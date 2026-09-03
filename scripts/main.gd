@@ -8,6 +8,7 @@ const GOLD := Color(0.98, 0.86, 0.5)
 const CYAN := Color(0.62, 0.9, 0.95)
 const DIM := Color(0.6, 0.62, 0.68)
 const WHITEISH := Color(0.92, 0.92, 0.95)
+const HILITE := Color(0.98, 0.86, 0.5)  # 已学/已穿戴 高亮金
 
 var _realm_label: Label
 var _essence_label: Label
@@ -32,9 +33,13 @@ var _equip_box: VBoxContainer
 var _equip_row_nodes: Dictionary = {}
 var _equip_btns: Dictionary = {}
 var _slot_labels: Dictionary = {}
+var _card_sb_normal: StyleBoxFlat
+var _card_sb_hi: StyleBoxFlat
 
 
 func _ready() -> void:
+	_card_sb_normal = _make_card_sb(false)
+	_card_sb_hi = _make_card_sb(true)
 	_build_ui()
 	if GameData.offline_msg != "":
 		_show_msg(GameData.offline_msg)
@@ -219,14 +224,7 @@ func _build_skill_page(page: Panel) -> void:
 func _add_skill_row(id: String) -> void:
 	var s: Dictionary = GameData.skill_by_id[id]
 	var row := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = CARD_BG
-	sb.set_corner_radius_all(6)
-	sb.content_margin_left = 10
-	sb.content_margin_right = 10
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
-	row.add_theme_stylebox_override("panel", sb)
+	row.add_theme_stylebox_override("panel", _card_sb_normal)
 	_skill_box.add_child(row)
 
 	var hb := HBoxContainer.new()
@@ -343,14 +341,7 @@ func _build_equip_page(page: Panel) -> void:
 func _add_equip_row(id: String) -> void:
 	var e: Dictionary = GameData.equip_by_id[id]
 	var row := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = CARD_BG
-	sb.set_corner_radius_all(6)
-	sb.content_margin_left = 10
-	sb.content_margin_right = 10
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
-	row.add_theme_stylebox_override("panel", sb)
+	row.add_theme_stylebox_override("panel", _card_sb_normal)
 	_equip_box.add_child(row)
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
@@ -434,6 +425,33 @@ func _refresh() -> void:
 	# 槽位
 	for slot in g.SLOTS:
 		(_slot_labels[slot] as Label).text = g.equipped_name(slot)
+	# 状态高亮: 已学技能 / 已穿戴装备 金色边框 (仅状态变化时应用, 避免每帧重刷)
+	for id in _skill_row_nodes:
+		_apply_card_hl(_skill_row_nodes[id], g.learned.has(id))
+	for id in _equip_row_nodes:
+		var e: Dictionary = g.equip_by_id[id]
+		_apply_card_hl(_equip_row_nodes[id], str(g.equipped.get(str(e["slot"]), "")) == id)
+
+
+func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
+	var last: bool = bool(row.get_meta("_hl", false))
+	if last == hi:
+		return
+	row.set_meta("_hl", hi)
+	row.add_theme_stylebox_override("panel", _card_sb_hi if hi else _card_sb_normal)
+
+
+func _make_card_sb(hi: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.19, 0.17, 0.12) if hi else CARD_BG
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	sb.border_color = HILITE if hi else Color(0, 0, 0, 0)
+	sb.set_border_width_all(2 if hi else 0)
+	return sb
 
 
 func _find_item(item_id: String) -> Dictionary:
