@@ -208,7 +208,7 @@ func _init() -> void:
 	g.ascended = false
 	g._ach_acc = -86400.0   # 冻结节流, 避免 _process 并发解锁干扰自测确定性 (测试仅数秒)
 	check(g.ach_ids.size() >= 10, "成就数量>=10 (实际 %d)" % g.ach_ids.size())
-	check(g.ach_by_id.has("ascend_immortal") and g.ach_by_id.has("first_break") and g.ach_by_id.has("skill_10"), "成就定义齐全 (ascend/first_break/skill_10)")
+	check(g.ach_by_id.has("ascend_immortal") and g.ach_by_id.has("first_break") and g.ach_by_id.has("skill_10") and g.ach_by_id.has("dao_zuzi"), "成就定义齐全 (ascend/first_break/skill_10/dao_zuzi)")
 	var got0: Array[String] = g.check_achievements()
 	check(got0.is_empty(), "初始状态无成就解锁")
 	# first_break: 首次成功突破
@@ -278,9 +278,9 @@ func _init() -> void:
 	g.realm_idx = 8
 	var got10: Array[String] = g.check_achievements()
 	check(got10.has("realm_dujie") and got10.has("realm_dacheng"), "渡劫解锁 realm_dujie/realm_dacheng: " + str(got10))
-	# 已解锁数 = 已触发的全部 (境界里程碑 8 + 飞升 + 玩法 7 = 16 全解锁)
+	# 已解锁数 = 飞升前全部可解锁成就 (境界里程碑 8 + 飞升 + 玩法 7 = 16/17, dao_zuzi 需飞升后道祖)
 	g.check_achievements()
-	check(g.ach_done.size() == g.ach_ids.size(), "16 成就全部解锁 (实际 %d/%d)" % [g.ach_done.size(), g.ach_ids.size()])
+	check(g.ach_done.size() == g.ach_ids.size() - 1, "飞升前 16/17 成就解锁 (实际 %d/%d)" % [g.ach_done.size(), g.ach_ids.size()])
 	g.realm_idx = 0
 	g.layer = 1
 	# 成就存档往返: 部分解锁后存/读档
@@ -331,12 +331,74 @@ func _init() -> void:
 	var bst: String = g.bonus_summary_text()
 	check(bst.find("灵气 x") >= 0 and bst.find("法器 x") >= 0 and bst.find("离线") >= 0, "bonus_summary_text 含灵气/离线/法器段 (实际: %s)" % bst)
 
+	# ---------- 打磨-10: 飞升后道行 (真仙境 9 阶, 每阶灵气 x2) ----------
+	check(g.fmt(1.5e8) == "1.5亿", "fmt 亿 (实际 %s)" % g.fmt(1.5e8))
+	check(g.fmt(1.0e12) == "1.0兆", "fmt 兆 (实际 %s)" % g.fmt(1.0e12))
+	check(g.fmt(2.56e20) == "2.6垓", "fmt 垓 (实际 %s)" % g.fmt(2.56e20))
+	check(g.try_dao_break(0.01).find("飞升后方可") >= 0, "未飞升不可修炼道行")
+	check(g.immortal_mult() == 1.0, "未飞升道行倍率 x1")
+	# 飞升 + 道行倍率
+	g.ascended = true
+	check(g.immortal_mult() == 1.0, "飞升初仙 道行倍率 x1")
+	var qi_pre: float = g.qi_per_sec()
+	g.dao_level = 1
+	check(absf(g.qi_per_sec() / qi_pre - 2.0) < 1e-9, "道行每阶灵气 x2 (实际 x%.3f)" % (g.qi_per_sec() / qi_pre))
+	g.realm_idx = 9
+	check(absf(g.qi_mult_realm() - g.QI_MULT[9] * 2.0) < 1e-6, "qi_mult_realm 含道行倍率 (真仙 x2, 实际 %s)" % g.fmt(g.qi_mult_realm()))
+	g.dao_level = 0
+	check(g.realm_display() == "真仙·初仙 (已飞升)", "realm_display 飞升后 (实际 %s)" % g.realm_display())
+	g.ascended = false
+	g.realm_idx = 0
+	check(g.realm_display() == "练气 第 1 层", "realm_display 未飞升 (实际 %s)" % g.realm_display())
+	# 道行精进: 不足 / 成功 / 失败
+	g.ascended = true
+	var dseq0: int = g.break_seq
+	g.dao = g.dao_break_cost() * 0.5
+	check(g.try_dao_break(0.01).find("道行不足") >= 0, "道行不足被拒")
+	check(g.dao == g.dao_break_cost() * 0.5, "道行不足不扣道行")
+	g.dao = g.dao_break_cost() + 1.0
+	var db_ok: String = g.try_dao_break(0.01)
+	check(db_ok.find("道行精进!") >= 0, "注入 roll=0.01 道行精进成功: " + db_ok)
+	check(g.dao_level == 1, "道行阶段 +1")
+	check(g.last_break_result == 4, "道行精进 last_break_result==4")
+	check(g.break_seq == dseq0 + 1, "道行精进 break_seq +1")
+	g.dao = g.dao_break_cost() + 1.0
+	var db_fail: String = g.try_dao_break(0.999)
+	check(db_fail.find("道行精进失败") >= 0, "注入 roll=0.999 道行精进失败: " + db_fail)
+	check(g.dao_level == 1, "失败后阶段不变")
+	check(g.last_break_result == 2, "失败 last_break_result==2")
+	check(g.dao_break_chance() >= 0.05 and g.dao_break_chance() <= 0.99, "道行成功率受控 5%%~99%% (实际 %0.0f%%)" % (g.dao_break_chance() * 100.0))
+	# 飞升后进度条 = 道行比例
+	g.dao = g.dao_break_cost() * 0.5
+	check(absf(g.breakthrough_progress() - 50.0) < 1e-6, "飞升后进度=道行比例 (实际 %s)" % g.breakthrough_progress())
+	# 封顶: 道祖
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	check(g.try_dao_break(0.01).find("道祖") >= 0, "道祖封顶提示 (实际: %s)" % g.try_dao_break(0.01))
+	check(g.breakthrough_progress() == 100.0, "道祖进度 100%")
+	check(g.ach_progress("dao_zuzi").find("道行精进中") >= 0, "ach_progress dao_zuzi 道行中 (实际 %s)" % g.ach_progress("dao_zuzi"))
+	var got11: Array[String] = g.check_achievements()
+	check(got11.has("dao_zuzi"), "道祖解锁 dao_zuzi: " + str(got11))
+	g.ach_done.erase("dao_zuzi")
+	g.dao_level = 0
+	g.ascended = false
+	check(g.ach_progress("dao_zuzi") == "飞升后, 道行精进至道祖境", "ach_progress dao_zuzi 未飞升 (实际 %s)" % g.ach_progress("dao_zuzi"))
+	# 道行消耗梯度 (每阶 x8)
+	var dc0: float = g.dao_break_cost()
+	check(dc0 > 0.0, "道行基础消耗>0")
+	for i in 8:
+		var nxt: float = dc0 * g.DAO_BREAK_GROWTH
+		check(nxt > dc0, "道行消耗第%d阶上升" % i)
+		dc0 = nxt
+
 	# ---------- 存档往返 ----------
-	# 全购法器后灵石近 0, 补充灵石再存档 (验证恢复逻辑)
+	# 全购法器后灵石近 0, 补充灵石/道行再存档 (验证恢复逻辑)
 	g.stones = 123456.0
+	g.dao = 12345.678
+	g.dao_level = 2
 	g.save_game()
 	var saved := _save_json()
 	check(saved.has("skills") and saved.has("eq_owned") and saved.has("equipped"), "存档包含 skills/eq_owned/equipped 字段")
+	check(saved.has("dao") and saved.has("dao_level"), "存档包含 dao/dao_level 字段 (打磨-10)")
 	check(saved.has("ach_done"), "存档包含 ach_done 字段")
 	check(saved.get("realm_idx", -1) == g.realm_idx, "存档 realm_idx 一致")
 	check(saved.get("essence", -1.0) == g.essence, "存档 essence 一致")
@@ -354,6 +416,8 @@ func _init() -> void:
 	check(str(g.equipped.get("weapon", "")) == eq_id, "读档恢复穿戴")
 	check(g.ach_done.has("first_break"), "读档恢复已解锁成就")
 	check(g.stones > 0.0, "读档恢复灵石")
+	check(absf(g.dao - 12345.678) < 1e-6, "读档恢复道行 (打磨-10, 实际 %s)" % g.fmt(g.dao))
+	check(g.dao_level == 2, "读档恢复道行阶段 (打磨-10)")
 	# 旧档兼容: 缺新字段
 	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
 	f.store_string(JSON.stringify({"realm_idx": 1, "layer": 2, "essence": 5.0, "stones": 7.0}))
@@ -368,6 +432,36 @@ func _init() -> void:
 	check(g.learned.is_empty() and g.owned_eq.is_empty(), "旧档缺字段默认空")
 	check(g.ach_done.is_empty(), "旧档缺 ach_done 默认空")
 	check(g.stones == 7.0, "旧档灵石读取")
+
+	# ---------- 打磨-10: 离线道行 (飞升后离线收益计入道行) ----------
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 0.0
+	g.essence = 0.0
+	g.stones = 0.0
+	g.realm_idx = 9
+	g.layer = 1
+	g.owned.clear()
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.save_game()
+	# 存档 ts 回拨 2 小时, 模拟离线
+	var of := FileAccess.open(g.SAVE_PATH, FileAccess.READ)
+	var ov: Variant = JSON.parse_string(of.get_as_text())
+	of.close()
+	var od: Dictionary = ov
+	od["ts"] = int(Time.get_unix_time_from_system()) - 7200
+	var ofw := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	ofw.store_string(JSON.stringify(od))
+	ofw.close()
+	g.essence = 0.0
+	g.dao = 0.0
+	g.load_game()
+	# 纯挂机速率 = QI_MULT[9] = 1e5 (无加成), 离线效率 50%, 2h → 3.6e8
+	check(g.dao >= 3.5e8 and g.dao <= 3.7e8, "离线道行 ≈ 3.6e8 (实际 %s)" % g.fmt(g.dao))
+	check(g.essence == 0.0, "飞升后离线不涨灵气")
+	check(g.offline_msg.find("道行") >= 0, "离线提示含道行 (实际 %s)" % g.offline_msg)
 
 	# ---------- 汇报 ----------
 	print("")

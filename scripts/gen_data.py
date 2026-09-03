@@ -34,6 +34,7 @@ ACHIEVEMENTS = [
     {"id": "equip_first",      "name": "初具规模", "desc": "购入第一件装备"},
     {"id": "equip_10",         "name": "行头齐全", "desc": "购入 10 件装备"},
     {"id": "rich_100k",        "name": "灵石满堂", "desc": "持有灵石达 10 万"},
+    {"id": "dao_zuzi",         "name": "道祖",     "desc": "道行精进至道祖境"},
 ]
 # 境界里程碑 id 与 REALMS 索引的对应 (realm_xxx -> realm_idx)
 ACH_REALM_IDX = {"realm_zhuji": 1, "realm_jindan": 2, "realm_yuanying": 3,

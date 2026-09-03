@@ -25,6 +25,12 @@ const REALMS := [
 # 各境界的灵气速率倍率 (飞升后 x10 万, 仙凡两隔!)
 const QI_MULT := [1.0, 4.0, 15.0, 40.0, 100.0, 250.0, 600.0, 1500.0, 4000.0, 100000.0]
 
+# 打磨-10: 飞升后道行 — 真仙境 9 阶段, 每阶灵气速率 x2, 道行精进 (突破) 消耗道行
+const IMMORTAL_REALMS := ["初仙", "少仙", "上仙", "天仙", "金仙", "太乙", "大罗", "混元", "道祖"]
+const IMMORTAL_STAGE_MULT := 2.0   # 道行每阶灵气倍率
+const DAO_BREAK_BASE := 1.0e9      # 道行精进基础消耗 (初仙→少仙)
+const DAO_BREAK_GROWTH := 8.0      # 每阶消耗倍率 (长线挂机目标)
+
 # 法器 (用灵石购买, 永久提升灵气速率)
 # 打磨-4: 性价比曲线调平 + 补全真仙境 (渡劫/真仙), 每件在当前境界约 1~8 分钟灵石可购
 const ITEMS := [
@@ -74,6 +80,8 @@ var learned: Array[String] = []    # 已学习技能 id
 var owned_eq: Array[String] = []   # 已拥有装备 id
 var equipped: Dictionary = {}      # 部位 slot -> 装备 id
 var ascended := false       # 是否已飞升
+var dao := 0.0              # 道行 (飞升后挂机资源, 打磨-10)
+var dao_level := 0          # 道行阶段 0..8 (0=初仙, 8=道祖, 打磨-10)
 var ach_done: Array[String] = []   # 已解锁成就 id (打磨-6)
 var offline_msg := ""       # 离线收益提示
 var last_break_result := 0  # 上次突破: 0=未触发 1=成功 2=失败 3=飞升
@@ -88,10 +96,12 @@ func _ready() -> void:
 	load_game()
 
 func _process(delta: float) -> void:
-	# 挂机自动积累
-	if not ascended:
+	# 挂机自动积累 (飞升后: 道行替代灵气, 打磨-10)
+	if ascended:
+		dao += qi_per_sec() * delta
+	else:
 		essence += qi_per_sec() * delta
-		stones += stone_per_sec() * delta
+	stones += stone_per_sec() * delta
 	# 神通冷却
 	for id in _active_cd.keys():
 		_active_cd[id] = maxf(0.0, _active_cd[id] - delta)
@@ -171,15 +181,19 @@ func equip_bonus(eff: String) -> float:
 			total += float(e.get(eff, 0.0))
 	return total
 
+# 打磨-10: 道行阶段倍率 (飞升后每阶 x2)
+func immortal_mult() -> float:
+	return pow(IMMORTAL_STAGE_MULT, dao_level) if ascended else 1.0
+
 func qi_per_sec() -> float:
-	return QI_MULT[realm_idx] * item_boost() * (1.0 + passive_bonus("qi_mult") + passive_bonus("all_mult") + equip_bonus("qi_mult"))
+	return QI_MULT[realm_idx] * immortal_mult() * item_boost() * (1.0 + passive_bonus("qi_mult") + passive_bonus("all_mult") + equip_bonus("qi_mult"))
 
 func stone_per_sec() -> float:
 	return 1.0 * QI_MULT[realm_idx] * (1.0 + passive_bonus("stone_mult") + passive_bonus("all_mult") + equip_bonus("stone_mult"))
 
 # 灵气倍率构成 (顶栏展示用: 境界基础 / 功法与装备加成)
 func qi_mult_realm() -> float:
-	return QI_MULT[realm_idx]
+	return QI_MULT[realm_idx] * immortal_mult()
 
 func qi_mult_skill_equip() -> float:
 	return 1.0 + passive_bonus("qi_mult") + passive_bonus("all_mult") + equip_bonus("qi_mult")
@@ -221,6 +235,8 @@ func _ach_met(id: String) -> bool:
 			return owned_eq.size() >= 10
 		"rich_100k":
 			return stones >= 100000.0
+		"dao_zuzi":
+			return ascended and dao_level >= IMMORTAL_REALMS.size() - 1
 		_:
 			var need: int = ACH_REALM_IDX.get(id, -1)
 			return need >= 0 and realm_idx >= need
@@ -258,6 +274,10 @@ func ach_progress(id: String) -> String:
 			return "%d/10" % mini(owned_eq.size(), 10)
 		"rich_100k":
 			return "%d/100000" % int(minf(stones, 100000.0))
+		"dao_zuzi":
+			if not ascended:
+				return "飞升后, 道行精进至道祖境"
+			return "道行精进中: 当前 %s / 目标 道祖" % IMMORTAL_REALMS[dao_level]
 		_:
 			var need: int = ACH_REALM_IDX.get(id, -1)
 			if need >= 0:
@@ -447,6 +467,42 @@ func try_buy_item(item_id: String) -> String:
 				return "灵石不足: 需要 %s" % fmt(it["cost"])
 	return "未找到该法器"
 
+# ================= 打磨-10: 道行 (飞升后目标) =================
+
+func dao_break_cost() -> float:
+	return DAO_BREAK_BASE * pow(DAO_BREAK_GROWTH, dao_level)
+
+func dao_break_chance() -> float:
+	return clampf(0.90 - 0.03 * dao_level + passive_bonus("bt_chance") + equip_bonus("bt_chance"), 0.05, 0.99)
+
+# 飞升后点击突破按钮 -> 道行精进; roll 可注入 [0,1) 确定性测试
+func try_dao_break(roll: float = -1.0) -> String:
+	last_break_result = 0
+	if not ascended:
+		return "飞升后方可修炼道行"
+	if dao_level >= IMMORTAL_REALMS.size() - 1:
+		return "已至道祖, 道法自然 ♪"
+	var cost := dao_break_cost()
+	if dao < cost:
+		return "道行不足: 需要 %s" % fmt(cost)
+	dao -= cost
+	if roll < 0.0:
+		roll = randf()
+	if roll < dao_break_chance():
+		dao_level += 1
+		last_break_result = 4
+		break_seq += 1
+		return "道行精进! 当前境界: %s·%s" % [realm_name(), IMMORTAL_REALMS[dao_level]]
+	last_break_result = 2
+	break_seq += 1
+	return "道行精进失败… 道心不稳, 静修再来!"
+
+# 境界展示 (顶栏): 未飞升 "练气 第 1 层" / 飞升后 "真仙·初仙 (已飞升)"
+func realm_display() -> String:
+	if not ascended:
+		return "%s %s" % [realm_name(), layer_name()]
+	return "真仙·%s (已飞升)" % IMMORTAL_REALMS[dao_level]
+
 # ================= 存档 =================
 
 func save_game() -> void:
@@ -461,6 +517,8 @@ func save_game() -> void:
 		"equipped": equipped,
 		"ach_done": ach_done,
 		"ascended": ascended,
+		"dao": dao,
+		"dao_level": dao_level,
 		"ts": int(Time.get_unix_time_from_system()),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -481,6 +539,8 @@ func load_game() -> void:
 	essence = float(parsed.get("essence", 0.0))
 	stones = float(parsed.get("stones", 0.0))
 	ascended = bool(parsed.get("ascended", false))
+	dao = float(parsed.get("dao", 0.0))
+	dao_level = clampi(int(parsed.get("dao_level", 0)), 0, IMMORTAL_REALMS.size() - 1)
 	owned = _str_array(parsed.get("owned", []))
 	learned = _str_array(parsed.get("skills", []))
 	owned_eq = _str_array(parsed.get("eq_owned", []))
@@ -496,14 +556,19 @@ func load_game() -> void:
 	var ts := int(parsed.get("ts", 0))
 	if ts > 0:
 		var elapsed := clampf(Time.get_unix_time_from_system() - float(ts), 0.0, OFFLINE_CAP_SEC)
-		if elapsed > 60.0 and not ascended:
+		if elapsed > 60.0:
 			var rate := offline_rate()
-			var ge := qi_per_sec() * elapsed * rate
+			var gq := qi_per_sec() * elapsed * rate
 			var gs := stone_per_sec() * elapsed * rate
-			essence += ge
 			stones += gs
-			offline_msg = "离线 %s, 效率%0.0f%%, 收获灵气 %s, 灵石 %s" % [
-				fmt_time(elapsed), rate * 100.0, fmt(ge), fmt(gs)]
+			if ascended:
+				dao += gq
+				offline_msg = "离线 %s, 效率%0.0f%%, 收获道行 %s, 灵石 %s" % [
+					fmt_time(elapsed), rate * 100.0, fmt(gq), fmt(gs)]
+			else:
+				essence += gq
+				offline_msg = "离线 %s, 效率%0.0f%%, 收获灵气 %s, 灵石 %s" % [
+					fmt_time(elapsed), rate * 100.0, fmt(gq), fmt(gs)]
 
 func _str_array(v) -> Array[String]:
 	var out: Array[String] = []
@@ -525,14 +590,22 @@ func layer_name() -> String:
 
 func breakthrough_progress() -> float:
 	if ascended:
-		return 100.0
+		if dao_level >= IMMORTAL_REALMS.size() - 1:
+			return 100.0
+		return clampf(dao / dao_break_cost() * 100.0, 0.0, 100.0)
 	return clampf(essence / breakthrough_cost() * 100.0, 0.0, 100.0)
 
 func fmt(v: float) -> String:
-	if v >= 100000000.0:
-		return "%.1f亿" % (v / 100000000.0)
-	if v >= 10000.0:
-		return "%.1f万" % (v / 10000.0)
+	if v >= 1e20:
+		return "%.1f垓" % (v / 1e20)
+	if v >= 1e16:
+		return "%.1f京" % (v / 1e16)
+	if v >= 1e12:
+		return "%.1f兆" % (v / 1e12)
+	if v >= 1e8:
+		return "%.1f亿" % (v / 1e8)
+	if v >= 1e4:
+		return "%.1f万" % (v / 1e4)
 	return str(int(v))
 
 func fmt_time(sec: float) -> String:

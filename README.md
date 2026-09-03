@@ -7,6 +7,7 @@
 挂机自动积累 **灵气** 与 **灵石**，灵气攒够后点击突破境界（有成功率）。
 
 - **境界体系**：练气 → 筑基 → 金丹 → 元婴 → 化神 → 炼虚 → 合体 → 大乘 → 渡劫 → 真仙（飞升），境界越高挂机越快（顶栏显示当前境界灵气倍率，悬停查看构成）
+- **飞升后道行**（打磨-10）：飞升真仙界后挂机积累 **道行**，可精进 9 个阶段（初仙→道祖），每阶灵气速率 x2，给满级玩家长线挂机目标
 - **技能系统**（120 个，数据驱动 `data/skills.json`）：
   - 被动功法：永久加成（灵气/灵石速率、突破成功率、离线效率）
   - 主动神通：点击释放，瞬间爆发大量灵气，带冷却
@@ -41,7 +42,7 @@ python3 scripts/gen_data.py
 project.godot            # 项目配置
 data/skills.json         # 120 技能 (数据驱动)
 data/equipment.json      # 140 装备 (数据驱动)
-data/achievements.json   # 16 成就 (数据驱动, Steam 上报)
+data/achievements.json   # 17 成就 (数据驱动, Steam 上报)
 scenes/main.tscn         # 主场景
 scripts/game_data.gd     # 全局逻辑 + 存档 + 成就判定 (autoload)
 scripts/steam.gd         # Steam 接入骨架 (autoload)
@@ -55,7 +56,7 @@ PROJECT_PLAN.md          # 项目计划
 
 ```bash
 ~/bin/godot --headless --path .            # 无头冒烟 (应无报错, 会一直挂机运行)
-~/bin/godot --headless --path . -s res://scripts/selftest.gd   # 全流程自测 (学习/购买/穿戴/冷却/存读档/倍率/数值曲线/成就, 100 项, 退出码 0=通过)
+~/bin/godot --headless --path . -s res://scripts/selftest.gd   # 全流程自测 (学习/购买/穿戴/冷却/存读档/倍率/数值曲线/成就/飞升后道行, 164 项, 退出码 0=通过)
 ```
 
 ## 导出 (打包)

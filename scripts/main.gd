@@ -182,17 +182,32 @@ func _build_training_page(page: Panel) -> void:
 	for it in GameData.ITEMS:
 		_add_shop_row(it)
 
-	# 右: 境界阶梯
+	# 右: 境界阶梯 (打磨-10: 含仙界道行阶梯, 可滚动)
 	var right := _add_panel(wrap)
 	right.add_child(_label("境 界 阶 梯", 15, DIM))
 	right.add_child(_sep())
+	var rscroll := ScrollContainer.new()
+	rscroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	right.add_child(rscroll)
+	var rbox := VBoxContainer.new()
+	rbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rbox.add_theme_constant_override("separation", 4)
+	rscroll.add_child(rbox)
 	for i in GameData.REALMS.size():
 		var r: Dictionary = GameData.REALMS[i]
 		var name_c := GOLD if i == GameData.realm_idx else WHITEISH
-		right.add_child(_label("%s × %d 层  (灵气x%.0f)" % [r["name"], r["layers"], GameData.QI_MULT[i]], 14, name_c))
-	var hint := _label("挂机自动积累灵气与灵石, 灵气攒够后点击突破。境界越高, 挂机越快。", 13, DIM)
+		rbox.add_child(_label("%s × %d 层  (灵气x%s)" % [r["name"], r["layers"], GameData.fmt(GameData.QI_MULT[i])], 14, name_c))
+	# 仙界道行 (飞升后解锁, 每阶灵气 x2)
+	rbox.add_child(_sep())
+	rbox.add_child(_label("仙界道行 (飞升后解锁, 每阶灵气 x%d)" % int(GameData.IMMORTAL_STAGE_MULT), 13, DIM))
+	for i in GameData.IMMORTAL_REALMS.size():
+		var nm: String = GameData.IMMORTAL_REALMS[i]
+		var hi_c := GameData.ascended and i == GameData.dao_level
+		rbox.add_child(_label("%s  (x%.0f)" % [nm, pow(2.0, float(i))], 14, GOLD if hi_c else WHITEISH))
+	var hint := _label("挂机自动积累灵气与灵石, 灵气攒够后点击突破。境界越高, 挂机越快。\n飞升后改修道行: 道行每阶灵气 x2, 直至道祖。", 13, DIM)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	right.add_child(hint)
+	rbox.add_child(hint)
 
 
 func _add_shop_row(it: Dictionary) -> void:
@@ -465,24 +480,30 @@ func _add_ach_row(id: String) -> void:
 func _refresh() -> void:
 	var g := GameData
 	var realm_mult := g.qi_mult_realm()
-	_realm_label.text = "境界: %s %s · 灵气x%s" % [g.realm_name(), g.layer_name(), g.fmt(realm_mult)]
-	# tooltip: 倍率构成 (境界基础 / 功法装备 / 法器), 仅在数值变化时刷新
-	var tip := "境界灵气倍率 x%s  |  功法/装备 x%.2f  |  法器 x%.1f  |  当前灵气速率 %s/秒" % [
-		g.fmt(realm_mult), g.qi_mult_skill_equip(), g.item_boost(), g.fmt(g.qi_per_sec())]
+	_realm_label.text = "境界: %s · 灵气x%s" % [g.realm_display(), g.fmt(realm_mult)]
+	# tooltip: 倍率构成 (境界基础含道行 / 功法装备 / 法器 / 道行), 仅在数值变化时刷新
+	var tip := "境界灵气倍率 x%s  |  功法/装备 x%.2f  |  法器 x%.1f  |  道行 x%.0f  |  当前速率 %s/秒" % [
+		g.fmt(realm_mult), g.qi_mult_skill_equip(), g.item_boost(), g.immortal_mult(), g.fmt(g.qi_per_sec())]
 	if tip != _realm_tip:
 		_realm_tip = tip
 		_realm_label.tooltip_text = tip
 	_essence_label.text = "灵气 %s" % g.fmt(g.essence)
 	_stones_label.text = "灵石 %s" % g.fmt(g.stones)
-	_qi_label.text = "灵气速率  %s /秒" % g.fmt(g.qi_per_sec())
+	var rate_txt := g.fmt(g.qi_per_sec())
+	_qi_label.text = ("道行速率  %s /秒" if g.ascended else "灵气速率  %s /秒") % rate_txt
 	_stone_rate_label.text = "灵石速率  %s /秒" % g.fmt(g.stone_per_sec())
-	_progress_label.text = "突破进度  %d%%" % int(g.breakthrough_progress())
+	_progress_label.text = ("道行进度  %d%%" if g.ascended else "突破进度  %d%%") % int(g.breakthrough_progress())
 	_bar_fill.size = Vector2(_bar_bg.size.x * g.breakthrough_progress() / 100.0, _bar_bg.size.y)
 	if g.ascended:
-		_break_btn.text = "已飞升真仙 · 仙凡两隔 ♪"
-		_break_btn.disabled = true
+		if g.dao_level >= g.IMMORTAL_REALMS.size() - 1:
+			_break_btn.text = "已至道祖 · 道法自然 ♪"
+			_break_btn.disabled = true
+		else:
+			_break_btn.text = "修炼道行 · 耗 %s 道行 (成功率%0.0f%%)" % [g.fmt(g.dao_break_cost()), g.dao_break_chance() * 100.0]
+			_break_btn.disabled = false
 	else:
 		_break_btn.text = "尝试突破 · 耗 %s 灵气 (成功率%0.0f%%)" % [g.fmt(g.breakthrough_cost()), g.breakthrough_chance() * 100.0]
+		_break_btn.disabled = false
 	# 法器
 	for id in _shop_rows:
 		var btn: Button = _shop_rows[id]
@@ -585,8 +606,8 @@ func _refresh() -> void:
 		var pt: String = g.ach_progress(id)
 		if pl2.text != pt:
 			pl2.text = pt
-	# 突破闪烁: 事件序号变化时触发 (成功绿闪 / 失败红闪)
-	if not g.ascended and g.break_seq != _break_flash_seq:
+	# 突破/道行精进闪烁: 事件序号变化时触发 (成功绿闪 / 失败红闪, 打磨-10)
+	if g.break_seq != _break_flash_seq:
 		_break_flash_seq = g.break_seq
 		_break_flash(int(g.last_break_result))
 
@@ -622,7 +643,8 @@ func _find_item(item_id: String) -> Dictionary:
 # ---------- 事件 ----------
 
 func _on_break() -> void:
-	var msg := GameData.try_breakthrough()
+	# 飞升后同一按钮用于道行精进 (打磨-10)
+	var msg := GameData.try_dao_break() if GameData.ascended else GameData.try_breakthrough()
 	_show_msg(msg)
 	_float_break()
 
@@ -664,6 +686,9 @@ func _float_break() -> void:
 		3:
 			_float_label.text = "☀ 飞升真仙! 仙凡两隔 ☀"
 			_float_label.add_theme_color_override("font_color", GOLD)
+		4:
+			_float_label.text = "✦ 道行精进! ✦"
+			_float_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.55))
 		_:
 			_float_label.text = "✖ 突破失败… ✖"
 			_float_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
@@ -680,7 +705,7 @@ func _float_break() -> void:
 func _break_flash(result: int) -> void:
 	if _break_btn == null or _break_btn.disabled:
 		return
-	var col := Color(0.3, 0.9, 0.3) if result == 1 else Color(1.0, 0.4, 0.35)
+	var col := Color(0.3, 0.9, 0.3) if (result == 1 or result == 4) else Color(1.0, 0.4, 0.35)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(col.r * 0.22, col.g * 0.22, col.b * 0.22, 1.0)
 	sb.border_color = col
