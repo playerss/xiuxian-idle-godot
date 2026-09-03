@@ -51,5 +51,6 @@ PROJECT_PLAN.md          # 项目计划
 ## 开发
 
 ```bash
-~/bin/godot --headless --path .            # 无头冒烟 (应无报错)
+~/bin/godot --headless --path .            # 无头冒烟 (应无报错, 会一直挂机运行)
+~/bin/godot --headless --path . -s res://scripts/selftest.gd   # 全流程自测 (学习/购买/穿戴/冷却/存读档, 44 项, 退出码 0=通过)
 ```
