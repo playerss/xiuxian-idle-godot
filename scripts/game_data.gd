@@ -207,6 +207,30 @@ func breakthrough_chance() -> float:
 func offline_rate() -> float:
 	return clampf(OFFLINE_BASE_RATE * (1.0 + passive_bonus("offline_rate") + equip_bonus("offline_rate")), 0.0, 1.0)
 
+# ---------- 打磨-13: 离线/挂机收益可视化 ----------
+
+# 指定秒数的离线收益 (基础效率 50% + 功法/装备, 上限 8 小时; 飞升后 qi 计为道行)
+func offline_gain(sec: float) -> Dictionary:
+	var s := minf(maxf(sec, 0.0), OFFLINE_CAP_SEC)
+	var r: float = offline_rate()
+	return {
+		"sec": s,
+		"rate": r,
+		"qi": qi_per_sec() * s * r,
+		"stone": stone_per_sec() * s * r,
+		"capped": sec > OFFLINE_CAP_SEC,
+	}
+
+# 每小时离线收益 (修行页展示)
+func offline_hourly() -> Dictionary:
+	return offline_gain(3600.0)
+
+# 离线每小时文本 (修行页; 飞升后主资源为道行)
+func offline_hourly_text() -> String:
+	var h := offline_hourly()
+	return "离线每小时  %s %s · 灵石 %s (效率%0.0f%%, 上限8小时)" % [
+		"道行" if ascended else "灵气", fmt(float(h["qi"])), fmt(float(h["stone"])), float(h["rate"]) * 100.0]
+
 # ================= 成就 (打磨-6: 数据驱动, Steam 上报) =================
 
 # 境界里程碑成就 -> 目标 realm_idx (与 gen_data.py ACH_REALM_IDX 一致)

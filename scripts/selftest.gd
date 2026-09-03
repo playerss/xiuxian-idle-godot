@@ -509,6 +509,46 @@ func _init() -> void:
 	check(g.fmt_time(45.0) == "不足1分", "fmt_time 短时长 (实际 %s)" % g.fmt_time(45.0))
 	check(g.fmt_time(7200.0) == "2小时0分", "fmt_time 小时档回归 (实际 %s)" % g.fmt_time(7200.0))
 
+	# ---------- 打磨-13: 离线/挂机收益可视化 (offline_gain / offline_hourly) ----------
+	# 当前受控状态: 无加成, 练气, 未飞升, qi/stone 速率均为 1.0/秒, 离线效率 50%
+	var og: Dictionary = g.offline_gain(3600.0)
+	check(absf(float(og["qi"]) - 1800.0) < 1e-6, "offline_gain 1h 灵气 = 速率x3600x0.5 = 1800 (实际 %s)" % g.fmt(float(og["qi"])))
+	check(absf(float(og["stone"]) - 1800.0) < 1e-6, "offline_gain 1h 灵石 = 1800 (实际 %s)" % g.fmt(float(og["stone"])))
+	check(float(og["sec"]) == 3600.0 and bool(og["capped"]) == false, "offline_gain 未封顶")
+	check(absf(float(g.offline_hourly()["qi"]) - float(og["qi"])) < 1e-9, "offline_hourly == offline_gain(3600)")
+	# 上限 8 小时: 超长离线按 8h 计
+	var ogc: Dictionary = g.offline_gain(999999.0)
+	check(absf(float(ogc["sec"]) - g.OFFLINE_CAP_SEC) < 1e-9, "offline_gain 超长按上限 8h (实际 %s)" % g.fmt(float(ogc["sec"])))
+	check(bool(ogc["capped"]) == true, "offline_gain 超长按 capped=true")
+	check(absf(float(ogc["qi"]) - 14400.0) < 1e-6, "offline_gain 封顶 8h 灵气 = 14400 (实际 %s)" % g.fmt(float(ogc["qi"])))
+	check(absf(float(g.offline_gain(0.0)["qi"])) < 1e-9, "offline_gain 0 秒收益为 0")
+	check(absf(float(g.offline_gain(-5.0)["qi"])) < 1e-9, "offline_gain 负秒按 0 处理")
+	var oht: String = g.offline_hourly_text()
+	check(oht.find("灵气 1800") >= 0 and oht.find("灵石 1800") >= 0 and oht.find("50%") >= 0 and oht.find("上限8小时") >= 0, "offline_hourly_text 未飞升含灵气/灵石/效率/上限 (实际 %s)" % oht)
+	# 离线效率加成: 解锁并学习一个 offline_rate 被动 (最低为筑基第 2 层 divine_1_1), 小时收益随之提升
+	g.realm_idx = 1
+	g.layer = 2
+	var off_skill := "divine_1_1"
+	check(g.skill_by_id.has(off_skill) and str(g.skill_by_id[off_skill]["effect"]) == "offline_rate", "divine_1_1 为 offline_rate 被动 (实际 %s)" % str(g.skill_by_id.get(off_skill, {}).get("effect", "")))
+	check(g.can_learn(off_skill), "筑基第 2 层可学离线功法")
+	var rate_pre: float = g.offline_rate()
+	var qi_pre13: float = g.qi_per_sec()
+	g.learn_skill(off_skill)
+	check(g.offline_rate() > rate_pre, "学习离线功法后 offline_rate 提升 (实际 %0.2f%%)" % (g.offline_rate() * 100.0))
+	check(g.offline_hourly()["qi"] > qi_pre13 * 3600.0 * rate_pre, "离线小时收益随效率提升")
+	g.realm_idx = 0
+	g.layer = 1
+	# 飞升后文案主资源改为道行 (不改变数值, 仅资源名; 同状态取基准)
+	var oht_pre: String = g.offline_hourly_text()
+	var oq_pre: float = float(g.offline_hourly()["qi"])
+	g.ascended = true
+	var oht_up: String = g.offline_hourly_text()
+	check(oht_up.find("道行") >= 0 and oht_up.find("灵气") < 0, "offline_hourly_text 飞升后为道行 (实际 %s)" % oht_up)
+	check(absf(float(g.offline_hourly()["qi"]) - oq_pre) < 1e-9, "飞升不改变离线数值 (仅资源名)")
+	g.ascended = false
+	check(g.offline_hourly_text() == oht_pre, "恢复未飞升后文案复原")
+	check(g.learned.has(off_skill), "offline_rate 功法保留 (供存档往返节断言无副作用)")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

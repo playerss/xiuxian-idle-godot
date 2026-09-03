@@ -15,6 +15,8 @@ var _essence_label: Label
 var _stones_label: Label
 var _qi_label: Label
 var _stone_rate_label: Label
+var _offline_label: Label      # 打磨-13: 离线每小时收益 (修行页)
+var _offline_text := ""        # 离线文本缓存 (变化时才刷)
 var _progress_label: Label
 var _bar_bg: ColorRect
 var _bar_fill: ColorRect
@@ -164,6 +166,10 @@ func _build_training_page(page: Panel) -> void:
 	left.add_child(_qi_label)
 	_stone_rate_label = _label("灵石速率  0 /秒", 15, CYAN)
 	left.add_child(_stone_rate_label)
+	# 打磨-13: 离线/挂机收益可视化 (每小时离线可得资源)
+	_offline_label = _label("", 14, DIM)
+	left.add_child(_offline_label)
+	_offline_label.tooltip_text = "离线收益 = 当前速率 x 离线效率 (基础50% + 功法/装备加成), 上限 8 小时。关闭游戏后继续积累, 重新进入时发放。\n飞升后离线主资源计入道行。"
 	left.add_child(_sep())
 	_progress_label = _label("突破进度  0%", 14, DIM)
 	left.add_child(_progress_label)
@@ -181,9 +187,15 @@ func _build_training_page(page: Panel) -> void:
 	left.add_child(_break_btn)
 	left.add_child(_sep())
 	left.add_child(_label("法 器", 15, DIM))
+	# 打磨-13: 法器列表可滚动 (10 件避免低分辨率下超出屏幕)
+	var shop_scroll := ScrollContainer.new()
+	shop_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	shop_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	left.add_child(shop_scroll)
 	_shop_box = VBoxContainer.new()
+	_shop_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_shop_box.add_theme_constant_override("separation", 10)
-	left.add_child(_shop_box)
+	shop_scroll.add_child(_shop_box)
 	for it in GameData.ITEMS:
 		_add_shop_row(it)
 
@@ -521,6 +533,11 @@ func _refresh() -> void:
 	var rate_txt := g.fmt(g.qi_per_sec())
 	_qi_label.text = ("道行速率  %s /秒" if g.ascended else "灵气速率  %s /秒") % rate_txt
 	_stone_rate_label.text = "灵石速率  %s /秒" % g.fmt(g.stone_per_sec())
+	# 打磨-13: 离线每小时收益 (文本变化时才刷)
+	var off_t: String = g.offline_hourly_text()
+	if off_t != _offline_text:
+		_offline_text = off_t
+		_offline_label.text = off_t
 	_progress_label.text = ("道行进度  %d%%" if g.ascended else "突破进度  %d%%") % int(g.breakthrough_progress())
 	_bar_fill.size = Vector2(_bar_bg.size.x * g.breakthrough_progress() / 100.0, _bar_bg.size.y)
 	if g.ascended:
