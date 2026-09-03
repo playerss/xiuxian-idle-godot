@@ -46,6 +46,9 @@ var _ach_box: VBoxContainer
 var _ach_rows: Dictionary = {}      # 成就 id -> {row, name_l, desc_l, prog_l}
 var _ach_count_label: Label
 var _ach_hl_seq := 0               # 成就解锁总数缓存 (变化时才刷样式)
+var _bonus_labels: Array[Label] = []  # 技能/装备页顶栏 总加成汇总标签 (打磨-9)
+var _bonus_text := ""              # 汇总文本缓存 (变化时才刷)
+var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用)
 
 
 func _ready() -> void:
@@ -195,6 +198,7 @@ func _build_training_page(page: Panel) -> void:
 func _add_shop_row(it: Dictionary) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
+	row.tooltip_text = GameData.item_detail(it["id"] as String)
 	_shop_box.add_child(row)
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -207,6 +211,7 @@ func _add_shop_row(it: Dictionary) -> void:
 	btn.pressed.connect(_on_buy.bind(it["id"]))
 	row.add_child(btn)
 	_shop_rows[it["id"] as String] = btn
+	_shop_row_nodes[it["id"] as String] = row
 
 
 # ---------- 技能页 ----------
@@ -236,6 +241,12 @@ func _build_skill_page(page: Panel) -> void:
 		filter_bar.add_child(b)
 		_filter_btns[cat] = b
 
+	# 顶栏: 总加成汇总 (打磨-9)
+	var bonus_l := _label(GameData.bonus_summary_text(), 14, GOLD)
+	outer.add_child(bonus_l)
+	_bonus_labels.append(bonus_l)
+	_bonus_text = GameData.bonus_summary_text()
+
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -252,6 +263,7 @@ func _add_skill_row(id: String) -> void:
 	var s: Dictionary = GameData.skill_by_id[id]
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", _card_sb_normal)
+	row.tooltip_text = GameData.skill_detail(id)
 	_skill_box.add_child(row)
 
 	var hb := HBoxContainer.new()
@@ -369,6 +381,7 @@ func _add_equip_row(id: String) -> void:
 	var e: Dictionary = GameData.equip_by_id[id]
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", _card_sb_normal)
+	row.tooltip_text = GameData.equip_detail(id)
 	_equip_box.add_child(row)
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
@@ -524,6 +537,34 @@ func _refresh() -> void:
 	for id in _equip_row_nodes:
 		var e: Dictionary = g.equip_by_id[id]
 		_apply_card_hl(_equip_row_nodes[id], str(g.equipped.get(str(e["slot"]), "")) == id)
+	# 打磨-9: tooltip 状态行 (已领悟/已穿戴/已拥有 变化时才重建文本)
+	for id in _skill_row_nodes:
+		var row: Node = _skill_row_nodes[id]
+		if int(row.get_meta("_dk", -1)) != int(g.learned.has(id)):
+			row.set_meta("_dk", int(g.learned.has(id)))
+			row.tooltip_text = g.skill_detail(id)
+	for id in _equip_row_nodes:
+		var e2: Dictionary = g.equip_by_id[id]
+		var row2: Node = _equip_row_nodes[id]
+		var st := 0
+		if str(g.equipped.get(str(e2["slot"]), "")) == id:
+			st = 2
+		elif g.owned_eq.has(id):
+			st = 1
+		if int(row2.get_meta("_dk", -1)) != st:
+			row2.set_meta("_dk", st)
+			row2.tooltip_text = g.equip_detail(id)
+	for id in _shop_row_nodes:
+		var row3: Node = _shop_row_nodes[id]
+		if int(row3.get_meta("_dk", -1)) != int(g.owned.has(id)):
+			row3.set_meta("_dk", int(g.owned.has(id)))
+			row3.tooltip_text = g.item_detail(id)
+	# 打磨-9: 总加成汇总 (文本变化时才刷)
+	var bt: String = g.bonus_summary_text()
+	if bt != _bonus_text:
+		_bonus_text = bt
+		for l in _bonus_labels:
+			l.text = bt
 	# 成就: 计数 + 已解锁高亮/进度 (解锁数变化时刷样式, 进度文本仅文本变化时刷)
 	var done_n: int = g.ach_done.size()
 	if done_n != _ach_hl_seq:

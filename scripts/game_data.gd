@@ -264,6 +264,62 @@ func ach_progress(id: String) -> String:
 				return "当前 %s / 目标 %s" % [realm_name(), REALMS[need]["name"]]
 	return ""
 
+# ================= 详情提示 (打磨-9: 行 tooltip) =================
+
+# 技能详情 (tooltip: 名称/品质/类型/效果/领悟条件/状态)
+func skill_detail(id: String) -> String:
+	var s: Dictionary = skill_by_id.get(id, {})
+	if s.is_empty():
+		return ""
+	var type_cn := "主动·神通" if str(s["type"]) == "active" else "被动·功法"
+	var tip := "「%s」 %s · %s\n%s" % [s["name"], s["tier_name"], type_cn, s["desc"]]
+	var r: Dictionary = REALMS[int(s["unlock_realm"])]
+	tip += "\n领悟条件: %s 第%d层" % [r["name"], int(s["unlock_layer"])]
+	tip += "\n状态: %s" % ("已领悟" if learned.has(id) else "未领悟")
+	return tip
+
+# 装备详情 (tooltip: 名称/品质/部位/属性/价格/状态)
+func equip_detail(id: String) -> String:
+	var e: Dictionary = equip_by_id.get(id, {})
+	if e.is_empty():
+		return ""
+	var tip := "「%s」 %s · %s\n%s\n灵石 %s" % [e["name"], e["tier_name"], e["slot_name"], e["desc"], fmt(float(e["cost"]))]
+	if str(equipped.get(str(e["slot"]), "")) == id:
+		tip += "\n状态: 已穿戴"
+	elif owned_eq.has(id):
+		tip += "\n状态: 已拥有(未穿戴)"
+	else:
+		tip += "\n状态: 未拥有"
+	return tip
+
+# 法器详情 (tooltip: 名称/描述/价格/增幅/状态)
+func item_detail(item_id: String) -> String:
+	for it in ITEMS:
+		if str(it["id"]) == item_id:
+			var tip := "「%s」\n%s\n灵石 %s\n灵气速率 x%.1f" % [it["name"], it["desc"], fmt(float(it["cost"])), float(it["boost"])]
+			tip += "\n状态: %s" % ("已拥有" if owned.has(item_id) else "未拥有")
+			return tip
+	return ""
+
+# ================= 加成汇总 (打磨-9: 面板顶部展示) =================
+
+# 当前总加成 (乘数/概率/离线效率/法器)
+func bonus_summary() -> Dictionary:
+	return {
+		"qi_mult": 1.0 + passive_bonus("qi_mult") + passive_bonus("all_mult") + equip_bonus("qi_mult"),
+		"stone_mult": 1.0 + passive_bonus("stone_mult") + passive_bonus("all_mult") + equip_bonus("stone_mult"),
+		"bt_chance": passive_bonus("bt_chance") + equip_bonus("bt_chance"),
+		"offline_rate": offline_rate(),
+		"item_boost": item_boost(),
+	}
+
+# 加成汇总文本 (技能/装备页顶栏)
+func bonus_summary_text() -> String:
+	var b := bonus_summary()
+	return "当前总加成  灵气 x%.2f · 灵石 x%.2f · 突破 +%0.1f%% · 离线 %0.0f%% · 法器 x%.1f" % [
+		float(b["qi_mult"]), float(b["stone_mult"]), float(b["bt_chance"]) * 100.0,
+		float(b["offline_rate"]) * 100.0, float(b["item_boost"])]
+
 # ================= 技能 =================
 
 func can_learn(id: String) -> bool:

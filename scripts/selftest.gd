@@ -302,6 +302,35 @@ func _init() -> void:
 	# 恢复受控状态 (存档往返节)
 	g.stones = 123456.0
 
+	# ---------- 打磨-9: 详情 tooltip + 总加成汇总 (逻辑; UI 构建靠主场景 headless 运行验证) ----------
+	var learned_one: String = g.learned[0]
+	var unlearned_one := ""
+	for id in g.skill_ids:
+		if not g.learned.has(id):
+			unlearned_one = id
+			break
+	check(unlearned_one != "", "找到未学技能")
+	check(g.skill_detail(learned_one).find("状态: 已领悟") >= 0, "skill_detail 已学状态 (实际: %s)" % g.skill_detail(learned_one))
+	check(g.skill_detail(unlearned_one).find("状态: 未领悟") >= 0, "skill_detail 未学状态")
+	check(g.skill_detail(learned_one).find("领悟条件:") >= 0 and g.skill_detail(learned_one).find("功法") >= 0 or g.skill_detail(learned_one).find("神通") >= 0, "skill_detail 含领悟条件/类型")
+	check(g.skill_detail("not_exist") == "", "skill_detail 未知 id 返回空")
+	var owned_eq_one: String = g.owned_eq[0]
+	var e_oe: Dictionary = g.equip_by_id[owned_eq_one]
+	var worn_state := "状态: 已穿戴" if str(g.equipped.get(str(e_oe["slot"]), "")) == owned_eq_one else "状态: 已拥有(未穿戴)"
+	check(g.equip_detail(owned_eq_one).find(worn_state) >= 0, "equip_detail 状态行 (实际: %s)" % g.equip_detail(owned_eq_one))
+	check(g.equip_detail(owned_eq_one).find("灵石") >= 0, "equip_detail 含价格")
+	check(g.equip_detail("not_exist") == "", "equip_detail 未知 id 返回空")
+	check(g.item_detail("wooden_sword").find("状态: 已拥有") >= 0, "item_detail 已拥有状态 (wooden_sword, 实际: %s)" % g.item_detail("wooden_sword"))
+	check(g.item_detail("jade_talisman").find("状态: 未拥有") >= 0, "item_detail 未拥有状态 (jade_talisman)")
+	check(g.item_detail("not_exist") == "", "item_detail 未知 id 返回空")
+	var bs: Dictionary = g.bonus_summary()
+	check(absf(float(bs["qi_mult"]) - g.qi_mult_skill_equip()) < 0.001, "bonus_summary qi_mult 与 qi_mult_skill_equip 一致")
+	check(absf(float(bs["stone_mult"]) - (1.0 + g.passive_bonus("stone_mult") + g.passive_bonus("all_mult") + g.equip_bonus("stone_mult"))) < 0.001, "bonus_summary stone_mult 一致")
+	check(absf(float(bs["bt_chance"]) - (g.passive_bonus("bt_chance") + g.equip_bonus("bt_chance"))) < 0.001, "bonus_summary bt_chance 一致")
+	check(absf(float(bs["item_boost"]) - g.item_boost()) < 0.001, "bonus_summary item_boost 一致")
+	var bst: String = g.bonus_summary_text()
+	check(bst.find("灵气 x") >= 0 and bst.find("法器 x") >= 0 and bst.find("离线") >= 0, "bonus_summary_text 含灵气/离线/法器段 (实际: %s)" % bst)
+
 	# ---------- 存档往返 ----------
 	# 全购法器后灵石近 0, 补充灵石再存档 (验证恢复逻辑)
 	g.stones = 123456.0
