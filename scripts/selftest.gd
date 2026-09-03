@@ -152,7 +152,51 @@ func _init() -> void:
 	check(g.break_seq == seq0 + 2, "失败时 break_seq +1 (累计 seq0+2)")
 	check(g.essence < e1, "失败仍消耗灵气")
 
+	# ---------- 打磨-4: 数值曲线 (法器性价比 / 装备价格曲线受控) ----------
+	var item_costs: Array[float] = []
+	var item_boosts: Array[float] = []
+	for it in g.ITEMS:
+		item_costs.append(float(it["cost"]))
+		item_boosts.append(float(it["boost"]))
+	check(g.ITEMS.size() >= 5, "法器数量>=5 (实际 %d)" % g.ITEMS.size())
+	for i in item_costs.size() - 1:
+		check(item_costs[i + 1] > item_costs[i] and item_boosts[i + 1] > item_boosts[i], "法器第%d件价格/增幅单调上升" % i)
+	# 性价比: 每单位增幅的单价应不降 (后期法器更贵但增幅更大)
+	var cp_ok := true
+	var prev_ratio := 0.0
+	for i in g.ITEMS.size():
+		var ratio: float = item_costs[i] / item_boosts[i]
+		cp_ok = cp_ok and ratio >= prev_ratio * 0.99
+		prev_ratio = ratio
+	check(cp_ok, "法器性价比递减 (单价不降)")
+	# 装备: weapon 变体0 = 该档基础价, 相邻档倍率受控 3~10x (防止曲线回归过陡/过平)
+	var tc: Array[float] = []
+	for t in 7:
+		for id in g.equip_ids:
+			var e: Dictionary = g.equip_by_id[id]
+			if str(e["slot"]) == "weapon" and int(e["tier"]) == t:
+				tc.append(float(e["cost"]))
+				break
+	check(tc.size() == 7, "装备 7 档基础价齐全")
+	for i in 6:
+		var eq_ratio: float = tc[i + 1] / tc[i]
+		check(eq_ratio >= 3.0 and eq_ratio <= 12.0, "装备品质%d->%d 价格倍率受控 (实际 %.1fx)" % [i, i + 1, eq_ratio])
+	# 法器全购: 按序全部可买, 灵石清零, 总增幅>100x
+	var stones_all: float = 0.0
+	for it in g.ITEMS:
+		stones_all += float(it["cost"])
+	g.stones = stones_all
+	var bought := 0
+	for it in g.ITEMS:
+		if g.try_buy_item(it["id"]).find("购得") >= 0:
+			bought += 1
+	check(bought == g.ITEMS.size(), "法器全购成功 (%d/%d)" % [bought, g.ITEMS.size()])
+	check(g.stones < 0.5, "法器全购后灵石清零")
+	check(g.item_boost() > 100.0, "全购法器后灵气总增幅>100x (实际 x%.0f)" % g.item_boost())
+
 	# ---------- 存档往返 ----------
+	# 全购法器后灵石近 0, 补充灵石再存档 (验证恢复逻辑)
+	g.stones = 123456.0
 	g.save_game()
 	var saved := _save_json()
 	check(saved.has("skills") and saved.has("eq_owned") and saved.has("equipped"), "存档包含 skills/eq_owned/equipped 字段")

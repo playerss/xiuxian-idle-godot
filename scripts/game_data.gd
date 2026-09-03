@@ -25,12 +25,18 @@ const REALMS := [
 const QI_MULT := [1.0, 4.0, 15.0, 40.0, 100.0, 250.0, 600.0, 1500.0, 4000.0, 100000.0]
 
 # 法器 (用灵石购买, 永久提升灵气速率)
+# 打磨-4: 性价比曲线调平 + 补全真仙境 (渡劫/真仙), 每件在当前境界约 1~8 分钟灵石可购
 const ITEMS := [
 	{"id": "wooden_sword", "name": "木剑", "desc": "修行人的伙伴", "cost": 100, "boost": 1.5},
 	{"id": "jade_talisman", "name": "玉符", "desc": "静心护体", "cost": 1000, "boost": 2.0},
-	{"id": "spirit_bag", "name": "聚灵袋", "desc": "引四方灵气", "cost": 8000, "boost": 3.0},
-	{"id": "star_lamp", "name": "引星灯", "desc": "借星力修行", "cost": 60000, "boost": 5.0},
-	{"id": "immortal_flute", "name": "仙音笛", "desc": "一缕仙音, 道心通明", "cost": 500000, "boost": 10.0},
+	{"id": "spirit_bag", "name": "聚灵袋", "desc": "引四方灵气", "cost": 6000, "boost": 3.0},
+	{"id": "star_lamp", "name": "引星灯", "desc": "借星力修行", "cost": 45000, "boost": 5.0},
+	{"id": "immortal_flute", "name": "仙音笛", "desc": "一缕仙音, 道心通明", "cost": 250000, "boost": 8.0},
+	{"id": "star_dock", "name": "星槎", "desc": "乘槎问星, 直上天河", "cost": 1500000, "boost": 12.0},
+	{"id": "void_mirror", "name": "太虚镜", "desc": "照见太虚, 返璞归真", "cost": 5000000, "boost": 18.0},
+	{"id": "primordial_lamp", "name": "太初道灯", "desc": "一盏长明, 照破鸿蒙", "cost": 20000000, "boost": 25.0},
+	{"id": "chaos_bell", "name": "鸿蒙道钟", "desc": "一钟一世界, 道在钟鸣", "cost": 80000000, "boost": 40.0},
+	{"id": "ascension_seal", "name": "渡劫引仙印", "desc": "仙缘已至, 只待飞升", "cost": 300000000, "boost": 60.0},
 ]
 
 # 装备部位
