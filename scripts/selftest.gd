@@ -484,6 +484,31 @@ func _init() -> void:
 	check(g.essence >= ess_b5 + g.qi_per_sec() * float(s_act2["value"]) * 0.99, "未飞升神通爆发增加灵气")
 	check(absf(g.dao - dao_b5) < 1e-9, "未飞升神通不增道行")
 
+	# ---------- 打磨-12: 购买 ETA (灵石不足 -> 预计多久买得起) ----------
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	# 无加成状态: 灵石速率 = QI_MULT[0] * 1.0 = 1.0/秒
+	check(absf(g.stone_per_sec() - g.QI_MULT[0]) < 1e-9, "无加成灵石速率 = QI_MULT[0] (实际 %s)" % g.fmt(g.stone_per_sec()))
+	g.stones = 100000.0
+	check(g.eta_seconds(100000.0) == 0.0, "灵石足够 eta_seconds=0")
+	check(g.eta_text(100000.0) == "", "灵石足够 eta_text 为空")
+	g.stones = 0.0
+	check(absf(g.eta_seconds(120.0) - 120.0) < 1e-6, "eta_seconds = (价格-灵石)/速率 (120秒, 实际 %s)" % g.eta_seconds(120.0))
+	check(g.eta_text(120.0) == "约 2分 可购", "eta_text 分钟档 (实际 %s)" % g.eta_text(120.0))
+	check(g.eta_text(30.0) == "不足1分可购", "eta_text 不足1分 (实际 %s)" % g.eta_text(30.0))
+	check(g.eta_text(5400.0) == "约 1小时30分 可购", "eta_text 小时档 (实际 %s)" % g.eta_text(5400.0))
+	# 差额部分: 已有灵石时只按缺口计算
+	g.stones = 50.0
+	check(absf(g.eta_seconds(120.0) - 70.0) < 1e-6, "eta 只按缺口计算 (50灵石->70秒, 实际 %s)" % g.eta_seconds(120.0))
+	# fmt_time 回归: 短时长不再显示 0 分
+	check(g.fmt_time(45.0) == "不足1分", "fmt_time 短时长 (实际 %s)" % g.fmt_time(45.0))
+	check(g.fmt_time(7200.0) == "2小时0分", "fmt_time 小时档回归 (实际 %s)" % g.fmt_time(7200.0))
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

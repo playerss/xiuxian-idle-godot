@@ -619,4 +619,28 @@ func fmt_time(sec: float) -> String:
 	var m := int(sec) % 3600 / 60
 	if h > 0:
 		return "%d小时%d分" % [h, m]
-	return "%d分" % maxi(m, 1)
+	if m >= 1:
+		return "%d分" % m
+	return "不足1分"
+
+# ---------- 打磨-12: 购买 ETA (灵石何时足够) ----------
+
+# 灵石攒够所需秒数: 0 = 现在即可购买; -1 = 无灵石收入
+func eta_seconds(cost: float) -> float:
+	if cost <= stones:
+		return 0.0
+	var r: float = stone_per_sec()
+	if r <= 0.0:
+		return -1.0
+	return (cost - stones) / r
+
+# 购买 ETA 文本 (行内提示; "" = 现在买得起)
+func eta_text(cost: float) -> String:
+	var t: float = eta_seconds(cost)
+	if t == 0.0:
+		return ""
+	if t < 0.0:
+		return "无灵石收入"
+	if t < 60.0:
+		return "不足1分可购"
+	return "约 %s 可购" % fmt_time(t)

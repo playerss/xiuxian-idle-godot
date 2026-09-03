@@ -51,6 +51,9 @@ var _ach_hl_seq := 0               # 成就解锁总数缓存 (变化时才刷�
 var _bonus_labels: Array[Label] = []  # 技能/装备页顶栏 总加成汇总标签 (打磨-9)
 var _bonus_text := ""              # 汇总文本缓存 (变化时才刷)
 var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用)
+var _shop_eta: Dictionary = {}     # 法器 id -> 购买 ETA 提示标签 (打磨-12)
+var _equip_eta: Dictionary = {}    # 装备 id -> 购买 ETA 提示标签 (打磨-12)
+var _eta_acc := 0.0                # 打磨-12: ETA 节流累计 (1 秒刷一次)
 
 
 func _ready() -> void:
@@ -224,6 +227,10 @@ func _add_shop_row(it: Dictionary) -> void:
 	info.add_child(_label(it["name"] as String, 15, WHITEISH))
 	info.add_child(_label("%s · 灵气x%.1f" % [it["desc"], it["boost"]], 13, DIM))
 	info.add_child(_label("灵石 %s" % GameData.fmt(it["cost"]), 13, GOLD))
+	# 打磨-12: 购买 ETA 提示 (买不起时显示预计时间, 买得起时隐藏)
+	var eta_l := _label("", 13, DIM)
+	info.add_child(eta_l)
+	_shop_eta[it["id"] as String] = eta_l
 	var btn := _make_button("购买")
 	btn.pressed.connect(_on_buy.bind(it["id"]))
 	row.add_child(btn)
@@ -426,6 +433,10 @@ func _add_equip_row(id: String) -> void:
 	info.add_child(_label("%s · %s" % [e["name"], e["slot_name"]], 15, GameData.TIER_COLOR[int(e["tier"])]))
 	info.add_child(_label(e["desc"] as String, 13, WHITEISH))
 	info.add_child(_label("灵石 %s" % GameData.fmt(float(e["cost"])), 13, GOLD))
+	# 打磨-12: 购买 ETA 提示 (未拥有且买不起时显示预计时间)
+	var eta_l := _label("", 13, DIM)
+	info.add_child(eta_l)
+	_equip_eta[id] = eta_l
 	var btn := _make_button("购买")
 	btn.custom_minimum_size = Vector2(76, 0)
 	btn.pressed.connect(_on_equip_btn.bind(id))
@@ -624,6 +635,11 @@ func _refresh() -> void:
 		var pt: String = g.ach_progress(id)
 		if pl2.text != pt:
 			pl2.text = pt
+	# 打磨-12: 购买 ETA (1 秒节流刷一次, 仅文本变化时写)
+	_eta_acc += get_process_delta_time()
+	if _eta_acc >= 1.0:
+		_eta_acc = 0.0
+		_refresh_eta()
 	# 突破/道行精进闪烁: 事件序号变化时触发 (成功绿闪 / 失败红闪, 打磨-10)
 	if g.break_seq != _break_flash_seq:
 		_break_flash_seq = g.break_seq
@@ -636,6 +652,27 @@ func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
 		return
 	row.set_meta("_hl", hi)
 	row.add_theme_stylebox_override("panel", _card_sb_hi if hi else _card_sb_normal)
+
+
+# 打磨-12: 刷新法器/装备行的购买 ETA (买不起才显示预计时间, 买得起隐藏)
+func _refresh_eta() -> void:
+	var g := GameData
+	for id in _shop_eta:
+		var it: Dictionary = _find_item(str(id))
+		if it.is_empty():
+			continue
+		var l: Label = _shop_eta[id]
+		var t := "" if g.owned.has(str(id)) else g.eta_text(float(it["cost"]))
+		if l.text != t:
+			l.text = t
+	for id in _equip_eta:
+		var e: Dictionary = g.equip_by_id.get(id, {})
+		if e.is_empty():
+			continue
+		var l2: Label = _equip_eta[id]
+		var t2 := "" if g.owned_eq.has(id) else g.eta_text(float(e["cost"]))
+		if l2.text != t2:
+			l2.text = t2
 
 
 func _make_card_sb(hi: bool) -> StyleBoxFlat:
