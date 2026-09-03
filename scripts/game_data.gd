@@ -66,6 +66,8 @@ var owned_eq: Array[String] = []   # 已拥有装备 id
 var equipped: Dictionary = {}      # 部位 slot -> 装备 id
 var ascended := false       # 是否已飞升
 var offline_msg := ""       # 离线收益提示
+var last_break_result := 0  # 上次突破: 0=未触发 1=成功 2=失败 3=飞升
+var break_seq := 0          # 突破事件序号 (每次成功/失败/飞升 +1, UI 据此触发闪烁)
 
 var _active_cd := {}        # 技能 id -> 剩余冷却秒
 var _save_acc := 0.0
@@ -244,19 +246,27 @@ func equipped_name(slot: String) -> String:
 
 # ================= 突破 =================
 
-func try_breakthrough() -> String:
+# roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
+func try_breakthrough(roll: float = -1.0) -> String:
+	last_break_result = 0
 	if ascended:
 		return "你已在仙界, 道无止境 ♪"
 	var cost := breakthrough_cost()
 	if essence < cost:
 		return "灵气不足: 需要 %s" % fmt(cost)
 	essence -= cost
-	if randf() < breakthrough_chance():
+	if roll < 0.0:
+		roll = randf()
+	if roll < breakthrough_chance():
 		_advance()
+		last_break_result = 3 if ascended else 1
+		break_seq += 1
 		if ascended:
 			return "轰——天雷散尽, 你飞升真仙界了! 灵气速率 x100000!"
 		return "突破成功! 当前境界: %s %s" % [realm_name(), layer_name()]
 	else:
+		last_break_result = 2
+		break_seq += 1
 		return "突破失败… 灵气消耗殆尽, 但境界稳固, 卷土重来!"
 
 func _advance() -> void:

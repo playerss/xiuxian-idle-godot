@@ -23,6 +23,12 @@ var _shop_box: VBoxContainer
 var _shop_rows: Dictionary = {}
 var _msg_label: Label
 var _msg_tween: Tween
+var _float_label: Label
+var _float_tween: Tween
+var _break_flash_seq := 0
+var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
+var _flash_sb: StyleBoxFlat       # 闪烁用样式 (成功绿/失败红)
+var _flash_left := 0              # 剩余闪烁帧数
 var _tab: TabContainer
 var _skill_box: VBoxContainer
 var _skill_row_nodes: Dictionary = {}
@@ -40,6 +46,7 @@ var _card_sb_hi: StyleBoxFlat
 func _ready() -> void:
 	_card_sb_normal = _make_card_sb(false)
 	_card_sb_hi = _make_card_sb(true)
+	_btn_sb_normal = _make_btn_sb_normal()
 	_build_ui()
 	if GameData.offline_msg != "":
 		_show_msg(GameData.offline_msg)
@@ -47,6 +54,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_refresh()
+	_flash_step()
 
 
 # ---------- UI 构建 ----------
@@ -100,6 +108,17 @@ func _build_ui() -> void:
 	_msg_label = _label("", 18, GOLD)
 	_msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(_msg_label)
+
+	# 突破浮动提示 (顶层, 居中上浮淡出)
+	_float_label = _label("", 24, GOLD)
+	_float_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_float_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_float_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_float_label.position = Vector2(0, -20)
+	_float_label.modulate = Color(1, 1, 1, 0)
+	_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_float_label)
 
 
 func _make_page(title: String) -> Panel:
@@ -431,6 +450,10 @@ func _refresh() -> void:
 	for id in _equip_row_nodes:
 		var e: Dictionary = g.equip_by_id[id]
 		_apply_card_hl(_equip_row_nodes[id], str(g.equipped.get(str(e["slot"]), "")) == id)
+	# 突破闪烁: 事件序号变化时触发 (成功绿闪 / 失败红闪)
+	if not g.ascended and g.break_seq != _break_flash_seq:
+		_break_flash_seq = g.break_seq
+		_break_flash(int(g.last_break_result))
 
 
 func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
@@ -464,7 +487,9 @@ func _find_item(item_id: String) -> Dictionary:
 # ---------- 事件 ----------
 
 func _on_break() -> void:
-	_show_msg(GameData.try_breakthrough())
+	var msg := GameData.try_breakthrough()
+	_show_msg(msg)
+	_float_break()
 
 
 func _on_buy(item_id: String) -> void:
@@ -491,6 +516,64 @@ func _show_msg(text: String) -> void:
 	_msg_tween = create_tween()
 	_msg_tween.tween_interval(4.0)
 	_msg_tween.tween_property(_msg_label, "modulate", Color(1, 1, 1, 0), 1.5)
+
+
+# 突破浮动提示: 屏幕中央上浮淡出, 成功绿/飞升金/失败红
+func _float_break() -> void:
+	if GameData.last_break_result == 0:
+		return
+	match GameData.last_break_result:
+		1:
+			_float_label.text = "✦ 突破成功! ✦"
+			_float_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.55))
+		3:
+			_float_label.text = "☀ 飞升真仙! 仙凡两隔 ☀"
+			_float_label.add_theme_color_override("font_color", GOLD)
+		_:
+			_float_label.text = "✖ 突破失败… ✖"
+			_float_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
+	_float_label.position = Vector2(0, 12)
+	_float_label.modulate = Color(1, 1, 1, 1)
+	if _float_tween != null and _float_tween.is_valid():
+		_float_tween.kill()
+	_float_tween = create_tween()
+	_float_tween.tween_property(_float_label, "position:y", -36.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_float_tween.parallel().tween_property(_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
+
+
+# 突破按钮闪烁: 成功绿闪 / 失败红闪, 闪烁后恢复默认样式
+func _break_flash(result: int) -> void:
+	if _break_btn == null or _break_btn.disabled:
+		return
+	var col := Color(0.3, 0.9, 0.3) if result == 1 else Color(1.0, 0.4, 0.35)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(col.r * 0.22, col.g * 0.22, col.b * 0.22, 1.0)
+	sb.border_color = col
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	_flash_sb = sb
+	_flash_left = 16   # 每 4 帧切换一次, 共 16 帧 ≈ 0.55s
+	_flash_step()
+
+
+# 突破按钮闪烁步进 (每帧调用; 闪色 4 帧 / 恢复 4 帧 / 闪色 4 帧 / 恢复 8 帧)
+func _flash_step() -> void:
+	if _flash_left <= 0:
+		return
+	_flash_left -= 1
+	var hi := (_flash_left % 8) < 4
+	var sb := _flash_sb if hi else _btn_sb_normal
+	_break_btn.add_theme_stylebox_override("normal", sb)
+	_break_btn.add_theme_stylebox_override("hover", sb)
+	_break_btn.add_theme_stylebox_override("pressed", sb)
+	if _flash_left == 0:
+		_break_btn.add_theme_stylebox_override("normal", _btn_sb_normal)
+		_break_btn.add_theme_stylebox_override("hover", _btn_sb_normal.duplicate())
+		_break_btn.add_theme_stylebox_override("pressed", _btn_sb_normal.duplicate())
 
 
 # ---------- 小工具 ----------
@@ -537,6 +620,17 @@ func _make_button(text: String) -> Button:
 	b.add_theme_color_override("font_color", GOLD)
 	b.add_theme_color_override("font_hover_color", Color(1, 0.95, 0.7))
 	b.add_theme_color_override("font_pressed_color", Color(1, 0.9, 0.5))
+	b.add_theme_stylebox_override("normal", _btn_sb_normal)
+	var sh := _btn_sb_normal.duplicate() as StyleBoxFlat
+	sh.bg_color = Color(0.2, 0.22, 0.3)
+	b.add_theme_stylebox_override("hover", sh)
+	var spb := _btn_sb_normal.duplicate() as StyleBoxFlat
+	spb.bg_color = Color(0.05, 0.06, 0.08)
+	b.add_theme_stylebox_override("pressed", spb)
+	return b
+
+
+func _make_btn_sb_normal() -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.16, 0.17, 0.23)
 	s.border_color = Color(0.3, 0.35, 0.45)
@@ -546,11 +640,4 @@ func _make_button(text: String) -> Button:
 	s.content_margin_right = 12
 	s.content_margin_top = 8
 	s.content_margin_bottom = 8
-	b.add_theme_stylebox_override("normal", s)
-	var sh := s.duplicate() as StyleBoxFlat
-	sh.bg_color = Color(0.2, 0.22, 0.3)
-	b.add_theme_stylebox_override("hover", sh)
-	var spb := s.duplicate() as StyleBoxFlat
-	spb.bg_color = Color(0.05, 0.06, 0.08)
-	b.add_theme_stylebox_override("pressed", spb)
-	return b
+	return s

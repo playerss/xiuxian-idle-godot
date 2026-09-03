@@ -112,12 +112,34 @@ func _init() -> void:
 	# ---------- 突破 ----------
 	g.realm_idx = 0
 	g.layer = 1
-	g.essence = g.breakthrough_cost() + 1.0
+	var seq0: int = g.break_seq
+	# 灵气不足: 不触发事件, 不扣灵气
+	g.essence = g.breakthrough_cost() * 0.5
+	var e2: float = g.essence
+	check(g.try_breakthrough(0.01).find("灵气不足") >= 0, "灵气不足被拒")
+	check(g.last_break_result == 0, "灵气不足不产生事件标记")
+	check(g.break_seq == seq0, "灵气不足 break_seq 不变")
+	check(g.essence == e2, "灵气不足不扣灵气")
+	# 确定性注入 roll: 成功必前进 + 事件计数/结果标记
+	g.essence += g.breakthrough_cost() + 1.0
 	var r0: int = g.realm_idx
 	var l0: int = g.layer
-	var bt: String = g.try_breakthrough()
-	check(bt.find("突破成功") >= 0 or bt.find("突破失败") >= 0, "突破返回正常提示: " + bt)
-	check((g.realm_idx > r0) or (g.realm_idx == r0 and g.layer > l0) or bt.find("失败") >= 0, "成功则层/境界前进")
+	var bt_ok: String = g.try_breakthrough(0.01)
+	check(bt_ok.find("突破成功") >= 0, "注入 roll=0.01 必成功: " + bt_ok)
+	check(g.last_break_result == 1, "成功时 last_break_result==1")
+	check(g.break_seq == seq0 + 1, "成功时 break_seq +1")
+	check((g.realm_idx > r0) or (g.realm_idx == r0 and g.layer > l0), "成功后层/境界前进")
+	# 确定性注入 roll: 失败不前进, 仍扣灵气
+	g.essence = g.breakthrough_cost() + 1.0
+	var r1: int = g.realm_idx
+	var l1: int = g.layer
+	var e1: float = g.essence
+	var bt_fail: String = g.try_breakthrough(0.999)
+	check(bt_fail.find("突破失败") >= 0, "注入 roll=0.999 必失败: " + bt_fail)
+	check(g.realm_idx == r1 and g.layer == l1, "失败后层/境界不变")
+	check(g.last_break_result == 2, "失败时 last_break_result==2")
+	check(g.break_seq == seq0 + 2, "失败时 break_seq +1 (累计 seq0+2)")
+	check(g.essence < e1, "失败仍消耗灵气")
 
 	# ---------- 存档往返 ----------
 	g.save_game()
