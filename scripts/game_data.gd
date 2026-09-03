@@ -156,6 +156,13 @@ func qi_per_sec() -> float:
 func stone_per_sec() -> float:
 	return 1.0 * QI_MULT[realm_idx] * (1.0 + passive_bonus("stone_mult") + passive_bonus("all_mult") + equip_bonus("stone_mult"))
 
+# 灵气倍率构成 (顶栏展示用: 境界基础 / 功法与装备加成)
+func qi_mult_realm() -> float:
+	return QI_MULT[realm_idx]
+
+func qi_mult_skill_equip() -> float:
+	return 1.0 + passive_bonus("qi_mult") + passive_bonus("all_mult") + equip_bonus("qi_mult")
+
 func breakthrough_cost() -> float:
 	return 10.0 * pow(3.0, realm_idx) * layer
 

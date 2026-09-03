@@ -73,6 +73,17 @@ func _init() -> void:
 	check(g.qi_per_sec() >= before_qi, "学习被动后灵气速率提升")
 	check(g.learn_skill(passive_id).find("已经") >= 0, "重复学习被拒")
 
+	# ---------- 打磨-3: 灵气倍率构成 (顶栏展示用接口) ----------
+	var qmr: float = g.qi_mult_realm()
+	check(qmr == g.QI_MULT[0], "qi_mult_realm == QI_MULT[realm_idx] (练气 x1)")
+	check(g.qi_mult_skill_equip() > 1.0, "已学被动后 qi_mult_skill_equip > 1")
+	# 合成一致性: 境界 x (功法装备) 应近似 qi_per_sec / 法器
+	var qi_ratio: float = g.qi_per_sec() / g.item_boost()
+	check(absf(qi_ratio - qmr * g.qi_mult_skill_equip()) < 0.01, "qi_per_sec ≈ 境界x x 功法装备x")
+	g.realm_idx = 3
+	check(g.qi_mult_realm() == g.QI_MULT[3], "qi_mult_realm 随境界变化 (元婴 x40)")
+	g.realm_idx = 0
+
 	# ---------- 主动神通: 释放 / 冷却 ----------
 	check(g.use_active_skill(active_id).find("尚未领悟") >= 0, "未领悟神通不可施展")
 	g.learned.append(active_id)  # 直接注入, 测冷却逻辑

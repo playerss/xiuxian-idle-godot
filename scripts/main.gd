@@ -26,6 +26,7 @@ var _msg_tween: Tween
 var _float_label: Label
 var _float_tween: Tween
 var _break_flash_seq := 0
+var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
 var _flash_sb: StyleBoxFlat       # 闪烁用样式 (成功绿/失败红)
 var _flash_left := 0              # 剩余闪烁帧数
@@ -384,7 +385,14 @@ func _add_equip_row(id: String) -> void:
 
 func _refresh() -> void:
 	var g := GameData
-	_realm_label.text = "境界: %s %s" % [g.realm_name(), g.layer_name()]
+	var realm_mult := g.qi_mult_realm()
+	_realm_label.text = "境界: %s %s · 灵气x%s" % [g.realm_name(), g.layer_name(), g.fmt(realm_mult)]
+	# tooltip: 倍率构成 (境界基础 / 功法装备 / 法器), 仅在数值变化时刷新
+	var tip := "境界灵气倍率 x%s  |  功法/装备 x%.2f  |  法器 x%.1f  |  当前灵气速率 %s/秒" % [
+		g.fmt(realm_mult), g.qi_mult_skill_equip(), g.item_boost(), g.fmt(g.qi_per_sec())]
+	if tip != _realm_tip:
+		_realm_tip = tip
+		_realm_label.tooltip_text = tip
 	_essence_label.text = "灵气 %s" % g.fmt(g.essence)
 	_stones_label.text = "灵石 %s" % g.fmt(g.stones)
 	_qi_label.text = "灵气速率  %s /秒" % g.fmt(g.qi_per_sec())
