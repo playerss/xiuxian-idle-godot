@@ -39,6 +39,8 @@ var _filter_active := ""
 var _equip_box: VBoxContainer
 var _equip_row_nodes: Dictionary = {}
 var _equip_btns: Dictionary = {}
+var _equip_filter_btns: Dictionary = {}  # 部位 id -> 筛选按钮 (打磨-11)
+var _equip_filter_active := ""           # "" = 全部
 var _slot_labels: Dictionary = {}
 var _card_sb_normal: StyleBoxFlat
 var _card_sb_hi: StyleBoxFlat
@@ -379,6 +381,22 @@ func _build_equip_page(page: Panel) -> void:
 		btn.pressed.connect(_on_unequip.bind(slot))
 		cell.add_child(btn)
 
+	# 部位筛选 (打磨-11: 140 件按部位过滤, 降低查找成本)
+	var eq_filter_bar := HBoxContainer.new()
+	eq_filter_bar.add_theme_constant_override("separation", 8)
+	outer.add_child(eq_filter_bar)
+	var eq_all := _make_button("全部")
+	eq_all.toggle_mode = true
+	eq_all.pressed.connect(_on_equip_filter.bind(""))
+	eq_filter_bar.add_child(eq_all)
+	_equip_filter_btns[""] = eq_all
+	for slot in GameData.SLOTS:
+		var eb := _make_button(GameData.SLOT_CN[slot] as String)
+		eb.toggle_mode = true
+		eb.pressed.connect(_on_equip_filter.bind(slot))
+		eq_filter_bar.add_child(eb)
+		_equip_filter_btns[slot] = eb
+
 	# 装备列表 (已拥有=穿戴, 未拥有=购买)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -665,6 +683,19 @@ func _on_unequip(slot: String) -> void:
 	_show_msg(GameData.unequip(slot))
 
 
+# 打磨-11: 装备部位筛选 (显示/隐藏对应行)
+func _on_equip_filter(slot: String) -> void:
+	_equip_filter_active = slot
+	for key in _equip_filter_btns:
+		var b: Button = _equip_filter_btns[key]
+		b.set_pressed_no_signal(slot == str(key))
+	for id in _equip_row_nodes:
+		var e: Dictionary = GameData.equip_by_id[id]
+		var row: Node = _equip_row_nodes[id]
+		row.visible = slot == "" or str(e["slot"]) == slot
+	_show_msg("装备筛选: " + (str(GameData.SLOT_CN[slot]) if slot != "" else "全部"))
+
+
 func _show_msg(text: String) -> void:
 	_msg_label.text = text
 	_msg_label.modulate = Color.WHITE
@@ -683,6 +714,9 @@ func _float_break() -> void:
 		1:
 			_float_label.text = "✦ 突破成功! ✦"
 			_float_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.55))
+		2:
+			_float_label.text = "✖ 道行精进失败… ✖" if GameData.ascended else "✖ 突破失败… ✖"
+			_float_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
 		3:
 			_float_label.text = "☀ 飞升真仙! 仙凡两隔 ☀"
 			_float_label.add_theme_color_override("font_color", GOLD)

@@ -463,6 +463,27 @@ func _init() -> void:
 	check(g.essence == 0.0, "飞升后离线不涨灵气")
 	check(g.offline_msg.find("道行") >= 0, "离线提示含道行 (实际 %s)" % g.offline_msg)
 
+	# ---------- 打磨-11: 神通飞升后爆发转道行 ----------
+	g.learned.append(active_id)
+	g._active_cd.erase(active_id)
+	var s_act2: Dictionary = g.skill_by_id[active_id]
+	var dao_b4: float = g.dao
+	var da_msg: String = g.use_active_skill(active_id)
+	check(da_msg.find("获得道行") >= 0, "飞升后神通爆发文案为道行 (实际: %s)" % da_msg)
+	check(g.dao >= dao_b4 + g.qi_per_sec() * float(s_act2["value"]) * 0.99, "飞升后神通爆发增加道行 (≈速率x秒数)")
+	check(absf(g.essence) < 1e-9, "飞升后神通不增灵气")
+	check(not g.active_ready(active_id), "飞升后神通同样进冷却")
+	check(g.skill_detail(active_id).find("飞升后: 爆发转为获得道行") >= 0, "skill_detail 神通含飞升道行说明")
+	# 未飞升路径回归: 爆发仍加灵气, 不增道行
+	g.ascended = false
+	var dao_b5: float = g.dao
+	var ess_b5: float = g.essence
+	g._active_cd.erase(active_id)
+	var da_msg2: String = g.use_active_skill(active_id)
+	check(da_msg2.find("获得灵气") >= 0, "未飞升神通爆发文案为灵气 (实际: %s)" % da_msg2)
+	check(g.essence >= ess_b5 + g.qi_per_sec() * float(s_act2["value"]) * 0.99, "未飞升神通爆发增加灵气")
+	check(absf(g.dao - dao_b5) < 1e-9, "未飞升神通不增道行")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

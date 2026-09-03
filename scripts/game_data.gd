@@ -293,6 +293,8 @@ func skill_detail(id: String) -> String:
 		return ""
 	var type_cn := "主动·神通" if str(s["type"]) == "active" else "被动·功法"
 	var tip := "「%s」 %s · %s\n%s" % [s["name"], s["tier_name"], type_cn, s["desc"]]
+	if str(s["type"]) == "active":
+		tip += "\n(飞升后: 爆发转为获得道行)"
 	var r: Dictionary = REALMS[int(s["unlock_realm"])]
 	tip += "\n领悟条件: %s 第%d层" % [r["name"], int(s["unlock_layer"])]
 	tip += "\n状态: %s" % ("已领悟" if learned.has(id) else "未领悟")
@@ -374,8 +376,12 @@ func use_active_skill(id: String) -> String:
 	if not active_ready(id):
 		return "冷却中: 还需 %d 秒" % active_cd_left(id)
 	var gain := float(qi_per_sec()) * float(s["value"])
-	essence += gain
 	_active_cd[id] = float(s["cooldown"])
+	# 打磨-11: 飞升后灵气不再使用, 神通爆发改为获得道行
+	if ascended:
+		dao += gain
+		return "施展「%s」! 瞬间获得道行 %s!" % [s["name"], fmt(gain)]
+	essence += gain
 	return "施展「%s」! 瞬间获得灵气 %s!" % [s["name"], fmt(gain)]
 
 # ================= 装备 =================
