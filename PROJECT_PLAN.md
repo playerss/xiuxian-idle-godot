@@ -82,3 +82,5 @@ M1-M4 已全部完成（2026-09-03）。后续按以下小项推进，每次一�
 - [x] 打磨-6：Steam 上架准备（app_id 配置、SteamAPI 初始化骨架、成就定义表、app manifest）（16 成就数据驱动 data/achievements.json，steam.gd 骨架 autoload Windows+SDK 真接入/否则降级，成就判定入 GameData + 存档 ach_done 字段，steam_app.json manifest，自测 100 项）
 - [x] 打磨-7：成就面板 UI（16 成就列表：已解锁高亮 / 条件提示 / tooltip）（成就 Tab 页, 计数 N/16, 已解锁金框+★+绿字, 未解锁☆+进度提示 (进度/目标), 行 tooltip 条件说明; 状态变化才刷样式, 自测 +7 项 ach_progress 断言)
 - [ ] 打磨-8：Windows 主机接入 Steamworks 官方 SDK 实测（需 Windows 环境 + 真实 app_id，本机仅配置就绪）
+- [x] 打磨-9：技能/装备/法器行 tooltip 详情（名称/品质/类型/效果/领悟条件/状态行）+ 技能/装备页顶栏当前总加成汇总（灵气/灵石/突破/离线/法器乘数）（GameData.skill_detail/equip_detail/item_detail/bonus_summary/bonus_summary_text，UI 仅状态/文本变化时刷新，自测 123 项）
+- [ ] 打磨-10（候选）：飞升后目标玩法 — 真仙境道行进度/仙界资源，给满级玩家一个挂机目标
