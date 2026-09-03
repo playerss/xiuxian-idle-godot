@@ -1,9 +1,11 @@
 extends Node
-## 全局游戏数据：挂机核心逻辑 + 存档 (autoload: GameData)
+## 全局游戏数据：挂机核心 + 技能/装备 + 存档 (autoload: GameData)
 
 const SAVE_PATH := "user://save.json"
+const SKILLS_JSON := "res://data/skills.json"
+const EQUIP_JSON := "res://data/equipment.json"
 const OFFLINE_CAP_SEC := 8 * 3600.0   # 离线收益上限 8 小时
-const OFFLINE_RATE := 0.5             # 离线效率 50%
+const OFFLINE_BASE_RATE := 0.5       # 基础离线效率 50%
 const SAVE_INTERVAL_SEC := 15.0
 
 # 境界表: 每个境界有若干层, 逐层突破
@@ -31,18 +33,45 @@ const ITEMS := [
 	{"id": "immortal_flute", "name": "仙音笛", "desc": "一缕仙音, 道心通明", "cost": 500000, "boost": 10.0},
 ]
 
+# 装备部位
+const SLOTS := ["weapon", "robe", "amulet", "bead", "boot"]
+const SLOT_CN := {"weapon": "武器", "robe": "法袍", "amulet": "玉佩", "bead": "灵珠", "boot": "云靴"}
+# 技能类别
+const SKILL_CAT_CN := {"sword": "剑法", "spell": "法术", "mind": "心法", "body": "身法", "divine": "神通"}
+# 品质颜色
+const TIER_COLOR := {
+	0: Color(0.6, 0.62, 0.68),    # 凡品 灰
+	1: Color(0.55, 0.85, 0.55),   # 灵品 绿
+	2: Color(0.5, 0.7, 0.98),     # 玄品 蓝
+	3: Color(0.98, 0.85, 0.4),    # 地品 黄
+	4: Color(0.98, 0.6, 0.35),    # 天品 橙
+	5: Color(0.8, 0.55, 0.98),    # 仙品 紫
+	6: Color(0.98, 0.86, 0.5),    # 神品 金
+}
+
+# ---- 数据表 (加载自 JSON) ----
+var skill_by_id := {}
+var equip_by_id := {}
+var skill_ids: Array = []
+var equip_ids: Array = []
+
 # ---- 玩家状态 ----
 var realm_idx := 0          # 当前境界索引
 var layer := 1              # 当前层数 (1-based)
 var essence := 0.0          # 灵气 (突破资源)
 var stones := 0.0           # 灵石 (购买资源)
-var owned: Array[String] = []  # 已拥有法器 id
+var owned: Array[String] = []      # 已拥有法器 id
+var learned: Array[String] = []    # 已学习技能 id
+var owned_eq: Array[String] = []   # 已拥有装备 id
+var equipped: Dictionary = {}      # 部位 slot -> 装备 id
 var ascended := false       # 是否已飞升
 var offline_msg := ""       # 离线收益提示
 
+var _active_cd := {}        # 技能 id -> 剩余冷却秒
 var _save_acc := 0.0
 
 func _ready() -> void:
+	load_data()
 	load_game()
 
 func _process(delta: float) -> void:
@@ -50,6 +79,11 @@ func _process(delta: float) -> void:
 	if not ascended:
 		essence += qi_per_sec() * delta
 		stones += stone_per_sec() * delta
+	# 神通冷却
+	for id in _active_cd.keys():
+		_active_cd[id] = maxf(0.0, _active_cd[id] - delta)
+		if _active_cd[id] <= 0.0:
+			_active_cd.erase(id)
 	# 定期存档
 	_save_acc += delta
 	if _save_acc >= SAVE_INTERVAL_SEC:
@@ -60,7 +94,30 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		save_game()
 
-# ---- 数值计算 ----
+# ================= 数据加载 =================
+
+func load_data() -> void:
+	var s: Dictionary = _load_json(SKILLS_JSON)
+	if s.has("skills"):
+		for item in s["skills"]:
+			skill_by_id[item["id"]] = item
+			skill_ids.append(item["id"])
+	var e: Dictionary = _load_json(EQUIP_JSON)
+	if e.has("equipment"):
+		for item in e["equipment"]:
+			equip_by_id[item["id"]] = item
+			equip_ids.append(item["id"])
+
+func _load_json(path: String):
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		push_error("无法打开数据文件: " + path)
+		return null
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	f.close()
+	return parsed if typeof(parsed) == TYPE_DICTIONARY else null
+
+# ================= 数值计算 =================
 
 func item_boost() -> float:
 	var m := 1.0
@@ -69,20 +126,123 @@ func item_boost() -> float:
 			m *= it["boost"] as float
 	return m
 
+# 已学被动技能的加成汇总 (effect -> 总比例)
+func passive_bonus(eff: String) -> float:
+	var total := 0.0
+	for id in learned:
+		var s: Dictionary = skill_by_id.get(id, {})
+		if s.is_empty() or str(s.get("type", "")) != "passive" or str(s.get("effect", "")) != eff:
+			continue
+		total += float(s.get("value", 0.0))
+	return total
+
+# 已穿戴装备的加成汇总
+func equip_bonus(eff: String) -> float:
+	var total := 0.0
+	for slot in SLOTS:
+		var id: String = equipped.get(slot, "")
+		if id == "":
+			continue
+		var e: Dictionary = equip_by_id.get(id, {})
+		if not e.is_empty():
+			total += float(e.get(eff, 0.0))
+	return total
+
 func qi_per_sec() -> float:
-	return QI_MULT[realm_idx] * item_boost()
+	return QI_MULT[realm_idx] * item_boost() * (1.0 + passive_bonus("qi_mult") + passive_bonus("all_mult") + equip_bonus("qi_mult"))
 
 func stone_per_sec() -> float:
-	return 1.0 * QI_MULT[realm_idx]
+	return 1.0 * QI_MULT[realm_idx] * (1.0 + passive_bonus("stone_mult") + passive_bonus("all_mult") + equip_bonus("stone_mult"))
 
 func breakthrough_cost() -> float:
-	# 突破到下一层所需灵气
 	return 10.0 * pow(3.0, realm_idx) * layer
 
 func breakthrough_chance() -> float:
-	return maxf(0.55, 1.0 - 0.04 * realm_idx)
+	return clampf(0.85 - 0.04 * realm_idx + passive_bonus("bt_chance") + equip_bonus("bt_chance"), 0.05, 0.99)
 
-# ---- 玩家操作 ----
+func offline_rate() -> float:
+	return clampf(OFFLINE_BASE_RATE * (1.0 + passive_bonus("offline_rate") + equip_bonus("offline_rate")), 0.0, 1.0)
+
+# ================= 技能 =================
+
+func can_learn(id: String) -> bool:
+	var s: Dictionary = skill_by_id.get(id, {})
+	if s.is_empty():
+		return false
+	return realm_idx > s["unlock_realm"] or (realm_idx == s["unlock_realm"] and layer >= s["unlock_layer"])
+
+func learn_skill(id: String) -> String:
+	if learned.has(id):
+		return "已经学会了哦"
+	var s: Dictionary = skill_by_id.get(id, {})
+	if s.is_empty():
+		return "未找到该技能"
+	if not can_learn(id):
+		return "境界不足: 需要 %s 才能领悟" % REALMS[s["unlock_realm"]]["name"]
+	learned.append(id)
+	return "领悟「%s」! %s" % [s["name"], s["desc"]]
+
+func active_ready(id: String) -> bool:
+	return _active_cd.get(id, 0.0) <= 0.0
+
+func active_cd_left(id: String) -> int:
+	return int(ceil(_active_cd.get(id, 0.0)))
+
+func use_active_skill(id: String) -> String:
+	var s: Dictionary = skill_by_id.get(id, {})
+	if s.is_empty() or s.get("type", "") != "active":
+		return "这不是主动神通"
+	if not learned.has(id):
+		return "尚未领悟, 无法施展"
+	if not active_ready(id):
+		return "冷却中: 还需 %d 秒" % active_cd_left(id)
+	var gain := float(qi_per_sec()) * float(s["value"])
+	essence += gain
+	_active_cd[id] = float(s["cooldown"])
+	return "施展「%s」! 瞬间获得灵气 %s!" % [s["name"], fmt(gain)]
+
+# ================= 装备 =================
+
+func buy_equipment(id: String) -> String:
+	if owned_eq.has(id):
+		return "已经拥有了哦"
+	var e: Dictionary = equip_by_id.get(id, {})
+	if e.is_empty():
+		return "未找到该装备"
+	if stones < float(e["cost"]):
+		return "灵石不足: 需要 %s" % fmt(float(e["cost"]))
+	stones -= float(e["cost"])
+	owned_eq.append(id)
+	var msg := "购得「%s」(%s)" % [e["name"], e["tier_name"]]
+	var slot := str(e["slot"])
+	if equipped.get(slot) == null:
+		equipped[slot] = id
+		msg += ", 已自动穿戴!"
+	return msg
+
+func equip_equipment(id: String) -> String:
+	if not owned_eq.has(id):
+		return "尚未拥有该装备"
+	var e: Dictionary = equip_by_id.get(id, {})
+	if e.is_empty():
+		return "未找到该装备"
+	equipped[str(e["slot"])] = id
+	return "已穿戴「%s」" % e["name"]
+
+func unequip(slot: String) -> String:
+	if equipped.has(slot):
+		equipped.erase(slot)
+		return "已卸下" + SLOT_CN[slot]
+	return SLOT_CN[slot] + " 上没有装备"
+
+func equipped_name(slot: String) -> String:
+	var id: String = equipped.get(slot, "")
+	if id == "":
+		return "(空)"
+	var e: Dictionary = equip_by_id.get(id, {})
+	return str(e["name"]) if not e.is_empty() else "(空)"
+
+# ================= 突破 =================
 
 func try_breakthrough() -> String:
 	if ascended:
@@ -122,7 +282,7 @@ func try_buy_item(item_id: String) -> String:
 				return "灵石不足: 需要 %s" % fmt(it["cost"])
 	return "未找到该法器"
 
-# ---- 存档 ----
+# ================= 存档 =================
 
 func save_game() -> void:
 	var data := {
@@ -131,6 +291,9 @@ func save_game() -> void:
 		"essence": essence,
 		"stones": stones,
 		"owned": owned,
+		"skills": learned,
+		"eq_owned": owned_eq,
+		"equipped": equipped,
 		"ascended": ascended,
 		"ts": int(Time.get_unix_time_from_system()),
 	}
@@ -143,7 +306,7 @@ func load_game() -> void:
 	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if f == null:
 		return
-	var parsed = JSON.parse_string(f.get_as_text())
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
 	f.close()
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return
@@ -152,25 +315,38 @@ func load_game() -> void:
 	essence = float(parsed.get("essence", 0.0))
 	stones = float(parsed.get("stones", 0.0))
 	ascended = bool(parsed.get("ascended", false))
-	var ow = parsed.get("owned", [])
-	owned.clear()
-	if typeof(ow) == TYPE_ARRAY:
-		for v in ow:
-			if typeof(v) == TYPE_STRING:
-				owned.append(v)
+	owned = _str_array(parsed.get("owned", []))
+	learned = _str_array(parsed.get("skills", []))
+	owned_eq = _str_array(parsed.get("eq_owned", []))
+	equipped = {}
+	var eq: Dictionary = parsed.get("equipped", {})
+	if typeof(eq) == TYPE_DICTIONARY:
+		for slot in SLOTS:
+			var id: String = eq.get(slot, "")
+			if typeof(id) == TYPE_STRING and owned_eq.has(id):
+				equipped[slot] = id
 	# 离线收益
 	var ts := int(parsed.get("ts", 0))
 	if ts > 0:
 		var elapsed := clampf(Time.get_unix_time_from_system() - float(ts), 0.0, OFFLINE_CAP_SEC)
 		if elapsed > 60.0 and not ascended:
-			var ge := qi_per_sec() * elapsed * OFFLINE_RATE
-			var gs := stone_per_sec() * elapsed * OFFLINE_RATE
+			var rate := offline_rate()
+			var ge := qi_per_sec() * elapsed * rate
+			var gs := stone_per_sec() * elapsed * rate
 			essence += ge
 			stones += gs
-			offline_msg = "离线 %s, 效率50%%, 收获灵气 %s, 灵石 %s" % [
-				fmt_time(elapsed), fmt(ge), fmt(gs)]
+			offline_msg = "离线 %s, 效率%0.0f%%, 收获灵气 %s, 灵石 %s" % [
+				fmt_time(elapsed), rate * 100.0, fmt(ge), fmt(gs)]
 
-# ---- 展示用 ----
+func _str_array(v) -> Array[String]:
+	var out: Array[String] = []
+	if typeof(v) == TYPE_ARRAY:
+		for item in v:
+			if typeof(item) == TYPE_STRING:
+				out.append(item)
+	return out
+
+# ================= 展示 =================
 
 func realm_name() -> String:
 	return REALMS[realm_idx]["name"] as String

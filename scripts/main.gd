@@ -1,8 +1,9 @@
 extends Control
-## 修仙挂机 · 主界面 (UI 全部代码构建)
+## 修仙挂机 · 主界面 (UI 全部代码构建, Tab: 修行/技能/装备)
 
 const BG := Color(0.07, 0.08, 0.11)
 const PANEL_BG := Color(0.12, 0.13, 0.18)
+const CARD_BG := Color(0.16, 0.17, 0.22)
 const GOLD := Color(0.98, 0.86, 0.5)
 const CYAN := Color(0.62, 0.9, 0.95)
 const DIM := Color(0.6, 0.62, 0.68)
@@ -18,9 +19,19 @@ var _bar_bg: ColorRect
 var _bar_fill: ColorRect
 var _break_btn: Button
 var _shop_box: VBoxContainer
-var _msg_label: Label
 var _shop_rows: Dictionary = {}
+var _msg_label: Label
 var _msg_tween: Tween
+var _tab: TabContainer
+var _skill_box: VBoxContainer
+var _skill_row_nodes: Dictionary = {}
+var _skill_btns: Dictionary = {}
+var _filter_btns: Dictionary = {}
+var _filter_active := ""
+var _equip_box: VBoxContainer
+var _equip_row_nodes: Dictionary = {}
+var _equip_btns: Dictionary = {}
+var _slot_labels: Dictionary = {}
 
 
 func _ready() -> void:
@@ -47,7 +58,7 @@ func _build_ui() -> void:
 	root.offset_top = 14
 	root.offset_right = -16
 	root.offset_bottom = -12
-	root.add_theme_constant_override("separation", 12)
+	root.add_theme_constant_override("separation", 10)
 	add_child(root)
 
 	# 顶栏
@@ -58,23 +69,56 @@ func _build_ui() -> void:
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(sp)
-	_realm_label = _label("", 20, CYAN)
+	_realm_label = _label("", 19, CYAN)
 	top.add_child(_realm_label)
+	_essence_label = _label("灵气 0", 19, GOLD)
+	top.add_child(_essence_label)
+	_stones_label = _label("灵石 0", 19, WHITEISH)
+	top.add_child(_stones_label)
 
-	# 中部
-	var mid := HBoxContainer.new()
-	mid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mid.add_theme_constant_override("separation", 16)
-	root.add_child(mid)
+	# Tab
+	_tab = TabContainer.new()
+	_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(_tab)
+	var page1 := _make_page("修行")
+	var page2 := _make_page("技能")
+	var page3 := _make_page("装备")
+	_tab.add_child(page1)
+	_tab.add_child(page2)
+	_tab.add_child(page3)
 
-	# 左面板: 修行状态
-	var left := _add_panel(mid)
+	_build_training_page(page1)
+	_build_skill_page(page2)
+	_build_equip_page(page3)
+
+	# 底部消息
+	_msg_label = _label("", 18, GOLD)
+	_msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(_msg_label)
+
+
+func _make_page(title: String) -> Panel:
+	var p := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	p.add_theme_stylebox_override("panel", sb)
+	p.name = title
+	return p
+
+
+func _build_training_page(page: Panel) -> void:
+	var wrap := HBoxContainer.new()
+	wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wrap.offset_left = 10
+	wrap.offset_top = 8
+	wrap.offset_right = -10
+	wrap.offset_bottom = -8
+	wrap.add_theme_constant_override("separation", 16)
+	page.add_child(wrap)
+
+	# 左: 修行状态 + 法器
+	var left := _add_panel(wrap)
 	left.add_child(_label("修 行 状 态", 15, DIM))
-	left.add_child(_sep())
-	_essence_label = _label("灵气  0", 26, GOLD)
-	left.add_child(_essence_label)
-	_stones_label = _label("灵石  0", 18, WHITEISH)
-	left.add_child(_stones_label)
 	left.add_child(_sep())
 	_qi_label = _label("灵气速率  0 /秒", 15, CYAN)
 	left.add_child(_qi_label)
@@ -95,27 +139,25 @@ func _build_ui() -> void:
 	_break_btn = _make_button("尝试突破")
 	_break_btn.pressed.connect(_on_break)
 	left.add_child(_break_btn)
-	var hint := _label("挂机自动积累灵气与灵石, 灵气攒够后点击突破。", 13, DIM)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	left.add_child(hint)
-
-	# 右面板: 法器阁
-	var right := _add_panel(mid)
-	right.add_child(_label("法 器 阁", 18, GOLD))
-	right.add_child(_sep())
+	left.add_child(_sep())
+	left.add_child(_label("法 器", 15, DIM))
 	_shop_box = VBoxContainer.new()
 	_shop_box.add_theme_constant_override("separation", 10)
-	right.add_child(_shop_box)
+	left.add_child(_shop_box)
 	for it in GameData.ITEMS:
 		_add_shop_row(it)
-	var tail := Control.new()
-	tail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_child(tail)
 
-	# 底部消息
-	_msg_label = _label("", 18, GOLD)
-	_msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(_msg_label)
+	# 右: 境界阶梯
+	var right := _add_panel(wrap)
+	right.add_child(_label("境 界 阶 梯", 15, DIM))
+	right.add_child(_sep())
+	for i in GameData.REALMS.size():
+		var r: Dictionary = GameData.REALMS[i]
+		var name_c := GOLD if i == GameData.realm_idx else WHITEISH
+		right.add_child(_label("%s × %d 层  (灵气x%.0f)" % [r["name"], r["layers"], GameData.QI_MULT[i]], 14, name_c))
+	var hint := _label("挂机自动积累灵气与灵石, 灵气攒够后点击突破。境界越高, 挂机越快。", 13, DIM)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	right.add_child(hint)
 
 
 func _add_shop_row(it: Dictionary) -> void:
@@ -126,13 +168,206 @@ func _add_shop_row(it: Dictionary) -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)
 	row.add_child(info)
-	info.add_child(_label(it["name"] as String, 16, WHITEISH))
-	info.add_child(_label("%s · 灵气速率 x%.1f" % [it["desc"], it["boost"]], 13, DIM))
-	info.add_child(_label("灵石 %s" % GameData.fmt(it["cost"]), 14, GOLD))
+	info.add_child(_label(it["name"] as String, 15, WHITEISH))
+	info.add_child(_label("%s · 灵气x%.1f" % [it["desc"], it["boost"]], 13, DIM))
+	info.add_child(_label("灵石 %s" % GameData.fmt(it["cost"]), 13, GOLD))
 	var btn := _make_button("购买")
 	btn.pressed.connect(_on_buy.bind(it["id"]))
 	row.add_child(btn)
 	_shop_rows[it["id"] as String] = btn
+
+
+# ---------- 技能页 ----------
+
+func _build_skill_page(page: Panel) -> void:
+	var outer := VBoxContainer.new()
+	outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	outer.offset_left = 10
+	outer.offset_top = 8
+	outer.offset_right = -10
+	outer.offset_bottom = -8
+	outer.add_theme_constant_override("separation", 8)
+	page.add_child(outer)
+
+	var filter_bar := HBoxContainer.new()
+	filter_bar.add_theme_constant_override("separation", 8)
+	outer.add_child(filter_bar)
+	var all_btn := _make_button("全部")
+	all_btn.toggle_mode = true
+	all_btn.pressed.connect(_on_filter.bind(""))
+	filter_bar.add_child(all_btn)
+	_filter_btns[""] = all_btn
+	for cat in GameData.SKILL_CAT_CN:
+		var b := _make_button(GameData.SKILL_CAT_CN[cat] as String)
+		b.toggle_mode = true
+		b.pressed.connect(_on_filter.bind(str(cat)))
+		filter_bar.add_child(b)
+		_filter_btns[cat] = b
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	outer.add_child(scroll)
+	_skill_box = VBoxContainer.new()
+	_skill_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_skill_box.add_theme_constant_override("separation", 6)
+	scroll.add_child(_skill_box)
+	for id in GameData.skill_ids:
+		_add_skill_row(id)
+
+
+func _add_skill_row(id: String) -> void:
+	var s: Dictionary = GameData.skill_by_id[id]
+	var row := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = CARD_BG
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	row.add_theme_stylebox_override("panel", sb)
+	_skill_box.add_child(row)
+
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 10)
+	row.add_child(hb)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 2)
+	hb.add_child(info)
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 8)
+	info.add_child(name_row)
+	name_row.add_child(_label(s["name"] as String, 15, GameData.TIER_COLOR[int(s["tier"])]))
+	name_row.add_child(_label(s["tier_name"] as String, 13, DIM))
+	var is_active := str(s["type"]) == "active"
+	name_row.add_child(_label("[" + ("神通" if is_active else "功法") + "] " + str(s["category_name"]), 13, CYAN if is_active else DIM))
+	info.add_child(_label(s["desc"] as String, 13, WHITEISH))
+	info.add_child(_label("领悟条件: %s 第%d层" % [GameData.REALMS[int(s["unlock_realm"])]["name"], int(s["unlock_layer"])], 12, DIM))
+
+	var btn := _make_button("领悟")
+	btn.custom_minimum_size = Vector2(76, 0)
+	btn.pressed.connect(_on_skill_btn.bind(id, is_active))
+	hb.add_child(btn)
+	_skill_btns[id] = btn
+	_skill_row_nodes[id] = row
+
+
+func _on_filter(cat: String) -> void:
+	_filter_active = cat
+	for key in _filter_btns:
+		var b: Button = _filter_btns[key]
+		b.set_pressed_no_signal(cat == str(key))
+	# 排序: 已学在前, 其次按品质
+	var order: Array = []
+	for id in GameData.skill_ids:
+		var s: Dictionary = GameData.skill_by_id[id]
+		if _filter_active != "" and str(s["category"]) != _filter_active:
+			continue
+		order.append(id)
+	order.sort_custom(_skill_sort)
+	# 显示/隐藏
+	for id in GameData.skill_ids:
+		var row: Node = _skill_row_nodes[id]
+		row.visible = order.has(id)
+	# 重排: 按 order 顺序逐个移到末尾, 最终顺序即 order
+	for idx in order.size():
+		var row: Node = _skill_row_nodes[order[idx]]
+		_skill_box.move_child(row, _skill_box.get_child_count() - 1)
+	_show_msg("筛选: " + (_filter_active if _filter_active != "" else "全部"))
+
+
+func _skill_sort(a: String, b: String) -> bool:
+	var sa: Dictionary = GameData.skill_by_id[a]
+	var sb2: Dictionary = GameData.skill_by_id[b]
+	var a_learned := int(GameData.learned.has(a))
+	var b_learned := int(GameData.learned.has(b))
+	if a_learned != b_learned:
+		return a_learned < b_learned
+	if int(sa["tier"]) != int(sb2["tier"]):
+		return int(sa["tier"]) < int(sb2["tier"])
+	return a < b
+
+
+func _on_skill_btn(id: String, is_active: bool) -> void:
+	if is_active:
+		_show_msg(GameData.use_active_skill(id))
+	else:
+		_show_msg(GameData.learn_skill(id))
+
+
+# ---------- 装备页 ----------
+
+func _build_equip_page(page: Panel) -> void:
+	var outer := VBoxContainer.new()
+	outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	outer.offset_left = 10
+	outer.offset_top = 8
+	outer.offset_right = -10
+	outer.offset_bottom = -8
+	outer.add_theme_constant_override("separation", 10)
+	page.add_child(outer)
+
+	# 已穿戴槽位
+	var slot_bar := HBoxContainer.new()
+	slot_bar.add_theme_constant_override("separation", 10)
+	outer.add_child(slot_bar)
+	for slot in GameData.SLOTS:
+		var cell := VBoxContainer.new()
+		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cell.add_theme_constant_override("separation", 4)
+		slot_bar.add_child(cell)
+		cell.add_child(_label(GameData.SLOT_CN[slot] as String, 14, DIM))
+		var name_l := _label("(空)", 15, WHITEISH)
+		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cell.add_child(name_l)
+		_slot_labels[slot] = name_l
+		var btn := _make_button("卸下")
+		btn.pressed.connect(_on_unequip.bind(slot))
+		cell.add_child(btn)
+
+	# 装备列表 (已拥有=穿戴, 未拥有=购买)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	outer.add_child(scroll)
+	_equip_box = VBoxContainer.new()
+	_equip_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_equip_box.add_theme_constant_override("separation", 6)
+	scroll.add_child(_equip_box)
+	for id in GameData.equip_ids:
+		_add_equip_row(id)
+
+
+func _add_equip_row(id: String) -> void:
+	var e: Dictionary = GameData.equip_by_id[id]
+	var row := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = CARD_BG
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	row.add_theme_stylebox_override("panel", sb)
+	_equip_box.add_child(row)
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 10)
+	row.add_child(hb)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 2)
+	hb.add_child(info)
+	info.add_child(_label("%s · %s" % [e["name"], e["slot_name"]], 15, GameData.TIER_COLOR[int(e["tier"])]))
+	info.add_child(_label(e["desc"] as String, 13, WHITEISH))
+	info.add_child(_label("灵石 %s" % GameData.fmt(float(e["cost"])), 13, GOLD))
+	var btn := _make_button("购买")
+	btn.custom_minimum_size = Vector2(76, 0)
+	btn.pressed.connect(_on_equip_btn.bind(id))
+	hb.add_child(btn)
+	_equip_btns[id] = btn
+	_equip_row_nodes[id] = row
 
 
 # ---------- 每帧刷新 ----------
@@ -140,8 +375,8 @@ func _add_shop_row(it: Dictionary) -> void:
 func _refresh() -> void:
 	var g := GameData
 	_realm_label.text = "境界: %s %s" % [g.realm_name(), g.layer_name()]
-	_essence_label.text = "灵气  %s" % g.fmt(g.essence)
-	_stones_label.text = "灵石  %s" % g.fmt(g.stones)
+	_essence_label.text = "灵气 %s" % g.fmt(g.essence)
+	_stones_label.text = "灵石 %s" % g.fmt(g.stones)
 	_qi_label.text = "灵气速率  %s /秒" % g.fmt(g.qi_per_sec())
 	_stone_rate_label.text = "灵石速率  %s /秒" % g.fmt(g.stone_per_sec())
 	_progress_label.text = "突破进度  %d%%" % int(g.breakthrough_progress())
@@ -150,7 +385,8 @@ func _refresh() -> void:
 		_break_btn.text = "已飞升真仙 · 仙凡两隔 ♪"
 		_break_btn.disabled = true
 	else:
-		_break_btn.text = "尝试突破 · 耗 %s 灵气" % g.fmt(g.breakthrough_cost())
+		_break_btn.text = "尝试突破 · 耗 %s 灵气 (成功率%0.0f%%)" % [g.fmt(g.breakthrough_cost()), g.breakthrough_chance() * 100.0]
+	# 法器
 	for id in _shop_rows:
 		var btn: Button = _shop_rows[id]
 		var it: Dictionary = _find_item(id)
@@ -160,6 +396,44 @@ func _refresh() -> void:
 		else:
 			btn.text = "购买"
 			btn.disabled = g.stones < it["cost"]
+	# 技能
+	for id in _skill_btns:
+		var s: Dictionary = GameData.skill_by_id[id]
+		var btn: Button = _skill_btns[id]
+		if str(s["type"]) == "active":
+			if not g.learned.has(id):
+				btn.text = "未领悟"
+				btn.disabled = true
+			elif not g.active_ready(id):
+				btn.text = "冷却%d秒" % g.active_cd_left(id)
+				btn.disabled = true
+			else:
+				btn.text = "施展"
+				btn.disabled = false
+		else:
+			if g.learned.has(id):
+				btn.text = "已领悟"
+				btn.disabled = true
+			elif g.can_learn(id):
+				btn.text = "领悟"
+				btn.disabled = false
+			else:
+				btn.text = "未解锁"
+				btn.disabled = true
+	# 装备
+	for id in _equip_btns:
+		var e: Dictionary = GameData.equip_by_id[id]
+		var btn: Button = _equip_btns[id]
+		if not g.owned_eq.has(id):
+			btn.text = "购买"
+			btn.disabled = g.stones < float(e["cost"])
+		else:
+			var worn: bool = str(g.equipped.get(e["slot"], "")) == id
+			btn.text = "已穿戴" if worn else "穿戴"
+			btn.disabled = worn
+	# 槽位
+	for slot in g.SLOTS:
+		(_slot_labels[slot] as Label).text = g.equipped_name(slot)
 
 
 func _find_item(item_id: String) -> Dictionary:
@@ -177,6 +451,18 @@ func _on_break() -> void:
 
 func _on_buy(item_id: String) -> void:
 	_show_msg(GameData.try_buy_item(item_id))
+
+
+func _on_equip_btn(id: String) -> void:
+	var g := GameData
+	if g.owned_eq.has(id):
+		_show_msg(g.equip_equipment(id))
+	else:
+		_show_msg(g.buy_equipment(id))
+
+
+func _on_unequip(slot: String) -> void:
+	_show_msg(GameData.unequip(slot))
 
 
 func _show_msg(text: String) -> void:
