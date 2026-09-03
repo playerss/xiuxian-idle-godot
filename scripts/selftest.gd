@@ -288,6 +288,20 @@ func _init() -> void:
 	g.ach_done.append("first_break")
 	g.stones = 123456.0
 
+	# ---------- 打磨-7: 成就面板 (进度提示逻辑; UI 构建靠主场景 headless 运行验证) ----------
+	# ach_progress 逻辑 (此时 ach_done=["first_break"], stones=123456, learned 50 个)
+	check(g.ach_progress("first_break") == "已解锁", "ach_progress 已解锁成就 (first_break)")
+	g.stones = 50000.0
+	check(g.ach_progress("rich_100k") == "50000/100000", "ach_progress rich_100k 进度 (实际 %s)" % g.ach_progress("rich_100k"))
+	g.stones = 200000.0
+	check(g.ach_progress("rich_100k") == "100000/100000", "ach_progress rich_100k 进度封顶")
+	check(g.ach_progress("skill_50") == "50/50", "ach_progress skill_50 进度 (实际 %s)" % g.ach_progress("skill_50"))
+	check(g.ach_progress("realm_jindan") == "当前 练气 / 目标 金丹", "ach_progress 境界成就提示")
+	check(g.ach_progress("ascend_immortal") == "渡劫后飞升 (当前 练气 第 1 层)", "ach_progress 飞升成就提示")
+	check(g.ach_progress("skill_10") == "10/10", "ach_progress skill_10 进度封顶 10/10 (实际 %s)" % g.ach_progress("skill_10"))
+	# 恢复受控状态 (存档往返节)
+	g.stones = 123456.0
+
 	# ---------- 存档往返 ----------
 	# 全购法器后灵石近 0, 补充灵石再存档 (验证恢复逻辑)
 	g.stones = 123456.0

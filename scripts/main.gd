@@ -42,6 +42,10 @@ var _equip_btns: Dictionary = {}
 var _slot_labels: Dictionary = {}
 var _card_sb_normal: StyleBoxFlat
 var _card_sb_hi: StyleBoxFlat
+var _ach_box: VBoxContainer
+var _ach_rows: Dictionary = {}      # 成就 id -> {row, name_l, desc_l, prog_l}
+var _ach_count_label: Label
+var _ach_hl_seq := 0               # 成就解锁总数缓存 (变化时才刷样式)
 
 
 func _ready() -> void:
@@ -97,13 +101,16 @@ func _build_ui() -> void:
 	var page1 := _make_page("修行")
 	var page2 := _make_page("技能")
 	var page3 := _make_page("装备")
+	var page4 := _make_page("成就")
 	_tab.add_child(page1)
 	_tab.add_child(page2)
 	_tab.add_child(page3)
+	_tab.add_child(page4)
 
 	_build_training_page(page1)
 	_build_skill_page(page2)
 	_build_equip_page(page3)
+	_build_ach_page(page4)
 
 	# 底部消息
 	_msg_label = _label("", 18, GOLD)
@@ -381,6 +388,65 @@ func _add_equip_row(id: String) -> void:
 	_equip_row_nodes[id] = row
 
 
+# ---------- 成就页 ----------
+
+func _build_ach_page(page: Panel) -> void:
+	var outer := VBoxContainer.new()
+	outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	outer.offset_left = 10
+	outer.offset_top = 8
+	outer.offset_right = -10
+	outer.offset_bottom = -8
+	outer.add_theme_constant_override("separation", 8)
+	page.add_child(outer)
+
+	# 顶栏: 进度统计
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 12)
+	outer.add_child(head)
+	_ach_count_label = _label("成就 0/0", 16, GOLD)
+	head.add_child(_ach_count_label)
+	var hint := _label("达成条件即自动解锁, 悬停条目可查看详情", 13, DIM)
+	head.add_child(hint)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	outer.add_child(scroll)
+	_ach_box = VBoxContainer.new()
+	_ach_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ach_box.add_theme_constant_override("separation", 6)
+	scroll.add_child(_ach_box)
+	for id in GameData.ach_ids:
+		_add_ach_row(id)
+
+
+func _add_ach_row(id: String) -> void:
+	var a: Dictionary = GameData.ach_by_id[id]
+	var row := PanelContainer.new()
+	row.add_theme_stylebox_override("panel", _card_sb_normal)
+	_ach_box.add_child(row)
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 10)
+	row.add_child(hb)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 2)
+	hb.add_child(info)
+	var name_l := _label("☆ " + (a["name"] as String), 15, DIM)
+	info.add_child(name_l)
+	var desc_l := _label(a["desc"] as String, 13, WHITEISH)
+	info.add_child(desc_l)
+	# 进度标签 + 解锁提示 (解锁时换色/换文案, 变化时才刷)
+	var prog_l := _label(GameData.ach_progress(id), 13, DIM)
+	info.add_child(prog_l)
+	# tooltip: 名称/条件/进度
+	row.tooltip_text = "成就「%s」\n条件: %s" % [a["name"], a["desc"]]
+	_ach_rows[id] = {
+		"row": row, "name_l": name_l, "desc_l": desc_l, "prog_l": prog_l,
+	}
+
+
 # ---------- 每帧刷新 ----------
 
 func _refresh() -> void:
@@ -458,6 +524,26 @@ func _refresh() -> void:
 	for id in _equip_row_nodes:
 		var e: Dictionary = g.equip_by_id[id]
 		_apply_card_hl(_equip_row_nodes[id], str(g.equipped.get(str(e["slot"]), "")) == id)
+	# 成就: 计数 + 已解锁高亮/进度 (解锁数变化时刷样式, 进度文本仅文本变化时刷)
+	var done_n: int = g.ach_done.size()
+	if done_n != _ach_hl_seq:
+		_ach_hl_seq = done_n
+		_ach_count_label.text = "成就 %d/%d" % [done_n, g.ach_ids.size()]
+		for id in _ach_rows:
+			var r: Dictionary = _ach_rows[id]
+			var hi: bool = g.ach_done.has(id)
+			_apply_card_hl(r["row"], hi)
+			var nl: Label = r["name_l"]
+			nl.text = ("★ " if hi else "☆ ") + str(r["name_l"].text).trim_prefix("★ ").trim_prefix("☆ ")
+			nl.add_theme_color_override("font_color", GOLD if hi else DIM)
+			var pl: Label = r["prog_l"]
+			pl.add_theme_color_override("font_color", Color(0.55, 0.95, 0.55) if hi else DIM)
+			pl.text = g.ach_progress(id)
+	for id in _ach_rows:
+		var pl2: Label = _ach_rows[id]["prog_l"]
+		var pt: String = g.ach_progress(id)
+		if pl2.text != pt:
+			pl2.text = pt
 	# 突破闪烁: 事件序号变化时触发 (成功绿闪 / 失败红闪)
 	if not g.ascended and g.break_seq != _break_flash_seq:
 		_break_flash_seq = g.break_seq

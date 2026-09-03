@@ -80,5 +80,5 @@ M1-M4 已全部完成（2026-09-03）。后续按以下小项推进，每次一�
 - [x] 打磨-4：数值微调（后期装备价格曲线 x8→x5 受控；法器 5→10 件，性价比曲线调平并补全渡劫/真仙境，每件约 1~8 分钟灵石可购，自测新增曲线校验 21 项）
 - [x] 打磨-5：打包/导出配置（Steam 上架前的 Linux/Windows export preset）（export_presets.cfg 双平台 x86_64，Linux release 本机实测导出成功 GDPC pck；Windows preset 配置经 4.4 源码核对，需在 Windows 主机或 Godot 编辑器执行）
 - [x] 打磨-6：Steam 上架准备（app_id 配置、SteamAPI 初始化骨架、成就定义表、app manifest）（16 成就数据驱动 data/achievements.json，steam.gd 骨架 autoload Windows+SDK 真接入/否则降级，成就判定入 GameData + 存档 ach_done 字段，steam_app.json manifest，自测 100 项）
-- [ ] 打磨-7：成就面板 UI（16 成就列表：已解锁高亮 / 条件提示 / tooltip）
+- [x] 打磨-7：成就面板 UI（16 成就列表：已解锁高亮 / 条件提示 / tooltip）（成就 Tab 页, 计数 N/16, 已解锁金框+★+绿字, 未解锁☆+进度提示 (进度/目标), 行 tooltip 条件说明; 状态变化才刷样式, 自测 +7 项 ach_progress 断言)
 - [ ] 打磨-8：Windows 主机接入 Steamworks 官方 SDK 实测（需 Windows 环境 + 真实 app_id，本机仅配置就绪）

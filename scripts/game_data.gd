@@ -237,6 +237,33 @@ func check_achievements() -> Array[String]:
 				steam.set_achieved(id)
 	return got
 
+# 成就面板展示 (打磨-7): 已解锁 -> "已解锁"; 未解锁 -> 当前进度/条件提示
+func ach_progress(id: String) -> String:
+	if ach_done.has(id):
+		return "已解锁"
+	match id:
+		"ascend_immortal":
+			return "渡劫后飞升 (当前 %s %s)" % [realm_name(), layer_name()]
+		"first_break":
+			return "1/1" if (realm_idx > 0 or layer > 1) else "0/1"
+		"first_item":
+			return "%d/1" % mini(owned.size(), 1)
+		"skill_10":
+			return "%d/10" % mini(learned.size(), 10)
+		"skill_50":
+			return "%d/50" % mini(learned.size(), 50)
+		"equip_first":
+			return "%d/1" % mini(owned_eq.size(), 1)
+		"equip_10":
+			return "%d/10" % mini(owned_eq.size(), 10)
+		"rich_100k":
+			return "%d/100000" % int(minf(stones, 100000.0))
+		_:
+			var need: int = ACH_REALM_IDX.get(id, -1)
+			if need >= 0:
+				return "当前 %s / 目标 %s" % [realm_name(), REALMS[need]["name"]]
+	return ""
+
 # ================= 技能 =================
 
 func can_learn(id: String) -> bool:
