@@ -86,6 +86,7 @@ var ach_done: Array[String] = []   # 已解锁成就 id (打磨-6)
 var offline_msg := ""       # 离线收益提示
 var last_break_result := 0  # 上次突破: 0=未触发 1=成功 2=失败 3=飞升
 var break_seq := 0          # 突破事件序号 (每次成功/失败/飞升 +1, UI 据此触发闪烁)
+var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备, 读档时 _load_stats 兜底)
 
 var _active_cd := {}        # 技能 id -> 剩余冷却秒
 var _save_acc := 0.0
@@ -102,6 +103,7 @@ func _process(delta: float) -> void:
 	else:
 		essence += qi_per_sec() * delta
 	stones += stone_per_sec() * delta
+	_stat_inc("play_sec", delta)  # 打磨-14: 累计在线时长
 	# 神通冷却
 	for id in _active_cd.keys():
 		_active_cd[id] = maxf(0.0, _active_cd[id] - delta)
@@ -230,6 +232,41 @@ func offline_hourly_text() -> String:
 	var h := offline_hourly()
 	return "离线每小时  %s %s · 灵石 %s (效率%0.0f%%, 上限8小时)" % [
 		"道行" if ascended else "灵气", fmt(float(h["qi"])), fmt(float(h["stone"])), float(h["rate"]) * 100.0]
+
+# ================= 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备) =================
+
+func _stat_inc(key: String, amount: float = 1.0) -> void:
+	stats[key] = float(stats.get(key, 0.0)) + amount
+
+func _load_stats(v: Variant) -> void:
+	stats = {}
+	if typeof(v) == TYPE_DICTIONARY:
+		for k in v:
+			stats[str(k)] = float(v[k])
+	# 兜底键齐全 (旧档缺失不影响读取)
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "skill_use", "item_buy", "equip_buy"]:
+		if not stats.has(k):
+			stats[k] = 0.0
+
+# 统计文本 (修行页展示)
+func stats_text() -> String:
+	return "修行 %s · 突破 %d 次 · 道行精进 %d 次 · 神通 %d 次 · 法器 %d 件 · 装备 %d 件" % [
+		fmt_stats_time(float(stats.get("play_sec", 0.0))),
+		int(stats.get("break_ok", 0.0)), int(stats.get("dao_ok", 0.0)),
+		int(stats.get("skill_use", 0.0)), int(stats.get("item_buy", 0.0)), int(stats.get("equip_buy", 0.0))]
+
+# 统计时长格式 (日/小时/分)
+func fmt_stats_time(sec: float) -> String:
+	var d := int(sec) / 86400
+	var h := int(sec) % 86400 / 3600
+	var m := int(sec) % 3600 / 60
+	if d > 0:
+		return "%d天%d小时" % [d, h]
+	if h > 0:
+		return "%d小时%d分" % [h, m]
+	if m > 0:
+		return "%d分" % m
+	return "不足1分"
 
 # ================= 成就 (打磨-6: 数据驱动, Steam 上报) =================
 
@@ -401,6 +438,7 @@ func use_active_skill(id: String) -> String:
 		return "冷却中: 还需 %d 秒" % active_cd_left(id)
 	var gain := float(qi_per_sec()) * float(s["value"])
 	_active_cd[id] = float(s["cooldown"])
+	_stat_inc("skill_use")  # 打磨-14: 神通施展计数
 	# 打磨-11: 飞升后灵气不再使用, 神通爆发改为获得道行
 	if ascended:
 		dao += gain
@@ -420,6 +458,7 @@ func buy_equipment(id: String) -> String:
 		return "灵石不足: 需要 %s" % fmt(float(e["cost"]))
 	stones -= float(e["cost"])
 	owned_eq.append(id)
+	_stat_inc("equip_buy")  # 打磨-14: 装备购置计数
 	var msg := "购得「%s」(%s)" % [e["name"], e["tier_name"]]
 	var slot := str(e["slot"])
 	if equipped.get(slot) == null:
@@ -466,12 +505,14 @@ func try_breakthrough(roll: float = -1.0) -> String:
 		_advance()
 		last_break_result = 3 if ascended else 1
 		break_seq += 1
+		_stat_inc("break_ok")  # 打磨-14: 突破成功计数 (含飞升)
 		if ascended:
 			return "轰——天雷散尽, 你飞升真仙界了! 灵气速率 x100000!"
 		return "突破成功! 当前境界: %s %s" % [realm_name(), layer_name()]
 	else:
 		last_break_result = 2
 		break_seq += 1
+		_stat_inc("break_fail")  # 打磨-14: 突破失败计数
 		return "突破失败… 灵气消耗殆尽, 但境界稳固, 卷土重来!"
 
 func _advance() -> void:
@@ -492,6 +533,7 @@ func try_buy_item(item_id: String) -> String:
 			if stones >= it["cost"]:
 				stones -= it["cost"]
 				owned.append(item_id)
+				_stat_inc("item_buy")  # 打磨-14: 法器购置计数
 				return "购得「%s」, 灵气速率 x%.1f!" % [it["name"], it["boost"]]
 			else:
 				return "灵石不足: 需要 %s" % fmt(it["cost"])
@@ -522,6 +564,7 @@ func try_dao_break(roll: float = -1.0) -> String:
 		dao_level += 1
 		last_break_result = 4
 		break_seq += 1
+		_stat_inc("dao_ok")  # 打磨-14: 道行精进成功计数
 		return "道行精进! 当前境界: %s·%s" % [realm_name(), IMMORTAL_REALMS[dao_level]]
 	last_break_result = 2
 	break_seq += 1
@@ -549,6 +592,7 @@ func save_game() -> void:
 		"ascended": ascended,
 		"dao": dao,
 		"dao_level": dao_level,
+		"stats": stats,
 		"ts": int(Time.get_unix_time_from_system()),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -575,6 +619,7 @@ func load_game() -> void:
 	learned = _str_array(parsed.get("skills", []))
 	owned_eq = _str_array(parsed.get("eq_owned", []))
 	ach_done = _str_array(parsed.get("ach_done", []))
+	_load_stats(parsed.get("stats", {}))  # 打磨-14: 修行统计 (旧档缺字段默认 0)
 	equipped = {}
 	var eq: Dictionary = parsed.get("equipped", {})
 	if typeof(eq) == TYPE_DICTIONARY:

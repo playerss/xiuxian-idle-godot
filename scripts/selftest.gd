@@ -400,6 +400,7 @@ func _init() -> void:
 	check(saved.has("skills") and saved.has("eq_owned") and saved.has("equipped"), "存档包含 skills/eq_owned/equipped 字段")
 	check(saved.has("dao") and saved.has("dao_level"), "存档包含 dao/dao_level 字段 (打磨-10)")
 	check(saved.has("ach_done"), "存档包含 ach_done 字段")
+	check(saved.has("stats"), "存档包含 stats 字段 (打磨-14)")
 	check(saved.get("realm_idx", -1) == g.realm_idx, "存档 realm_idx 一致")
 	check(saved.get("essence", -1.0) == g.essence, "存档 essence 一致")
 	# 清空后重新加载
@@ -416,7 +417,18 @@ func _init() -> void:
 	check(str(g.equipped.get("weapon", "")) == eq_id, "读档恢复穿戴")
 	check(g.ach_done.has("first_break"), "读档恢复已解锁成就")
 	check(g.stones > 0.0, "读档恢复灵石")
-	check(absf(g.dao - 12345.678) < 1e-6, "读档恢复道行 (打磨-10, 实际 %s)" % g.fmt(g.dao))
+	# 打磨-14: 统计存档往返 (前面各节已累积计数: 11 法器 / 12 装备 / 10 突破成功 / 3 神通施展)
+	check(float(g.stats.get("item_buy", 0.0)) >= 10.0, "读档恢复统计 item_buy>=10 (打磨-14, 实际 %s)" % str(g.stats.get("item_buy")))
+	check(float(g.stats.get("equip_buy", 0.0)) >= 12.0, "读档恢复统计 equip_buy>=12 (打磨-14, 实际 %s)" % str(g.stats.get("equip_buy")))
+	check(float(g.stats.get("break_ok", 0.0)) >= 1.0, "读档恢复统计 break_ok>=1 (打磨-14, 实际 %s)" % str(g.stats.get("break_ok")))
+	check(float(g.stats.get("skill_use", 0.0)) >= 1.0, "读档恢复统计 skill_use>=1 (打磨-14, 实际 %s)" % str(g.stats.get("skill_use")))
+	# play_sec 存档往返: 读档后手动加时验证保存/读取通道
+	g.stats["play_sec"] = 1234.5
+	g.save_game()
+	g.stats["play_sec"] = 0.0
+	g.load_game()
+	check(absf(g.stats["play_sec"] - 1234.5) < 1e-6, "play_sec 存读档往返 (打磨-14, 实际 %s)" % str(g.stats["play_sec"]))
+	check(absf(g.dao - 12345.678) < 1e-9, "读档恢复道行 (打磨-10, 实际 %s)" % g.fmt(g.dao))
 	check(g.dao_level == 2, "读档恢复道行阶段 (打磨-10)")
 	# 旧档兼容: 缺新字段
 	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
@@ -432,6 +444,7 @@ func _init() -> void:
 	check(g.learned.is_empty() and g.owned_eq.is_empty(), "旧档缺字段默认空")
 	check(g.ach_done.is_empty(), "旧档缺 ach_done 默认空")
 	check(g.stones == 7.0, "旧档灵石读取")
+	check(float(g.stats.get("play_sec", -1.0)) == 0.0 and float(g.stats.get("item_buy", -1.0)) == 0.0, "旧档缺 stats 字段默认 0 (打磨-14)")
 
 	# ---------- 打磨-10: 离线道行 (飞升后离线收益计入道行) ----------
 	g.ascended = true
@@ -548,6 +561,48 @@ func _init() -> void:
 	g.ascended = false
 	check(g.offline_hourly_text() == oht_pre, "恢复未飞升后文案复原")
 	check(g.learned.has(off_skill), "offline_rate 功法保留 (供存档往返节断言无副作用)")
+
+	# ---------- 打磨-14: 修行统计 (计数/格式/存读档) ----------
+	# 当前受控状态: 练气 1 层, 未飞升, stones=50, learned=[divine_1_1]
+	check(g.fmt_stats_time(0.5) == "不足1分", "fmt_stats_time 短时长 (实际 %s)" % g.fmt_stats_time(0.5))
+	check(g.fmt_stats_time(600.0) == "10分", "fmt_stats_time 分钟档 (实际 %s)" % g.fmt_stats_time(600.0))
+	check(g.fmt_stats_time(5400.0) == "1小时30分", "fmt_stats_time 小时档 (实际 %s)" % g.fmt_stats_time(5400.0))
+	check(g.fmt_stats_time(90000.0) == "1天1小时", "fmt_stats_time 天档 (实际 %s)" % g.fmt_stats_time(90000.0))
+	var s14: Variant = g.stats.duplicate()
+	# 突破成功/失败计数 (确定性注入 roll)
+	g.essence = g.breakthrough_cost()
+	g.try_breakthrough(0.01)
+	check(float(g.stats["break_ok"]) == float(s14["break_ok"]) + 1.0, "突破成功 break_ok+1 (打磨-14, 实际 %s)" % str(g.stats["break_ok"]))
+	g.essence = g.breakthrough_cost()
+	g.try_breakthrough(0.999)
+	check(float(g.stats["break_fail"]) == float(s14["break_fail"]) + 1.0, "突破失败 break_fail+1 (打磨-14, 实际 %s)" % str(g.stats["break_fail"]))
+	# 神通施展计数
+	g.learned.append(active_id)
+	g._active_cd.erase(active_id)
+	g.use_active_skill(active_id)
+	check(float(g.stats["skill_use"]) == float(s14["skill_use"]) + 1.0, "神通施展 skill_use+1 (打磨-14, 实际 %s)" % str(g.stats["skill_use"]))
+	# 法器/装备购置计数
+	g.stones = 1000.0
+	g.try_buy_item("wooden_sword")
+	check(float(g.stats["item_buy"]) == float(s14["item_buy"]) + 1.0, "法器购置 item_buy+1 (打磨-14, 实际 %s)" % str(g.stats["item_buy"]))
+	g.stones = 1e12
+	g.buy_equipment(eq_id)
+	check(float(g.stats["equip_buy"]) == float(s14["equip_buy"]) + 1.0, "装备购置 equip_buy+1 (打磨-14, 实际 %s)" % str(g.stats["equip_buy"]))
+	# 重复购置不重复计数
+	var ib_pre: float = g.stats["item_buy"]
+	g.try_buy_item("wooden_sword")
+	check(float(g.stats["item_buy"]) == ib_pre, "重复购置法器不重复计数 (打磨-14)")
+	# 道行精进计数 (飞升后)
+	g.ascended = true
+	g.dao = g.dao_break_cost() + 1.0
+	g.try_dao_break(0.01)
+	check(float(g.stats["dao_ok"]) == float(s14["dao_ok"]) + 1.0, "道行精进 dao_ok+1 (打磨-14, 实际 %s)" % str(g.stats["dao_ok"]))
+	g.ascended = false
+	# stats_text 各段
+	var stt: String = g.stats_text()
+	check(stt.find("突破 %d 次" % int(g.stats["break_ok"])) >= 0, "stats_text 含突破计数 (实际 %s)" % stt)
+	check(stt.find("装备 %d 件" % int(g.stats["equip_buy"])) >= 0, "stats_text 含装备计数 (实际 %s)" % stt)
+	check(stt.find("神通") >= 0 and stt.find("法器") >= 0 and stt.find("道行精进") >= 0 and stt.find("修行") >= 0, "stats_text 含修行/神通/法器/道行段 (实际 %s)" % stt)
 
 	# ---------- 汇报 ----------
 	print("")

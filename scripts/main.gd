@@ -17,6 +17,8 @@ var _qi_label: Label
 var _stone_rate_label: Label
 var _offline_label: Label      # 打磨-13: 离线每小时收益 (修行页)
 var _offline_text := ""        # 离线文本缓存 (变化时才刷)
+var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
+var _stats_text := ""          # 统计文本缓存 (变化时才刷)
 var _progress_label: Label
 var _bar_bg: ColorRect
 var _bar_fill: ColorRect
@@ -170,6 +172,10 @@ func _build_training_page(page: Panel) -> void:
 	_offline_label = _label("", 14, DIM)
 	left.add_child(_offline_label)
 	_offline_label.tooltip_text = "离线收益 = 当前速率 x 离线效率 (基础50% + 功法/装备加成), 上限 8 小时。关闭游戏后继续积累, 重新进入时发放。\n飞升后离线主资源计入道行。"
+	# 打磨-14: 修行统计 (累计时长/突破/道行精进/神通/法器/装备, 持久化)
+	_stats_label = _label("", 13, DIM)
+	left.add_child(_stats_label)
+	_stats_label.tooltip_text = "修行统计自开荒起累计, 存档保存。\n突破: 境界层数成功次数 (含飞升)。\n道行精进: 飞升后道行阶段成功次数。"
 	left.add_child(_sep())
 	_progress_label = _label("突破进度  0%", 14, DIM)
 	left.add_child(_progress_label)
@@ -538,6 +544,11 @@ func _refresh() -> void:
 	if off_t != _offline_text:
 		_offline_text = off_t
 		_offline_label.text = off_t
+	# 打磨-14: 修行统计 (文本变化时才刷)
+	var st_t: String = g.stats_text()
+	if st_t != _stats_text:
+		_stats_text = st_t
+		_stats_label.text = st_t
 	_progress_label.text = ("道行进度  %d%%" if g.ascended else "突破进度  %d%%") % int(g.breakthrough_progress())
 	_bar_fill.size = Vector2(_bar_bg.size.x * g.breakthrough_progress() / 100.0, _bar_bg.size.y)
 	if g.ascended:
