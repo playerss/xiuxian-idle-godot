@@ -54,3 +54,17 @@ PROJECT_PLAN.md          # 项目计划
 ~/bin/godot --headless --path .            # 无头冒烟 (应无报错, 会一直挂机运行)
 ~/bin/godot --headless --path . -s res://scripts/selftest.gd   # 全流程自测 (学习/购买/穿戴/冷却/存读档/倍率/数值曲线, 80 项, 退出码 0=通过)
 ```
+
+## 导出 (打包)
+
+已配置 Linux / Windows 双平台 export preset（`export_presets.cfg`，均 x86_64、release 用二进制脚本、不内嵌 pck）。
+
+```bash
+# 前置: 安装 Godot 4.4 导出模板 (~/.local/share/godot/export_templates/4.4.stable)
+mkdir -p export/linux export/windows
+~/bin/godot --headless --path . --export-release Linux export/linux/xiuxian_idle
+~/bin/godot --headless --path . --export-release Windows export/windows/XiuxianIdle.exe
+```
+
+> 注意：命令行 `--export` 仅支持当前 Godot 构建编译进的平台（本机 Linux 构建只能导出 Linux；
+> Windows preset 需在 Windows 主机或 Godot 编辑器中导出）。导出产物在 `export/`（已 gitignore）。
