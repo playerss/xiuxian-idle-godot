@@ -1,0 +1,7 @@
+{
+  "name": "Xiuxian Idle 修仙挂机",
+  "description": "Godot 4 修仙挂机游戏 (idle / incremental)",
+  "launch": "XiuxianIdle.exe",
+  "icon": "icon",
+  "url": "https://github.com/playerss/xiuxian-idle-godot"
+}

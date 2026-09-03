@@ -1,0 +1,84 @@
+{
+  "achievements": [
+    {
+      "id": "realm_zhuji",
+      "name": "筑基",
+      "desc": "突破至筑基期"
+    },
+    {
+      "id": "realm_jindan",
+      "name": "结丹",
+      "desc": "突破至金丹期"
+    },
+    {
+      "id": "realm_yuanying",
+      "name": "元婴初现",
+      "desc": "突破至元婴期"
+    },
+    {
+      "id": "realm_huashen",
+      "name": "化神",
+      "desc": "突破至化神期"
+    },
+    {
+      "id": "realm_luexu",
+      "name": "炼虚",
+      "desc": "突破至炼虚期"
+    },
+    {
+      "id": "realm_het",
+      "name": "合体",
+      "desc": "突破至合体期"
+    },
+    {
+      "id": "realm_dacheng",
+      "name": "大乘",
+      "desc": "突破至大乘期"
+    },
+    {
+      "id": "realm_dujie",
+      "name": "渡劫",
+      "desc": "突破至渡劫期"
+    },
+    {
+      "id": "ascend_immortal",
+      "name": "飞升",
+      "desc": "飞升真仙界, 仙凡两隔"
+    },
+    {
+      "id": "first_break",
+      "name": "初次突破",
+      "desc": "首次成功突破"
+    },
+    {
+      "id": "first_item",
+      "name": "第一件法器",
+      "desc": "购入第一件法器"
+    },
+    {
+      "id": "skill_10",
+      "name": "小有小成",
+      "desc": "领悟 10 个技能"
+    },
+    {
+      "id": "skill_50",
+      "name": "博闻强记",
+      "desc": "领悟 50 个技能"
+    },
+    {
+      "id": "equip_first",
+      "name": "初具规模",
+      "desc": "购入第一件装备"
+    },
+    {
+      "id": "equip_10",
+      "name": "行头齐全",
+      "desc": "购入 10 件装备"
+    },
+    {
+      "id": "rich_100k",
+      "name": "灵石满堂",
+      "desc": "持有灵石达 10 万"
+    }
+  ]
+}

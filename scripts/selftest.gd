@@ -194,12 +194,107 @@ func _init() -> void:
 	check(g.stones < 0.5, "法器全购后灵石清零")
 	check(g.item_boost() > 100.0, "全购法器后灵气总增幅>100x (实际 x%.0f)" % g.item_boost())
 
+	# ---------- 打磨-6: 成就 (Steam 上架准备, 数据驱动) ----------
+	# 重置为受控状态, 保证解锁判定确定性 (前面各节已产生 owned/learned 等状态)
+	g.owned.clear()
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ach_done.clear()
+	g.stones = 0.0
+	g.essence = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g._ach_acc = -86400.0   # 冻结节流, 避免 _process 并发解锁干扰自测确定性 (测试仅数秒)
+	check(g.ach_ids.size() >= 10, "成就数量>=10 (实际 %d)" % g.ach_ids.size())
+	check(g.ach_by_id.has("ascend_immortal") and g.ach_by_id.has("first_break") and g.ach_by_id.has("skill_10"), "成就定义齐全 (ascend/first_break/skill_10)")
+	var got0: Array[String] = g.check_achievements()
+	check(got0.is_empty(), "初始状态无成就解锁")
+	# first_break: 首次成功突破
+	g.essence = g.breakthrough_cost()
+	g.try_breakthrough(0.01)
+	var got1: Array[String] = g.check_achievements()
+	check(got1.has("first_break"), "首次突破解锁 first_break: " + str(got1))
+	check(g.ach_done.has("first_break"), "ach_done 记录 first_break")
+	var got2: Array[String] = g.check_achievements()
+	check(got2.is_empty(), "成就检查幂等 (不重复解锁)")
+	# realm_zhuji: 升到筑基 (realm_idx=1)
+	var guard := 0
+	while g.realm_idx < 1 and not g.ascended and guard < 30:
+		g.essence = g.breakthrough_cost()
+		g.try_breakthrough(0.01)
+		guard += 1
+	var got3: Array[String] = g.check_achievements()
+	check(got3.has("realm_zhuji"), "筑基解锁 realm_zhuji: " + str(got3))
+	# skill_10: 真实学习 10 个技能 (筑基 3 层可学 凡/灵 两档 40 个; 失败文案含"领悟"字, 按 learned 计数)
+	g.layer = 3
+	var learned_now := 0
+	for id in g.skill_ids:
+		if learned_now >= 10:
+			break
+		if not g.learned.has(id):
+			g.learn_skill(id)
+			if g.learned.has(id):
+				learned_now += 1
+	check(learned_now == 10, "已学满 10 技能 (实际 %d)" % learned_now)
+	var got4: Array[String] = g.check_achievements()
+	check(got4.has("skill_10"), "学 10 技能解锁 skill_10: " + str(got4))
+	# skill_50: 补到 50 (注入剩余 id, 解锁判定只看数量)
+	var si := 0
+	while g.learned.size() < 50 and si < g.skill_ids.size():
+		if not g.learned.has(g.skill_ids[si]):
+			g.learned.append(g.skill_ids[si])
+		si += 1
+	check(g.learned.size() >= 50, "已学技能数>=50 (实际 %d)" % g.learned.size())
+	var got5: Array[String] = g.check_achievements()
+	check(got5.has("skill_50"), "学 50 技能解锁 skill_50: " + str(got5))
+	# equip_first / equip_10: 购买 10 件装备 (先压低灵石避免 rich_100k 误触发)
+	g.stones = 1e15
+	var eq_bought := 0
+	for id in g.equip_ids:
+		if eq_bought >= 10:
+			break
+		if g.buy_equipment(id).find("购得") >= 0:
+			eq_bought += 1
+	g.stones = 99999.0
+	var got6: Array[String] = g.check_achievements()
+	check(got6.has("equip_first") and got6.has("equip_10"), "购 10 装备解锁 equip_first/equip_10: " + str(got6))
+	# rich_100k: 灵石达 10 万
+	g.stones = 100000.0
+	var got7: Array[String] = g.check_achievements()
+	check(got7.has("rich_100k"), "灵石达 10 万解锁 rich_100k: " + str(got7))
+	# first_item: 购入第一件法器
+	g.stones = 1000.0
+	g.try_buy_item("wooden_sword")
+	var got8: Array[String] = g.check_achievements()
+	check(got8.has("first_item"), "第一件法器解锁 first_item: " + str(got8))
+	# ascend_immortal: 飞升
+	g.ascended = true
+	var got9: Array[String] = g.check_achievements()
+	check(got9.has("ascend_immortal"), "飞升解锁 ascend_immortal: " + str(got9))
+	g.ascended = false
+	# realm_dujie: 境界里程碑 (渡劫 idx=8, 顺带大乘 idx=7 同时满足)
+	g.realm_idx = 8
+	var got10: Array[String] = g.check_achievements()
+	check(got10.has("realm_dujie") and got10.has("realm_dacheng"), "渡劫解锁 realm_dujie/realm_dacheng: " + str(got10))
+	# 已解锁数 = 已触发的全部 (境界里程碑 8 + 飞升 + 玩法 7 = 16 全解锁)
+	g.check_achievements()
+	check(g.ach_done.size() == g.ach_ids.size(), "16 成就全部解锁 (实际 %d/%d)" % [g.ach_done.size(), g.ach_ids.size()])
+	g.realm_idx = 0
+	g.layer = 1
+	# 成就存档往返: 部分解锁后存/读档
+	g.ach_done.clear()
+	g.ach_done.append("first_break")
+	g.stones = 123456.0
+
 	# ---------- 存档往返 ----------
 	# 全购法器后灵石近 0, 补充灵石再存档 (验证恢复逻辑)
 	g.stones = 123456.0
 	g.save_game()
 	var saved := _save_json()
 	check(saved.has("skills") and saved.has("eq_owned") and saved.has("equipped"), "存档包含 skills/eq_owned/equipped 字段")
+	check(saved.has("ach_done"), "存档包含 ach_done 字段")
 	check(saved.get("realm_idx", -1) == g.realm_idx, "存档 realm_idx 一致")
 	check(saved.get("essence", -1.0) == g.essence, "存档 essence 一致")
 	# 清空后重新加载
@@ -208,11 +303,13 @@ func _init() -> void:
 	g.learned.clear()
 	g.owned_eq.clear()
 	g.equipped.clear()
+	g.ach_done.clear()
 	g.stones = 0.0
 	g.load_game()
 	check(g.learned.has(passive_id), "读档恢复已学技能")
 	check(g.owned_eq.has(eq_id), "读档恢复已购装备")
 	check(str(g.equipped.get("weapon", "")) == eq_id, "读档恢复穿戴")
+	check(g.ach_done.has("first_break"), "读档恢复已解锁成就")
 	check(g.stones > 0.0, "读档恢复灵石")
 	# 旧档兼容: 缺新字段
 	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
@@ -221,9 +318,12 @@ func _init() -> void:
 	g.learned.clear()
 	g.owned_eq.clear()
 	g.equipped.clear()
+	g.ach_done.clear()
+	g.ach_done.append("stale")
 	g.load_game()
 	check(g.realm_idx == 1 and g.layer == 2, "旧档境界读取")
 	check(g.learned.is_empty() and g.owned_eq.is_empty(), "旧档缺字段默认空")
+	check(g.ach_done.is_empty(), "旧档缺 ach_done 默认空")
 	check(g.stones == 7.0, "旧档灵石读取")
 
 	# ---------- 汇报 ----------

@@ -11,6 +11,7 @@ config/features=PackedStringArray("4.4")
 [autoload]
 
 GameData="*res://scripts/game_data.gd"
+Steam="*res://scripts/steam.gd"
 
 [display]
 

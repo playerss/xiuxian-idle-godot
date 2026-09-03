@@ -4,6 +4,7 @@ extends Node
 const SAVE_PATH := "user://save.json"
 const SKILLS_JSON := "res://data/skills.json"
 const EQUIP_JSON := "res://data/equipment.json"
+const ACH_JSON := "res://data/achievements.json"
 const OFFLINE_CAP_SEC := 8 * 3600.0   # 离线收益上限 8 小时
 const OFFLINE_BASE_RATE := 0.5       # 基础离线效率 50%
 const SAVE_INTERVAL_SEC := 15.0
@@ -58,8 +59,10 @@ const TIER_COLOR := {
 # ---- 数据表 (加载自 JSON) ----
 var skill_by_id := {}
 var equip_by_id := {}
+var ach_by_id := {}
 var skill_ids: Array = []
 var equip_ids: Array = []
+var ach_ids: Array = []
 
 # ---- 玩家状态 ----
 var realm_idx := 0          # 当前境界索引
@@ -71,12 +74,14 @@ var learned: Array[String] = []    # 已学习技能 id
 var owned_eq: Array[String] = []   # 已拥有装备 id
 var equipped: Dictionary = {}      # 部位 slot -> 装备 id
 var ascended := false       # 是否已飞升
+var ach_done: Array[String] = []   # 已解锁成就 id (打磨-6)
 var offline_msg := ""       # 离线收益提示
 var last_break_result := 0  # 上次突破: 0=未触发 1=成功 2=失败 3=飞升
 var break_seq := 0          # 突破事件序号 (每次成功/失败/飞升 +1, UI 据此触发闪烁)
 
 var _active_cd := {}        # 技能 id -> 剩余冷却秒
 var _save_acc := 0.0
+var _ach_acc := 0.0         # 成就检测节流累计
 
 func _ready() -> void:
 	load_data()
@@ -92,6 +97,11 @@ func _process(delta: float) -> void:
 		_active_cd[id] = maxf(0.0, _active_cd[id] - delta)
 		if _active_cd[id] <= 0.0:
 			_active_cd.erase(id)
+	# 成就检测 (节流 1 秒, 幂等; 灵石达标记类成就在挂机中也能触发)
+	_ach_acc += delta
+	if _ach_acc >= 1.0:
+		_ach_acc = 0.0
+		check_achievements()
 	# 定期存档
 	_save_acc += delta
 	if _save_acc >= SAVE_INTERVAL_SEC:
@@ -115,6 +125,11 @@ func load_data() -> void:
 		for item in e["equipment"]:
 			equip_by_id[item["id"]] = item
 			equip_ids.append(item["id"])
+	var a: Dictionary = _load_json(ACH_JSON)
+	if a.has("achievements"):
+		for item in a["achievements"]:
+			ach_by_id[item["id"]] = item
+			ach_ids.append(item["id"])
 
 func _load_json(path: String):
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -177,6 +192,50 @@ func breakthrough_chance() -> float:
 
 func offline_rate() -> float:
 	return clampf(OFFLINE_BASE_RATE * (1.0 + passive_bonus("offline_rate") + equip_bonus("offline_rate")), 0.0, 1.0)
+
+# ================= 成就 (打磨-6: 数据驱动, Steam 上报) =================
+
+# 境界里程碑成就 -> 目标 realm_idx (与 gen_data.py ACH_REALM_IDX 一致)
+const ACH_REALM_IDX := {
+	"realm_zhuji": 1, "realm_jindan": 2, "realm_yuanying": 3, "realm_huashen": 4,
+	"realm_luexu": 5, "realm_het": 6, "realm_dacheng": 7, "realm_dujie": 8,
+}
+
+func _ach_met(id: String) -> bool:
+	if ach_done.has(id):
+		return false
+	match id:
+		"ascend_immortal":
+			return ascended
+		"first_break":
+			return realm_idx > 0 or layer > 1
+		"first_item":
+			return owned.size() >= 1
+		"skill_10":
+			return learned.size() >= 10
+		"skill_50":
+			return learned.size() >= 50
+		"equip_first":
+			return owned_eq.size() >= 1
+		"equip_10":
+			return owned_eq.size() >= 10
+		"rich_100k":
+			return stones >= 100000.0
+		_:
+			var need: int = ACH_REALM_IDX.get(id, -1)
+			return need >= 0 and realm_idx >= need
+
+# 检查并解锁新成就 (幂等: 已解锁的不会重复上报)。返回本次新解锁的 id 列表
+func check_achievements() -> Array[String]:
+	var got: Array[String] = []
+	for id in ach_ids:
+		if _ach_met(id):
+			ach_done.append(id)
+			got.append(id)
+			var steam = get_node_or_null("/root/Steam")
+			if steam != null:
+				steam.set_achieved(id)
+	return got
 
 # ================= 技能 =================
 
@@ -317,6 +376,7 @@ func save_game() -> void:
 		"skills": learned,
 		"eq_owned": owned_eq,
 		"equipped": equipped,
+		"ach_done": ach_done,
 		"ascended": ascended,
 		"ts": int(Time.get_unix_time_from_system()),
 	}
@@ -341,6 +401,7 @@ func load_game() -> void:
 	owned = _str_array(parsed.get("owned", []))
 	learned = _str_array(parsed.get("skills", []))
 	owned_eq = _str_array(parsed.get("eq_owned", []))
+	ach_done = _str_array(parsed.get("ach_done", []))
 	equipped = {}
 	var eq: Dictionary = parsed.get("equipped", {})
 	if typeof(eq) == TYPE_DICTIONARY:

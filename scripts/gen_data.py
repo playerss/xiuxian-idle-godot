@@ -13,6 +13,39 @@ os.makedirs(DATA, exist_ok=True)
 SKILL_TIERS = ["凡品", "灵品", "玄品", "地品", "天品", "仙品"]        # 6 档
 EQUIP_TIERS = ["凡品", "灵品", "玄品", "地品", "天品", "仙品", "神品"]  # 7 档
 
+# ============ 成就 (打磨-6: Steam 上架准备, 数据驱动) ============
+# Steam 成就 id 必须为 [a-zA-Z0-9_]+, 定义与解锁判定 (game_data.check_achievements) 按 id 对齐
+ACHIEVEMENTS = [
+    # 境界里程碑 (realm_idx 0..9)
+    {"id": "realm_zhuji",      "name": "筑基",     "desc": "突破至筑基期"},
+    {"id": "realm_jindan",     "name": "结丹",     "desc": "突破至金丹期"},
+    {"id": "realm_yuanying",   "name": "元婴初现", "desc": "突破至元婴期"},
+    {"id": "realm_huashen",    "name": "化神",     "desc": "突破至化神期"},
+    {"id": "realm_luexu",      "name": "炼虚",     "desc": "突破至炼虚期"},
+    {"id": "realm_het",        "name": "合体",     "desc": "突破至合体期"},
+    {"id": "realm_dacheng",    "name": "大乘",     "desc": "突破至大乘期"},
+    {"id": "realm_dujie",      "name": "渡劫",     "desc": "突破至渡劫期"},
+    {"id": "ascend_immortal",  "name": "飞升",     "desc": "飞升真仙界, 仙凡两隔"},
+    # 玩法进度
+    {"id": "first_break",      "name": "初次突破", "desc": "首次成功突破"},
+    {"id": "first_item",       "name": "第一件法器", "desc": "购入第一件法器"},
+    {"id": "skill_10",         "name": "小有小成", "desc": "领悟 10 个技能"},
+    {"id": "skill_50",         "name": "博闻强记", "desc": "领悟 50 个技能"},
+    {"id": "equip_first",      "name": "初具规模", "desc": "购入第一件装备"},
+    {"id": "equip_10",         "name": "行头齐全", "desc": "购入 10 件装备"},
+    {"id": "rich_100k",        "name": "灵石满堂", "desc": "持有灵石达 10 万"},
+]
+# 境界里程碑 id 与 REALMS 索引的对应 (realm_xxx -> realm_idx)
+ACH_REALM_IDX = {"realm_zhuji": 1, "realm_jindan": 2, "realm_yuanying": 3,
+                 "realm_huashen": 4, "realm_luexu": 5, "realm_het": 6,
+                 "realm_dacheng": 7, "realm_dujie": 8}
+
+def gen_achievements():
+    out = []
+    for a in ACHIEVEMENTS:
+        out.append(dict(a))
+    return out
+
 # ============ 技能 ============
 # 每档属性池（越高档越稀有），每类 4 变体各取不同属性
 SKILL_ATTR = {
@@ -133,19 +166,28 @@ def gen_equipment():
 def main():
     skills = gen_skills()
     equipment = gen_equipment()
+    achievements = gen_achievements()
     with open(os.path.join(DATA, "skills.json"), "w", encoding="utf-8") as f:
         json.dump({"skills": skills}, f, ensure_ascii=False, indent=2)
     with open(os.path.join(DATA, "equipment.json"), "w", encoding="utf-8") as f:
         json.dump({"equipment": equipment}, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(DATA, "achievements.json"), "w", encoding="utf-8") as f:
+        json.dump({"achievements": achievements}, f, ensure_ascii=False, indent=2)
     # 校验
     assert len(skills) >= 100, f"技能数 {len(skills)} < 100"
     assert len(equipment) >= 100, f"装备数 {len(equipment)} < 100"
+    assert len(achievements) >= 10, f"成就数 {len(achievements)} < 10"
     assert len({s["id"] for s in skills}) == len(skills), "技能 id 重复"
     assert len({e["id"] for e in equipment}) == len(equipment), "装备 id 重复"
+    assert len({a["id"] for a in achievements}) == len(achievements), "成就 id 重复"
+    import re
+    for a in achievements:
+        assert re.fullmatch(r"[A-Za-z0-9_]+", a["id"]), f"成就 id 不合法 (Steam 要求): {a['id']}"
     active = sum(1 for s in skills if s["type"] == "active")
     passive = sum(1 for s in skills if s["type"] == "passive")
     print(f"skills: {len(skills)} (passive {passive}, active {active})")
     print(f"equipment: {len(equipment)}")
+    print(f"achievements: {len(achievements)}")
     print("\n--- 技能样例 ---")
     for s in skills[:3] + [x for x in skills if x["type"] == "active"][:2]:
         print(f"  {s['id']:14s} {s['name']:10s} {s['tier_name']} {s['type']:8s} {s['desc']}")
