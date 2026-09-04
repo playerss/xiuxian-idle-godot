@@ -113,7 +113,7 @@ func _setup_demo_state() -> void:
 	g.set_process(false)  # 冻结挂机/成就/自动存档
 	g.realm_idx = 2       # 金丹
 	g.layer = 2
-	g.essence = 0.4 * g.breakthrough_cost()  # 突破进度 40%
+	g.essence = 1.02 * g.breakthrough_cost()  # 打磨-32: 资源攒够(可突破) — 展示突破按钮金边高亮 + 进度 100%
 	g.stones = 30000.0
 	# 法器: 前 3 件 (x1.5 x2.0 x3.0), 第 4 件 45k 买不起 -> 展示购买 ETA
 	g.try_buy_item("wooden_sword")

@@ -41,6 +41,8 @@ var _ach_float_count := 0          # 打磨-17: 成就浮动提示次数 (自测
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
+var _btn_sb_gold: StyleBoxFlat    # 打磨-32: 突破按钮"可突破"金边高亮样式
+var _break_ready := false         # 打磨-32: 上帧可突破状态缓存 (变化才刷样式)
 var _flash_sb: StyleBoxFlat       # 闪烁用样式 (成功绿/失败红)
 var _flash_left := 0              # 剩余闪烁帧数
 var _tab: TabContainer
@@ -88,6 +90,7 @@ func _ready() -> void:
 	_card_sb_normal = _make_card_sb(false)
 	_card_sb_hi = _make_card_sb(true)
 	_btn_sb_normal = _make_btn_sb_normal()
+	_btn_sb_gold = _make_btn_sb_gold()
 	_build_ui()
 	if GameData.offline_msg != "":
 		_show_msg(GameData.offline_msg)
@@ -767,6 +770,11 @@ func _refresh() -> void:
 	else:
 		_break_btn.text = "尝试突破 · 耗 %s 灵气 (成功率%0.0f%%)" % [g.fmt(g.breakthrough_cost()), g.breakthrough_chance() * 100.0]
 		_break_btn.disabled = false
+	# 打磨-32: 突破按钮"可突破"金边高亮 (资源攒够时引导点击, 状态变化才刷样式; 闪烁动画期间不干预)
+	var ready_now: bool = g.breakthrough_ready()
+	if ready_now != _break_ready:
+		_break_ready = ready_now
+		_apply_break_btn_style()
 	# 法器
 	for id in _shop_rows:
 		var btn: Button = _shop_rows[id]
@@ -1133,6 +1141,18 @@ func _float_break() -> void:
 	_float_tween.parallel().tween_property(_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
 
 
+# 打磨-32: 突破按钮样式切换 — 可突破时金边高亮, 否则默认样式 (闪烁动画期间由 _flash_step 接管)
+func _apply_break_btn_style() -> void:
+	if _break_btn == null:
+		return
+	if _flash_left > 0:
+		return
+	var sb := _btn_sb_gold if _break_ready else _btn_sb_normal
+	_break_btn.add_theme_stylebox_override("normal", sb)
+	_break_btn.add_theme_stylebox_override("hover", sb.duplicate() if _break_ready else _btn_sb_normal.duplicate())
+	_break_btn.add_theme_stylebox_override("pressed", sb.duplicate() if _break_ready else _btn_sb_normal.duplicate())
+
+
 # 突破按钮闪烁: 成功绿闪 / 失败红闪, 闪烁后恢复默认样式
 func _break_flash(result: int) -> void:
 	if _break_btn == null or _break_btn.disabled:
@@ -1163,9 +1183,8 @@ func _flash_step() -> void:
 	_break_btn.add_theme_stylebox_override("hover", sb)
 	_break_btn.add_theme_stylebox_override("pressed", sb)
 	if _flash_left == 0:
-		_break_btn.add_theme_stylebox_override("normal", _btn_sb_normal)
-		_break_btn.add_theme_stylebox_override("hover", _btn_sb_normal.duplicate())
-		_break_btn.add_theme_stylebox_override("pressed", _btn_sb_normal.duplicate())
+		# 打磨-32: 闪烁结束后按当前"可突破"状态恢复 (金边/默认)
+		_apply_break_btn_style()
 
 
 # ---------- 小工具 ----------
@@ -1227,6 +1246,20 @@ func _make_btn_sb_normal() -> StyleBoxFlat:
 	s.bg_color = Color(0.16, 0.17, 0.23)
 	s.border_color = Color(0.3, 0.35, 0.45)
 	s.set_border_width_all(1)
+	s.set_corner_radius_all(6)
+	s.content_margin_left = 12
+	s.content_margin_right = 12
+	s.content_margin_top = 8
+	s.content_margin_bottom = 8
+	return s
+
+
+# 打磨-32: 突破按钮"可突破"金边样式 (资源攒够时的醒目高亮)
+func _make_btn_sb_gold() -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0.3, 0.24, 0.1)
+	s.border_color = Color(0.98, 0.86, 0.5)
+	s.set_border_width_all(2)
 	s.set_corner_radius_all(6)
 	s.content_margin_left = 12
 	s.content_margin_right = 12

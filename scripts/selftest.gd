@@ -1139,6 +1139,40 @@ func _init() -> void:
 	g.dao = 0.0
 	g.dao_level = 0
 
+	# ---------- 打磨-32: 突破按钮"可突破"状态 (breakthrough_ready) ----------
+	# 受控状态: 练气第 1 层 未飞升, 无资源
+	check(g.breakthrough_ready() == false, "breakthrough_ready 资源不足 = false")
+	g.essence = g.breakthrough_cost() - 1.0
+	check(g.breakthrough_ready() == false, "breakthrough_ready 差一点 = false")
+	g.essence = g.breakthrough_cost()
+	check(g.breakthrough_ready() == true, "breakthrough_ready 灵气刚好攒够 = true")
+	g.essence = g.breakthrough_cost() * 2.0
+	check(g.breakthrough_ready() == true, "breakthrough_ready 灵气富余 = true")
+	# 突破后灵气消耗 -> 回落为 false (按钮金边消失)
+	g.try_breakthrough(0.01)
+	check(g.breakthrough_ready() == false, "突破后灵气扣减 -> 回落 false (实际 essence=%s cost=%s)" % [g.fmt(g.essence), g.fmt(g.breakthrough_cost())])
+	# 飞升后: 道行口径
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 0.0
+	check(g.breakthrough_ready() == false, "飞升后道行不足 = false")
+	g.dao = g.dao_break_cost()
+	check(g.breakthrough_ready() == true, "飞升后道行攒够 = true")
+	g.dao = g.dao_break_cost() + 1.0
+	g.try_dao_break(0.01)
+	check(g.breakthrough_ready() == false, "道行精进扣减后回落 false (实际 dao=%s cost=%s)" % [g.fmt(g.dao), g.fmt(g.dao_break_cost())])
+	# 道祖封顶: 恒 false (按钮保持禁用)
+	g.dao_level = 8
+	g.dao = 1e30
+	check(g.breakthrough_ready() == false, "道祖封顶恒 false (按钮禁用)")
+	# 恢复未飞升基准态
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

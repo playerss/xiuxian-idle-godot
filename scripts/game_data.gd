@@ -1073,3 +1073,13 @@ func next_realm_display() -> String:
 	if realm_idx < REALMS.size() - 1:
 		return "%s 第 1 层" % [REALMS[realm_idx + 1]["name"] as String]
 	return "飞升真仙"
+
+# ---------- 打磨-32: 突破按钮"可突破"状态 (资源攒够时 UI 金边高亮引导点击) ----------
+
+# 当前是否已可点击突破/精进 (资源 >= 突破消耗且未封顶; 封顶恒 false, 按钮保持禁用)
+func breakthrough_ready() -> bool:
+	if ascended:
+		if dao_level >= IMMORTAL_REALMS.size() - 1:
+			return false
+		return dao >= dao_break_cost()
+	return essence >= breakthrough_cost()
