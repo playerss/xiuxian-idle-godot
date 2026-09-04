@@ -29,6 +29,10 @@ var _msg_label: Label
 var _msg_tween: Tween
 var _float_label: Label
 var _float_tween: Tween
+var _ach_float_label: Label   # 打磨-17: 成就解锁浮动提示 (顶层)
+var _ach_float_tween: Tween
+var _ach_prev: Array[String] = []  # 打磨-17: 上帧已解锁成就快照 (检测新解锁)
+var _ach_float_count := 0          # 打磨-17: 成就浮动提示次数 (自测断言用)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
@@ -67,6 +71,8 @@ func _ready() -> void:
 	_build_ui()
 	if GameData.offline_msg != "":
 		_show_msg(GameData.offline_msg)
+	# 打磨-17: 启动时先取基线快照, 读档恢复的旧解锁不当作"新解锁"弹浮动
+	_ach_prev = GameData.ach_done.duplicate()
 
 
 func _process(_delta: float) -> void:
@@ -139,6 +145,17 @@ func _build_ui() -> void:
 	_float_label.modulate = Color(1, 1, 1, 0)
 	_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_float_label)
+
+	# 打磨-17: 成就解锁浮动提示 (顶层, 居中略偏下, 金绿上浮淡出)
+	_ach_float_label = _label("", 22, Color(0.65, 0.95, 0.6))
+	_ach_float_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_ach_float_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_ach_float_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_ach_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ach_float_label.position = Vector2(0, -70)
+	_ach_float_label.modulate = Color(1, 1, 1, 0)
+	_ach_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_ach_float_label)
 
 
 func _make_page(title: String) -> Panel:
@@ -672,6 +689,33 @@ func _refresh() -> void:
 	if g.break_seq != _break_flash_seq:
 		_break_flash_seq = g.break_seq
 		_break_flash(int(g.last_break_result))
+	# 打磨-17: 成就解锁浮动提示 (与上一帧快照对比, 检测新解锁; 只增不减, 数量变化即快照)
+	var fresh: Array = g.new_ach_since(_ach_prev)
+	if not fresh.is_empty():
+		_ach_float(fresh)
+	if g.ach_done.size() != _ach_prev.size():
+		_ach_prev = g.ach_done.duplicate()
+
+
+# 打磨-17: 成就解锁浮动提示 (居中上浮淡出; 同一批多个解锁合并一行展示)
+func _ach_float(fresh: Array) -> void:
+	var names := ""
+	for id in fresh:
+		var a: Dictionary = GameData.ach_by_id.get(str(id), {})
+		if a.is_empty():
+			continue
+		names += ("\n" if names != "" else "") + (a["name"] as String)
+	if names == "":
+		return
+	_ach_float_count += 1
+	_ach_float_label.text = "✦ 成就达成: " + names + " ✦"
+	_ach_float_label.position = Vector2(0, -58)
+	_ach_float_label.modulate = Color(1, 1, 1, 1)
+	if _ach_float_tween != null and _ach_float_tween.is_valid():
+		_ach_float_tween.kill()
+	_ach_float_tween = create_tween()
+	_ach_float_tween.tween_property(_ach_float_label, "position:y", -96.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_ach_float_tween.parallel().tween_property(_ach_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
 
 
 func _apply_card_hl(row: PanelContainer, hi: bool) -> void:

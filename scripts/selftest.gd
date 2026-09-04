@@ -219,6 +219,13 @@ func _init() -> void:
 	check(g.ach_done.has("first_break"), "ach_done 记录 first_break")
 	var got2: Array[String] = g.check_achievements()
 	check(got2.is_empty(), "成就检查幂等 (不重复解锁)")
+	# 打磨-17: new_ach_since (成就解锁浮动提示的差集逻辑; UI 每帧对比快照触发浮动)
+	var prev17: Array[String] = g.ach_done.duplicate() as Array[String]
+	check(g.new_ach_since(prev17).is_empty(), "new_ach_since 状态不变返回空 (实际 %s)" % str(g.new_ach_since(prev17)))
+	var diff17: Array[String] = g.new_ach_since([])
+	check(diff17.size() == 1 and diff17.has("first_break"), "new_ach_since 含新解锁成就 (实际 %s)" % str(diff17))
+	var stale_prev: Array[String] = ["stale_x", "first_break"]
+	check(g.new_ach_since(stale_prev).is_empty(), "new_ach_since 已含旧解锁不重复计")
 	# realm_zhuji: 升到筑基 (realm_idx=1)
 	var guard := 0
 	while g.realm_idx < 1 and not g.ascended and guard < 30:

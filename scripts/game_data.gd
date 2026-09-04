@@ -345,6 +345,15 @@ func ach_progress(id: String) -> String:
 				return "当前 %s / 目标 %s" % [realm_name(), REALMS[need]["name"]]
 	return ""
 
+# 打磨-17: 自 prev 以来新解锁的成就 (UI 浮动提示用; 存档带来的旧解锁不当作"新")
+# prev 用非类型 Array: 调用方 (含 -s 脚本/存档恢复) 可能传入未类型化数组, 类型化参数会运行时报错
+func new_ach_since(prev: Array) -> Array[String]:
+	var out: Array[String] = []
+	for id in ach_done:
+		if not prev.has(id):
+			out.append(id)
+	return out
+
 # ================= 详情提示 (打磨-9: 行 tooltip) =================
 
 # 技能详情 (tooltip: 名称/品质/类型/效果/领悟条件/状态)
