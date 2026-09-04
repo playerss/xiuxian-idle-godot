@@ -761,6 +761,35 @@ func try_buy_item(item_id: String) -> String:
 				return "灵石不足: 需要 %s" % fmt(it["cost"])
 	return "未找到该法器"
 
+# ---------- 打磨-29: 法器 一键购买 (修行页法器区, 与 一键购买/一键领悟/一键最佳 口径一致) ----------
+
+# 当前灵石可买起的未拥有法器数 (供修行页"一键购买"按钮文案)
+func item_affordable_count() -> int:
+	var n := 0
+	for it in ITEMS:
+		if not owned.has(it["id"] as String) and stones >= float(it["cost"]):
+			n += 1
+	return n
+
+# 按 价格升序 (同价按数据序) 连续购买 买得起 的法器, 灵石花到买不起为止
+func buy_items_affordable() -> Dictionary:
+	var order: Array = []
+	for it in ITEMS:
+		order.append(it)
+	order.sort_custom(_item_price_cmp)
+	var n := 0
+	for it in order:
+		if str(try_buy_item(str(it["id"]))).find("购得") >= 0:
+			n += 1
+	return {"count": n, "bought": n > 0}
+
+func _item_price_cmp(a: Dictionary, b: Dictionary) -> bool:
+	var ca: float = float(a["cost"])
+	var cb: float = float(b["cost"])
+	if ca != cb:
+		return ca < cb
+	return str(a["id"]) < str(b["id"])
+
 # ================= 打磨-10: 道行 (飞升后目标) =================
 
 func dao_break_cost() -> float:

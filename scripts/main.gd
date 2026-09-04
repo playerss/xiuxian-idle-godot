@@ -27,6 +27,7 @@ var _bar_fill: ColorRect
 var _break_btn: Button
 var _shop_box: VBoxContainer
 var _shop_rows: Dictionary = {}
+var _items_buy_btn: Button          # 打磨-29: 法器 一键购买 (修行页法器区)
 var _msg_label: Label
 var _msg_tween: Tween
 var _float_label: Label
@@ -229,7 +230,18 @@ func _build_training_page(page: Panel) -> void:
 	_break_btn.pressed.connect(_on_break)
 	left.add_child(_break_btn)
 	left.add_child(_sep())
-	left.add_child(_label("法 器", 15, DIM))
+	# 法器标题 + 打磨-29: 一键购买 (价格升序连买买得起的法器)
+	var item_head := HBoxContainer.new()
+	item_head.add_theme_constant_override("separation", 8)
+	left.add_child(item_head)
+	var item_sp := Control.new()
+	item_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	item_head.add_child(_label("法 器", 15, DIM))
+	item_head.add_child(item_sp)
+	_items_buy_btn = _make_button("一键购买")
+	_items_buy_btn.pressed.connect(_on_items_buy_all)
+	_items_buy_btn.tooltip_text = "按价格升序连续买下当前灵石买得起的全部法器, 灵石花到买不起为止。"
+	item_head.add_child(_items_buy_btn)
 	# 打磨-13: 法器列表可滚动 (10 件避免低分辨率下超出屏幕)
 	var shop_scroll := ScrollContainer.new()
 	shop_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -471,6 +483,15 @@ func _on_learn_all() -> void:
 		_show_msg(msg)
 	else:
 		_show_msg("当前境界下没有可领悟的新技能 (或筛选范围内已全部领悟)")
+
+
+# 打磨-29: 法器 一键购买 (价格升序连买买得起的, 与装备 一键购买 口径一致)
+func _on_items_buy_all() -> void:
+	var r: Dictionary = GameData.buy_items_affordable()
+	if int(r["count"]) > 0:
+		_show_msg("一键购置 %d 件法器 (灵石已花到买不起为止)" % int(r["count"]))
+	else:
+		_show_msg("当前灵石买不起任何一件未拥有的法器")
 
 
 # 打磨-23: 一键购买 (价格升序连买, 灵石花到买不起为止)
@@ -784,6 +805,11 @@ func _refresh() -> void:
 	var eb_txt := ("一键最佳 x%d" if best_n > 0 else "已最佳")
 	if _equip_best_btn.text != eb_txt:
 		_equip_best_btn.text = eb_txt
+	# 打磨-29: 法器 一键购买 (可买数变化时才刷, 与 一键购买/一键最佳 按可执行数计 口径一致)
+	var ib_avail: int = g.item_affordable_count()
+	var ib_txt := ("一键购买 x%d" if ib_avail > 0 else "灵石不足")
+	if _items_buy_btn.text != ib_txt:
+		_items_buy_btn.text = ib_txt
 	# 槽位
 	for slot in g.SLOTS:
 		(_slot_labels[slot] as Label).text = g.equipped_name(slot)

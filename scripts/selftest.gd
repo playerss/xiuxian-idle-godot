@@ -1013,6 +1013,49 @@ func _init() -> void:
 	g.unequip("weapon")
 	check(int(g.collect_summary()["equip"]["got"]) == 1, "卸下装备不影响收集计数 (只增不减)")
 
+	# ---------- 打磨-29: 法器 一键购买 (价格升序连买买得起的, 与装备 一键购买 口径一致) ----------
+	# 受控状态: 清掉前节遗留法器, 灵石从 0 开始
+	g.owned.clear()
+	g.stones = 0.0
+	var ib_stats0: int = int(g.stats.get("item_buy", 0.0))
+	var ib0: Dictionary = g.buy_items_affordable()
+	check(int(ib0["count"]) == 0 and g.owned.size() == 0, "法器一键购买 灵石 0 买 0 (实际 %s)" % str(ib0))
+	check(g.item_affordable_count() == 0, "item_affordable_count 灵石 0 = 0")
+	g.stones = 100.0
+	check(g.item_affordable_count() == 1, "item_affordable_count 100 灵石 = 1 (实际 %d)" % g.item_affordable_count())
+	var ib1: Dictionary = g.buy_items_affordable()
+	check(int(ib1["count"]) == 1, "法器一键购买 100 灵石买 1 件 (实际 %s)" % str(ib1))
+	check(g.owned.has("wooden_sword"), "买到的最便宜法器 = 木剑 (价格升序)")
+	check(absf(g.stones) < 1e-6, "法器一键购买扣光 100 灵石 (剩 %s)" % g.fmt(g.stones))
+	# 200 灵石: 玉符 1000 买不起 -> 只买 0 件新的 (木剑已拥有)
+	g.stones = 200.0
+	var ib2: Dictionary = g.buy_items_affordable()
+	check(int(ib2["count"]) == 0 and g.owned.size() == 1, "200 灵石再买 0 (下一件 1000 买不起, 实际 %s)" % str(ib2))
+	# 1100 灵石: 连买 玉符(1000) 后剩 100, 无更便宜的未拥有件 -> 1 件
+	g.stones = 1100.0
+	var ib3: Dictionary = g.buy_items_affordable()
+	check(int(ib3["count"]) == 1 and g.owned.has("jade_talisman"), "1100 灵石买 玉符 1 件 (实际 %s)" % str(ib3))
+	check(absf(g.stones - 100.0) < 1e-6, "买 玉符 后剩 100 灵石 (实际 %s)" % g.fmt(g.stones))
+	# 7000 灵石: 买起 聚灵袋(6000) 后剩 1000, 仍买不起 引星灯(45000) -> 1 件
+	g.stones = 7000.0
+	var ib4: Dictionary = g.buy_items_affordable()
+	check(int(ib4["count"]) == 1 and g.owned.has("spirit_bag"), "7000 灵石买 聚灵袋 (实际 %s)" % str(ib4))
+	check(g.item_affordable_count() == 0, "买完后 item_affordable_count 归 0")
+	check(int(g.stats.get("item_buy", 0.0)) == ib_stats0 + 3, "item_buy 统计 +3 (实际 %s)" % str(int(g.stats.get("item_buy", 0.0))))
+	# 满灵石: 补齐剩余 7 件, 全部拥有
+	g.stones = 1e13
+	var ib5: Dictionary = g.buy_items_affordable()
+	check(int(ib5["count"]) == 7, "满灵石补齐 7 件法器 (实际 %s)" % str(ib5))
+	check(g.owned.size() == g.ITEMS.size(), "法器一键购买后拥有全部 10 件")
+	var ib6: Dictionary = g.buy_items_affordable()
+	check(int(ib6["count"]) == 0 and g.owned.size() == 10, "全部拥有后法器一键购买 0 (幂等)")
+	check(g.item_affordable_count() == 0, "全部拥有后 item_affordable_count = 0")
+	# 幂等性: 重复购买不重复扣灵石/不重复入账
+	var stones_before: float = g.stones
+	var boost_before: float = g.item_boost()
+	g.buy_items_affordable()
+	check(g.stones == stones_before and g.item_boost() == boost_before, "幂等: 重复购买不扣灵石/不加成")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
