@@ -790,6 +790,41 @@ func _item_price_cmp(a: Dictionary, b: Dictionary) -> bool:
 		return ca < cb
 	return str(a["id"]) < str(b["id"])
 
+# ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 的主动神通) ----------
+
+# 当前就绪 (无冷却) 的 已学主动神通 数 (供技能页"一键施展"按钮文案)
+func active_ready_count() -> int:
+	var n := 0
+	for id in skill_ids:
+		var s: Dictionary = skill_by_id.get(str(id), {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if not learned.has(str(id)):
+			continue
+		if active_ready(str(id)):
+			n += 1
+	return n
+
+# 释放所有 就绪 的主动神通 (复用 use_active_skill 的 冷却/爆发/统计埋点)
+# 返回 {count, burst}; 施展后各自进入冷却, 冷却中再调 = 0 (幂等)
+func use_all_active() -> Dictionary:
+	var n := 0
+	var burst := 0.0
+	for id in skill_ids:
+		var s: Dictionary = skill_by_id.get(str(id), {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if not learned.has(str(id)):
+			continue
+		if not active_ready(str(id)):
+			continue
+		var before := primary_res_value()
+		var m := use_active_skill(str(id))
+		if m.find("施展") >= 0:
+			n += 1
+			burst += primary_res_value() - before
+	return {"count": n, "burst": burst}
+
 # ================= 打磨-10: 道行 (飞升后目标) =================
 
 func dao_break_cost() -> float:

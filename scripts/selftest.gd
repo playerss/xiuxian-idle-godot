@@ -1056,6 +1056,36 @@ func _init() -> void:
 	g.buy_items_affordable()
 	check(g.stones == stones_before and g.item_boost() == boost_before, "幂等: 重复购买不扣灵石/不加成")
 
+	# ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 的主动神通) ----------
+	# 受控状态: 清空 已学/冷却, 注入 3 个 已学+就绪 的主动神通 (确定性)
+	g.learned.clear()
+	g._active_cd.clear()
+	var act_ids: Array[String] = []
+	for id in g.skill_ids:
+		if str(g.skill_by_id[id]["type"]) == "active" and act_ids.size() < 3:
+			act_ids.append(id)
+	for id in act_ids:
+		g.learned.append(id)
+	var n_ready30: int = act_ids.size()
+	check(n_ready30 == 3, "测试前置: 注入 3 个已学就绪主动神通 (实际 %d)" % n_ready30)
+	check(g.active_ready_count() == n_ready30, "active_ready_count = 已学就绪神通数 (实际 %d)" % g.active_ready_count())
+	var res_before30: float = g.primary_res_value()
+	var sa0: int = int(g.stats.get("skill_use", 0.0))
+	var ua1: Dictionary = g.use_all_active()
+	check(int(ua1["count"]) == n_ready30, "一键施展 释放全部就绪神通 (实际 %s)" % str(ua1["count"]))
+	check(g.primary_res_value() > res_before30, "一键施展后主资源增加 (爆发 %s)" % g.fmt(float(ua1["burst"])))
+	check(float(ua1["burst"]) > 0.0, "一键施展 爆发值 > 0")
+	check(int(g.stats.get("skill_use", 0.0)) == sa0 + n_ready30, "skill_use 统计 +就绪数 (实际 %s)" % str(int(g.stats.get("skill_use", 0.0))))
+	# 施展后全部进入冷却 -> 再调 = 0 (幂等)
+	check(g.active_ready_count() == 0, "施展后 active_ready_count 归 0")
+	var res_mid30: float = g.primary_res_value()
+	var ua2: Dictionary = g.use_all_active()
+	check(int(ua2["count"]) == 0 and float(ua2["burst"]) == 0.0, "冷却中再调一键施展 = 0 (幂等, 实际 %s)" % str(ua2))
+	check(g.primary_res_value() == res_mid30, "冷却中重复施展 主资源不变")
+	# 清空已学神通 -> 就绪数保持 0
+	g.learned.clear()
+	check(g.active_ready_count() == 0, "未学习任何技能时 active_ready_count = 0")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

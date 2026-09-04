@@ -53,6 +53,7 @@ var _equip_box: VBoxContainer
 var _equip_row_nodes: Dictionary = {}
 var _equip_btns: Dictionary = {}
 var _learn_all_btn: Button           # 打磨-23: 一键领悟 (技能页)
+var _active_all_btn: Button         # 打磨-30: 一键施展 (技能页, 释放所有就绪主动神通)
 var _buy_all_btn: Button            # 打磨-23: 一键购买 (装备页)
 var _equip_best_btn: Button         # 打磨-26: 一键最佳穿戴 (装备页)
 var _equip_filter_btns: Dictionary = {}  # 部位 id -> 筛选按钮 (打磨-11)
@@ -357,6 +358,11 @@ func _build_skill_page(page: Panel) -> void:
 	_learn_all_btn = _make_button("一键领悟")
 	_learn_all_btn.pressed.connect(_on_learn_all)
 	tier_bar.add_child(_learn_all_btn)
+	# 打磨-30: 一键施展 (释放所有 已学+冷却完毕 的主动神通)
+	_active_all_btn = _make_button("一键施展")
+	_active_all_btn.pressed.connect(_on_active_all)
+	_active_all_btn.tooltip_text = "释放所有已领悟且冷却完毕的主动神通, 一次全部爆发; 施展后各自进入冷却。"
+	tier_bar.add_child(_active_all_btn)
 
 	# 顶栏: 总加成汇总 (打磨-9)
 	var bonus_l := _label(GameData.bonus_summary_text(), 14, GOLD)
@@ -492,6 +498,16 @@ func _on_items_buy_all() -> void:
 		_show_msg("一键购置 %d 件法器 (灵石已花到买不起为止)" % int(r["count"]))
 	else:
 		_show_msg("当前灵石买不起任何一件未拥有的法器")
+
+
+# 打磨-30: 一键施展 (释放所有 就绪 的主动神通, 与 一键领悟/一键购买/一键最佳 系列口径一致)
+func _on_active_all() -> void:
+	var r: Dictionary = GameData.use_all_active()
+	if int(r["count"]) > 0:
+		var res := "灵气" if not GameData.ascended else "道行"
+		_show_msg("一键施展 %d 个神通, 爆发%s %s" % [int(r["count"]), res, GameData.fmt(float(r["burst"]))])
+	else:
+		_show_msg("没有可施展的主动神通 (未领悟或冷却中)")
 
 
 # 打磨-23: 一键购买 (价格升序连买, 灵石花到买不起为止)
@@ -790,6 +806,11 @@ func _refresh() -> void:
 	var tier_i27 := int(_tier_active) if _tier_active != "" else -1
 	var ll_avail: int = g.learn_available_count(_filter_active, tier_i27)
 	var ll_txt := ("一键领悟 x%d" if ll_avail > 0 else "已无新技能")
+	# 打磨-30: 一键施展 (可施展数变化才刷; 就绪数随冷却倒计时变化)
+	var ar_avail: int = g.active_ready_count()
+	var ar_txt := ("一键施展 x%d" if ar_avail > 0 else "冷却中")
+	if _active_all_btn.text != ar_txt:
+		_active_all_btn.text = ar_txt
 	var buy_n := 0
 	for eid in g.equip_ids:
 		var ee: Dictionary = g.equip_by_id[eid]
