@@ -585,6 +585,16 @@ func realm_display() -> String:
 		return "%s %s" % [realm_name(), layer_name()]
 	return "真仙·%s (已飞升)" % IMMORTAL_REALMS[dao_level]
 
+# 打磨-19: 顶栏主资源 (未飞升=灵气, 飞升后=道行; 灵石始终单列)
+func primary_res_name() -> String:
+	return "道行" if ascended else "灵气"
+
+func primary_res_value() -> float:
+	return dao if ascended else essence
+
+func primary_res_text() -> String:
+	return "%s %s" % [primary_res_name(), fmt(primary_res_value())]
+
 # ================= 存档 =================
 
 func save_game() -> void:

@@ -611,6 +611,21 @@ func _init() -> void:
 	check(stt.find("装备 %d 件" % int(g.stats["equip_buy"])) >= 0, "stats_text 含装备计数 (实际 %s)" % stt)
 	check(stt.find("神通") >= 0 and stt.find("法器") >= 0 and stt.find("道行精进") >= 0 and stt.find("修行") >= 0, "stats_text 含修行/神通/法器/道行段 (实际 %s)" % stt)
 
+	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
+	g.ascended = false
+	g.essence = 54321.0
+	g.dao = 987654.0
+	check(g.primary_res_name() == "灵气", "未飞升主资源名=灵气 (实际 %s)" % g.primary_res_name())
+	check(absf(g.primary_res_value() - 54321.0) < 1e-9, "未飞升主资源值=essence (实际 %s)" % g.fmt(g.primary_res_value()))
+	check(g.primary_res_text() == ("灵气 " + g.fmt(54321.0)), "未飞升顶栏主资源文本 (实际 %s)" % g.primary_res_text())
+	g.ascended = true
+	check(g.primary_res_name() == "道行", "飞升后主资源名=道行 (实际 %s)" % g.primary_res_name())
+	check(absf(g.primary_res_value() - 987654.0) < 1e-9, "飞升后主资源值=dao (实际 %s)" % g.fmt(g.primary_res_value()))
+	check(g.primary_res_text() == ("道行 " + g.fmt(987654.0)), "飞升后顶栏主资源文本 (实际 %s)" % g.primary_res_text())
+	check((g.primary_res_name() == "道行") == g.ascended, "主资源名与飞升状态一致 (切换即生效)")
+	g.ascended = false
+	check(g.primary_res_name() == "灵气", "恢复未飞升后主资源复原为灵气")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

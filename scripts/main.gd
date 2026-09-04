@@ -558,7 +558,7 @@ func _refresh() -> void:
 	if tip != _realm_tip:
 		_realm_tip = tip
 		_realm_label.tooltip_text = tip
-	_essence_label.text = "灵气 %s" % g.fmt(g.essence)
+	_essence_label.text = g.primary_res_text()  # 打磨-19: 顶栏主资源 (未飞升=灵气 / 飞升后=道行)
 	_stones_label.text = "灵石 %s" % g.fmt(g.stones)
 	var rate_txt := g.fmt(g.qi_per_sec())
 	_qi_label.text = ("道行速率  %s /秒" if g.ascended else "灵气速率  %s /秒") % rate_txt
