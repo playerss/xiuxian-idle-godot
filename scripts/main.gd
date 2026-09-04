@@ -53,6 +53,7 @@ var _equip_filter_btns: Dictionary = {}  # 部位 id -> 筛选按钮 (打磨-11)
 var _equip_filter_active := ""           # "" = 全部
 var _equip_tier_btns: Dictionary = {}    # 打磨-21: 装备品质筛选按钮 (key = 品质索引字符串, "" = 全部)
 var _equip_tier_active := ""             # 打磨-21: 当前装备品质筛选 ("" = 全部)
+var _eq_states: Array = []               # 打磨-22: 上帧装备状态快照 (变化才重排)
 var _slot_labels: Dictionary = {}
 var _card_sb_normal: StyleBoxFlat
 var _card_sb_hi: StyleBoxFlat
@@ -695,6 +696,8 @@ func _refresh() -> void:
 	for id in _equip_row_nodes:
 		var e: Dictionary = g.equip_by_id[id]
 		_apply_card_hl(_equip_row_nodes[id], str(g.equipped.get(str(e["slot"]), "")) == id)
+	# 打磨-22: 装备列表按状态重排 (购买/穿戴/卸下 时状态快照变化才真正重排)
+	_resort_equip()
 	# 打磨-9: tooltip 状态行 (已领悟/已穿戴/已拥有 变化时才重建文本)
 	for id in _skill_row_nodes:
 		var row: Node = _skill_row_nodes[id]
@@ -891,7 +894,9 @@ func _on_equip_tier_filter(tier: String) -> void:
 
 
 # 打磨-21: 应用 部位×品质 叠加筛选 (显示/隐藏 + 提示)
+# 打磨-22: 顺带按状态重排 (已穿戴 > 已拥有 > 未拥有), 避免买到的装备沉在长列表底部
 func _apply_equip_filter() -> void:
+	_resort_equip()
 	for id in _equip_row_nodes:
 		var e: Dictionary = GameData.equip_by_id[id]
 		var row: Node = _equip_row_nodes[id]
@@ -900,6 +905,26 @@ func _apply_equip_filter() -> void:
 	var msg := "装备筛选: " + (str(GameData.SLOT_CN[_equip_filter_active]) if _equip_filter_active != "" else "全部部位")
 	msg += (" · " + GameData.equip_tier_name(int(_equip_tier_active)) if _equip_tier_active != "" else " · 全部品质")
 	_show_msg(msg)
+
+
+# 打磨-22: 状态快照变化时才重排 (购买/穿戴/卸下/读档触发, 避免每帧重排 140 行)
+func _resort_equip() -> void:
+	var cur: Array = []
+	for id in GameData.equip_ids:
+		cur.append(GameData.equip_state(id))
+	if cur.size() != _eq_states.size() or _states_diff(cur):
+		_eq_states = cur
+		var order: Array = GameData.equip_sort_order()
+		for idx in order.size():
+			var row: Node = _equip_row_nodes[order[idx]]
+			_equip_box.move_child(row, _equip_box.get_child_count() - 1)
+
+
+func _states_diff(cur: Array) -> bool:
+	for i in cur.size():
+		if int(cur[i]) != int(_eq_states[i]):
+			return true
+	return false
 
 
 func _show_msg(text: String) -> void:

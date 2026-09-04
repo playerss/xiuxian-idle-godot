@@ -676,6 +676,51 @@ func _init() -> void:
 			weapon_total += 1
 	check(weapon_total == 28, "AND 叠加: weapon×全部品质 命中 28 件 (实际 %d)" % weapon_total)
 
+	# ---------- 打磨-22: 装备列表排序 (已穿戴 > 已拥有 > 未拥有) ----------
+	g.owned_eq.clear()   # 清掉前几节遗留的 weapon_0_0, 保证本组槽位假设成立
+	g.equipped.clear()
+	g.stones = 1e12
+	g.buy_equipment("weapon_2_1")   # 武器槽空 -> 自动穿戴 (state 2)
+	g.buy_equipment("robe_0_2")     # 法袍槽空 -> 自动穿戴 (state 2)
+	g.buy_equipment("weapon_1_0")   # 武器槽已被占 -> 已拥有未穿戴 (state 1)
+	g.buy_equipment("amulet_3_0")   # 玉佩槽空 -> 自动穿戴 (state 2)
+	check(g.equip_state("weapon_2_1") == 2, "equip_state 已穿戴=2 (weapon_2_1)")
+	check(g.equip_state("weapon_1_0") == 1, "equip_state 已拥有未穿戴=1 (weapon_1_0)")
+	check(g.equip_state("robe_0_0") == 0, "equip_state 未拥有=0 (robe_0_0)")
+	var eord: Array = g.equip_sort_order()
+	check(eord.size() == g.equip_ids.size(), "equip_sort_order 含全部装备 (实际 %d/%d)" % [eord.size(), g.equip_ids.size()])
+	var seen: Dictionary = {}
+	var perm_ok := true
+	for x in eord:
+		if seen.has(x):
+			perm_ok = false
+		seen[x] = true
+	check(perm_ok, "equip_sort_order 无重复 id")
+	check(str(eord[0]) == "weapon_2_1", "已穿戴按数据序置顶 (首位 weapon_2_1, 实际 %s)" % str(eord[0]))
+	check(str(eord[1]) == "robe_0_2" and str(eord[2]) == "amulet_3_0", "已穿戴组按 部位 数据序 (robe_0_2, amulet_3_0)")
+	check(str(eord[3]) == "weapon_1_0", "已拥有未穿戴组紧随其后 (weapon_1_0)")
+	var unowned_seq: Array = []
+	for id in g.equip_ids:
+		if g.equip_state(id) == 0:
+			unowned_seq.append(id)
+	var prev_i := -1
+	var mono_ok := true
+	for x in eord:
+		if g.equip_state(str(x)) == 0:
+			var pos: int = unowned_seq.find(x)
+			if pos <= prev_i:
+				mono_ok = false
+			prev_i = pos
+	check(mono_ok, "未拥有组内部保持数据序 (稳定)")
+	var det2: Array = g.equip_sort_order()
+	check(det2 == eord, "同状态重复调用顺序一致 (确定性)")
+	# 卸下武器 -> weapon_2_1 降为 state 1, 法袍件升为首位
+	g.unequip("weapon")
+	var eord2: Array = g.equip_sort_order()
+	check(str(eord2[0]) == "robe_0_2", "卸下后首位换为当前已穿戴件 (实际 %s)" % str(eord2[0]))
+	check(eord2.find("weapon_1_0") < eord2.find("weapon_2_1"), "同为已拥有未穿戴时保持数据序 (weapon_1_0 < weapon_2_1)")
+	check(g.equip_sort_order() == eord2, "状态变化后新顺序稳定 (确定性)")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

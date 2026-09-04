@@ -505,6 +505,38 @@ func equipped_name(slot: String) -> String:
 	var e: Dictionary = equip_by_id.get(id, {})
 	return str(e["name"]) if not e.is_empty() else "(空)"
 
+# 打磨-22: 装备状态 (0=未拥有 1=已拥有未穿戴 2=已穿戴) — 供装备列表排序
+func equip_state(id: String) -> int:
+	if not owned_eq.has(id):
+		return 0
+	var e: Dictionary = equip_by_id.get(id, {})
+	if not e.is_empty() and str(equipped.get(str(e["slot"]), "")) == id:
+		return 2
+	return 1
+
+# 打磨-22: 装备列表排序 (已穿戴 > 已拥有 > 未拥有; 同状态按 部位/品质/变体 数据序)
+func equip_sort_order() -> Array:
+	var out: Array = []
+	for id in equip_ids:
+		out.append(id)
+	out.sort_custom(equip_sort_cmp)
+	return out
+
+func equip_sort_cmp(a: String, b: String) -> bool:
+	var sa: int = equip_state(a)
+	var sb: int = equip_state(b)
+	if sa != sb:
+		return sa > sb
+	var ea: Dictionary = equip_by_id[a]
+	var eb: Dictionary = equip_by_id[b]
+	var ia: int = SLOTS.find(str(ea["slot"]))
+	var ib: int = SLOTS.find(str(eb["slot"]))
+	if ia != ib:
+		return ia < ib
+	if int(ea["tier"]) != int(eb["tier"]):
+		return int(ea["tier"]) < int(eb["tier"])
+	return str(a) < str(b)
+
 # ================= 突破 =================
 
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
