@@ -1043,3 +1043,33 @@ func breakthrough_eta_text() -> String:
 	if t < 60.0:
 		return prefix + "不足1分"
 	return prefix + fmt_time(t)
+
+# ---------- 打磨-31: 下一目标提示 (修行页: 玩家下一步该做什么) ----------
+
+# 下一目标文本 (未飞升=攒灵气突破到下一层/境界, 飞升后=道行精进; 已至道祖=圆满)
+# 目标名称 + 缺口 + 按当前速率的预计时间; 攒够时直接提示"可突破/可精进"
+func next_goal_text() -> String:
+	if not ascended:
+		var need: float = breakthrough_cost()
+		var gap: float = need - essence
+		var goal_name := "突破至 %s" % next_realm_display()
+		if gap <= 0.0:
+			return "下一目标  %s  灵气已攒够, 点击突破!" % goal_name
+		return "下一目标  %s  还差 %s 灵气 (%s)" % [goal_name, fmt(gap), breakthrough_eta_text()]
+	if dao_level >= IMMORTAL_REALMS.size() - 1:
+		return "下一目标  已至道祖, 道法自然 ♪"
+	var d_need: float = dao_break_cost()
+	var d_gap: float = d_need - dao
+	var d_goal := "道行精进至 %s" % IMMORTAL_REALMS[dao_level + 1]
+	if d_gap <= 0.0:
+		return "下一目标  %s  道行已攒够, 点击修炼!" % d_goal
+	return "下一目标  %s  还差 %s 道行 (%s)" % [d_goal, fmt(d_gap), breakthrough_eta_text()]
+
+# 下一层/境界的展示名 (未飞升用: "练气 第 2 层" / "筑基 第 1 层")
+func next_realm_display() -> String:
+	var max_layer := REALMS[realm_idx]["layers"] as int
+	if layer < max_layer:
+		return "%s 第 %d 层" % [REALMS[realm_idx]["name"] as String, layer + 1]
+	if realm_idx < REALMS.size() - 1:
+		return "%s 第 1 层" % [REALMS[realm_idx + 1]["name"] as String]
+	return "飞升真仙"

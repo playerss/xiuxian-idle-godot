@@ -1086,6 +1086,59 @@ func _init() -> void:
 	g.learned.clear()
 	check(g.active_ready_count() == 0, "未学习任何技能时 active_ready_count = 0")
 
+	# ---------- 打磨-31: 下一目标提示 (修行页: 玩家下一步该做什么) ----------
+	# 受控状态: 练气 第1层 未飞升, 无资源
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	check(g.next_realm_display() == "练气 第 2 层", "next_realm_display 层内 (实际 %s)" % g.next_realm_display())
+	var ng0: String = g.next_goal_text()
+	check(ng0.find("突破至 练气 第 2 层") >= 0, "未飞升下一目标指向下一层 (实际 %s)" % ng0)
+	check(ng0.find("灵气") >= 0, "未飞升下一目标含灵气缺口 (实际 %s)" % ng0)
+	check(ng0.find("突破还需") >= 0, "未飞升下一目标含 ETA (实际 %s)" % ng0)
+	# 层顶: 指向下一境界
+	g.layer = 9
+	check(g.next_realm_display() == "筑基 第 1 层", "next_realm_display 跨境界 (实际 %s)" % g.next_realm_display())
+	# 渡劫 (layers=1) 顶层: 指向真仙 (最后一境, 再突破即飞升)
+	g.realm_idx = 8
+	g.layer = 1
+	check(g.next_realm_display() == "真仙 第 1 层", "next_realm_display 渡劫顶 (实际 %s)" % g.next_realm_display())
+	# 真仙 (最后一境) 顶层: 指向飞升
+	g.realm_idx = 9
+	check(g.next_realm_display() == "飞升真仙", "next_realm_display 飞升 (实际 %s)" % g.next_realm_display())
+	# 灵气攒够: 直接提示可突破
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = g.breakthrough_cost()
+	var ng1: String = g.next_goal_text()
+	check(ng1.find("已攒够, 点击突破") >= 0, "灵气攒够提示点击突破 (实际 %s)" % ng1)
+	check(ng1.find("还差") < 0, "灵气攒够时不再显示缺口 (实际 %s)" % ng1)
+	# 飞升后: 道行精进
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 0.0
+	var ng2: String = g.next_goal_text()
+	check(ng2.find("道行精进至 少仙") >= 0, "飞升后下一目标指向少仙 (实际 %s)" % ng2)
+	check(ng2.find("道行") >= 0, "飞升后下一目标含道行缺口 (实际 %s)" % ng2)
+	# 道行攒够: 提示可修炼
+	g.dao = g.dao_break_cost()
+	var ng3: String = g.next_goal_text()
+	check(ng3.find("已攒够, 点击修炼") >= 0, "道行攒够提示点击修炼 (实际 %s)" % ng3)
+	# 道祖封顶
+	g.dao_level = 8
+	var ng4: String = g.next_goal_text()
+	check(ng4.find("已至道祖") >= 0, "道祖封顶提示 (实际 %s)" % ng4)
+	# 恢复未飞升基准态 (后续测试可能依赖)
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
