@@ -642,6 +642,40 @@ func _init() -> void:
 	for t in [0, 1, 2, 3, 4, 5]:
 		check(int(tier_dist.get(g.skill_tier_name(t), 0)) == 20, "%s 档 20 个技能 (实际 %d)" % [g.skill_tier_name(t), int(tier_dist.get(g.skill_tier_name(t), 0))])
 
+	# ---------- 打磨-21: 装备品质筛选 (品质名接口 + 数据一致性 + AND 叠加) ----------
+	check(g.equip_tier_name(0) == "凡品", "equip_tier_name 0=凡品 (实际 %s)" % g.equip_tier_name(0))
+	check(g.equip_tier_name(6) == "神品", "equip_tier_name 6=神品 (实际 %s)" % g.equip_tier_name(6))
+	check(g.equip_tier_name(-1) == "凡品" and g.equip_tier_name(99) == "神品", "equip_tier_name 越界钳制 (实际 %s / %s)" % [g.equip_tier_name(-1), g.equip_tier_name(99)])
+	var eq_tier_ok := true
+	var eq_tier_dist: Dictionary = {}
+	for id in g.equip_ids:
+		var e: Dictionary = g.equip_by_id[id]
+		if g.equip_tier_name(int(e["tier"])) != str(e["tier_name"]):
+			eq_tier_ok = false
+		eq_tier_dist[str(e["tier_name"])] = int(eq_tier_dist.get(str(e["tier_name"]), 0)) + 1
+	check(eq_tier_ok, "全部装备 tier_name 与 equip_tier_name(tier) 一致")
+	check(eq_tier_dist.size() == 7, "7 档品质均有装备 (实际 %d 档)" % eq_tier_dist.size())
+	for t in [0, 1, 2, 3, 4, 5, 6]:
+		check(int(eq_tier_dist.get(g.equip_tier_name(t), 0)) == 20, "%s 档 20 件装备 (实际 %d)" % [g.equip_tier_name(t), int(eq_tier_dist.get(g.equip_tier_name(t), 0))])
+	# AND 叠加: 部位×品质 逐组合命中数 (每组合应恰 4 件 = 4 变体; weapon 全品质共 28 件)
+	var combo_ok := true
+	for slot in g.SLOTS:
+		for t in 7:
+			var n4 := 0
+			for id in g.equip_ids:
+				var eq_c: Dictionary = g.equip_by_id[id]
+				if str(eq_c["slot"]) == slot and int(eq_c["tier"]) == t:
+					n4 += 1
+			if n4 != 4:
+				combo_ok = false
+	check(combo_ok, "AND 叠加: 每个部位x品质组合命中 4 件 (4 变体)")
+	var weapon_total := 0
+	for id in g.equip_ids:
+		var eq_c2: Dictionary = g.equip_by_id[id]
+		if str(eq_c2["slot"]) == "weapon":
+			weapon_total += 1
+	check(weapon_total == 28, "AND 叠加: weapon×全部品质 命中 28 件 (实际 %d)" % weapon_total)
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

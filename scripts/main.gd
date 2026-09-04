@@ -51,6 +51,8 @@ var _equip_row_nodes: Dictionary = {}
 var _equip_btns: Dictionary = {}
 var _equip_filter_btns: Dictionary = {}  # 部位 id -> 筛选按钮 (打磨-11)
 var _equip_filter_active := ""           # "" = 全部
+var _equip_tier_btns: Dictionary = {}    # 打磨-21: 装备品质筛选按钮 (key = 品质索引字符串, "" = 全部)
+var _equip_tier_active := ""             # 打磨-21: 当前装备品质筛选 ("" = 全部)
 var _slot_labels: Dictionary = {}
 var _card_sb_normal: StyleBoxFlat
 var _card_sb_hi: StyleBoxFlat
@@ -484,6 +486,21 @@ func _build_equip_page(page: Panel) -> void:
 		eb.pressed.connect(_on_equip_filter.bind(slot))
 		eq_filter_bar.add_child(eb)
 		_equip_filter_btns[slot] = eb
+	# 打磨-21: 装备品质筛选行 (凡品~神品 7 档, 与部位筛选叠加生效)
+	var eq_tier_bar := HBoxContainer.new()
+	eq_tier_bar.add_theme_constant_override("separation", 8)
+	outer.add_child(eq_tier_bar)
+	var et_all := _make_button("全部品质")
+	et_all.toggle_mode = true
+	et_all.pressed.connect(_on_equip_tier_filter.bind(""))
+	eq_tier_bar.add_child(et_all)
+	_equip_tier_btns[""] = et_all
+	for t in 7:
+		var etb := _make_button(GameData.equip_tier_name(t))
+		etb.toggle_mode = true
+		etb.pressed.connect(_on_equip_tier_filter.bind(str(t)))
+		eq_tier_bar.add_child(etb)
+		_equip_tier_btns[str(t)] = etb
 
 	# 装备列表 (已拥有=穿戴, 未拥有=购买)
 	var scroll := ScrollContainer.new()
@@ -861,11 +878,28 @@ func _on_equip_filter(slot: String) -> void:
 	for key in _equip_filter_btns:
 		var b: Button = _equip_filter_btns[key]
 		b.set_pressed_no_signal(slot == str(key))
+	_apply_equip_filter()
+
+
+# 打磨-21: 装备品质筛选 (与部位筛选叠加生效)
+func _on_equip_tier_filter(tier: String) -> void:
+	_equip_tier_active = tier
+	for key in _equip_tier_btns:
+		var b: Button = _equip_tier_btns[key]
+		b.set_pressed_no_signal(tier == str(key))
+	_apply_equip_filter()
+
+
+# 打磨-21: 应用 部位×品质 叠加筛选 (显示/隐藏 + 提示)
+func _apply_equip_filter() -> void:
 	for id in _equip_row_nodes:
 		var e: Dictionary = GameData.equip_by_id[id]
 		var row: Node = _equip_row_nodes[id]
-		row.visible = slot == "" or str(e["slot"]) == slot
-	_show_msg("装备筛选: " + (str(GameData.SLOT_CN[slot]) if slot != "" else "全部"))
+		row.visible = (_equip_filter_active == "" or str(e["slot"]) == _equip_filter_active) \
+			and (_equip_tier_active == "" or int(e["tier"]) == int(_equip_tier_active))
+	var msg := "装备筛选: " + (str(GameData.SLOT_CN[_equip_filter_active]) if _equip_filter_active != "" else "全部部位")
+	msg += (" · " + GameData.equip_tier_name(int(_equip_tier_active)) if _equip_tier_active != "" else " · 全部品质")
+	_show_msg(msg)
 
 
 func _show_msg(text: String) -> void:
