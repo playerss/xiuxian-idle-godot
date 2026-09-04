@@ -416,6 +416,32 @@ func bonus_summary_text() -> String:
 		float(b["qi_mult"]), float(b["stone_mult"]), float(b["bt_chance"]) * 100.0,
 		float(b["offline_rate"]) * 100.0, float(b["item_boost"])]
 
+# ---------- 打磨-28: 收集进度一览 (成就页顶栏, 全局收集目标) ----------
+
+# 全局收集进度: 技能/装备/法器/成就 各自 已收集/总量 (各条目只收集一次, 计数只增不减)
+func collect_summary() -> Dictionary:
+	return {
+		"skill": {"got": learned.size(), "total": skill_ids.size()},
+		"equip": {"got": owned_eq.size(), "total": equip_ids.size()},
+		"item": {"got": owned.size(), "total": ITEMS.size()},
+		"ach": {"got": ach_done.size(), "total": ach_ids.size()},
+	}
+
+# 收集一览文本 (成就页展示; 某类收集变化才变)
+func collect_summary_text() -> String:
+	var c := collect_summary()
+	var g_all := 0
+	var t_all := 0
+	for k in c:
+		g_all += int(c[k]["got"])
+		t_all += int(c[k]["total"])
+	return "收集进度  技能 %d/%d · 装备 %d/%d · 法器 %d/%d · 成就 %d/%d (总 %d/%d)" % [
+		int(c["skill"]["got"]), int(c["skill"]["total"]),
+		int(c["equip"]["got"]), int(c["equip"]["total"]),
+		int(c["item"]["got"]), int(c["item"]["total"]),
+		int(c["ach"]["got"]), int(c["ach"]["total"]),
+		g_all, t_all]
+
 # ================= 技能 =================
 
 # 打磨-20: 技能品质名 (凡品~仙品 共 6 档, 供筛选按钮/展示用)

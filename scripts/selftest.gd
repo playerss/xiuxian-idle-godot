@@ -974,6 +974,45 @@ func _init() -> void:
 	g.realm_idx = 0
 	g.layer = 1
 
+	# ---------- 打磨-28: 收集进度一览 (collect_summary / collect_summary_text) ----------
+	# 受控状态: 清空装备/法器 (打磨-26/27 段遗留), 保留 已学 2 剑法 (learned=2), 练气第1层
+	g.learned.clear()
+	g.learn_all_available("sword", 0)  # 受控: 恰好学 2 个
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	var cs28: Dictionary = g.collect_summary()
+	check(cs28.has("skill") and cs28.has("equip") and cs28.has("item") and cs28.has("ach"), "collect_summary 含 技能/装备/法器/成就 四类")
+	check(int(cs28["skill"]["got"]) == 2 and int(cs28["skill"]["total"]) == g.skill_ids.size(), "collect_summary 技能 = 已学数/总量 (实际 %s)" % str(cs28["skill"]))
+	check(int(cs28["equip"]["got"]) == 0 and int(cs28["equip"]["total"]) == g.equip_ids.size(), "collect_summary 装备 = 0/140 (实际 %s)" % str(cs28["equip"]))
+	check(int(cs28["item"]["got"]) == 0 and int(cs28["item"]["total"]) == 10, "collect_summary 法器 = 0/10 (实际 %s)" % str(cs28["item"]))
+	check(int(cs28["ach"]["total"]) == g.ach_ids.size(), "collect_summary 成就总量 = 成就数 (实际 %s)" % str(cs28["ach"]))
+	check(int(cs28["ach"]["got"]) == g.ach_done.size(), "collect_summary 成就已解锁数 = ach_done 数 (实际 %s)" % str(cs28["ach"]))
+	# 总量合计恒等: 总 = 120+140+10+17 = 287 (数据驱动, 用实际总量校验)
+	var t28 := 0
+	for k in cs28:
+		t28 += int(cs28[k]["total"])
+	check(t28 == 287, "收集总量合计 = 287 (实际 %d)" % t28)
+	var txt28: String = g.collect_summary_text()
+	check(txt28.begins_with("收集进度"), "collect_summary_text 以 收集进度 开头 (实际 %s)" % txt28)
+	check(txt28.find("技能 2/%d" % g.skill_ids.size()) >= 0, "收集文本含 技能 2/120 (实际 %s)" % txt28)
+	check(txt28.find("装备 0/%d" % g.equip_ids.size()) >= 0, "收集文本含 装备 0/140 (实际 %s)" % txt28)
+	check(txt28.find("法器 0/10") >= 0, "收集文本含 法器 0/10")
+	check(txt28.find("(总 %d/%d)" % [2 + g.ach_done.size(), 287]) >= 0, "收集文本含 总 N/287 (实际 %s)" % txt28)
+	# 收集变化 -> 文本变化 (购买 1 件装备后)
+	g.stones = 1e12
+	g.buy_equipment("weapon_0_0")
+	var txt28b: String = g.collect_summary_text()
+	check(txt28b != txt28, "购买装备后收集文本变化")
+	check(txt28b.find("装备 1/%d" % g.equip_ids.size()) >= 0, "收集文本装备更新为 1/140 (实际 %s)" % txt28b)
+	# 已收集类计数只增不减 (卸下/换装不影响收集数)
+	g.unequip("weapon")
+	check(int(g.collect_summary()["equip"]["got"]) == 1, "卸下装备不影响收集计数 (只增不减)")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

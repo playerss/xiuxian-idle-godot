@@ -66,6 +66,8 @@ var _ach_box: VBoxContainer
 var _ach_rows: Dictionary = {}      # 成就 id -> {row, name_l, desc_l, prog_l}
 var _ach_count_label: Label
 var _ach_hl_seq := 0               # 成就解锁总数缓存 (变化时才刷样式)
+var _collect_label: Label           # 打磨-28: 成就页顶栏 收集进度一览
+var _collect_text := ""            # 收集文本缓存 (变化时才刷)
 var _bonus_labels: Array[Label] = []  # 技能/装备页顶栏 总加成汇总标签 (打磨-9)
 var _bonus_text := ""              # 汇总文本缓存 (变化时才刷)
 var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用)
@@ -627,6 +629,13 @@ func _build_ach_page(page: Panel) -> void:
 	head.add_child(_ach_count_label)
 	var hint := _label("达成条件即自动解锁, 悬停条目可查看详情", 13, DIM)
 	head.add_child(hint)
+	# 打磨-28: 收集进度一览 (技能/装备/法器/成就 全局收集目标, 右侧单列)
+	var head_sp := Control.new()
+	head_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(head_sp)
+	_collect_label = _label("", 14, CYAN)
+	head.add_child(_collect_label)
+	_collect_label.tooltip_text = "全局收集进度: 领悟过的技能 / 购买过的装备 / 购置的法器 / 达成的成就。\n收集只增不减, 全数收集即为圆满。"
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -841,6 +850,11 @@ func _refresh() -> void:
 		var pt: String = g.ach_progress(id)
 		if pl2.text != pt:
 			pl2.text = pt
+	# 打磨-28: 收集进度一览 (技能/装备/法器/成就 收集数变化才刷)
+	var ct: String = g.collect_summary_text()
+	if ct != _collect_text:
+		_collect_text = ct
+		_collect_label.text = ct
 	# 打磨-12: 购买 ETA (1 秒节流刷一次, 仅文本变化时写)
 	_eta_acc += get_process_delta_time()
 	if _eta_acc >= 1.0:
