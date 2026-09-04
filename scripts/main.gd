@@ -53,6 +53,7 @@ var _equip_row_nodes: Dictionary = {}
 var _equip_btns: Dictionary = {}
 var _learn_all_btn: Button           # 打磨-23: 一键领悟 (技能页)
 var _buy_all_btn: Button            # 打磨-23: 一键购买 (装备页)
+var _equip_best_btn: Button         # 打磨-26: 一键最佳穿戴 (装备页)
 var _equip_filter_btns: Dictionary = {}  # 部位 id -> 筛选按钮 (打磨-11)
 var _equip_filter_active := ""           # "" = 全部
 var _equip_tier_btns: Dictionary = {}    # 打磨-21: 装备品质筛选按钮 (key = 品质索引字符串, "" = 全部)
@@ -479,6 +480,15 @@ func _on_buy_all() -> void:
 		_show_msg("当前灵石买不起任何一件未拥有的装备")
 
 
+# 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件)
+func _on_equip_best() -> void:
+	var r: Dictionary = GameData.equip_best()
+	if int(r["count"]) > 0:
+		_show_msg("最佳穿戴 %d 件 (各部位已换上最佳装备)" % int(r["count"]))
+	else:
+		_show_msg("各部位已是最佳穿戴 (或尚无已拥有装备)")
+
+
 # ---------- 装备页 ----------
 
 func _build_equip_page(page: Panel) -> void:
@@ -546,6 +556,11 @@ func _build_equip_page(page: Panel) -> void:
 	_buy_all_btn = _make_button("一键购买")
 	_buy_all_btn.pressed.connect(_on_buy_all)
 	eq_tier_bar.add_child(_buy_all_btn)
+	# 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件, 补 一键购买 只穿首件 的缺口)
+	_equip_best_btn = _make_button("一键最佳")
+	_equip_best_btn.pressed.connect(_on_equip_best)
+	_equip_best_btn.tooltip_text = "各部位自动穿上已拥有的最佳装备 (按 灵气+灵石 主属性, 再突破/离线 综合比较)。"
+	eq_tier_bar.add_child(_equip_best_btn)
 
 	# 装备列表 (已拥有=穿戴, 未拥有=购买)
 	var scroll := ScrollContainer.new()
@@ -756,6 +771,11 @@ func _refresh() -> void:
 		_learn_all_btn.text = ll_txt
 	if _buy_all_btn.text != ba_txt:
 		_buy_all_btn.text = ba_txt
+	# 打磨-26: 一键最佳穿戴 (可改进槽位数变化时才刷, 购买/穿戴/卸下/读档 触发重排时自然生效)
+	var best_n: int = g.equip_best_pending()
+	var eb_txt := ("一键最佳 x%d" if best_n > 0 else "已最佳")
+	if _equip_best_btn.text != eb_txt:
+		_equip_best_btn.text = eb_txt
 	# 槽位
 	for slot in g.SLOTS:
 		(_slot_labels[slot] as Label).text = g.equipped_name(slot)

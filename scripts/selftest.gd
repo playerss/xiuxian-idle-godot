@@ -893,6 +893,50 @@ func _init() -> void:
 	check(g.equip_detail("weapon_5_0").find("换装对比:") < 0, "卸下后 equip_detail 无换装对比行")
 	check(g.equip_detail("weapon_5_0") != det25_before, "detail 随穿戴状态变化而变化")
 
+	# ---------- 打磨-26: 一键最佳穿戴 (各槽位自动穿上拥有的最佳件) ----------
+	# 受控状态: 全清空, 练气第 1 层, 满灵石
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 1e12
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	# 购买 3 件武器 (价格升序): 第一件自动穿戴 (最便宜)
+	g.buy_equipment("weapon_0_0")   # 凡品, 槽位空 -> 自动穿戴
+	g.buy_equipment("weapon_2_1")   # 玄品, 槽位已占 -> 未穿戴
+	g.buy_equipment("weapon_5_0")   # 仙品, 槽位已占 -> 未穿戴
+	check(str(g.equipped.get("weapon", "")) == "weapon_0_0", "最佳穿戴前提: 初始自动穿戴为最便宜 weapon_0_0 (实际 %s)" % str(g.equipped.get("weapon", "")))
+	check(g.equip_best_id("weapon") == "weapon_5_0", "equip_best_id 取该部位主属性最佳 (weapon_5_0, 实际 %s)" % g.equip_best_id("weapon"))
+	check(g.equip_best_id("weapon") == g.equip_best_id("weapon"), "equip_best_id 确定性 (重复调用一致)")
+	check(g.equip_best_id("robe") == "", "equip_best_id 空槽位返回空")
+	check(g.equip_best_pending() == 1, "equip_best_pending = 1 (仅武器槽非最佳, 实际 %d)" % g.equip_best_pending())
+	var eb0: Dictionary = g.equip_best()
+	check(int(eb0["count"]) == 1, "一键最佳穿戴 变更 1 槽 (实际 %s)" % str(eb0))
+	check(str(g.equipped.get("weapon", "")) == "weapon_5_0", "最佳穿戴后武器槽为最佳件 weapon_5_0")
+	check(g.equip_best_pending() == 0, "最佳穿戴后 pending = 0")
+	var eb1: Dictionary = g.equip_best()
+	check(int(eb1["count"]) == 0, "一键最佳穿戴 幂等 (再执行 0)")
+	# 多部位: 各槽位买 最佳件 + 干扰件, 验证仅法袍槽变更
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 1e12
+	g.buy_equipment("robe_0_0")     # 自动穿戴 (最便宜)
+	g.buy_equipment("robe_4_2")     # 天品 v2, 更优
+	g.buy_equipment("amulet_1_1")   # 自动穿戴 (唯一一件)
+	g.buy_equipment("bead_3_0")     # 自动穿戴 (唯一一件)
+	g.buy_equipment("boot_2_0")     # 自动穿戴 (唯一一件)
+	var eb2: Dictionary = g.equip_best()
+	check(str(g.equipped.get("robe", "")) == "robe_4_2", "多部位: 法袍槽为最佳 robe_4_2 (实际 %s)" % str(g.equipped.get("robe", "")))
+	check(str(g.equipped.get("amulet", "")) == "amulet_1_1", "玉佩槽不变 (唯一一件即最佳)")
+	check(str(g.equipped.get("bead", "")) == "bead_3_0", "灵珠槽不变")
+	check(str(g.equipped.get("boot", "")) == "boot_2_0", "云靴槽不变")
+	check(int(eb2["count"]) == 1, "多部位: 仅法袍槽变更 (实际 %s)" % str(eb2))
+	check(g.equip_best_pending() == 0, "多部位最佳穿戴后 pending = 0")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

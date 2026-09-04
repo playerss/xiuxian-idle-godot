@@ -613,6 +613,58 @@ func equip_sort_cmp(a: String, b: String) -> bool:
 		return int(ea["tier"]) < int(eb["tier"])
 	return str(a) < str(b)
 
+# ---------- 打磨-26: 一键最佳穿戴 (各槽位自动穿上拥有的最佳件) ----------
+
+# 最佳穿戴排序键: [主属性(灵气+灵石), 突破, 离线, id] (最终按 id 兜底, 确定性)
+func _equip_rank_key(id: String) -> Array:
+	var e: Dictionary = equip_by_id.get(id, {})
+	if e.is_empty():
+		return [0.0, 0.0, 0.0, ""]
+	return [float(e["qi_mult"]) + float(e["stone_mult"]), float(e.get("bt_chance", 0.0)), float(e.get("offline_rate", 0.0)), str(id)]
+
+# a 是否优于 b (主属性降序, 再突破/离线, 最后 id 小者优先)
+func _rank_gt(a: Array, b: Array) -> bool:
+	if float(a[0]) != float(b[0]):
+		return float(a[0]) > float(b[0])
+	if float(a[1]) != float(b[1]):
+		return float(a[1]) > float(b[1])
+	if float(a[2]) != float(b[2]):
+		return float(a[2]) > float(b[2])
+	return str(a[3]) < str(b[3])
+
+# 已拥有装备中, 指定部位的最佳 id ("" = 该部位无拥有件)
+func equip_best_id(slot: String) -> String:
+	var best := ""
+	var best_key: Array = []
+	for id in owned_eq:
+		var e: Dictionary = equip_by_id.get(str(id), {})
+		if e.is_empty() or str(e.get("slot", "")) != slot:
+			continue
+		var k: Array = _equip_rank_key(str(id))
+		if best == "" or _rank_gt(k, best_key):
+			best = str(id)
+			best_key = k
+	return best
+
+# 当前穿戴非最佳拥有件的槽位数 (0 = 各槽位均已最佳 / 无拥有件)
+func equip_best_pending() -> int:
+	var n := 0
+	for slot in SLOTS:
+		var bid := equip_best_id(slot)
+		if bid != "" and str(equipped.get(slot, "")) != bid:
+			n += 1
+	return n
+
+# 一键最佳穿戴: 各槽位穿上拥有的最佳件; 返回 {count, changed}
+func equip_best() -> Dictionary:
+	var changed: Array[String] = []
+	for slot in SLOTS:
+		var bid := equip_best_id(slot)
+		if bid != "" and str(equipped.get(slot, "")) != bid:
+			equipped[slot] = bid
+			changed.append(bid)
+	return {"count": changed.size(), "changed": changed}
+
 # ================= 突破 =================
 
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
