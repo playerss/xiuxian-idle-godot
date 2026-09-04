@@ -790,6 +790,68 @@ func _init() -> void:
 	var rb4: Dictionary = g.buy_affordable()
 	check(int(rb4["count"]) == 0, "全部拥有后一键购买 0 (幂等)")
 
+	# ---------- 打磨-24: 突破 ETA (主资源攒够突破耗时; 飞升后自动切换道行精进 ETA) ----------
+	# 受控状态: 练气第 1 层, 无加成, qi = 1.0/秒 (QI_MULT[0] x 1 x 1), essence = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	var bcost: float = g.breakthrough_cost()  # 10.0
+	check(absf(bcost - 10.0) < 1e-9, "突破消耗基准 10 灵气 (实际 %s)" % bcost)
+	check(absf(g.breakthrough_eta_seconds() - bcost) < 1e-6, "eta_seconds = 缺口/灵气速率 (10秒, 实际 %s)" % g.breakthrough_eta_seconds())
+	check(g.breakthrough_eta_text() == "突破还需 不足1分", "eta_text 不足1分档 (实际 %s)" % g.breakthrough_eta_text())
+	# 缺口部分: 已有灵气时只按缺口计算
+	g.essence = 5.0
+	check(absf(g.breakthrough_eta_seconds() - 5.0) < 1e-6, "eta 只按缺口计算 (5灵气->5秒, 实际 %s)" % g.breakthrough_eta_seconds())
+	# 文本分档
+	g.essence = 0.0
+	check(g.breakthrough_eta_text() == "突破还需 不足1分", "eta_text 突破还需前缀")
+	g.essence = -5000.0  # 等效缺口 5010 秒 = 1小时23分
+	check(g.breakthrough_eta_text() == "突破还需 1小时23分", "eta_text 小时档 (实际 %s)" % g.breakthrough_eta_text())
+	g.essence = 0.0
+	# 攒够 = 现在即可突破 (空文本, UI 隐藏)
+	g.essence = bcost
+	check(g.breakthrough_eta_seconds() == 0.0, "灵气足量 eta_seconds=0")
+	check(g.breakthrough_eta_text() == "", "灵气足量 eta_text 为空")
+	# 学一个 qi_mult 被动 (mind_0_0, 练气第1层 +3%) 后速率提升 -> ETA 变短
+	g.essence = 0.0
+	var eta_pre24: float = g.breakthrough_eta_seconds()
+	g.learn_skill("mind_0_0")
+	var eta_post24: float = g.breakthrough_eta_seconds()
+	check(g.qi_per_sec() > 1.0, "学功法后灵气速率提升 (实际 x%.3f)" % g.qi_per_sec())
+	check(eta_post24 < eta_pre24, "学功法后突破 ETA 变短 (%.3f -> %.3f 秒)" % [eta_pre24, eta_post24])
+	# 境界提升: 消耗跳升 (筑基第1层 = 30) 但速率也升 (x4) -> ETA 仍可控
+	g.learned.clear()  # 清掉 mind_0_0, 速率恰为 QI_MULT[1] = 4.0
+	g.essence = 0.0
+	g.realm_idx = 1
+	g.layer = 1
+	check(absf(g.breakthrough_cost() - 30.0) < 1e-9, "筑基消耗 30 (实际 %s)" % g.breakthrough_cost())
+	check(absf(g.breakthrough_eta_seconds() - 7.5) < 1e-6, "筑基 ETA = 30/4 = 7.5秒 (实际 %s)" % g.breakthrough_eta_seconds())
+	g.realm_idx = 0
+	# 飞升后: ETA 切换为道行精进 (dao_break_cost 初仙 = 1e9, 飞升后 qi = QI_MULT[9] x 道行倍率)
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 9
+	var dcost24: float = g.dao_break_cost()
+	check(absf(dcost24 - 1.0e9) < 1.0, "道行精进基础消耗 1e9 (实际 %s)" % g.fmt(dcost24))
+	var qir: float = g.qi_per_sec()
+	check(absf(g.breakthrough_eta_seconds() - dcost24 / qir) < 1e-6, "飞升后 eta = 道行缺口/道行速率 (实际 %s, 期望 %s)" % [g.breakthrough_eta_seconds(), dcost24 / qir])
+	check(g.breakthrough_eta_text().find("道行精进还需") >= 0, "飞升后前缀切换为 道行精进还需 (实际 %s)" % g.breakthrough_eta_text())
+	# 道祖封顶: 无需再精进 -> 0 + 空文本
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	check(g.breakthrough_eta_seconds() == 0.0, "道祖封顶 eta_seconds=0")
+	check(g.breakthrough_eta_text() == "", "道祖封顶 eta_text 为空")
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

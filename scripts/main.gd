@@ -17,6 +17,8 @@ var _qi_label: Label
 var _stone_rate_label: Label
 var _offline_label: Label      # 打磨-13: 离线每小时收益 (修行页)
 var _offline_text := ""        # 离线文本缓存 (变化时才刷)
+var _break_eta_label: Label    # 打磨-24: 突破/道行精进 ETA (修行页)
+var _break_eta_text := ""      # 突破 ETA 文本缓存 (变化时才刷)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
 var _stats_text := ""          # 统计文本缓存 (变化时才刷)
 var _progress_label: Label
@@ -206,6 +208,10 @@ func _build_training_page(page: Panel) -> void:
 	left.add_child(_sep())
 	_progress_label = _label("突破进度  0%", 14, DIM)
 	left.add_child(_progress_label)
+	# 打磨-24: 突破/道行精进 ETA (按当前速率预计何时攒够突破资源)
+	_break_eta_label = _label("", 13, DIM)
+	left.add_child(_break_eta_label)
+	_break_eta_label.tooltip_text = "按当前灵气(道行)速率估算攒够突破资源所需时间。挂机/神通/境界提升都会改变该时间, 攒够后自动消失。"
 	_bar_bg = ColorRect.new()
 	_bar_bg.color = Color(0.18, 0.19, 0.25)
 	_bar_bg.custom_minimum_size = Vector2(0, 14)
@@ -668,6 +674,11 @@ func _refresh() -> void:
 		_stats_text = st_t
 		_stats_label.text = st_t
 	_progress_label.text = ("道行进度  %d%%" if g.ascended else "突破进度  %d%%") % int(g.breakthrough_progress())
+	# 打磨-24: 突破/道行精进 ETA (每帧算一次, 文本变化才写)
+	var bet_t: String = g.breakthrough_eta_text()
+	if bet_t != _break_eta_text:
+		_break_eta_text = bet_t
+		_break_eta_label.text = bet_t
 	_bar_fill.size = Vector2(_bar_bg.size.x * g.breakthrough_progress() / 100.0, _bar_bg.size.y)
 	if g.ascended:
 		if g.dao_level >= g.IMMORTAL_REALMS.size() - 1:

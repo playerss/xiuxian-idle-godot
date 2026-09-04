@@ -814,3 +814,37 @@ func eta_text(cost: float) -> String:
 	if t < 60.0:
 		return "不足1分可购"
 	return "约 %s 可购" % fmt_time(t)
+
+# ---------- 打磨-24: 突破 ETA (主资源攒够突破耗时; 飞升后自动切换为道行精进 ETA) ----------
+
+# 距主资源 (灵气/道行) 攒够突破消耗所需秒数: 0 = 现在即可突破; -1 = 无灵气收入 (防御, 正常恒不触发)
+func breakthrough_eta_seconds() -> float:
+	var need := 0.0
+	var cur := 0.0
+	if ascended:
+		if dao_level >= IMMORTAL_REALMS.size() - 1:
+			return 0.0
+		need = dao_break_cost()
+		cur = dao
+	else:
+		need = breakthrough_cost()
+		cur = essence
+	var gap := need - cur
+	if gap <= 0.0:
+		return 0.0
+	var r: float = qi_per_sec()
+	if r <= 0.0:
+		return -1.0
+	return gap / r
+
+# 突破 ETA 文本 (修行页展示; "" = 现在可突破 / 已至道祖)
+func breakthrough_eta_text() -> String:
+	var t: float = breakthrough_eta_seconds()
+	if t == 0.0:
+		return ""
+	if t < 0.0:
+		return "无灵气收入"
+	var prefix := "道行精进还需 " if ascended else "突破还需 "
+	if t < 60.0:
+		return prefix + "不足1分"
+	return prefix + fmt_time(t)
