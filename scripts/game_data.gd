@@ -463,6 +463,25 @@ func learn_all_available(cat: String = "", tier: int = -1) -> Dictionary:
 		n += 1
 	return {"count": n}
 
+# 打磨-27: 筛选范围内可学技能数 (未学+境界足够+匹配 类别/品质 筛选)
+# 口径与 learn_all_available(cat, tier) 完全一致, 供技能页"一键领悟"按钮文案
+# (按钮点击只学筛选内的技能, 计数显示全局数会误导; 与 一键购买/一键最佳 口径统一)
+func learn_available_count(cat: String = "", tier: int = -1) -> int:
+	var n := 0
+	for id in skill_ids:
+		if learned.has(id):
+			continue
+		var s: Dictionary = skill_by_id.get(id, {})
+		if s.is_empty():
+			continue
+		if cat != "" and str(s["category"]) != cat:
+			continue
+		if tier >= 0 and int(s["tier"]) != tier:
+			continue
+		if can_learn(id):
+			n += 1
+	return n
+
 func active_ready(id: String) -> bool:
 	return _active_cd.get(id, 0.0) <= 0.0
 

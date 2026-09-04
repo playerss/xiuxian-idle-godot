@@ -937,6 +937,43 @@ func _init() -> void:
 	check(int(eb2["count"]) == 1, "多部位: 仅法袍槽变更 (实际 %s)" % str(eb2))
 	check(g.equip_best_pending() == 0, "多部位最佳穿戴后 pending = 0")
 
+	# ---------- 打磨-27: 一键领悟按钮计数口径 (筛选范围内可学数, 与 learn_all_available 执行一致) ----------
+	# 受控状态: 全清空, 练气第 1 层 (全局可学 11 = tier0 中 layer1 的 11 个)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	check(g.learn_available_count() == 11, "learn_available_count 全局 练气第1层 = 11 (实际 %d)" % g.learn_available_count())
+	# 口径一致性: count 恒等于 learn_all_available 实际学到的数量 (点击执行即计数)
+	var la27: Dictionary = g.learn_all_available()
+	check(int(la27["count"]) == 11, "learn_all_available 全局学 11 (实际 %s)" % str(la27))
+	g.learned.clear()
+	# 类别筛选: sword 可学 2 (凡品 layer1 的两个变体)
+	check(g.learn_available_count("sword", -1) == 2, "learn_available_count 类别 sword = 2 (实际 %d)" % g.learn_available_count("sword", -1))
+	var la27b: Dictionary = g.learn_all_available("sword", -1)
+	check(int(la27b["count"]) == 2, "类别口径: 执行数 = 执行前计数 (2, 实际 %s)" % str(la27b))
+	check(g.learned.size() == 2, "类别筛选执行恰好 2 (实际 %d)" % g.learned.size())
+	check(g.learn_available_count("sword", -1) == 0, "类别筛选执行后计数归 0 (幂等)")
+	g.learned.clear()
+	# 品质筛选: tier0 可学 11; tier1 需筑基 -> 0
+	check(g.learn_available_count("", 0) == 11, "learn_available_count 品质 tier0 = 11 (实际 %d)" % g.learn_available_count("", 0))
+	check(g.learn_available_count("", 1) == 0, "learn_available_count 品质 tier1 境界不足 = 0")
+	# 类别×品质 AND 叠加: sword+t0 = 2, sword+t1 = 0
+	check(g.learn_available_count("sword", 0) == 2, "learn_available_count sword×tier0 = 2 (实际 %d)" % g.learn_available_count("sword", 0))
+	check(g.learn_available_count("sword", 1) == 0, "learn_available_count sword×tier1 = 0 (筑基门槛)")
+	# 已学部分后计数递减 (学掉 sword 的 2 个, 全局 11 -> 9)
+	var la27c: Dictionary = g.learn_all_available("sword", 0)
+	check(g.learn_available_count() == 9, "学掉 2 个后全局计数递减 11->9 (实际 %d)" % g.learn_available_count())
+	# 境界提升: 筑基第 3 层 tier0+1 共 40, 减去已学 sword2 凡品 -> 38
+	g.realm_idx = 1
+	g.layer = 3
+	check(g.learn_available_count() == 38, "筑基第3层 计数 38 = 40-已学2 (实际 %d)" % g.learn_available_count())
+	g.realm_idx = 0
+	g.layer = 1
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

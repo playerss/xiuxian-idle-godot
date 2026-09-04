@@ -756,10 +756,9 @@ func _refresh() -> void:
 			btn.text = "已穿戴" if worn else "穿戴"
 			btn.disabled = worn
 	# 打磨-23: 批量按钮 (境界/灵石/已学数变化时才刷, 避免每帧写文本)
-	var ll_avail := 0
-	for sid in g.skill_ids:
-		if not g.learned.has(sid) and g.can_learn(sid):
-			ll_avail += 1
+	# 打磨-27: 一键领悟按当前 类别/品质 筛选计可学数 (点击只学筛选内技能, 计数与执行口径一致)
+	var tier_i27 := int(_tier_active) if _tier_active != "" else -1
+	var ll_avail: int = g.learn_available_count(_filter_active, tier_i27)
 	var ll_txt := ("一键领悟 x%d" if ll_avail > 0 else "已无新技能")
 	var buy_n := 0
 	for eid in g.equip_ids:
