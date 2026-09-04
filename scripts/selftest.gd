@@ -626,6 +626,22 @@ func _init() -> void:
 	g.ascended = false
 	check(g.primary_res_name() == "灵气", "恢复未飞升后主资源复原为灵气")
 
+	# ---------- 打磨-20: 技能品质筛选 (品质名接口 + 数据一致性) ----------
+	check(g.skill_tier_name(0) == "凡品", "skill_tier_name 0=凡品 (实际 %s)" % g.skill_tier_name(0))
+	check(g.skill_tier_name(5) == "仙品", "skill_tier_name 5=仙品 (实际 %s)" % g.skill_tier_name(5))
+	check(g.skill_tier_name(-1) == "凡品" and g.skill_tier_name(99) == "仙品", "skill_tier_name 越界钳制 (实际 %s / %s)" % [g.skill_tier_name(-1), g.skill_tier_name(99)])
+	var tier_ok := true
+	var tier_dist: Dictionary = {}
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id[id]
+		if g.skill_tier_name(int(s["tier"])) != str(s["tier_name"]):
+			tier_ok = false
+		tier_dist[str(s["tier_name"])] = int(tier_dist.get(str(s["tier_name"]), 0)) + 1
+	check(tier_ok, "全部技能 tier_name 与 skill_tier_name(tier) 一致")
+	check(tier_dist.size() == 6, "6 档品质均有技能 (实际 %d 档)" % tier_dist.size())
+	for t in [0, 1, 2, 3, 4, 5]:
+		check(int(tier_dist.get(g.skill_tier_name(t), 0)) == 20, "%s 档 20 个技能 (实际 %d)" % [g.skill_tier_name(t), int(tier_dist.get(g.skill_tier_name(t), 0))])
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

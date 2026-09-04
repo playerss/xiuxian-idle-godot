@@ -44,6 +44,8 @@ var _skill_row_nodes: Dictionary = {}
 var _skill_btns: Dictionary = {}
 var _filter_btns: Dictionary = {}
 var _filter_active := ""
+var _tier_btns: Dictionary = {}         # 打磨-20: 品质筛选按钮 (key = 品质索引字符串, "" = 全部)
+var _tier_active := ""                 # 打磨-20: 当前品质筛选 ("" = 全部)
 var _equip_box: VBoxContainer
 var _equip_row_nodes: Dictionary = {}
 var _equip_btns: Dictionary = {}
@@ -306,6 +308,21 @@ func _build_skill_page(page: Panel) -> void:
 		b.pressed.connect(_on_filter.bind(str(cat)))
 		filter_bar.add_child(b)
 		_filter_btns[cat] = b
+	# 打磨-20: 品质筛选行 (凡品~仙品, 与类别筛选叠加生效)
+	var tier_bar := HBoxContainer.new()
+	tier_bar.add_theme_constant_override("separation", 8)
+	outer.add_child(tier_bar)
+	var t_all := _make_button("全部品质")
+	t_all.toggle_mode = true
+	t_all.pressed.connect(_on_tier_filter.bind(""))
+	tier_bar.add_child(t_all)
+	_tier_btns[""] = t_all
+	for t in [0, 1, 2, 3, 4, 5]:
+		var tb := _make_button(GameData.skill_tier_name(t))
+		tb.toggle_mode = true
+		tb.pressed.connect(_on_tier_filter.bind(str(t)))
+		tier_bar.add_child(tb)
+		_tier_btns[str(t)] = tb
 
 	# 顶栏: 总加成汇总 (打磨-9)
 	var bonus_l := _label(GameData.bonus_summary_text(), 14, GOLD)
@@ -362,11 +379,27 @@ func _on_filter(cat: String) -> void:
 	for key in _filter_btns:
 		var b: Button = _filter_btns[key]
 		b.set_pressed_no_signal(cat == str(key))
+	_apply_skill_filter()
+
+
+# 打磨-20: 品质筛选 (与类别筛选叠加生效)
+func _on_tier_filter(tier: String) -> void:
+	_tier_active = tier
+	for key in _tier_btns:
+		var b: Button = _tier_btns[key]
+		b.set_pressed_no_signal(tier == str(key))
+	_apply_skill_filter()
+
+
+# 打磨-20: 应用 类别×品质 叠加筛选 (显示/隐藏 + 排序 + 提示)
+func _apply_skill_filter() -> void:
 	# 排序: 已学在前, 其次按品质
 	var order: Array = []
 	for id in GameData.skill_ids:
 		var s: Dictionary = GameData.skill_by_id[id]
 		if _filter_active != "" and str(s["category"]) != _filter_active:
+			continue
+		if _tier_active != "" and int(s["tier"]) != int(_tier_active):
 			continue
 		order.append(id)
 	order.sort_custom(_skill_sort)
@@ -378,7 +411,13 @@ func _on_filter(cat: String) -> void:
 	for idx in order.size():
 		var row: Node = _skill_row_nodes[order[idx]]
 		_skill_box.move_child(row, _skill_box.get_child_count() - 1)
-	_show_msg("筛选: " + (_filter_active if _filter_active != "" else "全部"))
+	var msg := "筛选: "
+	msg += (_filter_active if _filter_active != "" else "全部类别")
+	if _tier_active != "":
+		msg += " · " + GameData.skill_tier_name(int(_tier_active))
+	else:
+		msg += " · 全部品质"
+	_show_msg(msg)
 
 
 func _skill_sort(a: String, b: String) -> bool:

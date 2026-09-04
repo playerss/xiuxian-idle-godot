@@ -414,6 +414,10 @@ func bonus_summary_text() -> String:
 
 # ================= 技能 =================
 
+# 打磨-20: 技能品质名 (凡品~仙品 共 6 档, 供筛选按钮/展示用)
+func skill_tier_name(t: int) -> String:
+	return ["凡品", "灵品", "玄品", "地品", "天品", "仙品"][clampi(t, 0, 5)]
+
 func can_learn(id: String) -> bool:
 	var s: Dictionary = skill_by_id.get(id, {})
 	if s.is_empty():
