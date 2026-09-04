@@ -62,6 +62,9 @@ var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用
 var _shop_eta: Dictionary = {}     # 法器 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_eta: Dictionary = {}    # 装备 id -> 购买 ETA 提示标签 (打磨-12)
 var _eta_acc := 0.0                # 打磨-12: ETA 节流累计 (1 秒刷一次)
+var _realm_ladder: Array[Label] = []    # 打磨-18: 境界阶梯标签 (金框高亮随当前境界移动)
+var _immortal_ladder: Array[Label] = [] # 打磨-18: 仙界道行阶梯标签
+var _ladder_key := -1                # 打磨-18: 阶梯高亮缓存键 (境界/道行变化才刷)
 
 
 func _ready() -> void:
@@ -236,15 +239,19 @@ func _build_training_page(page: Panel) -> void:
 	rscroll.add_child(rbox)
 	for i in GameData.REALMS.size():
 		var r: Dictionary = GameData.REALMS[i]
-		var name_c := GOLD if i == GameData.realm_idx else WHITEISH
-		rbox.add_child(_label("%s × %d 层  (灵气x%s)" % [r["name"], r["layers"], GameData.fmt(GameData.QI_MULT[i])], 14, name_c))
+		var rl := _label("%s × %d 层  (灵气x%s)" % [r["name"], r["layers"], GameData.fmt(GameData.QI_MULT[i])], 14, WHITEISH)
+		rbox.add_child(rl)
+		_realm_ladder.append(rl)
 	# 仙界道行 (飞升后解锁, 每阶灵气 x2)
 	rbox.add_child(_sep())
 	rbox.add_child(_label("仙界道行 (飞升后解锁, 每阶灵气 x%d)" % int(GameData.IMMORTAL_STAGE_MULT), 13, DIM))
 	for i in GameData.IMMORTAL_REALMS.size():
 		var nm: String = GameData.IMMORTAL_REALMS[i]
-		var hi_c := GameData.ascended and i == GameData.dao_level
-		rbox.add_child(_label("%s  (x%.0f)" % [nm, pow(2.0, float(i))], 14, GOLD if hi_c else WHITEISH))
+		var il := _label("%s  (x%.0f)" % [nm, pow(2.0, float(i))], 14, WHITEISH)
+		rbox.add_child(il)
+		_immortal_ladder.append(il)
+	# 打磨-18: 阶梯高亮随当前境界/道行阶段动态移动 (初始刷一次)
+	_refresh_ladder()
 	var hint := _label("挂机自动积累灵气与灵石, 灵气攒够后点击突破。境界越高, 挂机越快。\n飞升后改修道行: 道行每阶灵气 x2, 直至道祖。", 13, DIM)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rbox.add_child(hint)
@@ -685,6 +692,8 @@ func _refresh() -> void:
 	if _eta_acc >= 1.0:
 		_eta_acc = 0.0
 		_refresh_eta()
+	# 打磨-18: 境界阶梯高亮随当前境界/道行阶段移动 (状态变化才刷)
+	_refresh_ladder()
 	# 突破/道行精进闪烁: 事件序号变化时触发 (成功绿闪 / 失败红闪, 打磨-10)
 	if g.break_seq != _break_flash_seq:
 		_break_flash_seq = g.break_seq
@@ -745,6 +754,21 @@ func _refresh_eta() -> void:
 		var t2 := "" if g.owned_eq.has(id) else g.eta_text(float(e["cost"]))
 		if l2.text != t2:
 			l2.text = t2
+
+
+# 打磨-18: 境界阶梯高亮 (当前境界 / 飞升后当前道行阶段 金色, 其余白字; 状态变化才刷)
+func _refresh_ladder() -> void:
+	var g := GameData
+	var key := g.realm_idx * 100 + (1000 if g.ascended else 0) + (g.dao_level if g.ascended else 0)
+	if key == _ladder_key:
+		return
+	_ladder_key = key
+	for i in _realm_ladder.size():
+		var hi := (not g.ascended) and i == g.realm_idx
+		(_realm_ladder[i] as Label).add_theme_color_override("font_color", GOLD if hi else WHITEISH)
+	for i in _immortal_ladder.size():
+		var hi2 := g.ascended and i == g.dao_level
+		(_immortal_ladder[i] as Label).add_theme_color_override("font_color", GOLD if hi2 else WHITEISH)
 
 
 func _make_card_sb(hi: bool) -> StyleBoxFlat:
