@@ -370,7 +370,7 @@ func skill_detail(id: String) -> String:
 	tip += "\n状态: %s" % ("已领悟" if learned.has(id) else "未领悟")
 	return tip
 
-# 装备详情 (tooltip: 名称/品质/部位/属性/价格/状态)
+# 打磨-9: 装备详情 (tooltip: 名称/品质/部位/属性/价格/状态/换装对比)
 func equip_detail(id: String) -> String:
 	var e: Dictionary = equip_by_id.get(id, {})
 	if e.is_empty():
@@ -382,6 +382,10 @@ func equip_detail(id: String) -> String:
 		tip += "\n状态: 已拥有(未穿戴)"
 	else:
 		tip += "\n状态: 未拥有"
+	# 打磨-25: 换装对比 (该部位已穿其它装备时, 穿上本件的主属性变化)
+	var sw: Dictionary = equip_swap_hint(id)
+	if str(sw["text"]) != "":
+		tip += "\n换装对比: %s" % str(sw["text"])
 	return tip
 
 # 法器详情 (tooltip: 名称/描述/价格/增幅/状态)
@@ -546,6 +550,36 @@ func equipped_name(slot: String) -> String:
 		return "(空)"
 	var e: Dictionary = equip_by_id.get(id, {})
 	return str(e["name"]) if not e.is_empty() else "(空)"
+
+# ---------- 打磨-25: 换装对比提示 (购买/穿戴行显示 替换对象 + 主属性差) ----------
+
+# 指定部位当前穿戴的装备 (无 -> {})
+func equipped_at(slot: String) -> Dictionary:
+	var id: String = equipped.get(slot, "")
+	if id == "":
+		return {}
+	return equip_by_id.get(id, {})
+
+# 换装对比: 穿上 id 后该部位属性变化
+# {"cur": {}, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0, "text": ""}
+# text: "" = 槽位空 (纯增益) / "替换 「X」: 灵气+12% 灵石+7%" (负数带负号, 0 省略)
+func equip_swap_hint(id: String) -> Dictionary:
+	var e: Dictionary = equip_by_id.get(id, {})
+	if e.is_empty():
+		return {"cur": {}, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0, "text": ""}
+	var slot := str(e["slot"])
+	var cur: Dictionary = equipped_at(slot)
+	if cur.is_empty() or str(cur.get("id", "")) == id:
+		return {"cur": cur, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0, "text": ""}
+	var dqi: float = float(e["qi_mult"]) - float(cur.get("qi_mult", 0.0))
+	var dst: float = float(e["stone_mult"]) - float(cur.get("stone_mult", 0.0))
+	var parts: Array = []
+	if absf(dqi) >= 0.0005:
+		parts.append("灵气%s%0.0f%%" % ["+" if dqi > 0.0 else "-", absf(dqi) * 100.0])
+	if absf(dst) >= 0.0005:
+		parts.append("灵石%s%0.0f%%" % ["+" if dst > 0.0 else "-", absf(dst) * 100.0])
+	return {"cur": cur, "replace_name": str(cur.get("name", "")), "d_qi": dqi, "d_stone": dst,
+		"text": "替换「%s」: %s" % [str(cur.get("name", "")), ", ".join(parts)]}
 
 # 打磨-22: 装备状态 (0=未拥有 1=已拥有未穿戴 2=已穿戴) — 供装备列表排序
 func equip_state(id: String) -> int:

@@ -70,6 +70,7 @@ var _bonus_text := ""              # 汇总文本缓存 (变化时才刷)
 var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用)
 var _shop_eta: Dictionary = {}     # 法器 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_eta: Dictionary = {}    # 装备 id -> 购买 ETA 提示标签 (打磨-12)
+var _equip_swap: Dictionary = {}   # 打磨-25: 装备 id -> 换装对比提示标签
 var _eta_acc := 0.0                # 打磨-12: ETA 节流累计 (1 秒刷一次)
 var _realm_ladder: Array[Label] = []    # 打磨-18: 境界阶梯标签 (金框高亮随当前境界移动)
 var _immortal_ladder: Array[Label] = [] # 打磨-18: 仙界道行阶梯标签
@@ -579,6 +580,10 @@ func _add_equip_row(id: String) -> void:
 	var eta_l := _label("", 13, DIM)
 	info.add_child(eta_l)
 	_equip_eta[id] = eta_l
+	# 打磨-25: 换装对比提示 (穿上本件后该部位主属性变化; 穿戴/卸下状态变化才刷)
+	var swap_l := _label("", 12, CYAN)
+	info.add_child(swap_l)
+	_equip_swap[id] = swap_l
 	var btn := _make_button("购买")
 	btn.custom_minimum_size = Vector2(76, 0)
 	btn.pressed.connect(_on_equip_btn.bind(id))
@@ -784,6 +789,13 @@ func _refresh() -> void:
 		if int(row3.get_meta("_dk", -1)) != int(g.owned.has(id)):
 			row3.set_meta("_dk", int(g.owned.has(id)))
 			row3.tooltip_text = g.item_detail(id)
+	# 打磨-25: 换装对比提示 (穿上本件后该部位 灵气/灵石 差值; 文本变化才写标签, 并同步行 tooltip)
+	for id in _equip_swap:
+		var t25: String = str(g.equip_swap_hint(str(id))["text"])
+		var l25: Label = _equip_swap[id]
+		if l25.text != t25:
+			l25.text = t25
+			(_equip_row_nodes[id] as Node).tooltip_text = g.equip_detail(str(id))
 	# 打磨-9: 总加成汇总 (文本变化时才刷)
 	var bt: String = g.bonus_summary_text()
 	if bt != _bonus_text:

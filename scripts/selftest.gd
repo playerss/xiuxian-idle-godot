@@ -852,6 +852,47 @@ func _init() -> void:
 	g.realm_idx = 0
 	g.layer = 1
 
+	# ---------- 打磨-25: 换装对比提示 (穿上本件后该部位 灵气/灵石 差值) ----------
+	# 受控状态: 全清空, 练气第 1 层
+	g.stones = 1e12
+	g.buy_equipment("weapon_2_1")   # 武器槽空 -> 自动穿戴
+	check(str(g.equipped_at("weapon").get("id", "")) == "weapon_2_1", "equipped_at 返回当前穿戴 (weapon_2_1)")
+	check(g.equipped_at("robe").is_empty(), "equipped_at 空槽位返回 {}")
+	var e25a: Dictionary = g.equip_by_id["weapon_1_0"]
+	var e25b: Dictionary = g.equip_by_id["weapon_2_1"]
+	var swA: Dictionary = g.equip_swap_hint("weapon_1_0")   # 灵剑 vs 已穿紫刀
+	check(str(swA["replace_name"]) == str(e25b["name"]), "swap_hint 替换对象为当前穿戴 (实际 %s)" % str(swA["replace_name"]))
+	check(absf(float(swA["d_qi"]) - (float(e25a["qi_mult"]) - float(e25b["qi_mult"]))) < 1e-9, "swap_hint d_qi = 新-旧 (实际 %s)" % str(swA["d_qi"]))
+	check(float(swA["d_qi"]) < 0.0, "低级件 vs 已穿高级件 d_qi 为负")
+	check(str(swA["text"]).find("替换「%s」: " % str(e25b["name"])) == 0, "swap_hint text 前缀 替换「当前穿戴」 (实际 %s)" % str(swA["text"]))
+	check(str(swA["text"]).find("灵气-") >= 0, "swap_hint text 含灵气负差 (实际 %s)" % str(swA["text"]))
+	check(str(swA["text"]).find("灵石-") >= 0, "swap_hint text 含灵石负差 (实际 %s)" % str(swA["text"]))
+	check(str(g.equip_swap_hint("weapon_2_1")["text"]) == "", "穿上自身 text 为空 (自身不算替换)")
+	check(float(g.equip_swap_hint("weapon_2_1")["d_qi"]) == 0.0, "穿上自身 d_qi=0")
+	check(str(g.equip_swap_hint("robe_0_0")["text"]) == "", "空槽位 text 为空 (纯增益)")
+	check(g.equip_swap_hint("robe_0_0")["d_qi"] == 0.0, "空槽位 d_qi=0")
+	check(str(g.equip_swap_hint("not_exist")["text"]) == "", "未知 id text 为空")
+	# 换装: 穿上更高品质武器后, 旧件对比符号翻正
+	g.buy_equipment("weapon_5_0")
+	g.equip_equipment("weapon_5_0")
+	var swB: Dictionary = g.equip_swap_hint("weapon_2_1")   # 紫刀 vs 已穿仙品
+	check(float(swB["d_qi"]) < 0.0, "仙品穿戴后 紫刀 d_qi 仍为负 (紫刀更弱, 实际 %s)" % str(swB["d_qi"]))
+	var swC: Dictionary = g.equip_swap_hint("weapon_5_0")
+	check(str(swC["text"]) == "", "已穿戴仙品自身 text 为空")
+	# 正差场景: 卸下仙品, 穿回紫刀, 再看仙品 -> 正差带 +
+	g.unequip("weapon")
+	g.equip_equipment("weapon_2_1")
+	var swD: Dictionary = g.equip_swap_hint("weapon_5_0")
+	check(float(swD["d_qi"]) > 0.0, "穿上更强件 d_qi 为正 (实际 %s)" % str(swD["d_qi"]))
+	check(str(swD["text"]).find("灵气+") >= 0, "swap_hint text 正差带+号 (实际 %s)" % str(swD["text"]))
+	check(str(swD["text"]).find(str(e25b["name"])) >= 0, "swap_hint text 含被替换件名")
+	# equip_detail 换装对比行 (随穿戴状态出现/消失)
+	check(g.equip_detail("weapon_5_0").find("换装对比:") >= 0, "equip_detail 含换装对比行 (实际: %s)" % g.equip_detail("weapon_5_0"))
+	var det25_before: String = g.equip_detail("weapon_5_0")
+	g.unequip("weapon")
+	check(g.equip_detail("weapon_5_0").find("换装对比:") < 0, "卸下后 equip_detail 无换装对比行")
+	check(g.equip_detail("weapon_5_0") != det25_before, "detail 随穿戴状态变化而变化")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
