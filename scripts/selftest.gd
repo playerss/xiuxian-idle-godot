@@ -721,6 +721,75 @@ func _init() -> void:
 	check(eord2.find("weapon_1_0") < eord2.find("weapon_2_1"), "同为已拥有未穿戴时保持数据序 (weapon_1_0 < weapon_2_1)")
 	check(g.equip_sort_order() == eord2, "状态变化后新顺序稳定 (确定性)")
 
+	# ---------- 打磨-23: 一键领悟 / 一键购买 (批量操作 QoL) ----------
+	# 受控状态: 清掉前几节遗留, 练气第 1 层 (tier0 解锁境界=0; 各档 20 个, layer1 可学 11)
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	var ra0: Dictionary = g.learn_all_available()
+	check(int(ra0["count"]) == 11, "一键领悟 练气第1层 学 11 (实际 %s)" % str(ra0))
+	check(g.learned.size() == 11, "learned 恰好 11 (实际 %d)" % g.learned.size())
+	check(int(g.learn_all_available()["count"]) == 0, "一键领悟 幂等 (重复 0)")
+	# 品质/类别筛选叠加 (先取计数再断言, 避免二次调用把结果学走)
+	g.learned.clear()
+	var c_t0: Dictionary = g.learn_all_available("", 0)
+	check(int(c_t0["count"]) == 11, "一键领悟 品质筛选 tier0 学 11 (实际 %d)" % int(c_t0["count"]))
+	g.learned.clear()
+	var c_sword: Dictionary = g.learn_all_available("sword", -1)
+	check(int(c_sword["count"]) == 2, "一键领悟 类别筛选 sword 学 2 (实际 %d)" % int(c_sword["count"]))
+	g.learned.clear()
+	var c_sw_t0: Dictionary = g.learn_all_available("sword", 0)
+	check(int(c_sw_t0["count"]) == 2, "一键领悟 类别x品质 AND 叠加 sword+t0 学 2 (实际 %d)" % int(c_sw_t0["count"]))
+	g.learned.clear()
+	var c_div: Dictionary = g.learn_all_available("divine", 1)
+	check(int(c_div["count"]) == 0, "一键领悟 境界不足组合 0 (divine t1 需筑基, 实际 %d)" % int(c_div["count"]))
+	# 境界门槛: 筑基第 3 层 -> tier0 全 20 + tier1 全 20 = 40
+	g.learned.clear()
+	g.realm_idx = 1
+	g.layer = 3
+	var ra13: Dictionary = g.learn_all_available()
+	check(int(ra13["count"]) == 40, "一键领悟 筑基第3层 tier0+1 学 40 (实际 %s)" % str(ra13))
+	check(g.learned.size() == 40, "learned 恰好 40 (实际 %d)" % g.learned.size())
+	# 已学不重复: 升金丹第 1 层, 只剩 tier2 中 layer1 的 11 个可学
+	g.realm_idx = 2
+	g.layer = 1
+	var ra2: Dictionary = g.learn_all_available()
+	check(int(ra2["count"]) == 11, "一键领悟 金丹第1层 只学剩余 11 (实际 %s)" % str(ra2))
+	check(int(g.learn_all_available()["count"]) == 0, "再次一键领悟 0 (幂等)")
+	# 一键购买: 价格升序连买 (4 件 100 价 = amulet/bead/boot/robe v0, weapon 为第 5 件)
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 0.0
+	g.owned_eq.clear()
+	g.equipped.clear()
+	var rb0: Dictionary = g.buy_affordable()
+	check(int(rb0["count"]) == 0, "一键购买 灵石 0 买 0 (实际 %s)" % str(rb0))
+	g.stones = 400.0
+	var rb1: Dictionary = g.buy_affordable()
+	check(int(rb1["count"]) == 4, "一键购买 400 灵石买 4 件 (实际 %s)" % int(rb1["count"]))
+	check(g.owned_eq.size() == 4, "owned_eq 恰好 4 (实际 %d)" % g.owned_eq.size())
+	check(absf(g.stones) < 1e-6, "一键购买扣光 4 件 x100 (剩 %s)" % g.fmt(g.stones))
+	check(g.equipped.size() == 4, "槽位空时自动穿戴 4 件 (实际 %d 槽)" % g.equipped.size())
+	check(str(g.equipped.get("robe", "")) != "" and str(g.equipped.get("amulet", "")) != "" and str(g.equipped.get("bead", "")) != "" and str(g.equipped.get("boot", "")) != "", "自动穿戴 robe/amulet/bead/boot")
+	check(int(g.buy_affordable()["count"]) == 0, "灵石花到买不起为止 (再买 0)")
+	# 零头再买: 55 灵石仍买不起下一件 -> 0
+	g.stones = 55.0
+	var rb1b: Dictionary = g.buy_affordable()
+	check(int(rb1b["count"]) == 0 and g.stones == 55.0, "55 灵石再买 0 (剩 55)")
+	# 已拥有不再买: 满灵石只补剩下的 136 件
+	g.stones = 1e12
+	var rb3: Dictionary = g.buy_affordable()
+	check(int(rb3["count"]) == 136, "一键购买 满灵石补 136 件 (实际 %s)" % int(rb3["count"]))
+	check(g.owned_eq.size() == g.equip_ids.size(), "一键购买后拥有全部装备")
+	check(g.equipped.size() == 5, "5 槽位全部自动穿戴")
+	var rb4: Dictionary = g.buy_affordable()
+	check(int(rb4["count"]) == 0, "全部拥有后一键购买 0 (幂等)")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

@@ -439,6 +439,26 @@ func learn_skill(id: String) -> String:
 	learned.append(id)
 	return "领悟「%s」! %s" % [s["name"], s["desc"]]
 
+# 打磨-23: 一键领悟 — 批量学习全部 未学 且 境界足够 的技能 (可叠加技能页筛选)
+# cat = 类别 id ("" = 全部类别), tier = 品质索引 (-1 = 全部品质)
+func learn_all_available(cat: String = "", tier: int = -1) -> Dictionary:
+	var n := 0
+	for id in skill_ids:
+		if learned.has(id):
+			continue
+		var s: Dictionary = skill_by_id.get(id, {})
+		if s.is_empty():
+			continue
+		if cat != "" and str(s["category"]) != cat:
+			continue
+		if tier >= 0 and int(s["tier"]) != tier:
+			continue
+		if not can_learn(id):
+			continue
+		learned.append(id)
+		n += 1
+	return {"count": n}
+
 func active_ready(id: String) -> bool:
 	return _active_cd.get(id, 0.0) <= 0.0
 
@@ -497,6 +517,28 @@ func unequip(slot: String) -> String:
 		equipped.erase(slot)
 		return "已卸下" + SLOT_CN[slot]
 	return SLOT_CN[slot] + " 上没有装备"
+
+# 打磨-23: 一键购买 — 按 价格升序 (同价按数据序) 连续购买 买得起 的装备
+# (先买便宜的, 灵石花到买不起为止; 槽位空时 buy_equipment 自动穿戴)
+func buy_affordable() -> Dictionary:
+	var n := 0
+	var ids: Array = []
+	for id in equip_ids:
+		ids.append(id)
+	ids.sort_custom(buy_affordable_cmp)
+	for id in ids:
+		if str(buy_equipment(str(id))).find("购得") >= 0:
+			n += 1
+	return {"count": n, "bought": n > 0}
+
+func buy_affordable_cmp(a: String, b: String) -> bool:
+	var ea: Dictionary = equip_by_id.get(a, {})
+	var eb: Dictionary = equip_by_id.get(b, {})
+	var ca: float = float(ea.get("cost", INF))
+	var cb: float = float(eb.get("cost", INF))
+	if ca != cb:
+		return ca < cb
+	return a < b
 
 func equipped_name(slot: String) -> String:
 	var id: String = equipped.get(slot, "")

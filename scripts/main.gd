@@ -49,6 +49,8 @@ var _tier_active := ""                 # 打磨-20: 当前品质筛选 ("" = 全
 var _equip_box: VBoxContainer
 var _equip_row_nodes: Dictionary = {}
 var _equip_btns: Dictionary = {}
+var _learn_all_btn: Button           # 打磨-23: 一键领悟 (技能页)
+var _buy_all_btn: Button            # 打磨-23: 一键购买 (装备页)
 var _equip_filter_btns: Dictionary = {}  # 部位 id -> 筛选按钮 (打磨-11)
 var _equip_filter_active := ""           # "" = 全部
 var _equip_tier_btns: Dictionary = {}    # 打磨-21: 装备品质筛选按钮 (key = 品质索引字符串, "" = 全部)
@@ -326,6 +328,13 @@ func _build_skill_page(page: Panel) -> void:
 		tb.pressed.connect(_on_tier_filter.bind(str(t)))
 		tier_bar.add_child(tb)
 		_tier_btns[str(t)] = tb
+	# 打磨-23: 一键领悟 (与当前 类别/品质 筛选叠加, 批量学习全部 可学 技能)
+	var tier_sp := Control.new()
+	tier_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tier_bar.add_child(tier_sp)
+	_learn_all_btn = _make_button("一键领悟")
+	_learn_all_btn.pressed.connect(_on_learn_all)
+	tier_bar.add_child(_learn_all_btn)
 
 	# 顶栏: 总加成汇总 (打磨-9)
 	var bonus_l := _label(GameData.bonus_summary_text(), 14, GOLD)
@@ -442,6 +451,27 @@ func _on_skill_btn(id: String, is_active: bool) -> void:
 		_show_msg(GameData.learn_skill(id))
 
 
+# 打磨-23: 一键领悟 (与当前 类别/品质 筛选叠加; 只学 未学+境界足够 的)
+func _on_learn_all() -> void:
+	var tier_i := int(_tier_active) if _tier_active != "" else -1
+	var r: Dictionary = GameData.learn_all_available(_filter_active, tier_i)
+	if int(r["count"]) > 0:
+		var msg := "一键领悟 %d 个技能" % int(r["count"])
+		msg += (", " + GameData.skill_tier_name(int(_tier_active))) if _tier_active != "" else ""
+		_show_msg(msg)
+	else:
+		_show_msg("当前境界下没有可领悟的新技能 (或筛选范围内已全部领悟)")
+
+
+# 打磨-23: 一键购买 (价格升序连买, 灵石花到买不起为止)
+func _on_buy_all() -> void:
+	var r: Dictionary = GameData.buy_affordable()
+	if int(r["count"]) > 0:
+		_show_msg("一键购买 %d 件装备 (槽位空时已自动穿戴)" % int(r["count"]))
+	else:
+		_show_msg("当前灵石买不起任何一件未拥有的装备")
+
+
 # ---------- 装备页 ----------
 
 func _build_equip_page(page: Panel) -> void:
@@ -502,6 +532,13 @@ func _build_equip_page(page: Panel) -> void:
 		etb.pressed.connect(_on_equip_tier_filter.bind(str(t)))
 		eq_tier_bar.add_child(etb)
 		_equip_tier_btns[str(t)] = etb
+	# 打磨-23: 一键购买 (连续买下当前所有买得起的装备, 槽位空时自动穿戴)
+	var eq_sp := Control.new()
+	eq_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	eq_tier_bar.add_child(eq_sp)
+	_buy_all_btn = _make_button("一键购买")
+	_buy_all_btn.pressed.connect(_on_buy_all)
+	eq_tier_bar.add_child(_buy_all_btn)
 
 	# 装备列表 (已拥有=穿戴, 未拥有=购买)
 	var scroll := ScrollContainer.new()
@@ -687,6 +724,22 @@ func _refresh() -> void:
 			var worn: bool = str(g.equipped.get(e["slot"], "")) == id
 			btn.text = "已穿戴" if worn else "穿戴"
 			btn.disabled = worn
+	# 打磨-23: 批量按钮 (境界/灵石/已学数变化时才刷, 避免每帧写文本)
+	var ll_avail := 0
+	for sid in g.skill_ids:
+		if not g.learned.has(sid) and g.can_learn(sid):
+			ll_avail += 1
+	var ll_txt := ("一键领悟 x%d" if ll_avail > 0 else "已无新技能")
+	var buy_n := 0
+	for eid in g.equip_ids:
+		var ee: Dictionary = g.equip_by_id[eid]
+		if not g.owned_eq.has(eid) and g.stones >= float(ee["cost"]):
+			buy_n += 1
+	var ba_txt := ("一键购买 x%d" if buy_n > 0 else "灵石不足")
+	if _learn_all_btn.text != ll_txt:
+		_learn_all_btn.text = ll_txt
+	if _buy_all_btn.text != ba_txt:
+		_buy_all_btn.text = ba_txt
 	# 槽位
 	for slot in g.SLOTS:
 		(_slot_labels[slot] as Label).text = g.equipped_name(slot)
