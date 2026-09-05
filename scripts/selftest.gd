@@ -1233,13 +1233,44 @@ func _init() -> void:
 	# 未飞升时 道行行 不可达
 	g.ascended = false
 	check(g.ladder_row_eta("dao", 0) == "", "未飞升道行行无 ETA (实际 %s)" % g.ladder_row_eta("dao", 0))
+	# ---------- 打磨-34: 境界阶梯当前层进度 ----------
+	# 未飞升: 当前境界行 层内进度 (练气 1/9 层, 突破消耗 10*3^0*1=10)
+	check(g.ladder_current_progress_text() == "第 1/9 层 · 突破需 10 灵气 (当前 0)",
+		"当前层进度 练气第1层 (实际 %s)" % g.ladder_current_progress_text())
+	# 层数/资源 变化时文本同步
+	g.layer = 5
+	g.essence = 6.0
+	check(g.ladder_current_progress_text() == "第 5/9 层 · 突破需 50 灵气 (当前 6)",
+		"当前层进度 练气第5层 (实际 %s)" % g.ladder_current_progress_text())
+	# 跨境界: 渡劫只有 1 层 (10*3^8*1=65610 -> 6.6万)
+	g.realm_idx = 8
+	g.layer = 1
+	check(g.ladder_current_progress_text() == "第 1/1 层 · 突破需 6.6万 灵气 (当前 6)",
+		"当前层进度 渡劫第1层 (实际 %s)" % g.ladder_current_progress_text())
+	# 层顶: 真仙 1 层 (飞升前最后一层, 10*3^9*1=196830 -> 19.7万)
+	g.realm_idx = 9
+	g.layer = 1
+	check(g.ladder_current_progress_text() == "第 1/1 层 · 突破需 19.7万 灵气 (当前 6)",
+		"当前层进度 真仙第1层 (实际 %s)" % g.ladder_current_progress_text())
+	# 大数值格式: 筑基 第 3 层 突破消耗 10*3^1*3=90, 库存 12345
+	g.realm_idx = 1
+	g.layer = 3
+	g.essence = 12345.0
+	check(g.ladder_current_progress_text() == "第 3/3 层 · 突破需 90 灵气 (当前 1.2万)",
+		"当前层进度 筑基第3层 库存1.2万 (实际 %s)" % g.ladder_current_progress_text())
+	# 飞升后: 无层内进度 (空文本, UI 隐藏标签)
+	g.ascended = true
+	check(g.ladder_current_progress_text() == "", "飞升后当前层进度 = 空 (实际 %s)" % g.ladder_current_progress_text())
+	# 道祖封顶: 仍无层内进度
+	g.dao_level = 8
+	check(g.ladder_current_progress_text() == "", "道祖封顶当前层进度 = 空")
 	# 恢复基准态
 	g.ascended = false
+	g.dao_level = 0
 	g.realm_idx = 0
 	g.layer = 1
 	g.essence = 0.0
 	g.dao = 0.0
-	g.dao_level = 0
 
 	# ---------- 汇报 ----------
 	print("")

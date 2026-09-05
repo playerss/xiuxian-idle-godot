@@ -1172,3 +1172,15 @@ func ladder_row_eta(kind: String, target: int) -> String:
 	if r <= 0.0:
 		return "8天+"   # 无收入防御 (正常恒不触发): 按上限显示, 不误导
 	return ladder_eta_text(sec / r)
+
+# ---------- 打磨-34: 境界阶梯当前层进度 (当前境界行内 层数位置 + 突破资源) ----------
+
+# 当前境界的层内进度 (未飞升): "第 X/Y 层 · 突破需 X 灵气 (当前 X)"
+# 未飞升才有层内进度; 飞升后返回 "" (仙界按阶段行展示, 无层概念)
+func ladder_current_progress_text() -> String:
+	if ascended:
+		return ""
+	var max_layer := REALMS[realm_idx]["layers"] as int
+	var cost := breakthrough_cost()
+	return "第 %d/%d 层 · 突破需 %s 灵气 (当前 %s)" % [
+		layer, max_layer, fmt(cost), fmt(essence)]

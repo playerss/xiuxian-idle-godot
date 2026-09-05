@@ -87,6 +87,8 @@ var _immortal_ladder: Array[Label] = [] # 打磨-18: 仙界道行阶梯标签
 var _ladder_key := -1                # 打磨-18: 阶梯高亮缓存键 (境界/道行变化才刷)
 var _ladder_eta: Dictionary = {}     # 打磨-33: "realm_N"/"dao_N" -> ETA 提示标签 (青色)
 var _ladder_eta_key := ""            # 打磨-33: ETA 文本快照缓存 (变化才刷)
+var _ladder_prog: Label              # 打磨-34: 当前境界行内层内进度标签 (金色, 飞升后隐藏)
+var _ladder_prog_text := ""          # 打磨-34: 层内进度文本缓存 (变化才刷)
 
 
 func _ready() -> void:
@@ -284,6 +286,11 @@ func _build_training_page(page: Panel) -> void:
 		var rl := _label("%s × %d 层  (灵气x%s)" % [r["name"], r["layers"], GameData.fmt(GameData.QI_MULT[i])], 14, WHITEISH)
 		rbox.add_child(rl)
 		_realm_ladder.append(rl)
+		if i == 0:
+			# 打磨-34: 当前境界行内 层内进度 (初始挂在第 0 行下, 随当前境界移动)
+			_ladder_prog = _label("", 12, GOLD)
+			_ladder_prog.tooltip_text = "当前境界的层内进度: 第 X/Y 层 与 下次突破所需灵气 (当前已攒)。\n飞升后隐藏。"
+			rbox.add_child(_ladder_prog)
 		# 打磨-33: 阶梯 ETA 路线 (按当前速率估算 累计耗时, 已达成/当前 行不显示)
 		var r_eta := _label("", 12, CYAN)
 		rbox.add_child(r_eta)
@@ -1019,6 +1026,17 @@ func _refresh_ladder() -> void:
 	for i in _immortal_ladder.size():
 		var hi2 := g.ascended and i == g.dao_level
 		(_immortal_ladder[i] as Label).add_theme_color_override("font_color", GOLD if hi2 else WHITEISH)
+	# 打磨-34: 层内进度标签移动到当前境界行下 (飞升后隐藏, 挪到凡境末行)
+	if g.ascended:
+		var last := 2 * (_realm_ladder.size() - 1) + 1
+		if _ladder_prog.text != "":
+			_ladder_prog.text = ""
+		if _ladder_prog.get_index() != last:
+			_ladder_prog.get_parent().move_child(_ladder_prog, last)
+	else:
+		var want := 2 * g.realm_idx + 1
+		if _ladder_prog.get_index() != want:
+			_ladder_prog.get_parent().move_child(_ladder_prog, want)
 	# 打磨-33: 境界/阶段变化时 ETA 路线口径变了, 立即重算
 	_refresh_ladder_eta(true)
 
@@ -1061,6 +1079,11 @@ func _refresh_ladder_eta(force: bool = false) -> void:
 				t2 = g.ladder_row_eta("dao", i)
 		if l2.text != t2:
 			l2.text = t2
+	# 打磨-34: 当前境界行内 层内进度 (未飞升才显示; 文本变化才刷)
+	var tp: String = g.ladder_current_progress_text()
+	if _ladder_prog.text != tp:
+		_ladder_prog.text = tp
+		_ladder_prog_text = tp
 
 
 # 打磨-33: 当前主资源进度值 (ETA 快照键用; 未飞升=灵气, 飞升后=道行)
