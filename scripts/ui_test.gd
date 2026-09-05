@@ -3,6 +3,8 @@ extends Node
 ## 打磨-41: 技能/装备/法器 行首品质色竖条断言 (存在/首子节点/颜色与数据 tier 或价格档一致)
 ## 打磨-42: 成就页顶栏收集进度一览 mini 进度条断言 (4 条节点/0 填充/满态金/半态比例/节流缓存)
 ## 打磨-43: 收集进度一览加 总计 mini 进度条断言 (5 条节点/总计=10/287 与 137/287 两态/wrap 换行布局)
+## 打磨-44: 收集进度一览 点击直达断言 (5 条 flat Button+手型光标/tooltip/点击切 Tab 重置筛选/
+##          法器区金边高亮+自动恢复/无存档统计副作用/总计不切页)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
@@ -67,6 +69,7 @@ func _ready() -> void:
 	_mutate_state()
 	await _assert_tier_bars()
 	await _assert_collect_bars_mutated()
+	await _assert_collect_jump()
 	_finish()
 
 
@@ -331,6 +334,85 @@ func _assert_tier_bars() -> void:
 		check(bar.color == g.TIER_COLOR[expect_idx], "法器 %s 价格档色=%s 期望档%d" % [iid, str(bar.color), expect_idx])
 		tier_seen[expect_idx] = tier_seen[expect_idx] + 1
 	check(tier_seen[0] > 0 and tier_seen[2] > 0 and tier_seen[5] > 0 and tier_seen[6] > 0, "法器四档价格色标均有覆盖 (实际 %s)" % str(tier_seen))
+
+
+# 打磨-44: 收集进度一览 点击直达 — 5 条 flat Button (手型光标/tooltip), 点击切 Tab+重置筛选,
+# 法器区金边高亮+自动恢复, 无存档/统计副作用, 总计不切页
+func _assert_collect_jump() -> void:
+	var g := GameData
+	# 回到成就页 (点击入口所在页)
+	ui._tab.current_tab = 3
+	# 5 条按钮节点 + flat + 手型光标
+	check(ui._collect_btns.size() == 5, "收集进度 5 条点击按钮齐全 (实际 %d)" % ui._collect_btns.size())
+	var expect_tip := {"skill": "点击直达 技能页", "equip": "点击直达 装备页",
+		"item": "点击直达 修行页·法器区", "ach": "已在 成就页", "total": "总计 = 四类已收集之和"}
+	for k in expect_tip:
+		var b: Button = ui._collect_btns.get(k, null)
+		check(b != null, "收集 %s 按钮存在" % k)
+		if b == null:
+			continue
+		check(b.flat == true, "收集 %s 按钮 flat (可点样式)" % k)
+		check(b.mouse_default_cursor_shape == Control.CURSOR_POINTING_HAND, "收集 %s 手型光标提示可点" % k)
+		check(b.toggle_mode == false, "收集 %s 按钮非 toggle (点击即触发)" % k)
+		check(b.tooltip_text.find(expect_tip[k]) >= 0, "收集 %s tooltip 含「%s」 (实际 %s)" % [k, expect_tip[k], b.tooltip_text])
+		# 行 (HBox) 是按钮子节点 (结构: wrap > btn > row[label+bar])
+		var it: Dictionary = ui._collect_items[k]
+		var row: Node = it["row"]
+		check(row.get_parent() == b, "收集 %s 行挂在按钮下 (点击热区=整行)" % k)
+	# 法器区高亮 Panel 存在 (修行页)
+	check(ui._items_panel != null and ui._items_panel is Panel, "修行页法器区高亮 Panel 存在")
+	# --- 点击 技能: 切到技能页(tab1) + 筛选重置(全部类别/全部品质) ---
+	# 先给技能页制造一个筛选态, 验证点击后重置
+	ui._on_filter("sword")
+	ui._on_tier_filter("2")
+	check(ui._filter_active == "sword" and ui._tier_active == "2", "前置 技能筛选态 (sword/tier2)")
+	# 副作用快照 (点击 不应改变)
+	var snap_essence := g.essence
+	var snap_stones := g.stones
+	var snap_stats := g.stats
+	ui._on_collect_jump("skill")
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 1, "点击 技能 → 切到 技能页 (tab=1) (实际 %d)" % ui._tab.current_tab)
+	check(ui._filter_active == "", "点击 技能 → 类别筛选重置为 全部 (实际 %s)" % ui._filter_active)
+	check(ui._tier_active == "", "点击 技能 → 品质筛选重置为 全部 (实际 %s)" % ui._tier_active)
+	check(g.essence == snap_essence and g.stones == snap_stones, "点击 技能 无资源副作用")
+	check(g.stats == snap_stats, "点击 技能 无统计副作用 (无 _stat_inc)")
+	# --- 点击 装备: 切到装备页(tab2) + 部位/品质 筛选重置 ---
+	ui._on_equip_filter("weapon")
+	ui._on_equip_tier_filter("3")
+	check(ui._equip_filter_active == "weapon" and ui._equip_tier_active == "3", "前置 装备筛选态 (weapon/tier3)")
+	ui._on_collect_jump("equip")
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 2, "点击 装备 → 切到 装备页 (tab=2) (实际 %d)" % ui._tab.current_tab)
+	check(ui._equip_filter_active == "", "点击 装备 → 部位筛选重置为 全部 (实际 %s)" % ui._equip_filter_active)
+	check(ui._equip_tier_active == "", "点击 装备 → 品质筛选重置为 全部 (实际 %s)" % ui._equip_tier_active)
+	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats, "点击 装备 无资源/统计副作用")
+	# --- 点击 法器: 切到修行页(tab0) + 法器区金边高亮, 之后自动恢复 ---
+	ui._on_collect_jump("item")
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 0, "点击 法器 → 切到 修行页 (tab=0) (实际 %d)" % ui._tab.current_tab)
+	var sb_hi: StyleBoxFlat = ui._items_panel.get_theme_stylebox("panel")
+	check(sb_hi != null and sb_hi.get_border_width_all() > 0, "点击 法器 → 法器区金边高亮 (边框宽>0)")
+	check(sb_hi != null and sb_hi.border_color == ui.GOLD, "点击 法器 → 高亮边框=金")
+	# 等待 tween 结束(1.2s) 后恢复
+	await get_tree().create_timer(1.4).timeout
+	var sb_rest: StyleBoxFlat = ui._items_panel.get_theme_stylebox("panel")
+	check(sb_rest != null and sb_rest.get_border_width_all() == 0, "法器区高亮 1.2s 后自动恢复 (边框宽=0)")
+	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats, "点击 法器 无资源/统计副作用")
+	# --- 点击 成就: 已在成就页, 不切页 (保持 tab=3) ---
+	ui._tab.current_tab = 3
+	ui._on_collect_jump("ach")
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 3, "点击 成就 → 保持 成就页 (tab=3) (实际 %d)" % ui._tab.current_tab)
+	# --- 点击 总计: 只弹口径提示, 不切页 (保持 tab=3) ---
+	ui._tab.current_tab = 3
+	var tab_before_total: int = ui._tab.current_tab
+	ui._on_collect_jump("total")
+	await get_tree().process_frame
+	check(ui._tab.current_tab == tab_before_total, "点击 总计 → 不切页 (保持 tab=%d)" % tab_before_total)
+	check(str(ui._msg_label.text).find("总计") >= 0, "点击 总计 → 底部弹口径提示 (实际 %s)" % ui._msg_label.text)
+	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats, "点击 总计 无资源/统计副作用")
+	# 恢复受控态 (防污染: 筛选已重置为全部, 无需额外清理)
 
 
 func _finish() -> void:

@@ -2,6 +2,7 @@ extends Control
 ## 修仙挂机 · 主界面 (UI 全部代码构建, Tab: 修行/技能/装备)
 ## 打磨-41: 技能/装备/法器 行首 4px 品质色竖条 (技能 tier 0..5 / 装备 tier 0..6 / 法器按价格档: 凡灰·玄蓝·仙紫·神金)
 ## 打磨-42: 成就页顶栏收集进度一览 mini 进度条 (4 类横排, 满=金/未满=青, 比例 1% 量化档才刷)
+## 打磨-44: 收集进度一览 点击直达 (技能/装备/法器 点击切对应 Tab+重置筛选, 总计弹口径提示; 纯导航无存档/统计副作用)
 
 const BG := Color(0.07, 0.08, 0.11)
 const PANEL_BG := Color(0.12, 0.13, 0.18)
@@ -85,6 +86,11 @@ var _collect_box: Control         # 打磨-42: 成就页顶栏 收集进度一�
 var _collect_wrap: FlowContainer  # 打磨-43: 收集进度一览容器 (与 _collect_box 同一节点, 宽度不足时逐条换行不截断)
 var _collect_items: Dictionary = {} # 打磨-42: 类别 -> {label, bar_bg, bar_fill, text, q} (text/q 变化才刷)
 var _collect_text := ""            # 收集文本缓存 (变化时才刷, tooltip/断言用; 原单行 Label 已升级为 _collect_box)
+var _collect_btns: Dictionary = {}  # 打磨-44: 类别 -> flat Button (收集进度行, 点击直达对应页)
+var _collect_sb_normal: StyleBoxFlat # 打磨-44: 收集行按钮 normal (透明)
+var _collect_sb_hover: StyleBoxFlat  # 打磨-44: 收集行按钮 hover (淡底+金边 可点提示)
+var _items_panel: Panel              # 打磨-44: 修行页法器区面板 (透明, 收集进度点击直达时金边高亮)
+var _items_hi_tween: Tween           # 打磨-44: 法器区高亮 tween (1.2s 自动恢复)
 var _bonus_labels: Array[Label] = []  # 技能/装备页顶栏 总加成汇总标签 (打磨-9)
 var _bonus_text := ""              # 汇总文本缓存 (变化时才刷)
 var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用)
@@ -265,9 +271,25 @@ func _build_training_page(page: Panel) -> void:
 	left.add_child(_break_btn)
 	left.add_child(_sep())
 	# 法器标题 + 打磨-29: 一键购买 (价格升序连买买得起的法器)
+	# 打磨-44: 法器区 包进透明 Panel, 收集进度"法器"点击直达时金边高亮 1.2s
+	_items_panel = Panel.new()
+	var ip_sb := StyleBoxFlat.new()
+	ip_sb.bg_color = Color(0, 0, 0, 0)
+	ip_sb.set_corner_radius_all(8)
+	_items_panel.add_theme_stylebox_override("panel", ip_sb)
+	_items_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_child(_items_panel)
+	var items_box := VBoxContainer.new()
+	items_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	items_box.offset_left = 10
+	items_box.offset_top = 8
+	items_box.offset_right = -10
+	items_box.offset_bottom = -8
+	items_box.add_theme_constant_override("separation", 8)
+	_items_panel.add_child(items_box)
 	var item_head := HBoxContainer.new()
 	item_head.add_theme_constant_override("separation", 8)
-	left.add_child(item_head)
+	items_box.add_child(item_head)
 	var item_sp := Control.new()
 	item_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	item_head.add_child(_label("法 器", 15, DIM))
@@ -280,7 +302,7 @@ func _build_training_page(page: Panel) -> void:
 	var shop_scroll := ScrollContainer.new()
 	shop_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	shop_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	left.add_child(shop_scroll)
+	items_box.add_child(shop_scroll)
 	_shop_box = VBoxContainer.new()
 	_shop_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_shop_box.add_theme_constant_override("separation", 10)
@@ -754,12 +776,23 @@ func _build_ach_page(page: Panel) -> void:
 	_collect_wrap.tooltip_text = "全局收集进度: 领悟过的技能 / 购买过的装备 / 购置的法器 / 达成的成就。\n收集只增不减, 全数收集即为圆满。"
 	head.add_child(_collect_wrap)
 	_collect_box = _collect_wrap  # 打磨-42 旧名指向同一容器 (tooltip/断言兼容)
+	# 打磨-44: 收集进度行升级为 flat Button (点击直达对应页; 悬停淡底+金边提示可点)
+	_collect_sb_normal = StyleBoxFlat.new()
+	_collect_sb_normal.bg_color = Color(0, 0, 0, 0)
+	_collect_sb_hover = StyleBoxFlat.new()
+	_collect_sb_hover.bg_color = Color(1, 1, 1, 0.06)
+	_collect_sb_hover.border_color = GOLD
+	_collect_sb_hover.set_border_width_all(1)
+	_collect_sb_hover.set_corner_radius_all(6)
+	_collect_sb_hover.content_margin_left = 2
+	_collect_sb_hover.content_margin_right = 2
+	_collect_sb_hover.content_margin_top = 1
+	_collect_sb_hover.content_margin_bottom = 1
 	for kv in [["skill", "技能"], ["equip", "装备"], ["item", "法器"], ["ach", "成就"]]:
 		var ckey: String = kv[0]
 		var crow := HBoxContainer.new()
 		crow.add_theme_constant_override("separation", 5)
 		crow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		crow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var cl := _label("", 14, CYAN)
 		crow.add_child(cl)
 		var cbar_bg := ColorRect.new()
@@ -773,14 +806,30 @@ func _build_ach_page(page: Panel) -> void:
 		cbar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cbar_bg.add_child(cbar_fill)
 		crow.add_child(cbar_bg)
-		_collect_wrap.add_child(crow)
-		_collect_items[ckey] = {"label": cl, "bar_bg": cbar_bg, "bar_fill": cbar_fill, "text": "", "q": -1}
+		var cbtn := Button.new()
+		cbtn.flat = true
+		cbtn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		cbtn.add_theme_stylebox_override("normal", _collect_sb_normal)
+		cbtn.add_theme_stylebox_override("hover", _collect_sb_hover)
+		cbtn.add_theme_stylebox_override("pressed", _collect_sb_hover)
+		cbtn.add_theme_stylebox_override("focus", _collect_sb_hover)
+		cbtn.toggle_mode = false
+		cbtn.pressed.connect(_on_collect_jump.bind(ckey))
+		var ctip: String = {
+			"skill": "点击直达 技能页", "equip": "点击直达 装备页",
+			"item": "点击直达 修行页·法器区", "ach": "已在 成就页, 点击无动作",
+		}[ckey]
+		cbtn.tooltip_text = ctip
+		cbtn.add_child(crow)
+		_collect_wrap.add_child(cbtn)
+		_collect_items[ckey] = {"label": cl, "bar_bg": cbar_bg, "bar_fill": cbar_fill, "text": "", "q": -1, "btn": cbtn, "row": crow}
+		_collect_btns[ckey] = cbtn
 	# 打磨-43: 第 5 条 总计 mini 进度条 (打磨-28 旧文字 "(总 N/287)" 的展示位回归; 口径=四类已收集之和/总量之和)
+	# 打磨-44: 总计行同样 flat Button (点击弹口径提示, 不切页)
 	var tt := _label("", 14, CYAN)
 	var trow := HBoxContainer.new()
 	trow.add_theme_constant_override("separation", 5)
 	trow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	trow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	trow.add_child(tt)
 	var tbg := ColorRect.new()
 	tbg.color = Color(0.22, 0.24, 0.31)
@@ -793,8 +842,19 @@ func _build_ach_page(page: Panel) -> void:
 	tfill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tbg.add_child(tfill)
 	trow.add_child(tbg)
-	_collect_wrap.add_child(trow)
-	_collect_items["total"] = {"label": tt, "bar_bg": tbg, "bar_fill": tfill, "text": "", "q": -1}
+	var tbtn := Button.new()
+	tbtn.flat = true
+	tbtn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	tbtn.add_theme_stylebox_override("normal", _collect_sb_normal)
+	tbtn.add_theme_stylebox_override("hover", _collect_sb_hover)
+	tbtn.add_theme_stylebox_override("pressed", _collect_sb_hover)
+	tbtn.add_theme_stylebox_override("focus", _collect_sb_hover)
+	tbtn.pressed.connect(_on_collect_jump.bind("total"))
+	tbtn.tooltip_text = "总计 = 四类已收集之和 / 四类总量之和 (技能+装备+法器+成就, 各条目只收集一次)"
+	tbtn.add_child(trow)
+	_collect_wrap.add_child(tbtn)
+	_collect_items["total"] = {"label": tt, "bar_bg": tbg, "bar_fill": tfill, "text": "", "q": -1, "btn": tbtn, "row": trow}
+	_collect_btns["total"] = tbtn
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1161,6 +1221,20 @@ func _refresh_collect() -> void:
 		fill.color = GOLD if full else CYAN
 		if int(bg.size.x) > 0:
 			fill.size = Vector2(bg.size.x * float(q) / 100.0, bg.size.y)
+		# 打磨-44: Button 非 Container, 子行 label/bar 的 min-size 不会上抛 -> FlowContainer 视为 0 宽不换行;
+		# 文本变化时按 label+bar 重算按钮 min-size (真实渲染含字体度量, headless 字体 min=0 但布局仍成立)
+		_collect_btn_min(k, it["label"] as Label, bg)
+
+
+# 打磨-44: 按 行内 label+bar 的 min-size 同步收集按钮 min-size (让 FlowContainer 正确换行)
+func _collect_btn_min(k: String, cl: Label, bg: ColorRect) -> void:
+	var it: Dictionary = _collect_items[k]
+	var b: Button = it.get("btn", null)
+	if b == null:
+		return
+	var mw: float = cl.get_minimum_size().x + bg.custom_minimum_size.x + 8.0  # 8 ≈ 行间 separation
+	var mh: float = maxf(cl.get_minimum_size().y, bg.custom_minimum_size.y) + 4.0
+	b.custom_minimum_size = Vector2(mw, mh)
 
 
 # 打磨-40: 刷单个成就行进度条 (已解锁=满条金色 / 未解锁=青色按 ach_progress_ratio 填充)
@@ -1376,6 +1450,57 @@ func _on_equip_btn(id: String) -> void:
 
 func _on_unequip(slot: String) -> void:
 	_show_msg(GameData.unequip(slot))
+
+
+# 打磨-44: 收集进度一览 点击直达 — 技能→技能页 / 装备→装备页 / 法器→修行页法器区(金边高亮) /
+# 总计→口径提示 (不切页); 纯导航操作, 无存档/统计副作用 (复用筛选接口, 口径与各自页一致)
+func _on_collect_jump(ckey: String) -> void:
+	match ckey:
+		"skill":
+			_tab.current_tab = 1
+			_on_filter("")
+			_on_tier_filter("")
+			_show_msg("直达 技能页 (全部类别 · 全部品质)")
+		"equip":
+			_tab.current_tab = 2
+			_on_equip_filter("")
+			_on_equip_tier_filter("")
+			_show_msg("直达 装备页 (全部部位 · 全部品质)")
+		"item":
+			_tab.current_tab = 0
+			_flash_items_panel()
+			_show_msg("直达 修行页·法器区")
+		"ach":
+			_tab.current_tab = 3
+			_show_msg("已在 成就页")
+		"total":
+			_show_msg("总计 = 四类已收集之和 / 四类总量之和 (各条目只收集一次, 卸下/换装不影响)")
+
+
+# 打磨-44: 法器区金边高亮 1.2s 后自动恢复 (tween 驱动, 重入时先 kill 旧 tween)
+func _flash_items_panel() -> void:
+	if _items_panel == null:
+		return
+	if _items_hi_tween != null and _items_hi_tween.is_valid():
+		_items_hi_tween.kill()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = GOLD
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	_items_panel.add_theme_stylebox_override("panel", sb)
+	_items_hi_tween = create_tween()
+	_items_hi_tween.tween_interval(1.2)
+	_items_hi_tween.tween_callback(_restore_items_panel)
+
+
+func _restore_items_panel() -> void:
+	if _items_panel == null:
+		return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.set_corner_radius_all(8)
+	_items_panel.add_theme_stylebox_override("panel", sb)
 
 
 # 打磨-11: 装备部位筛选 (显示/隐藏对应行)
