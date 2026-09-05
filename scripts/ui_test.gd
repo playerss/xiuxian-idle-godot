@@ -1,5 +1,6 @@
 extends Node
 ## 打磨-40: 成就页进度条 UI 断言 (headless 可跑, scene 模式带 autoload GameData/Steam)
+## 打磨-41: 技能/装备/法器 行首品质色竖条断言 (存在/首子节点/颜色与数据 tier 或价格档一致)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
@@ -61,6 +62,7 @@ func _ready() -> void:
 	await get_tree().process_frame
 	_assert_initial()
 	_mutate_state()
+	await _assert_tier_bars()
 	_finish()
 
 
@@ -131,6 +133,55 @@ func _mutate_state() -> void:
 		if not (node as PanelContainer).get_meta("_hl", false):
 			all_ok = false
 	check(all_ok, "排序 前 %d 行均为已解锁 (金框)" % done.size())
+
+
+# 打磨-41: 技能/装备/法器 行首品质色竖条 (120+140+10 行, 颜色与 数据tier/价格档 一致)
+func _assert_tier_bars() -> void:
+	var g := GameData
+	# 技能页 (tab 1): 色条 = TIER_COLOR[s.tier]
+	ui._tab.current_tab = 1
+	ui._refresh()
+	await get_tree().process_frame
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id[id]
+		var rown: Node = ui._skill_row_nodes[id]
+		var hb: HBoxContainer = rown.get_child(0)
+		check(hb.get_child_count() > 0 and hb.get_child(0) is ColorRect, "技能 %s 色条为首子节点" % id)
+		if hb.get_child_count() == 0 or not (hb.get_child(0) is ColorRect):
+			continue
+		var bar: ColorRect = hb.get_child(0)
+		check(bar.color == g.TIER_COLOR[int(s["tier"])], "技能 %s 色条色=%s tier=%s" % [id, str(bar.color), str(s["tier"])])
+		check(bar.size.y >= 16.0, "技能 %s 色条高>16 (实际 %.0f)" % [id, bar.size.y])
+	# 装备页 (tab 2): 色条 = TIER_COLOR[e.tier]
+	ui._tab.current_tab = 2
+	ui._refresh()
+	await get_tree().process_frame
+	for id in g.equip_ids:
+		var e: Dictionary = g.equip_by_id[id]
+		var rown: Node = ui._equip_row_nodes[id]
+		var hb: HBoxContainer = rown.get_child(0)
+		check(hb.get_child_count() > 0 and hb.get_child(0) is ColorRect, "装备 %s 色条为首子节点" % id)
+		if hb.get_child_count() == 0 or not (hb.get_child(0) is ColorRect):
+			continue
+		var bar: ColorRect = hb.get_child(0)
+		check(bar.color == g.TIER_COLOR[int(e["tier"])], "装备 %s 色条色=%s tier=%s" % [id, str(bar.color), str(e["tier"])])
+	# 修行页 (tab 0): 法器色条 = 价格档 (1k/100k/1M -> 凡灰/玄蓝/仙紫/神金)
+	ui._tab.current_tab = 0
+	ui._refresh()
+	await get_tree().process_frame
+	var tier_seen := {0: 0, 2: 0, 5: 0, 6: 0}
+	for it in g.ITEMS:
+		var iid: String = str(it["id"])
+		var row: Node = ui._shop_row_nodes[iid]
+		check(row.get_child_count() > 0 and row.get_child(0) is ColorRect, "法器 %s 色条为首子节点" % iid)
+		if row.get_child_count() == 0 or not (row.get_child(0) is ColorRect):
+			continue
+		var bar: ColorRect = row.get_child(0)
+		var cost: float = float(it["cost"])
+		var expect_idx := 0 if cost < 1000.0 else (2 if cost < 100000.0 else (5 if cost < 1000000.0 else 6))
+		check(bar.color == g.TIER_COLOR[expect_idx], "法器 %s 价格档色=%s 期望档%d" % [iid, str(bar.color), expect_idx])
+		tier_seen[expect_idx] = tier_seen[expect_idx] + 1
+	check(tier_seen[0] > 0 and tier_seen[2] > 0 and tier_seen[5] > 0 and tier_seen[6] > 0, "法器四档价格色标均有覆盖 (实际 %s)" % str(tier_seen))
 
 
 func _finish() -> void:

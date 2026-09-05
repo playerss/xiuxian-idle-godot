@@ -1,5 +1,6 @@
 extends Control
 ## 修仙挂机 · 主界面 (UI 全部代码构建, Tab: 修行/技能/装备)
+## 打磨-41: 技能/装备/法器 行首 4px 品质色竖条 (技能 tier 0..5 / 装备 tier 0..6 / 法器按价格档: 凡灰·玄蓝·仙紫·神金)
 
 const BG := Color(0.07, 0.08, 0.11)
 const PANEL_BG := Color(0.12, 0.13, 0.18)
@@ -340,6 +341,8 @@ func _add_shop_row(it: Dictionary) -> void:
 	row.add_theme_constant_override("separation", 12)
 	row.tooltip_text = GameData.item_detail(it["id"] as String)
 	_shop_box.add_child(row)
+	# 打磨-41: 行首品质色竖条 (法器无 tier 字段, 按价格档着色: <1k 凡灰 / <100k 玄蓝 / <1M 仙紫 / 以上 神金)
+	_add_tier_bar(row, _item_tier_color(float(it["cost"])))
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)
@@ -446,6 +449,8 @@ func _add_skill_row(id: String) -> void:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
 	row.add_child(hb)
+	# 打磨-41: 行首品质色竖条 (4px, 颜色随数据 tier 固定, 构建一次)
+	_add_tier_bar(hb, GameData.TIER_COLOR[int(s["tier"])])
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)
@@ -688,6 +693,8 @@ func _add_equip_row(id: String) -> void:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
 	row.add_child(hb)
+	# 打磨-41: 行首品质色竖条 (4px, 颜色随数据 tier 固定, 构建一次)
+	_add_tier_bar(hb, GameData.TIER_COLOR[int(e["tier"])])
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)
@@ -1209,6 +1216,28 @@ func _refresh_ladder_eta(force: bool = false) -> void:
 # 打磨-33: 当前主资源进度值 (ETA 快照键用; 未飞升=灵气, 飞升后=道行)
 func primary_progress_value() -> float:
 	return GameData.dao if GameData.ascended else GameData.essence
+
+
+# 打磨-41: 行首品质色竖条 (4px, 构建后颜色不变, 无每帧刷新)
+func _add_tier_bar(parent: Control, color: Color) -> void:
+	var bar := ColorRect.new()
+	bar.color = color
+	bar.custom_minimum_size = Vector2(4, 18)
+	bar.size_flags_vertical = Control.SIZE_FILL
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(bar)
+	parent.move_child(bar, 0)
+
+
+# 打磨-41: 法器无品质字段, 按价格档近似着色 (与 TIER_COLOR 复用, 断言/文案口径一致)
+func _item_tier_color(cost: float) -> Color:
+	if cost < 1000.0:
+		return GameData.TIER_COLOR[0]    # 凡灰
+	if cost < 100000.0:
+		return GameData.TIER_COLOR[2]   # 玄蓝
+	if cost < 1000000.0:
+		return GameData.TIER_COLOR[5]   # 仙紫
+	return GameData.TIER_COLOR[6]       # 神金
 
 
 func _make_card_sb(hi: bool) -> StyleBoxFlat:
