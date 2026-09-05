@@ -1063,6 +1063,17 @@ func _init() -> void:
 	# 已收集类计数只增不减 (卸下/换装不影响收集数)
 	g.unequip("weapon")
 	check(int(g.collect_summary()["equip"]["got"]) == 1, "卸下装备不影响收集计数 (只增不减)")
+	# 打磨-43: 总计口径 = 四类已收集之和/四类总量之和 (与 collect_summary_text 的 "(总 N/287)" 一致)
+	var cs43: Dictionary = g.collect_summary()
+	var got43 := 0
+	var tot43 := 0
+	for k in cs43:
+		got43 += int(cs43[k]["got"])
+		tot43 += int(cs43[k]["total"])
+	var txt43: String = g.collect_summary_text()
+	check(txt43.find("(总 %d/%d)" % [got43, tot43]) >= 0, "打磨-43 总计 N/287 = 四类之和 (总 %d/%d, 文本 %s)" % [got43, tot43, txt43])
+	check(tot43 == 287, "打磨-43 总计分母 = 287 (实际 %d)" % tot43)
+	check(got43 == int(cs43["skill"]["got"]) + int(cs43["equip"]["got"]) + int(cs43["item"]["got"]) + int(cs43["ach"]["got"]), "打磨-43 总计分子 = 四类已收集之和 (实际 %d)" % got43)
 
 	# ---------- 打磨-29: 法器 一键购买 (价格升序连买买得起的, 与装备 一键购买 口径一致) ----------
 	# 受控状态: 清掉前节遗留法器, 灵石从 0 开始

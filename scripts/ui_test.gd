@@ -2,6 +2,7 @@ extends Node
 ## 打磨-40: 成就页进度条 UI 断言 (headless 可跑, scene 模式带 autoload GameData/Steam)
 ## 打磨-41: 技能/装备/法器 行首品质色竖条断言 (存在/首子节点/颜色与数据 tier 或价格档一致)
 ## 打磨-42: 成就页顶栏收集进度一览 mini 进度条断言 (4 条节点/0 填充/满态金/半态比例/节流缓存)
+## 打磨-43: 收集进度一览加 总计 mini 进度条断言 (5 条节点/总计=10/287 与 137/287 两态/wrap 换行布局)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
@@ -90,12 +91,13 @@ func _assert_initial() -> void:
 	check(str(ui._ach_count_label.text) == "成就 0/%d" % g.ach_ids.size(), "顶栏成就计数 0/%d (实际 %s)" % [g.ach_ids.size(), ui._ach_count_label.text])
 
 
-# 打磨-42: 初始态 (全新档, 成就页): 4 条收集进度条, 节点齐全/0 填充/青色/计数文本/tooltip + 节流缓存 (同态再刷不重写)
+# 打磨-42→43: 初始态 (全新档, 成就页): 5 条收集进度条 (4 类 + 总计), 节点齐全/0 填充/青色/计数文本/tooltip + 节流缓存 (同态再刷不重写)
 func _assert_collect_bars_initial() -> void:
 	var g := GameData
-	check(ui._collect_items.size() == 4, "收集进度 4 类节点齐全 (实际 %d)" % ui._collect_items.size())
+	check(ui._collect_items.size() == 5, "收集进度 5 条节点齐全 (4 类+总计) (实际 %d)" % ui._collect_items.size())
+	check(ui._collect_wrap != null and ui._collect_box == ui._collect_wrap, "打磨-43 收集进度一览为 FlowContainer (宽不足逐条换行不截断)")
 	var expect_txt := {"skill": "技能 0/%d" % g.skill_ids.size(), "equip": "装备 0/%d" % g.equip_ids.size(),
-		"item": "法器 0/10", "ach": "成就 0/%d" % g.ach_ids.size()}
+		"item": "法器 0/10", "ach": "成就 0/%d" % g.ach_ids.size(), "total": "总计 0/287"}
 	for k in expect_txt:
 		var it: Dictionary = ui._collect_items.get(k, {})
 		check(it.has("label") and it.has("bar_bg") and it.has("bar_fill"), "收集 %s 节点 (label/bar_bg/bar_fill) 存在" % k)
@@ -175,15 +177,16 @@ func _mutate_state() -> void:
 	check(all_ok, "排序 前 %d 行均为已解锁 (金框)" % done.size())
 
 
-# 打磨-42: 变化态 (2技能+2装备+1法器+5成就): 4 条同步计数 + 1% 档填充 + 青色 (未满); 再学全技能/全法器 -> 满态金 (金/青混合二态)
+# 打磨-42→43: 变化态 (2技能+2装备+1法器+5成就): 5 条同步计数 (含 总计 10/287) + 1% 档填充 + 青色 (未满);
+# 再学全技能/全法器 -> 满态金 (技能/法器 金 + 总计 137/287 仍青, 金/青混合二态)
 func _assert_collect_bars_mutated() -> void:
 	var g := GameData
 	ui._tab.current_tab = 3
 	ui._refresh()
 	await get_tree().process_frame
-	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就"}
+	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就", "total": "总计"}
 	var expect := {"skill": [2, g.skill_ids.size()], "equip": [2, g.equip_ids.size()],
-		"item": [1, 10], "ach": [5, g.ach_ids.size()]}
+		"item": [1, 10], "ach": [5, g.ach_ids.size()], "total": [10, 287]}
 	for k in expect:
 		var it: Dictionary = ui._collect_items.get(k, {})
 		if it.is_empty():
@@ -218,6 +221,67 @@ func _assert_collect_bars_mutated() -> void:
 		var it: Dictionary = ui._collect_items[k]
 		check((it["bar_fill"] as ColorRect).color == ui.CYAN, "收集 %s 未满分态保持青" % k)
 	check(str(ui._collect_text).find("(总 137/287)") >= 0, "满态汇总文本含 总 137/287 (实际 %s)" % str(ui._collect_text))
+	# 打磨-43: 总计条 满态 137/287 — 青色 48%档 (未满保持青, 与 4 类同口径; 10/287 态已在上方 for 循环 q 公式断言)
+	var t2: Dictionary = ui._collect_items["total"]
+	var tb2: ColorRect = t2["bar_bg"]
+	var tf2: ColorRect = t2["bar_fill"]
+	var q2: int = int(ceil(clampf(137.0 / 287.0, 0.0, 1.0) * 100.0))
+	check(int(tf2.size.x) == int(tb2.size.x * float(q2) / 100.0), "总计条 137/287 填充=1%%档 %d%% (fill=%d bg=%d)" % [q2, int(tf2.size.x), int(tb2.size.x)])
+	check(tf2.color == ui.CYAN, "总计条 137/287 未满=青")
+	await _assert_collect_total_wrap()
+
+
+# 打磨-43: 顶栏宽度不足时逐条换行不截断 — 压缩 FlowContainer 宽度 -> 5 条目折到多行; 恢复宽 -> 回单行
+func _assert_collect_total_wrap() -> void:
+	var g := GameData
+	var wrap: FlowContainer = ui._collect_wrap
+	# 全收集态 (287/287) 下断言: 总计条 满条金色
+	g.owned_eq.clear()
+	for eid in g.equip_ids:
+		g.owned_eq.append(eid)
+	g.ach_done.clear()
+	for aid in g.ach_ids:
+		g.ach_done.append(str(aid))
+	ui._refresh()
+	await get_tree().process_frame
+	var full_txt := "总计 287/287"
+	var it_all: Dictionary = ui._collect_items["total"]
+	check(str((it_all["label"] as Label).text) == full_txt, "总计条 全收集 %s (实际 %s)" % [full_txt, str((it_all["label"] as Label).text)])
+	check((it_all["bar_fill"] as ColorRect).color == ui.GOLD, "总计条 全收集=金")
+	# 宽态: 5 条目全部布局在位 (1280 窄屏下天然可能 2~3 行, 记录自然行数供 roundtrip 对比; 1920 宽屏实测单行)
+	var rows_nat := _count_rows(wrap)
+	check(wrap.get_child_count() == 5, "宽态 5 条目全在 (实际 %d, 自然 %d 行)" % [wrap.get_child_count(), rows_nat])
+	# 窄态: 强制 FlowContainer 最小宽 200px -> 条目必须换行 (y 出现 2 档) 且不消失 (5 条目全在)
+	var old_min: Vector2 = wrap.custom_minimum_size
+	wrap.custom_minimum_size = Vector2(200, 0)
+	ui._refresh()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check(wrap.get_child_count() == 5, "窄态 5 条目仍在 (未截断) (实际 %d)" % wrap.get_child_count())
+	var rows_narrow := _count_rows(wrap)
+	check(rows_narrow >= 2, "窄态 逐条换行到多行 (实际 %d 行)" % rows_narrow)
+	# 恢复宽度 -> roundtrip 行数与压缩前一致
+	wrap.custom_minimum_size = old_min
+	ui._refresh()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var rows_rest := _count_rows(wrap)
+	check(rows_rest == rows_nat, "恢复宽后 roundtrip 行数一致 (压缩前 %d, 恢复后 %d)" % [rows_nat, rows_rest])
+	# 恢复受控态 (防污染后续断言)
+	g.owned_eq.clear()
+	g.ach_done.clear()
+
+
+# 打磨-43: 统计容器子节点折成的行数 (y 坐标 2px 容差归并)
+func _count_rows(c: Container) -> int:
+	var rows := 0
+	var y0: float = -1.0
+	for i in c.get_child_count():
+		var y: float = c.get_child(i).position.y
+		if y0 < 0.0 or absf(y - y0) > 2.0:
+			rows += 1
+			y0 = y
+	return rows
 
 
 # 打磨-41: 技能/装备/法器 行首品质色竖条 (120+140+10 行, 颜色与 数据tier/价格档 一致)

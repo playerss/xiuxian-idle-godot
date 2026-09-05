@@ -81,7 +81,8 @@ var _ach_count_label: Label
 var _ach_hl_seq := 0               # 成就解锁总数缓存 (变化时才刷样式)
 var _ach_states: Array = []           # 打磨-39: 上帧成就排序键快照 (变化才重排)
 var _ach_bar_q: Dictionary = {}       # 打磨-40: 成就进度条量化缓存 id -> "宽|档" (宽/档变化才刷, 防每帧重绘)
-var _collect_box: HBoxContainer     # 打磨-42: 成就页顶栏 收集进度一览 (4 条 mini 进度条横排)
+var _collect_box: Control         # 打磨-42: 成就页顶栏 收集进度一览 (5 条 mini 进度条, FlowContainer 换行)
+var _collect_wrap: FlowContainer  # 打磨-43: 收集进度一览容器 (与 _collect_box 同一节点, 宽度不足时逐条换行不截断)
 var _collect_items: Dictionary = {} # 打磨-42: 类别 -> {label, bar_bg, bar_fill, text, q} (text/q 变化才刷)
 var _collect_text := ""            # 收集文本缓存 (变化时才刷, tooltip/断言用; 原单行 Label 已升级为 _collect_box)
 var _bonus_labels: Array[Label] = []  # 技能/装备页顶栏 总加成汇总标签 (打磨-9)
@@ -740,30 +741,60 @@ func _build_ach_page(page: Panel) -> void:
 	head.add_child(_ach_count_label)
 	var hint := _label("达成条件即自动解锁, 悬停条目可查看详情", 13, DIM)
 	head.add_child(hint)
-	# 打磨-28→42: 收集进度一览 (技能/装备/法器/成就 全局收集目标; 4 条 mini 进度条横排, 满=金/未满=青)
+	# 打磨-28→42→43: 收集进度一览 (技能/装备/法器/成就 全局收集目标; 5 条 mini 进度条横排, 满=金/未满=青)
 	var head_sp := Control.new()
 	head_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(head_sp)
-	_collect_box = HBoxContainer.new()
-	_collect_box.add_theme_constant_override("separation", 10)
-	head.add_child(_collect_box)
-	_collect_box.tooltip_text = "全局收集进度: 领悟过的技能 / 购买过的装备 / 购置的法器 / 达成的成就。\n收集只增不减, 全数收集即为圆满。"
+	# 打磨-43: 5 条 (含 总计) 逐条装进 FlowContainer (真换行) — 顶栏宽度不足时逐条换行, 不截断
+	_collect_wrap = FlowContainer.new()
+	_collect_wrap.add_theme_constant_override("h_separation", 10)
+	_collect_wrap.add_theme_constant_override("v_separation", 4)
+	_collect_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_collect_wrap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_collect_wrap.tooltip_text = "全局收集进度: 领悟过的技能 / 购买过的装备 / 购置的法器 / 达成的成就。\n收集只增不减, 全数收集即为圆满。"
+	head.add_child(_collect_wrap)
+	_collect_box = _collect_wrap  # 打磨-42 旧名指向同一容器 (tooltip/断言兼容)
 	for kv in [["skill", "技能"], ["equip", "装备"], ["item", "法器"], ["ach", "成就"]]:
 		var ckey: String = kv[0]
+		var crow := HBoxContainer.new()
+		crow.add_theme_constant_override("separation", 5)
+		crow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		crow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var cl := _label("", 14, CYAN)
-		_collect_box.add_child(cl)
+		crow.add_child(cl)
 		var cbar_bg := ColorRect.new()
 		cbar_bg.color = Color(0.22, 0.24, 0.31)
 		cbar_bg.custom_minimum_size = Vector2(72, 6)
-		cbar_bg.size_flags_vertical = Control.SIZE_SHRINK_END
+		cbar_bg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		cbar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var cbar_fill := ColorRect.new()
 		cbar_fill.color = CYAN
 		cbar_fill.position = Vector2.ZERO
 		cbar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cbar_bg.add_child(cbar_fill)
-		_collect_box.add_child(cbar_bg)
+		crow.add_child(cbar_bg)
+		_collect_wrap.add_child(crow)
 		_collect_items[ckey] = {"label": cl, "bar_bg": cbar_bg, "bar_fill": cbar_fill, "text": "", "q": -1}
+	# 打磨-43: 第 5 条 总计 mini 进度条 (打磨-28 旧文字 "(总 N/287)" 的展示位回归; 口径=四类已收集之和/总量之和)
+	var tt := _label("", 14, CYAN)
+	var trow := HBoxContainer.new()
+	trow.add_theme_constant_override("separation", 5)
+	trow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	trow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	trow.add_child(tt)
+	var tbg := ColorRect.new()
+	tbg.color = Color(0.22, 0.24, 0.31)
+	tbg.custom_minimum_size = Vector2(72, 6)
+	tbg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tfill := ColorRect.new()
+	tfill.color = CYAN
+	tfill.position = Vector2.ZERO
+	tfill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tbg.add_child(tfill)
+	trow.add_child(tbg)
+	_collect_wrap.add_child(trow)
+	_collect_items["total"] = {"label": tt, "bar_bg": tbg, "bar_fill": tfill, "text": "", "q": -1}
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1087,17 +1118,31 @@ func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
 	row.add_theme_stylebox_override("panel", _card_sb_hi if hi else _card_sb_normal)
 
 
-# 打磨-42: 刷收集进度一览 mini 进度条 (4 类横排: 类别名+计数 + 6px 进度条, 满=金/未满=青)
+# 打磨-42→43: 刷收集进度一览 mini 进度条 (4 类 + 总计 横排: 类别名+计数 + 6px 进度条, 满=金/未满=青)
 # 计数文本或 布局宽 变化才写 (缓存键 "宽|文本", 同打磨-40 口径), 防每帧重绘;
 # 比例按 1% 量化档 (q=ceil(ratio*100)), 页面不可见时布局宽为 0 跳过填充, 切页后首帧补刷
+# 打磨-43: total 条 = 四类已收集之和/四类总量之和 (与 collect_summary_text 的 "(总 N/287)" 口径一致)
 func _refresh_collect() -> void:
 	var g := GameData
 	var cs: Dictionary = g.collect_summary()
-	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就"}
+	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就", "total": "总计"}
+	var got_all := 0
+	var tot_all := 0
 	for k in cs:
+		got_all += int(cs[k]["got"])
+		tot_all += int(cs[k]["total"])
+	var keys: Array = []
+	for k in cs:
+		keys.append(k)
+	keys.append("total")
+	for k in keys:
 		if not _collect_items.has(k):
 			continue
-		var c: Dictionary = cs[k]
+		var c: Dictionary
+		if k == "total":
+			c = {"got": got_all, "total": tot_all}
+		else:
+			c = cs[k]
 		var it: Dictionary = _collect_items[k]
 		var bg: ColorRect = it["bar_bg"]
 		var fill: ColorRect = it["bar_fill"]
