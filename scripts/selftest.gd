@@ -974,6 +974,57 @@ func _init() -> void:
 	g.realm_idx = 0
 	g.layer = 1
 
+	# ---------- 打磨-38: 技能页"只看可学"筛选 (skill_can_learn_display / learnable_display_count) ----------
+	# 受控: 清空 learned, 练气第1层 (r0L1 可学 11, 全部凡品; r0L2/L3 各 5/4 个境界不足)
+	g.learned.clear()
+	# skill_can_learn_display: 未学须 境界/层 足够; 已学恒 true
+	check(g.skill_can_learn_display("sword_0_0"), "can_learn_display 未学+境界足够 = true (sword_0_0 练气1层)")
+	var lk38 := ""
+	for id in g.skill_ids:
+		var s38: Dictionary = g.skill_by_id[id]
+		if not g.learned.has(id) and not g.can_learn(id) and lk38 == "":
+			lk38 = id
+	check(lk38 != "", "找到境界不足的未学技能 (练气第1层)")
+	check(not g.skill_can_learn_display(lk38), "can_learn_display 境界不足未学 = false (实际 %s)" % lk38)
+	check(not g.skill_can_learn_display("__nope__"), "can_learn_display 未知 id = false")
+	# 已学恒 true (境界不足也显示, 排最前)
+	g.learned.append(lk38)
+	check(g.skill_can_learn_display(lk38), "can_learn_display 已学(境界不足) = true (打磨-38 口径)")
+	g.learned.clear()
+	# learnable_display_count: 与 类别/品质 筛选叠加, 口径 = 已学 + 未学且境界足够
+	check(g.learnable_display_count() == 11, "learnable_display_count 全局 练气第1层 = 11 (实际 %d)" % g.learnable_display_count())
+	check(g.learnable_display_count("", 0) == 11, "learnable_display_count tier0 = 11 (r0 全凡品, 实际 %d)" % g.learnable_display_count("", 0))
+	check(g.learnable_display_count("", 1) == 0, "learnable_display_count tier1 境界不足 = 0")
+	check(g.learnable_display_count("sword", -1) == 2, "learnable_display_count 类别 sword = 2 (实际 %d)" % g.learnable_display_count("sword", -1))
+	check(g.learnable_display_count("divine", -1) == 3, "learnable_display_count 类别 divine = 3 (实际 %d)" % g.learnable_display_count("divine", -1))
+	check(g.learnable_display_count("sword", 0) == 2, "learnable_display_count sword×tier0 = 2 (AND 叠加, 实际 %d)" % g.learnable_display_count("sword", 0))
+	check(g.learnable_display_count("sword", 1) == 0, "learnable_display_count sword×tier1 = 0 (境界门槛)")
+	# 已学恒计入 (境界不足的已学技能也算"可显示")
+	g.learned.append(lk38)  # lk38 境界不足
+	check(g.learnable_display_count() == 12, "learnable_display_count 含境界不足的已学 = 11+1 = 12 (实际 %d)" % g.learnable_display_count())
+	g.learned.clear()
+	# 境界提升: 受控清空 (打磨-27 段遗留 已学 2 剑法), 筑基第1层 可学 r0+r1L1 = 20+11 = 31
+	g.learned.clear()
+	g.realm_idx = 1
+	g.layer = 1
+	check(g.learnable_display_count() == 31, "learnable_display_count 筑基第1层 = 31 (实际 %d)" % g.learnable_display_count())
+	# 学掉后: 已学恒计入, 可显示数不变 (31)
+	g.learned.append("sword_0_0")
+	check(g.learnable_display_count("sword", -1) == 6, "学掉 1 后 sword 可显示数仍 6 (已学恒计, 实际 %d)" % g.learnable_display_count("sword", -1))
+	check(g.learnable_display_count() == 31, "学掉 1 后全局可显示仍 31 (已学恒计, 实际 %d)" % g.learnable_display_count())
+	check(g.learn_available_count() == 30, "学掉 1 后 learn_available_count 31->30 (实际 %d)" % g.learn_available_count())
+	# 境界/层不足 -> 无可学 (按钮显示 "无可学" 口径): 清档后 渡劫期全学完 可学 0
+	g.learned.clear()
+	g.realm_idx = 9
+	g.layer = 1  # 真仙顶层: 全部 120 可学
+	g.learn_all_available()  # 学掉全部 120
+	check(g.learnable_display_count() == 120, "真仙顶层 全学后 可显示 = 已学 120 (已学恒显示, 实际 %d)" % g.learnable_display_count())
+	check(g.learn_available_count() == 0, "全学后 learn_available_count = 0 (无可学)")
+	g.realm_idx = 0
+	g.layer = 1
+	g.learned.clear()
+	g.stones = 0.0
+
 	# ---------- 打磨-28: 收集进度一览 (collect_summary / collect_summary_text) ----------
 	# 受控状态: 清空装备/法器 (打磨-26/27 段遗留), 保留 已学 2 剑法 (learned=2), 练气第1层
 	g.learned.clear()

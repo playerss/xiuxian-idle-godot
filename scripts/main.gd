@@ -67,6 +67,8 @@ var _equip_filter_btns: Dictionary = {}  # 部位 id -> 筛选按钮 (打磨-11)
 var _equip_filter_active := ""           # "" = 全部
 var _equip_tier_btns: Dictionary = {}    # 打磨-21: 装备品质筛选按钮 (key = 品质索引字符串, "" = 全部)
 var _equip_tier_active := ""             # 打磨-21: 当前装备品质筛选 ("" = 全部)
+var _learnable_btn: Button               # 打磨-38: 技能页"只看可学"开关 (与 类别/品质 筛选 AND 叠加)
+var _learnable_on := false               # 打磨-38: "只看可学"当前开关状态
 var _eq_states: Array = []               # 打磨-22: 上帧装备状态快照 (变化才重排)
 var _slot_labels: Dictionary = {}
 var _card_sb_normal: StyleBoxFlat
@@ -407,6 +409,12 @@ func _build_skill_page(page: Panel) -> void:
 	_active_all_btn.pressed.connect(_on_active_all)
 	_active_all_btn.tooltip_text = "释放所有已领悟且冷却完毕的主动神通, 一次全部爆发; 施展后各自进入冷却。"
 	tier_bar.add_child(_active_all_btn)
+	# 打磨-38: 只看可学 开关 (与 类别/品质 筛选 AND 叠加: 过滤境界/层不足的未学技能, 已学恒显示在最前)
+	_learnable_btn = _make_button("只看可学")
+	_learnable_btn.toggle_mode = true
+	_learnable_btn.pressed.connect(_on_learnable_filter)
+	_learnable_btn.tooltip_text = "只显示 已领悟 与 当前境界可领悟 的技能 (与 类别/品质 筛选叠加生效); 已学技能始终显示在最前。"
+	tier_bar.add_child(_learnable_btn)
 
 	# 顶栏: 总加成汇总 (打磨-9)
 	var bonus_l := _label(GameData.bonus_summary_text(), 14, GOLD)
@@ -475,6 +483,12 @@ func _on_tier_filter(tier: String) -> void:
 	_apply_skill_filter()
 
 
+# 打磨-38: "只看可学"开关 (与 类别/品质 筛选 AND 叠加)
+func _on_learnable_filter() -> void:
+	_learnable_on = _learnable_btn.button_pressed
+	_apply_skill_filter()
+
+
 # 打磨-20: 应用 类别×品质 叠加筛选 (显示/隐藏 + 排序 + 提示)
 func _apply_skill_filter() -> void:
 	# 排序: 已学在前, 其次按品质
@@ -484,6 +498,9 @@ func _apply_skill_filter() -> void:
 		if _filter_active != "" and str(s["category"]) != _filter_active:
 			continue
 		if _tier_active != "" and int(s["tier"]) != int(_tier_active):
+			continue
+		# 打磨-38: "只看可学"叠加 — 已学恒显示, 未学须 境界/层 足够
+		if _learnable_on and not GameData.skill_can_learn_display(id):
 			continue
 		order.append(id)
 	order.sort_custom(_skill_sort)
@@ -501,6 +518,8 @@ func _apply_skill_filter() -> void:
 		msg += " · " + GameData.skill_tier_name(int(_tier_active))
 	else:
 		msg += " · 全部品质"
+	if _learnable_on:
+		msg += " · 只看可学"
 	_show_msg(msg)
 
 
@@ -885,6 +904,11 @@ func _refresh() -> void:
 		_learn_all_btn.text = ll_txt
 	if _buy_all_btn.text != ba_txt:
 		_buy_all_btn.text = ba_txt
+	# 打磨-38: 只看可学 开关 (按钮按 当前 类别/品质 筛选 内 可显示数 计口径, 开关态变化才刷)
+	var lb_avail: int = g.learnable_display_count(_filter_active, tier_i27)
+	var lb_txt := ("显示全部" if _learnable_on else ("只看可学 x%d" if lb_avail > 0 else "无可学"))
+	if _learnable_btn.text != lb_txt:
+		_learnable_btn.text = lb_txt
 	# 打磨-26: 一键最佳穿戴 (可改进槽位数变化时才刷, 购买/穿戴/卸下/读档 触发重排时自然生效)
 	var best_n: int = g.equip_best_pending()
 	var eb_txt := ("一键最佳 x%d" if best_n > 0 else "已最佳")

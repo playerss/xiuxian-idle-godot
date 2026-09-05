@@ -512,6 +512,29 @@ func learn_available_count(cat: String = "", tier: int = -1) -> int:
 			n += 1
 	return n
 
+# 打磨-38: "只看可学"筛选显示口径 — 已学技能恒显示(排最前), 未学的须 境界/层 足够
+# 供技能页"只看可学"开关注释用, 与 UI _apply_skill_filter 过滤条件完全一致
+func skill_can_learn_display(id: String) -> bool:
+	if learned.has(id):
+		return true
+	var s: Dictionary = skill_by_id.get(id, {})
+	if s.is_empty():
+		return false
+	return can_learn(id)
+
+# 打磨-38: 筛选范围内 可学(未学+境界足够) 技能显示数 (与 skill_can_learn_display 口径一致)
+# cat = 类别 id ("" = 全部类别), tier = 品质索引 (-1 = 全部品质)
+func learnable_display_count(cat: String = "", tier: int = -1) -> int:
+	var n := 0
+	for id in skill_ids:
+		if cat != "" and str(skill_by_id[id]["category"]) != cat:
+			continue
+		if tier >= 0 and int(skill_by_id[id]["tier"]) != tier:
+			continue
+		if skill_can_learn_display(id):
+			n += 1
+	return n
+
 func active_ready(id: String) -> bool:
 	return _active_cd.get(id, 0.0) <= 0.0
 
