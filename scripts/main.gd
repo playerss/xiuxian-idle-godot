@@ -19,6 +19,8 @@ var _offline_label: Label      # 打磨-13: 离线每小时收益 (修行页)
 var _offline_text := ""        # 离线文本缓存 (变化时才刷)
 var _break_eta_label: Label    # 打磨-24: 突破/道行精进 ETA (修行页)
 var _break_eta_text := ""      # 突破 ETA 文本缓存 (变化时才刷)
+var _chance_label: Label       # 打磨-36: 主突破/道行精进成功率 (修行页)
+var _chance_text := ""         # 成功率文本缓存 (变化时才刷)
 var _goal_label: Label         # 打磨-31: 下一目标提示 (修行页)
 var _goal_text := ""           # 下一目标文本缓存 (变化时才刷)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
@@ -231,6 +233,10 @@ func _build_training_page(page: Panel) -> void:
 	_break_eta_label = _label("", 13, DIM)
 	left.add_child(_break_eta_label)
 	_break_eta_label.tooltip_text = "按当前灵气(道行)速率估算攒够突破资源所需时间。挂机/神通/境界提升都会改变该时间, 攒够后自动消失。"
+	# 打磨-36: 主突破/道行精进成功率 (与浮动提示/按钮口径对齐; 道祖封顶圆满)
+	_chance_label = _label("", 13, DIM)
+	left.add_child(_chance_label)
+	_chance_label.tooltip_text = "当前主突破/道行精进的成功率 (与突破按钮/浮动提示同口径)。\n成功率 = 境界(阶段)基础 + 功法/装备加成, 全程受控 5%~99%。\n未飞升显示突破成功率, 飞升后显示道行精进成功率; 失败仅消耗资源不损失境界/阶段。"
 	# 打磨-31: 下一目标提示 (玩家下一步该做什么: 目标名+缺口+预计时间)
 	_goal_label = _label("", 14, GOLD)
 	left.add_child(_goal_label)
@@ -781,6 +787,11 @@ func _refresh() -> void:
 	if bet_t != _break_eta_text:
 		_break_eta_text = bet_t
 		_break_eta_label.text = bet_t
+	# 打磨-36: 主突破/道行精进成功率 (境界/道行阶段/功法装备变化才变, 文本变化才写)
+	var ch_t: String = g.primary_break_chance_text()
+	if ch_t != _chance_text:
+		_chance_text = ch_t
+		_chance_label.text = ch_t
 	# 打磨-31: 下一目标提示 (缺口/预计时间随挂机与突破变化, 文本变化才写)
 	var goal_t: String = g.next_goal_text()
 	if goal_t != _goal_text:

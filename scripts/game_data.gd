@@ -1052,6 +1052,24 @@ func breakthrough_eta_text() -> String:
 		return prefix + "不足1分"
 	return prefix + fmt_time(t)
 
+# ---------- 打磨-36: 主突破成功率显示 (主资源突破/道行精进, 未飞升/飞升统一口径) ----------
+
+# 主突破成功率统一接口: 未飞升 = 突破成功率 / 飞升后 = 道行精进成功率 (道祖封顶 = 1.0, 不再精进)
+# 与浮动提示/按钮文案口径一致 (0.85-4%/境界 / 0.90-3%/阶段, 功法装备加成, 钳制 [0.05, 0.99])
+func primary_break_chance() -> float:
+	if not ascended:
+		return breakthrough_chance()
+	if dao_level >= IMMORTAL_REALMS.size() - 1:
+		return 1.0
+	return dao_break_chance()
+
+# 主突破成功率文本 (修行页展示; 道祖封顶 = 圆满文案)
+func primary_break_chance_text() -> String:
+	if ascended and dao_level >= IMMORTAL_REALMS.size() - 1:
+		return "已至道祖 · 道法自然 ♪"
+	var pct := int(round(primary_break_chance() * 100.0))
+	return ("道行精进成功率 %d%%" if ascended else "突破成功率 %d%%") % pct
+
 # ---------- 打磨-31: 下一目标提示 (修行页: 玩家下一步该做什么) ----------
 
 # 下一目标文本 (未飞升=攒灵气突破到下一层/境界, 飞升后=道行精进; 已至道祖=圆满)

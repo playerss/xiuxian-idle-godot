@@ -1299,6 +1299,62 @@ func _init() -> void:
 	g.essence = 0.0
 	g.dao = 0.0
 
+	# ---------- 打磨-36: 主突破/道行精进成功率显示 (primary_break_chance / primary_break_chance_text) ----------
+	# 干净态: 卸下全部已穿装备 (避免污染 裸成功率 断言)
+	for _slot36 in g.SLOTS:
+		g.unequip(_slot36)
+	# 基准态: 练气第1层 无加成 -> 突破成功率 85%
+	check(absf(g.primary_break_chance() - 0.85) < 1e-9, "基准 未飞升 primary_break_chance = 0.85 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance_text() == "突破成功率 85%", "基准 突破成功率文本 (实际 %s)" % g.primary_break_chance_text())
+	# 境界提升: 筑基 -> 85-4 = 81%
+	g.realm_idx = 1
+	g.layer = 2  # 功法 青法天术 解锁门槛 练气第2层 (can_learn 按 境界+层)
+	check(absf(g.primary_break_chance() - 0.81) < 1e-9, "筑基 primary_break_chance = 0.81 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance_text() == "突破成功率 81%", "筑基 成功率文本 (实际 %s)" % g.primary_break_chance_text())
+	# 功法加成: 学 青法天术 (bt_chance +0.05, 筑基解锁门槛 练气第2层)
+	g.learn_skill("divine_0_1")
+	check(absf(g.primary_break_chance() - 0.86) < 1e-9, "功法+5%% 后 = 0.86 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance_text() == "突破成功率 86%", "功法加成文本 (实际 %s)" % g.primary_break_chance_text())
+	# 舍入: 装备 灵剑 (bt_chance +0.005) 使 筑基 81.5% -> "82%" (四舍五入到整数)
+	g.learned.erase("divine_0_1")
+	g.unequip("weapon")
+	g.buy_equipment("weapon_1_0")
+	g.equip_equipment("weapon_1_0")
+	check(absf(g.primary_break_chance() - 0.815) < 1e-9, "装备+0.5%% 后 = 0.815 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance_text() == "突破成功率 82%", "81.5%% 舍入为 82%% (实际 %s)" % g.primary_break_chance_text())
+	g.unequip("weapon")  # 卸下, 不污染后续 裸成功率 断言
+	# 渡劫(第8境) 裸成功率 53% 仍在受控区间
+	g.realm_idx = 8
+	check(absf(g.primary_break_chance() - 0.53) < 1e-9, "渡劫 primary_break_chance = 0.53 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance() >= 0.05 and g.primary_break_chance() <= 0.99, "渡劫成功率受控 [0.05,0.99]")
+	# 飞升后: 初仙 道行精进 90%
+	g.realm_idx = 0
+	g.ascended = true
+	g.dao_level = 0
+	check(absf(g.primary_break_chance() - 0.90) < 1e-9, "飞升 初仙 primary_break_chance = 0.90 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance_text() == "道行精进成功率 90%", "飞升 成功率文本 (实际 %s)" % g.primary_break_chance_text())
+	# 飞升后功法口径: 再学 5% -> 95%
+	g.learn_skill("divine_0_1")
+	check(absf(g.primary_break_chance() - 0.95) < 1e-9, "飞升后 功法+5%% = 0.95 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance_text() == "道行精进成功率 95%", "飞升后 功法文本 (实际 %s)" % g.primary_break_chance_text())
+	# 跨阶段: 混元(第7) 90-3*7 = 69% (先卸功法, 测裸值)
+	g.learned.erase("divine_0_1")
+	g.dao_level = 7
+	check(absf(g.primary_break_chance() - 0.69) < 1e-9, "混元 primary_break_chance = 0.69 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance_text() == "道行精进成功率 69%", "混元 成功率文本 (实际 %s)" % g.primary_break_chance_text())
+	# 道祖封顶: 圆满文案 + chance = 1.0
+	g.dao_level = 8
+	check(absf(g.primary_break_chance() - 1.0) < 1e-9, "道祖 primary_break_chance = 1.0 (实际 %s)" % g.primary_break_chance())
+	check(g.primary_break_chance_text() == "已至道祖 · 道法自然 ♪", "道祖 成功率文本 = 圆满 (实际 %s)" % g.primary_break_chance_text())
+	# 恢复基准态
+	g.learned.erase("divine_0_1")
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
