@@ -11,12 +11,11 @@
 每次生成的 4 张图数值一致，可重复执行：
 
 ```bash
-# 本机 (有 X 环境):
-XIUXIAN_STORE_SHOTS=1 ~/bin/godot --path . res://scenes/main.tscn
+# 无显示环境 (Xvfb, 推荐):
+Xvfb :110 -screen 0 1920x1080x24 &
+DISPLAY=:110 ~/bin/godot --path . res://scenes/store_shots.tscn
 
-# 无显示环境 (Xvfb):
-Xvfb :99 -screen 0 1920x1080x24 &
-DISPLAY=:99 XIUXIAN_STORE_SHOTS=1 ~/bin/godot --path . res://scenes/main.tscn
+# 有显示环境: 同上 (去掉 DISPLAY 前缀)
 ```
 
 产出 4 张（退出码 0 成功）：

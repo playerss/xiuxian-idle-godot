@@ -78,6 +78,7 @@ var _ach_rows: Dictionary = {}      # 成就 id -> {row, name_l, desc_l, prog_l}
 var _ach_count_label: Label
 var _ach_hl_seq := 0               # 成就解锁总数缓存 (变化时才刷样式)
 var _ach_states: Array = []           # 打磨-39: 上帧成就排序键快照 (变化才重排)
+var _ach_bar_q: Dictionary = {}       # 打磨-40: 成就进度条量化缓存 id -> "宽|档" (宽/档变化才刷, 防每帧重绘)
 var _collect_label: Label           # 打磨-28: 成就页顶栏 收集进度一览
 var _collect_text := ""            # 收集文本缓存 (变化时才刷)
 var _bonus_labels: Array[Label] = []  # 技能/装备页顶栏 总加成汇总标签 (打磨-9)
@@ -722,11 +723,11 @@ func _build_ach_page(page: Panel) -> void:
 	outer.add_theme_constant_override("separation", 8)
 	page.add_child(outer)
 
-	# 顶栏: 进度统计
+	# 顶栏: 进度统计 (打磨-40: 初始计数用真实总数, 旧文案 0/0 会误导)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 12)
 	outer.add_child(head)
-	_ach_count_label = _label("成就 0/0", 16, GOLD)
+	_ach_count_label = _label("成就 0/%d" % GameData.ach_ids.size(), 16, GOLD)
 	head.add_child(_ach_count_label)
 	var hint := _label("达成条件即自动解锁, 悬停条目可查看详情", 13, DIM)
 	head.add_child(hint)
@@ -769,10 +770,23 @@ func _add_ach_row(id: String) -> void:
 	# 进度标签 + 解锁提示 (解锁时换色/换文案, 变化时才刷)
 	var prog_l := _label(GameData.ach_progress(id), 13, DIM)
 	info.add_child(prog_l)
-	# tooltip: 名称/条件/进度
-	row.tooltip_text = "成就「%s」\n条件: %s" % [a["name"], a["desc"]]
+	# 打磨-40: 进度条 (已解锁=满条金色 / 未解锁=青色按进度比例填充, 与按进度降序排序视觉呼应)
+	var bar_bg := ColorRect.new()
+	bar_bg.color = Color(0.22, 0.24, 0.31)
+	bar_bg.custom_minimum_size = Vector2(0, 6)
+	bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bar_fill := ColorRect.new()
+	bar_fill.color = CYAN
+	bar_fill.position = Vector2.ZERO
+	bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar_bg.add_child(bar_fill)
+	info.add_child(bar_bg)
+	# tooltip: 名称/条件/进度 (进度行随刷新路径 _ach_bar_refresh 更新)
+	row.tooltip_text = "成就「%s」\n条件: %s\n进度: 0%%" % [a["name"], a["desc"]]
 	_ach_rows[id] = {
 		"row": row, "name_l": name_l, "desc_l": desc_l, "prog_l": prog_l,
+		"bar_bg": bar_bg, "bar_fill": bar_fill,
 	}
 
 
@@ -986,6 +1000,9 @@ func _refresh() -> void:
 		var pt: String = g.ach_progress(id)
 		if pl2.text != pt:
 			pl2.text = pt
+	# 打磨-40: 成就页进度条 (2% 量化 + 布局宽变化才刷, 防每帧重绘)
+	for id in _ach_rows:
+		_ach_bar_refresh(id)
 	# 打磨-39: 成就页按解锁状态排序 (排序键变化才重排; 解锁/进度变化触发)
 	_resort_ach()
 	# 打磨-28: 收集进度一览 (技能/装备/法器/成就 收集数变化才刷)
@@ -1044,6 +1061,29 @@ func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
 		return
 	row.set_meta("_hl", hi)
 	row.add_theme_stylebox_override("panel", _card_sb_hi if hi else _card_sb_normal)
+
+
+# 打磨-40: 刷单个成就行进度条 (已解锁=满条金色 / 未解锁=青色按 ach_progress_ratio 填充)
+# 量化 2% 档 + 布局宽变化才写 (缓存键 "宽|档"), 避免每帧 17 条重绘; tooltip 进度行同步
+func _ach_bar_refresh(id: Variant) -> void:
+	var g := GameData
+	var r40: Dictionary = _ach_rows[id]
+	var bg40: ColorRect = r40["bar_bg"]
+	var fill40: ColorRect = r40["bar_fill"]
+	var hi40: bool = g.ach_done.has(str(id))
+	var rv40: float = 1.0 if hi40 else g.ach_progress_ratio(str(id))
+	var cl40: float = minf(maxf(rv40, 0.0), 1.0)
+	var q40: int = int(ceil(cl40 * 50.0))
+	var key40 := "%d|%d" % [int(bg40.size.x), q40]
+	if str(_ach_bar_q.get(id, "")) == key40:
+		return
+	_ach_bar_q[id] = key40
+	fill40.color = GOLD if hi40 else CYAN
+	fill40.size = Vector2(bg40.size.x * float(q40) / 50.0, bg40.size.y)
+	var a40: Dictionary = g.ach_by_id.get(str(id), {})
+	var pct40: int = int(round(cl40 * 100.0))
+	(r40["row"] as Node).tooltip_text = "成就「%s」\n条件: %s\n进度: %d%%" % [
+		str(a40.get("name", "")), str(a40.get("desc", "")), pct40]
 
 
 # 打磨-39: 成就页按解锁状态排序 (已解锁在前, 未解锁按进度降序; 排序键变化才重排, 避免每帧 17 行重排)
