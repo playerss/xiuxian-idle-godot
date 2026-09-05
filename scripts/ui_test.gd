@@ -5,6 +5,8 @@ extends Node
 ## 打磨-43: 收集进度一览加 总计 mini 进度条断言 (5 条节点/总计=10/287 与 137/287 两态/wrap 换行布局)
 ## 打磨-44: 收集进度一览 点击直达断言 (5 条 flat Button+手型光标/tooltip/点击切 Tab 重置筛选/
 ##          法器区金边高亮+自动恢复/无存档统计副作用/总计不切页)
+## 打磨-45: 一键系列统一浮动反馈断言 (变更>0 屏幕中央绿色浮动含数量/0 变更不弹/幂等再点不弹/
+##          文案/计数/颜色/无 essence 副作用, 5 按钮逐一+重复点击)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
@@ -70,6 +72,7 @@ func _ready() -> void:
 	await _assert_tier_bars()
 	await _assert_collect_bars_mutated()
 	await _assert_collect_jump()
+	await _assert_onekey_float()
 	_finish()
 
 
@@ -413,6 +416,127 @@ func _assert_collect_jump() -> void:
 	check(str(ui._msg_label.text).find("总计") >= 0, "点击 总计 → 底部弹口径提示 (实际 %s)" % ui._msg_label.text)
 	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats, "点击 总计 无资源/统计副作用")
 	# 恢复受控态 (防污染: 筛选已重置为全部, 无需额外清理)
+
+
+# 打磨-45: 一键系列统一浮动反馈 — 变更>0 时屏幕中央绿色浮动提示 (文案含数量), 0 变更不弹
+# 受控态 (realm_idx=2 layer=1, 灵石 5万, 空技能/装备/法器): 期望值全部按 GameData 只读接口
+# 动态计算 (learn_available_count/active_ready_count/item_affordable_count/equip_best_pending),
+# 5 按钮逐一点击断言 计数+1/文案含数量/绿色/位置复位; 5 按钮再点一次 (全学/全买/全穿/冷却中)
+# 计数不变 (0 变更只走底部消息); 施展爆发真实加灵气, 购买/穿戴不动灵气
+func _assert_onekey_float() -> void:
+	var g := GameData
+	# 受控态 (打磨-44 末态: 筛选已重置为全部, 资源 5万, 空 技能/装备/法器)
+	check(ui._filter_active == "" and ui._tier_active == "" and ui._equip_filter_active == "" and ui._equip_tier_active == "", "前置 筛选态已重置")
+	g.realm_idx = 2
+	g.layer = 1
+	g.stones = 50000.0
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.owned.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.essence = 0.0
+	ui._refresh()
+	# 节点: 浮动 Label 存在 + 绿色 (与 成就浮动 同绿口径)
+	var fl: Label = ui._onekey_float_label
+	check(fl != null, "一键浮动 Label 节点存在")
+	if fl == null:
+		return
+	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "一键浮动 文字色=绿")
+	check(str(ui._onekey_last_text) == "", "初始 无浮动文案 (实际 %s)" % str(ui._onekey_last_text))
+	check(ui._onekey_float_count == 0, "初始 浮动计数=0 (实际 %d)" % ui._onekey_float_count)
+	var c0: int = ui._onekey_float_count
+	var snap_ess := g.essence
+	# --- 一键领悟 (技能页): 期望数 = learn_available_count (境界足够+未学) ---
+	var n_learn: int = g.learn_available_count()
+	check(n_learn > 0, "受控态 存在可学技能 (实际 %d)" % n_learn)
+	ui._tab.current_tab = 1
+	ui._refresh()
+	ui._on_learn_all()
+	onekey_assert("一键领悟 %d 个技能" % n_learn, c0)
+	c0 = ui._onekey_float_count
+	check(g.learned.size() == n_learn, "一键领悟 学到 %d (实际 %d)" % [n_learn, g.learned.size()])
+	check(g.essence == snap_ess, "一键领悟 无灵气副作用 (实际 %.0f)" % g.essence)
+	# --- 一键施展: 期望数 = active_ready_count (冷却清空, 刚学的主动神通全部就绪; 爆发真实加灵气) ---
+	var n_act: int = g.active_ready_count()
+	check(n_act > 0, "受控态 存在就绪主动神通 (实际 %d)" % n_act)
+	ui._refresh()
+	var snap_ess_act := g.essence
+	ui._on_active_all()
+	onekey_assert("一键施展 %d 个神通" % n_act, c0)
+	c0 = ui._onekey_float_count
+	check(g.active_ready_count() == 0, "施展后 全部进冷却 (就绪 0, 实际 %d)" % g.active_ready_count())
+	check(g.essence > snap_ess_act, "施展 爆发真实加灵气 (爆发前 %.0f → 后 %.0f)" % [snap_ess_act, g.essence])
+	# --- 法器 一键购买 (修行页): 期望数 = 价格升序连买 (预算耗尽即停, 与 buy_items_affordable 同口径; 花灵石, 不动灵气) ---
+	var n_item := 0
+	var sim_stones_it := g.stones
+	var item_costs: Array = []
+	for it in g.ITEMS:
+		item_costs.append(float((it as Dictionary).get("cost", 1e18)))
+	item_costs.sort()
+	for c in item_costs:
+		var cost: float = float(c)
+		if cost <= sim_stones_it:
+			sim_stones_it -= cost
+			n_item += 1
+	check(n_item > 0, "受控态 存在可购法器 (实际 %d)" % n_item)
+	var snap_ess2 := g.essence
+	ui._tab.current_tab = 0
+	ui._refresh()
+	ui._on_items_buy_all()
+	onekey_assert("一键购置 %d 件法器" % n_item, c0)
+	c0 = ui._onekey_float_count
+	check(g.owned.size() == n_item, "法器 买到 %d (实际 %d)" % [n_item, g.owned.size()])
+	check(g.essence == snap_ess2, "一键购置 无灵气副作用 (实际 %.0f)" % g.essence)
+	# --- 装备 一键购买 (装备页): 期望数按 与 buy_affordable 完全一致的顺序 (价格升序, 同价 id 升序) 连买模拟 ---
+	var n_equip := 0
+	var sim_stones := g.stones
+	var ids: Array = g.equip_ids.duplicate()
+	ids.sort_custom(g.buy_affordable_cmp)
+	for id in ids:
+		var e: Dictionary = g.equip_by_id[str(id)]
+		var cost: float = float(e.get("cost", 1e18))
+		if cost <= sim_stones:
+			sim_stones -= cost
+			n_equip += 1
+	check(n_equip > 0, "受控态 存在可购装备 (实际 %d)" % n_equip)
+	ui._tab.current_tab = 2
+	ui._refresh()
+	ui._on_buy_all()
+	onekey_assert("一键购买 %d 件装备" % n_equip, c0)
+	c0 = ui._onekey_float_count
+	check(g.owned_eq.size() == n_equip, "装备 买到 %d (实际 %d)" % [n_equip, g.owned_eq.size()])
+	check(g.equipped.size() == 5, "槽位空时已自动穿戴 (5 部位, 实际 %d)" % g.equipped.size())
+	check(g.essence == snap_ess2, "一键购买 无灵气副作用 (实际 %.0f)" % g.essence)
+	# --- 一键最佳: 期望数 = equip_best_pending (各槽位换最佳) ---
+	var n_best: int = g.equip_best_pending()
+	check(n_best > 0, "受控态 存在待改进槽位 (实际 %d)" % n_best)
+	ui._refresh()
+	ui._on_equip_best()
+	onekey_assert("最佳穿戴 %d 件" % n_best, c0)
+	c0 = ui._onekey_float_count
+	check(g.equip_best_pending() == 0, "一键最佳后 无待改进槽位 (实际 %d)" % g.equip_best_pending())
+	check(g.essence == snap_ess2, "一键最佳 无灵气副作用 (实际 %.0f)" % g.essence)
+	# --- 再点 5 按钮 (全学/全买/全穿/冷却中): 0 变更不弹 ---
+	ui._on_learn_all()
+	ui._on_active_all()
+	ui._on_items_buy_all()
+	ui._on_buy_all()
+	ui._on_equip_best()
+	check(ui._onekey_float_count == c0, "5 按钮 0 变更再点 不弹浮动 (计数 %d 不变)" % c0)
+	check(str(ui._msg_label.text).find("装备") >= 0 or str(ui._msg_label.text).find("穿戴") >= 0, "0 变更仍走底部消息 (实际 %s)" % str(ui._msg_label.text))
+	check(g.essence == snap_ess2, "全流程 (施展后) 无额外灵气副作用 (实际 %.0f)" % g.essence)
+
+
+# 打磨-45: 单按钮 浮动 断言 (计数+1 / 文案=完整句子 / 绿色 / 位置复位 / 可见)
+func onekey_assert(expect_text: String, c_before: int) -> void:
+	var fl: Label = ui._onekey_float_label
+	check(ui._onekey_float_count == c_before + 1, "一键 浮动计数+1 (期望 %d, 实际 %d)" % [c_before + 1, ui._onekey_float_count])
+	check(str(ui._onekey_last_text) == expect_text, "一键 浮动文案=%s (实际 %s)" % [expect_text, str(ui._onekey_last_text)])
+	check(str(fl.text) == "✦ " + expect_text + " ✦", "一键 浮动 Label 文本 ✦…✦ (实际 %s)" % str(fl.text))
+	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "一键 浮动文字=绿")
+	check(absf(fl.position.y + 26.0) < 0.5, "一键 浮动位置复位 y≈-26 (实际 %.2f)" % fl.position.y)
+	check(fl.modulate.a > 0.9, "一键 浮动可见 (alpha=%.2f)" % fl.modulate.a)
 
 
 func _finish() -> void:

@@ -44,6 +44,10 @@ var _ach_float_label: Label   # 打磨-17: 成就解锁浮动提示 (顶层)
 var _ach_float_tween: Tween
 var _ach_prev: Array[String] = []  # 打磨-17: 上帧已解锁成就快照 (检测新解锁)
 var _ach_float_count := 0          # 打磨-17: 成就浮动提示次数 (自测断言用)
+var _onekey_float_label: Label     # 打磨-45: 一键系列浮动反馈 (顶层, 居中)
+var _onekey_float_tween: Tween
+var _onekey_float_count := 0       # 打磨-45: 浮动提示次数 (自测断言用)
+var _onekey_last_text := ""        # 打磨-45: 最近一次浮动文案 (自测断言用)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
@@ -204,6 +208,17 @@ func _build_ui() -> void:
 	_ach_float_label.modulate = Color(1, 1, 1, 0)
 	_ach_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_ach_float_label)
+
+	# 打磨-45: 一键系列浮动反馈 (居中绿色, 与 突破/成就 浮动同口径, 位置错开)
+	_onekey_float_label = _label("", 22, Color(0.55, 0.95, 0.55))
+	_onekey_float_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_onekey_float_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_onekey_float_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_onekey_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_onekey_float_label.position = Vector2(0, -30)
+	_onekey_float_label.modulate = Color(1, 1, 1, 0)
+	_onekey_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_onekey_float_label)
 
 
 func _make_page(title: String) -> Panel:
@@ -582,6 +597,8 @@ func _on_learn_all() -> void:
 		var msg := "一键领悟 %d 个技能" % int(r["count"])
 		msg += (", " + GameData.skill_tier_name(int(_tier_active))) if _tier_active != "" else ""
 		_show_msg(msg)
+		# 打磨-45: 变更>0 统一浮动反馈 (文案含数量)
+		_onekey_float("一键领悟 %d 个技能" % int(r["count"]))
 	else:
 		_show_msg("当前境界下没有可领悟的新技能 (或筛选范围内已全部领悟)")
 
@@ -591,6 +608,7 @@ func _on_items_buy_all() -> void:
 	var r: Dictionary = GameData.buy_items_affordable()
 	if int(r["count"]) > 0:
 		_show_msg("一键购置 %d 件法器 (灵石已花到买不起为止)" % int(r["count"]))
+		_onekey_float("一键购置 %d 件法器" % int(r["count"]))
 	else:
 		_show_msg("当前灵石买不起任何一件未拥有的法器")
 
@@ -601,6 +619,7 @@ func _on_active_all() -> void:
 	if int(r["count"]) > 0:
 		var res := "灵气" if not GameData.ascended else "道行"
 		_show_msg("一键施展 %d 个神通, 爆发%s %s" % [int(r["count"]), res, GameData.fmt(float(r["burst"]))])
+		_onekey_float("一键施展 %d 个神通" % int(r["count"]))
 	else:
 		_show_msg("没有可施展的主动神通 (未领悟或冷却中)")
 
@@ -610,6 +629,7 @@ func _on_buy_all() -> void:
 	var r: Dictionary = GameData.buy_affordable()
 	if int(r["count"]) > 0:
 		_show_msg("一键购买 %d 件装备 (槽位空时已自动穿戴)" % int(r["count"]))
+		_onekey_float("一键购买 %d 件装备" % int(r["count"]))
 	else:
 		_show_msg("当前灵石买不起任何一件未拥有的装备")
 
@@ -619,6 +639,7 @@ func _on_equip_best() -> void:
 	var r: Dictionary = GameData.equip_best()
 	if int(r["count"]) > 0:
 		_show_msg("最佳穿戴 %d 件 (各部位已换上最佳装备)" % int(r["count"]))
+		_onekey_float("最佳穿戴 %d 件" % int(r["count"]))
 	else:
 		_show_msg("各部位已是最佳穿戴 (或尚无已拥有装备)")
 
@@ -1168,6 +1189,21 @@ func _ach_float(fresh: Array) -> void:
 	_ach_float_tween = create_tween()
 	_ach_float_tween.tween_property(_ach_float_label, "position:y", -96.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_ach_float_tween.parallel().tween_property(_ach_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
+
+
+# 打磨-45: 一键系列统一浮动反馈 — 批量变更 >0 时屏幕中央绿色浮动提示 (文案含数量),
+# 底部 _show_msg 仍保留 (两者并存); 0 变更不弹 (走底部提示, 口径不变)
+func _onekey_float(text: String) -> void:
+	_onekey_float_count += 1
+	_onekey_last_text = text
+	_onekey_float_label.text = "✦ " + text + " ✦"
+	_onekey_float_label.position = Vector2(0, -26)
+	_onekey_float_label.modulate = Color(1, 1, 1, 1)
+	if _onekey_float_tween != null and _onekey_float_tween.is_valid():
+		_onekey_float_tween.kill()
+	_onekey_float_tween = create_tween()
+	_onekey_float_tween.tween_property(_onekey_float_label, "position:y", -64.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_onekey_float_tween.parallel().tween_property(_onekey_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
 
 
 func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
