@@ -1173,6 +1173,74 @@ func _init() -> void:
 	g.dao = 0.0
 	g.dao_level = 0
 
+	# ---------- 打磨-33: 境界阶梯 ETA 路线 (累计耗时估算) ----------
+	# 受控状态: 练气 第 1 层 未飞升
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	# 当前境界 = 0 (不显示 ETA, 由金色高亮表达)
+	check(g.ladder_row_eta("realm", 0) == "", "当前境界行无 ETA (实际 %s)" % g.ladder_row_eta("realm", 0))
+	# 越界/已达成 目标不可达 = ""
+	check(g.ladder_row_eta("realm", -1) == "", "越界负目标 = 空")
+	check(g.realm_ladder_eta(0) == 0.0, "当前境界累计 = 0")
+	# 下一境界目标: 练气 9 层全突破(450) = 450
+	check(g.realm_ladder_eta(1) == 450.0, "筑基目标累计 = 450 (实际 %s)" % str(g.realm_ladder_eta(1)))
+	# 精确值: 练气 9 层(450) + 筑基 3 层(30+60+90=180) = 630
+	check(g.realm_ladder_eta(2) == 450.0 + 180.0, "金丹目标累计 = 630 (实际 %s)" % str(g.realm_ladder_eta(2)))
+	# 层内变化: 练气 第 5 层起, 剩余 5..9 层 = 10*(5+6+7+8+9) = 450
+	g.layer = 5
+	check(g.realm_ladder_eta(0) == 0.0, "当前境界(第5层)累计仍 = 0")
+	g.layer = 1
+	# 库存抵扣: essence 抵掉一部分
+	g.essence = 100.0
+	check(g.ladder_row_eta("realm", 1) != "", "有缺口时未飞升阶梯行显示 ETA")
+	g.essence = g.realm_ladder_eta(1)  # 库存 = 缺口 -> 立即可达成, ETA 归空
+	check(g.ladder_row_eta("realm", 1) == "", "库存抵满后 ETA 归空 (实际 %s)" % g.ladder_row_eta("realm", 1))
+	g.essence = 0.0
+	# 格式化: 各档位
+	check(g.ladder_eta_text(0.0) == "", "ladder_eta_text 0 = 空")
+	check(g.ladder_eta_text(-1.0) == "", "ladder_eta_text 负 = 空")
+	check(g.ladder_eta_text(30.0) == "约不足1分", "30s = 约不足1分 (实际 %s)" % g.ladder_eta_text(30.0))
+	check(g.ladder_eta_text(180.0) == "约 3分", "180s = 约 3分 (实际 %s)" % g.ladder_eta_text(180.0))
+	check(g.ladder_eta_text(7200.0) == "约 2小时", "2h = 约 2小时 (实际 %s)" % g.ladder_eta_text(7200.0))
+	check(g.ladder_eta_text(90000.0) == "约1天1小时", "25h = 约1天1小时 (实际 %s)" % g.ladder_eta_text(90000.0))
+	check(g.ladder_eta_text(7.0 * 86400.0) == "8天+", "7天 = 8天+ (实际 %s)" % g.ladder_eta_text(7.0 * 86400.0))
+	check(g.ladder_eta_text(3.0e9) == "8天+", "超大 = 8天+ 封顶")
+	# 道行口径: 飞升后
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 0.0
+	# 初仙->少仙 消耗 1e9, 当前阶段 = 0 (不显示)
+	check(g.ladder_row_eta("dao", 0) == "", "当前道行阶段行无 ETA")
+	check(g.dao_ladder_eta(0) == 0.0, "当前道行阶段累计 = 0")
+	# 少仙 (stage 1) = 1e9
+	check(g.dao_ladder_eta(1) == 1.0e9, "少仙累计 = 1e9 (实际 %s)" % str(g.dao_ladder_eta(1)))
+	# 上仙 (stage 2) = 1e9 + 8e9 = 9e9
+	check(g.dao_ladder_eta(2) == 9.0e9, "上仙累计 = 9e9 (实际 %s)" % str(g.dao_ladder_eta(2)))
+	# 越界
+	check(g.dao_ladder_eta(9) == -1.0, "道行越界 = -1")
+	check(g.ladder_row_eta("dao", 9) == "", "道行越界行无 ETA")
+	# 道祖封顶行: 已达道祖时所有道行行不显示
+	g.dao_level = 8
+	g.dao = 0.0
+	check(g.ladder_row_eta("dao", 8) == "", "道祖当前行无 ETA")
+	check(g.dao_ladder_eta(8) == 0.0, "道祖当前阶段累计 = 0")
+	# 已达成道行阶段标注
+	g.dao_level = 3
+	g.dao = 0.0
+	check(g.ladder_row_eta("dao", 1) == "", "已达成道行阶段无 ETA (UI 显示已达成)")
+	# 未飞升时 道行行 不可达
+	g.ascended = false
+	check(g.ladder_row_eta("dao", 0) == "", "未飞升道行行无 ETA (实际 %s)" % g.ladder_row_eta("dao", 0))
+	# 恢复基准态
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

@@ -201,7 +201,11 @@ func qi_mult_skill_equip() -> float:
 	return 1.0 + passive_bonus("qi_mult") + passive_bonus("all_mult") + equip_bonus("qi_mult")
 
 func breakthrough_cost() -> float:
-	return 10.0 * pow(3.0, realm_idx) * layer
+	return breakthrough_cost_at(realm_idx, layer)
+
+# 指定境界/层的突破消耗 (打磨-33: 阶梯 ETA 路线按此估算, 不改动当前状态)
+func breakthrough_cost_at(r: int, l: int) -> float:
+	return 10.0 * pow(3.0, float(r)) * float(l)
 
 func breakthrough_chance() -> float:
 	return clampf(0.85 - 0.04 * realm_idx + passive_bonus("bt_chance") + equip_bonus("bt_chance"), 0.05, 0.99)
@@ -828,7 +832,11 @@ func use_all_active() -> Dictionary:
 # ================= 打磨-10: 道行 (飞升后目标) =================
 
 func dao_break_cost() -> float:
-	return DAO_BREAK_BASE * pow(DAO_BREAK_GROWTH, dao_level)
+	return dao_break_cost_at(dao_level)
+
+# 指定阶段的道行精进消耗 (打磨-33: 阶梯 ETA 路线按此估算, 不改动当前状态)
+func dao_break_cost_at(d: int) -> float:
+	return DAO_BREAK_BASE * pow(DAO_BREAK_GROWTH, float(d))
 
 func dao_break_chance() -> float:
 	return clampf(0.90 - 0.03 * dao_level + passive_bonus("bt_chance") + equip_bonus("bt_chance"), 0.05, 0.99)
@@ -1083,3 +1091,84 @@ func breakthrough_ready() -> bool:
 			return false
 		return dao >= dao_break_cost()
 	return essence >= breakthrough_cost()
+
+# ---------- 打磨-33: 境界阶梯 ETA 路线 (按当前速率估算各境界/道行阶段累计耗时) ----------
+
+const LADDER_ETA_CAP_SEC := 7.0 * 86400.0   # 显示上限 7 天 (>= 显示"8天+", 防无限期误导)
+
+# 到达某境界(第 1 层)所需的 累计灵气消耗 (当前境界/层之后, 全部突破成功口径; 已含当前层)
+# 返回 -1 = 目标不可达 (越界); 当前/已达成境界 = 0
+func realm_ladder_eta(target_realm: int) -> float:
+	if not ascended:
+		if target_realm < realm_idx or target_realm >= REALMS.size():
+			return -1.0
+		if target_realm == realm_idx:
+			return 0.0
+		var total := 0.0
+		# 当前境界: 从 当前层 逐层突破到 顶层
+		var layers := REALMS[realm_idx]["layers"] as int
+		for l in range(layer, layers + 1):
+			total += breakthrough_cost_at(realm_idx, l)
+		# 中间境界: 第 1 层 逐层突破到 顶层
+		for r in range(realm_idx + 1, target_realm):
+			var ll := REALMS[r]["layers"] as int
+			for l in range(1, ll + 1):
+				total += breakthrough_cost_at(r, l)
+		return total
+	# 已飞升: 凡境阶梯已走完 (全部视为已达成)
+	return 0.0
+
+# 到达某道行阶段所需的 累计道行消耗 (当前阶段之后, 全部精进成功口径)
+# 阶段 d 的精进消耗 = dao_break_cost_at(d) (从 d 升到 d+1); 目标=当前阶段 = 0
+# 返回 -1 = 目标不可达 (越界)
+func dao_ladder_eta(target_stage: int) -> float:
+	if target_stage < dao_level or target_stage >= IMMORTAL_REALMS.size():
+		return -1.0
+	if target_stage == dao_level:
+		return 0.0
+	var total := 0.0
+	for d in range(dao_level, target_stage):
+		total += dao_break_cost_at(d)
+	return total
+
+# 阶梯行 ETA 文本: "" = 已达成/当前 (不显示); "约 X" 按当前速率; "8天+" = 超 7 天显示上限
+# 已达成行 (目标在当前之下) 返回 "" (UI 自行加"已达成"标注)
+func ladder_eta_text(sec: float) -> String:
+	if sec < 0.0 or sec == 0.0:
+		return ""
+	var t := minf(sec, LADDER_ETA_CAP_SEC)
+	if t >= LADDER_ETA_CAP_SEC:
+		return "8天+"
+	if t < 60.0:
+		return "约不足1分"
+	if t < 3600.0:
+		return "约 %d分" % int(t / 60)
+	var d := int(t) / 86400
+	var h := int(t) % 86400 / 3600
+	if d == 0:
+		return "约 %d小时" % h
+	if h > 0:
+		return "约%d天%d小时" % [d, h]
+	return "约%d天" % d
+
+# 境界阶梯行 ETA (修行页右栏; 未飞升=灵气口径, 飞升后=道行口径)
+# 未达成行按当前速率估算 累计耗时 (含当前库存抵扣, 突破失败重耗不建模, tooltip 说明)
+func ladder_row_eta(kind: String, target: int) -> String:
+	var sec := 0.0
+	var r: float = qi_per_sec()
+	if kind == "realm":
+		sec = realm_ladder_eta(target)
+	elif kind == "dao":
+		sec = dao_ladder_eta(target)
+	else:
+		return ""
+	if sec < 0.0:
+		return ""
+	# 当前库存抵扣: 已有灵气/道行 先抵给路线 (估算保守口径: 失败不重耗)
+	var have := dao if kind == "dao" else essence
+	sec = maxf(sec - have, 0.0)
+	if sec == 0.0:
+		return ""
+	if r <= 0.0:
+		return "8天+"   # 无收入防御 (正常恒不触发): 按上限显示, 不误导
+	return ladder_eta_text(sec / r)

@@ -81,9 +81,12 @@ var _shop_eta: Dictionary = {}     # 法器 id -> 购买 ETA 提示标签 (打�
 var _equip_eta: Dictionary = {}    # 装备 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_swap: Dictionary = {}   # 打磨-25: 装备 id -> 换装对比提示标签
 var _eta_acc := 0.0                # 打磨-12: ETA 节流累计 (1 秒刷一次)
+var _eta_ladder_acc := 0.0         # 打磨-33: 阶梯 ETA 节流累计 (1 秒刷一次)
 var _realm_ladder: Array[Label] = []    # 打磨-18: 境界阶梯标签 (金框高亮随当前境界移动)
 var _immortal_ladder: Array[Label] = [] # 打磨-18: 仙界道行阶梯标签
 var _ladder_key := -1                # 打磨-18: 阶梯高亮缓存键 (境界/道行变化才刷)
+var _ladder_eta: Dictionary = {}     # 打磨-33: "realm_N"/"dao_N" -> ETA 提示标签 (青色)
+var _ladder_eta_key := ""            # 打磨-33: ETA 文本快照缓存 (变化才刷)
 
 
 func _ready() -> void:
@@ -281,6 +284,10 @@ func _build_training_page(page: Panel) -> void:
 		var rl := _label("%s × %d 层  (灵气x%s)" % [r["name"], r["layers"], GameData.fmt(GameData.QI_MULT[i])], 14, WHITEISH)
 		rbox.add_child(rl)
 		_realm_ladder.append(rl)
+		# 打磨-33: 阶梯 ETA 路线 (按当前速率估算 累计耗时, 已达成/当前 行不显示)
+		var r_eta := _label("", 12, CYAN)
+		rbox.add_child(r_eta)
+		_ladder_eta["realm_%d" % i] = r_eta
 	# 仙界道行 (飞升后解锁, 每阶灵气 x2)
 	rbox.add_child(_sep())
 	rbox.add_child(_label("仙界道行 (飞升后解锁, 每阶灵气 x%d)" % int(GameData.IMMORTAL_STAGE_MULT), 13, DIM))
@@ -289,10 +296,14 @@ func _build_training_page(page: Panel) -> void:
 		var il := _label("%s  (x%.0f)" % [nm, pow(2.0, float(i))], 14, WHITEISH)
 		rbox.add_child(il)
 		_immortal_ladder.append(il)
-	# 打磨-18: 阶梯高亮随当前境界/道行阶段动态移动 (初始刷一次)
+		var d_eta := _label("", 12, CYAN)
+		rbox.add_child(d_eta)
+		_ladder_eta["dao_%d" % i] = d_eta
+	# 打磨-18: 阶梯高亮随当前境界/道行阶段动态移动 (初始刷一次; 内部连带刷新打磨-33 ETA)
 	_refresh_ladder()
-	var hint := _label("挂机自动积累灵气与灵石, 灵气攒够后点击突破。境界越高, 挂机越快。\n飞升后改修道行: 道行每阶灵气 x2, 直至道祖。", 13, DIM)
+	var hint := _label("挂机自动积累灵气与灵石, 灵气攒够后点击突破。境界越高, 挂机越快。\n飞升后改修道行: 道行每阶灵气 x2, 直至道祖。\n阶梯下青色为按当前速率的累计预计耗时 (8天+ = 超过 7 天上限), 随境界/资源变化更新。", 13, DIM)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.tooltip_text = "境界阶梯 ETA 说明: 按 当前灵气速率 估算从当前状态攒够 各境界/阶段 全部突破资源所需的 累计时间 (含当前已攒部分抵扣, 未计入突破失败重耗; 境界提升后速率加快, 实际只会更快)。超过 7 天显示 8天+。"
 	rbox.add_child(hint)
 
 
@@ -928,6 +939,11 @@ func _refresh() -> void:
 		_refresh_eta()
 	# 打磨-18: 境界阶梯高亮随当前境界/道行阶段移动 (状态变化才刷)
 	_refresh_ladder()
+	# 打磨-33: 境界阶梯 ETA 路线 (1 秒节流, 文本变化才刷)
+	_eta_ladder_acc += get_process_delta_time()
+	if _eta_ladder_acc >= 1.0:
+		_eta_ladder_acc = 0.0
+		_refresh_ladder_eta(false)
 	# 突破/道行精进闪烁: 事件序号变化时触发 (成功绿闪 / 失败红闪, 打磨-10)
 	if g.break_seq != _break_flash_seq:
 		_break_flash_seq = g.break_seq
@@ -1003,6 +1019,53 @@ func _refresh_ladder() -> void:
 	for i in _immortal_ladder.size():
 		var hi2 := g.ascended and i == g.dao_level
 		(_immortal_ladder[i] as Label).add_theme_color_override("font_color", GOLD if hi2 else WHITEISH)
+	# 打磨-33: 境界/阶段变化时 ETA 路线口径变了, 立即重算
+	_refresh_ladder_eta(true)
+
+
+# 打磨-33: 境界阶梯 ETA 路线 (按当前速率估算 各境界/道行阶段 累计耗时; 文本变化才刷)
+# 已达成行显示"已达成" (青色), 当前行不显示 (金色高亮已表达), 未达成行显示"约 X" (超 7 天显示 8天+)
+func _refresh_ladder_eta(force: bool = false) -> void:
+	var g := GameData
+	# 快照键: 境界/层/道行/飞升/速率档/资源档 (变化才重算, 避免每帧 19 行字符串生成)
+	var qi_step := int(ceil(g.qi_per_sec() / 0.5))       # 速率 0.5 档量化 (防浮点抖动)
+	var res_step := int(ceil(primary_progress_value() / 1.0))
+	var key := "%d|%d|%d|%d|%d|%d" % [
+		g.realm_idx, g.layer, g.dao_level, 1 if g.ascended else 0, qi_step, res_step]
+	if not force and key == _ladder_eta_key:
+		return
+	_ladder_eta_key = key
+	for i in _realm_ladder.size():
+		var l: Label = _ladder_eta["realm_%d" % i]
+		var t := ""
+		if not g.ascended:
+			if i < g.realm_idx:
+				t = "已达成 ✓"
+			elif i == g.realm_idx:
+				t = ""
+			else:
+				t = g.ladder_row_eta("realm", i)
+		else:
+			t = "已达成 ✓"
+		if l.text != t:
+			l.text = t
+	for i in _immortal_ladder.size():
+		var l2: Label = _ladder_eta["dao_%d" % i]
+		var t2 := ""
+		if g.ascended:
+			if i < g.dao_level:
+				t2 = "已达成 ✓"
+			elif i == g.dao_level:
+				t2 = ""
+			else:
+				t2 = g.ladder_row_eta("dao", i)
+		if l2.text != t2:
+			l2.text = t2
+
+
+# 打磨-33: 当前主资源进度值 (ETA 快照键用; 未飞升=灵气, 飞升后=道行)
+func primary_progress_value() -> float:
+	return GameData.dao if GameData.ascended else GameData.essence
 
 
 func _make_card_sb(hi: bool) -> StyleBoxFlat:
