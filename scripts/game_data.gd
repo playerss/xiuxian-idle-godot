@@ -349,6 +349,58 @@ func ach_progress(id: String) -> String:
 				return "当前 %s / 目标 %s" % [realm_name(), REALMS[need]["name"]]
 	return ""
 
+# 打磨-39: 未解锁成就进度比例 0..1 (只读估算, 供成就页排序; 口径与 ach_progress 一致, 未知 id = 0)
+func ach_progress_ratio(id: String) -> float:
+	match id:
+		"ascend_immortal":
+			return 1.0 if ascended else 0.0
+		"first_break":
+			return 1.0 if (realm_idx > 0 or layer > 1) else 0.0
+		"first_item":
+			return 1.0 if owned.size() >= 1 else 0.0
+		"skill_10":
+			return minf(float(learned.size()), 10.0) / 10.0
+		"skill_50":
+			return minf(float(learned.size()), 50.0) / 50.0
+		"equip_first":
+			return 1.0 if owned_eq.size() >= 1 else 0.0
+		"equip_10":
+			return minf(float(owned_eq.size()), 10.0) / 10.0
+		"rich_100k":
+			return minf(stones, 100000.0) / 100000.0
+		"dao_zuzi":
+			if not ascended:
+				return 0.0
+			return float(dao_level) / float(IMMORTAL_REALMS.size() - 1)
+		_:
+			var need: int = ACH_REALM_IDX.get(id, -1)
+			if need < 0:
+				return 0.0
+			return minf(float(realm_idx), float(need)) / float(need)
+	return 0.0
+
+# 打磨-39: 成就页排序 (已解锁在前 / 未解锁按进度比例降序, 比例相同按 id 升序稳定)
+# 排序键 [未解锁 0/1, -进度比例, id], sort_custom 升序比较
+func ach_sort_cmp(a: String, b: String) -> bool:
+	var da: int = int(not ach_done.has(a))
+	var db: int = int(not ach_done.has(b))
+	if da != db:
+		return da < db
+	if da == 0:  # 已解锁段: 按 id 稳定
+		return a < b
+	var ra: float = ach_progress_ratio(a)
+	var rb: float = ach_progress_ratio(b)
+	if ra != rb:
+		return ra > rb
+	return a < b
+
+func ach_sort_order() -> Array:
+	var out: Array = []
+	for id in ach_ids:
+		out.append(id)
+	out.sort_custom(ach_sort_cmp)
+	return out
+
 # 打磨-17: 自 prev 以来新解锁的成就 (UI 浮动提示用; 存档带来的旧解锁不当作"新")
 # prev 用非类型 Array: 调用方 (含 -s 脚本/存档恢复) 可能传入未类型化数组, 类型化参数会运行时报错
 func new_ach_since(prev: Array) -> Array[String]:

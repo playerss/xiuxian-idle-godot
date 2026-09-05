@@ -77,6 +77,7 @@ var _ach_box: VBoxContainer
 var _ach_rows: Dictionary = {}      # 成就 id -> {row, name_l, desc_l, prog_l}
 var _ach_count_label: Label
 var _ach_hl_seq := 0               # 成就解锁总数缓存 (变化时才刷样式)
+var _ach_states: Array = []           # 打磨-39: 上帧成就排序键快照 (变化才重排)
 var _collect_label: Label           # 打磨-28: 成就页顶栏 收集进度一览
 var _collect_text := ""            # 收集文本缓存 (变化时才刷)
 var _bonus_labels: Array[Label] = []  # 技能/装备页顶栏 总加成汇总标签 (打磨-9)
@@ -985,6 +986,8 @@ func _refresh() -> void:
 		var pt: String = g.ach_progress(id)
 		if pl2.text != pt:
 			pl2.text = pt
+	# 打磨-39: 成就页按解锁状态排序 (排序键变化才重排; 解锁/进度变化触发)
+	_resort_ach()
 	# 打磨-28: 收集进度一览 (技能/装备/法器/成就 收集数变化才刷)
 	var ct: String = g.collect_summary_text()
 	if ct != _collect_text:
@@ -1041,6 +1044,17 @@ func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
 		return
 	row.set_meta("_hl", hi)
 	row.add_theme_stylebox_override("panel", _card_sb_hi if hi else _card_sb_normal)
+
+
+# 打磨-39: 成就页按解锁状态排序 (已解锁在前, 未解锁按进度降序; 排序键变化才重排, 避免每帧 17 行重排)
+func _resort_ach() -> void:
+	var order: Array = GameData.ach_sort_order()
+	if _ach_states == order:
+		return
+	_ach_states = order
+	for idx in order.size():
+		var row: Node = _ach_rows[order[idx]]["row"]
+		_ach_box.move_child(row, _ach_box.get_child_count() - 1)
 
 
 # 打磨-12: 刷新法器/装备行的购买 ETA (买不起才显示预计时间, 买得起隐藏)

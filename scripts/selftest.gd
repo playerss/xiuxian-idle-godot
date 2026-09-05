@@ -1476,6 +1476,95 @@ func _init() -> void:
 	g.learned.clear()
 	for _s37b in g.SLOTS:
 		g.equipped.erase(_s37b)
+	# ---------- 打磨-39: 成就页按解锁状态排序 (ach_progress_ratio / ach_sort_cmp / ach_sort_order) ----------
+	# 受控基准: 未飞升, 练气第1层, 无学/无购/无灵石, 无已解锁
+	g.ach_done.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.stones = 0.0
+	# ach_progress_ratio: 各类口径 (与 ach_progress 展示一致, 0..1)
+	check(g.ach_progress_ratio("ascend_immortal") == 0.0, "ratio 未飞升=0 (实际 %s)" % g.ach_progress_ratio("ascend_immortal"))
+	check(g.ach_progress_ratio("first_break") == 0.0, "ratio 未突破=0 (练气第1层)")
+	check(g.ach_progress_ratio("rich_100k") == 0.0, "ratio 灵石0=0")
+	check(g.ach_progress_ratio("skill_10") == 0.0, "ratio 未学=0")
+	check(g.ach_progress_ratio("skill_50") == 0.0, "ratio 未学=0")
+	check(g.ach_progress_ratio("equip_10") == 0.0, "ratio 未购=0")
+	check(g.ach_progress_ratio("dao_zuzi") == 0.0, "ratio 未飞升道祖=0")
+	check(g.ach_progress_ratio("realm_jindan") == 0.0, "ratio 境界成就 练气/金丹 = 0")
+	check(absf(g.ach_progress_ratio("realm_dujie")) < 1e-9, "ratio 境界成就 练气/渡劫 = 0")
+	# 进度推进: 境界提升 / 灵石 / 学技能 / 购装备 / 道行
+	g.realm_idx = 2  # 金丹
+	check(absf(g.ach_progress_ratio("realm_jindan") - 1.0) < 1e-9, "ratio 金丹成就=1 (realm_idx=2)")
+	check(absf(g.ach_progress_ratio("realm_dujie") - 2.0 / 8.0) < 1e-9, "ratio 渡劫成就=2/8 (realm_idx=2)")
+	check(absf(g.ach_progress_ratio("realm_zhuji") - 1.0) < 1e-9, "ratio 筑基成就=1 (realm_idx=2)")
+	g.stones = 50000.0
+	check(absf(g.ach_progress_ratio("rich_100k") - 0.5) < 1e-9, "ratio 灵石5万=0.5")
+	g.stones = 200000.0
+	check(absf(g.ach_progress_ratio("rich_100k") - 1.0) < 1e-9, "ratio 灵石封顶=1")
+	g.learned.append("sword_0_0")
+	g.learned.append("sword_0_1")
+	check(absf(g.ach_progress_ratio("skill_10") - 0.2) < 1e-9, "ratio 学2技能=0.2")
+	check(absf(g.ach_progress_ratio("skill_50") - 2.0 / 50.0) < 1e-9, "ratio 学2技能 50档=0.04")
+	g.owned_eq.append("weapon_0_0")
+	g.owned_eq.append("robe_0_0")
+	check(absf(g.ach_progress_ratio("equip_10") - 0.2) < 1e-9, "ratio 购2装备=0.2")
+	g.owned.append("wooden_sword")
+	check(absf(g.ach_progress_ratio("first_item") - 1.0) < 1e-9, "ratio 有法器=1")
+	g.ascended = true
+	check(absf(g.ach_progress_ratio("ascend_immortal") - 1.0) < 1e-9, "ratio 已飞升=1")
+	g.dao_level = 4
+	check(absf(g.ach_progress_ratio("dao_zuzi") - 4.0 / 8.0) < 1e-9, "ratio 道行4/8=0.5")
+	# ach_sort_order: 未解锁时 按进度降序 (比例相同按 id 升序)
+	g.ascended = false
+	g.dao_level = 0
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 0.0
+	var ord39: Array = g.ach_sort_order()
+	# 全 0 进度 -> 按 id 升序 (首个应为字典序最小 id "ascend_immortal")
+	check(ord39.size() == g.ach_ids.size(), "sort_order 数量=17 (实际 %d)" % ord39.size())
+	check(str(ord39[0]) == "ascend_immortal", "sort_order 全0进度按 id 升序首项 (实际 %s)" % ord39[0])
+	# 部分进度: 设 金丹 境界 + 5万灵石 + 2 技能 -> 部分成就有进度
+	g.realm_idx = 2
+	g.stones = 50000.0
+	g.learned.append("sword_0_0")
+	g.learned.append("sword_0_1")
+	ord39 = g.ach_sort_order()
+	# 进度最高的 (first_break/realm_jindan/realm_zhuji 均=1.0) 应在最前, 首项 ratio 必为 1.0
+	var top39: String = str(ord39[0])
+	check(absf(g.ach_progress_ratio(top39) - 1.0) < 1e-9, "sort_order 进度最高在前 (首项 %s ratio=1.0)" % top39)
+	# 已解锁恒在已解锁段 (id 稳定)
+	g.ach_done.clear()
+	g.ach_done.append("rich_100k")
+	g.ach_done.append("skill_10")
+	ord39 = g.ach_sort_order()
+	check(str(ord39[0]) == "rich_100k" and str(ord39[1]) == "skill_10", "sort_order 已解锁在前且按 id (实际 %s/%s)" % [ord39[0], ord39[1]])
+	# 未解锁段仍在后
+	var done_n39: int = g.ach_done.size()
+	for i in done_n39:
+		check(g.ach_done.has(str(ord39[i])), "sort_order 前%d为已解锁 (idx %d)" % [done_n39, i])
+	# 未知 id 防御
+	check(g.ach_progress_ratio("__nope__") == 0.0, "ratio 未知 id=0")
+	# 恢复基准态
+	g.ach_done.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 0.0
+	g.learned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.owned.clear()
+	g.owned_eq.clear()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
