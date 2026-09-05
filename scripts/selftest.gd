@@ -1355,6 +1355,76 @@ func _init() -> void:
 	g.essence = 0.0
 	g.dao = 0.0
 
+	# ---------- 打磨-37: 成功率构成 tooltip (primary_break_chance_parts / primary_break_chance_tip) ----------
+	# 直接操作状态 (绕过 境界门槛, 不受前面场景残留影响): 清空功法/装备
+	g.learned.clear()
+	for _s37 in g.SLOTS:
+		g.equipped.erase(_s37)
+	# 基准: 练气 基础 85%, 无加成无钳制, 与 primary_break_chance 一致
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	var p37: Dictionary = g.primary_break_chance_parts()
+	check(absf(float(p37["base"]) - 0.85) < 1e-9, "构成 基准 base = 0.85 (实际 %s)" % p37["base"])
+	check(absf(float(p37["skill"])) < 1e-9 and absf(float(p37["equip"])) < 1e-9, "构成 基准 skill/equip = 0 (实际 %s/%s)" % [p37["skill"], p37["equip"]])
+	check(absf(float(p37["clamp"])) < 1e-9, "构成 基准 clamp = 0 (实际 %s)" % p37["clamp"])
+	check(absf(float(p37["chance"]) - 0.85) < 1e-9, "构成 基准 chance = 0.85 (实际 %s)" % p37["chance"])
+	check(not bool(p37["cap"]), "构成 基准 cap = false (实际 %s)" % p37["cap"])
+	check(g.primary_break_chance_tip() == "突破成功率 85% 构成:\n· 境界 (练气) 基础 85%\n· 功法 +0.0%\n· 装备 +0.0%\n→ 85% (受控区间 5%~99%)",
+		"构成 tooltip 基准 (实际 %s)" % g.primary_break_chance_tip())
+	check(absf(g.primary_break_chance() - 0.85) < 1e-9, "构成 与 primary_break_chance 一致 (基准)")
+	# 功法 石剑意 +7.0% -> 92% (直接挂 learned, 不受 境界 限制)
+	g.learned.append("sword_0_2")
+	p37 = g.primary_break_chance_parts()
+	check(absf(float(p37["skill"]) - 0.07) < 1e-9, "构成 功法 skill = 0.07 (实际 %s)" % p37["skill"])
+	check(absf(float(p37["chance"]) - 0.92) < 1e-9, "构成 功法 chance = 0.92 (实际 %s)" % p37["chance"])
+	check(g.primary_break_chance_tip().find("· 功法 +7.0%") >= 0 and g.primary_break_chance_tip().find("→ 92%") >= 0,
+		"构成 tooltip 功法 +7.0%% -> 92%% (实际 %s)" % g.primary_break_chance_tip())
+	# 装备 灵剑 +0.5% -> 92.5% -> "93%" 舍入
+	g.equipped["weapon"] = "weapon_1_0"
+	p37 = g.primary_break_chance_parts()
+	check(absf(float(p37["equip"]) - 0.005) < 1e-9, "构成 装备 equip = 0.005 (实际 %s)" % p37["equip"])
+	check(absf(float(p37["chance"]) - 0.925) < 1e-9, "构成 装备 chance = 0.925 (实际 %s)" % p37["chance"])
+	var tip37: String = g.primary_break_chance_tip()
+	check(tip37.find("突破成功率 93%") >= 0 and tip37.find("· 功法 +7.0%") >= 0 and tip37.find("· 装备 +0.5%") >= 0 and tip37.find("→ 93%") >= 0,
+		"构成 tooltip 92.5%% 舍入 93%% (实际 %s)" % tip37)
+	# 高境界 基础值变化: 渡劫(第8) 基础 53%, 功法+装备 不变 -> 53+7+0.5 = 60.5% -> 61%
+	g.realm_idx = 8
+	p37 = g.primary_break_chance_parts()
+	check(absf(float(p37["base"]) - 0.53) < 1e-9, "构成 渡劫 base = 0.53 (实际 %s)" % p37["base"])
+	check(absf(float(p37["chance"]) - 0.605) < 1e-9, "构成 渡劫 chance = 0.605 (实际 %s)" % p37["chance"])
+	check(g.primary_break_chance_tip().find("· 境界 (渡劫) 基础 53%") >= 0,
+		"构成 tooltip 渡劫 基础 53%% (实际 %s)" % g.primary_break_chance_tip())
+	# 构造上限钳制: 混元(第7) 基础 69% + 圣剑意 74% + 灵剑 0.5% = 143.5% -> 钳制 99%
+	g.ascended = true
+	g.dao_level = 7
+	g.realm_idx = 0
+	g.learned.append("sword_5_2")
+	p37 = g.primary_break_chance_parts()
+	check(absf(float(p37["base"]) - 0.69) < 1e-9, "构成 混元 base = 0.69 (实际 %s)" % p37["base"])
+	check(absf(float(p37["skill"]) - 0.81) < 1e-9, "构成 混元 skill = 0.81 (74+7) (实际 %s)" % p37["skill"])
+	check(absf(float(p37["chance"]) - 0.99) < 1e-9, "构成 上限钳制 chance = 0.99 (实际 %s)" % p37["chance"])
+	check(float(p37["clamp"]) < 0.0, "构成 上限钳制 clamp < 0 (实际 %s)" % p37["clamp"])
+	tip37 = g.primary_break_chance_tip()
+	check(tip37.find("已钳制") >= 0 and tip37.find("道行精进成功率 99%") >= 0 and tip37.find("· 阶段 (混元) 基础 69%") >= 0 and tip37.find("→ 99%") >= 0,
+		"构成 tooltip 上限钳制 (实际 %s)" % tip37)
+	# 道祖封顶: cap 圆满, tooltip 无失败风险
+	g.dao_level = 8
+	p37 = g.primary_break_chance_parts()
+	check(bool(p37["cap"]), "构成 道祖 cap = true (实际 %s)" % p37["cap"])
+	check(absf(float(p37["chance"]) - 1.0) < 1e-9, "构成 道祖 chance = 1.0 (实际 %s)" % p37["chance"])
+	check(g.primary_break_chance_tip() == "已至道祖 · 道法自然 ♪\n道行圆满, 无失败风险。",
+		"构成 tooltip 道祖封顶 (实际 %s)" % g.primary_break_chance_tip())
+	# 恢复基准态
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.learned.clear()
+	for _s37b in g.SLOTS:
+		g.equipped.erase(_s37b)
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

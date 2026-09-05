@@ -1070,6 +1070,43 @@ func primary_break_chance_text() -> String:
 	var pct := int(round(primary_break_chance() * 100.0))
 	return ("道行精进成功率 %d%%" if ascended else "突破成功率 %d%%") % pct
 
+# ---------- 打磨-37: 成功率构成 tooltip (成功率行的 +N% 来自哪) ----------
+
+# 主突破成功率构成: base=境界(阶段)基础, skill/equip=功法/装备加成,
+# clamp=钳制修正 (非0=被 5%~99% 受控区间钳制), chance=最终值 (与 primary_break_chance 一致),
+# cap=道祖封顶 (圆满, 无失败风险)
+func primary_break_chance_parts() -> Dictionary:
+	if ascended and dao_level >= IMMORTAL_REALMS.size() - 1:
+		return {"base": 1.0, "skill": 0.0, "equip": 0.0, "clamp": 0.0, "chance": 1.0, "cap": true}
+	var base := (0.90 - 0.03 * float(dao_level)) if ascended else (0.85 - 0.04 * float(realm_idx))
+	var sk := passive_bonus("bt_chance")
+	var eq := equip_bonus("bt_chance")
+	var raw := base + sk + eq
+	var ch := clampf(raw, 0.05, 0.99)
+	return {"base": base, "skill": sk, "equip": eq, "clamp": ch - raw, "chance": ch, "cap": false}
+
+# 有符号百分比文本 (0 -> "+0.0%", 非0 -> "+5.0%"/"-1.5%")
+func _signed_pct(v: float) -> String:
+	if absf(v) < 0.005:
+		return "+0.0%"
+	return "%+.1f%%" % (v * 100.0)
+
+# 成功率构成 tooltip 文本 (成功率行动态展示; 境界/阶段/功法装备变化才变)
+func primary_break_chance_tip() -> String:
+	var p: Dictionary = primary_break_chance_parts()
+	if bool(p["cap"]):
+		return "已至道祖 · 道法自然 ♪\n道行圆满, 无失败风险。"
+	var stage_name: String = (IMMORTAL_REALMS[dao_level] if ascended else (REALMS[realm_idx]["name"] as String))
+	var prefix: String = "道行精进成功率" if ascended else "突破成功率"
+	var pct := int(round(float(p["chance"]) * 100.0))
+	var base_pct := int(round(float(p["base"]) * 100.0))
+	var stage_word: String = "阶段" if ascended else "境界"
+	var tail := "→ %d%% (受控区间 5%%~99%%" % pct
+	if float(p["clamp"]) != 0.0:
+		tail += " · 已钳制"
+	return "%s %d%% 构成:\n· %s (%s) 基础 %d%%\n· 功法 %s\n· 装备 %s\n%s)" % [
+		prefix, pct, stage_word, stage_name, base_pct, _signed_pct(float(p["skill"])), _signed_pct(float(p["equip"])), tail]
+
 # ---------- 打磨-31: 下一目标提示 (修行页: 玩家下一步该做什么) ----------
 
 # 下一目标文本 (未飞升=攒灵气突破到下一层/境界, 飞升后=道行精进; 已至道祖=圆满)
