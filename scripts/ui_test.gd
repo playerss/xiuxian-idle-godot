@@ -1,6 +1,7 @@
 extends Node
 ## 打磨-40: 成就页进度条 UI 断言 (headless 可跑, scene 模式带 autoload GameData/Steam)
 ## 打磨-41: 技能/装备/法器 行首品质色竖条断言 (存在/首子节点/颜色与数据 tier 或价格档一致)
+## 打磨-42: 成就页顶栏收集进度一览 mini 进度条断言 (4 条节点/0 填充/满态金/半态比例/节流缓存)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
@@ -61,8 +62,10 @@ func _ready() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	_assert_initial()
+	await _assert_collect_bars_initial()
 	_mutate_state()
 	await _assert_tier_bars()
+	await _assert_collect_bars_mutated()
 	_finish()
 
 
@@ -85,6 +88,43 @@ func _assert_initial() -> void:
 		var rown: Node = r["row"]
 		check(rown.tooltip_text.find("进度: 0%") >= 0, "成就 %s tooltip 含 进度: 0%% (实际 %s)" % [id, rown.tooltip_text])
 	check(str(ui._ach_count_label.text) == "成就 0/%d" % g.ach_ids.size(), "顶栏成就计数 0/%d (实际 %s)" % [g.ach_ids.size(), ui._ach_count_label.text])
+
+
+# 打磨-42: 初始态 (全新档, 成就页): 4 条收集进度条, 节点齐全/0 填充/青色/计数文本/tooltip + 节流缓存 (同态再刷不重写)
+func _assert_collect_bars_initial() -> void:
+	var g := GameData
+	check(ui._collect_items.size() == 4, "收集进度 4 类节点齐全 (实际 %d)" % ui._collect_items.size())
+	var expect_txt := {"skill": "技能 0/%d" % g.skill_ids.size(), "equip": "装备 0/%d" % g.equip_ids.size(),
+		"item": "法器 0/10", "ach": "成就 0/%d" % g.ach_ids.size()}
+	for k in expect_txt:
+		var it: Dictionary = ui._collect_items.get(k, {})
+		check(it.has("label") and it.has("bar_bg") and it.has("bar_fill"), "收集 %s 节点 (label/bar_bg/bar_fill) 存在" % k)
+		if it.is_empty() or not it.has("bar_bg"):
+			continue
+		var bg: ColorRect = it["bar_bg"]
+		var fill: ColorRect = it["bar_fill"]
+		check(int(bg.size.x) > 0, "收集 %s 进度条背景布局宽>0 (实际 %d)" % [k, int(bg.size.x)])
+		check(bg.size.y >= 5.0, "收集 %s 进度条高>=5 (实际 %.0f)" % [k, bg.size.y])
+		check(int(fill.size.x) == 0, "收集 %s 初始 0 填充 (实际 %d)" % [k, int(fill.size.x)])
+		check(fill.color == ui.CYAN, "收集 %s 初始填充色=青" % k)
+		check(str((it["label"] as Label).text) == expect_txt[k], "收集 %s 计数文本 (实际 %s)" % [k, str(it["label"].text)])
+		var lc: Color = (it["label"] as Label).get_theme_color("font_color")
+		check(lc == ui.CYAN, "收集 %s 未集齐 文字色=青" % k)
+	check(ui._collect_box.tooltip_text.find("全局收集进度") >= 0, "收集进度 tooltip 说明 (实际 %s)" % ui._collect_box.tooltip_text)
+	check(str(ui._collect_text).find("收集进度") >= 0 and str(ui._collect_text).find("(总 0/287)") >= 0, "收集汇总文本含 总 0/287 (实际 %s)" % str(ui._collect_text))
+	# 节流: 同态再刷两帧, 缓存键不变 (不重写)
+	var keys_before := {}
+	for k in expect_txt:
+		keys_before[k] = str(ui._collect_items[k].get("q", ""))
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	await get_tree().process_frame
+	var stable := true
+	for k in expect_txt:
+		if str(ui._collect_items[k].get("q", "")) != keys_before[k]:
+			stable = false
+	check(stable, "收集进度 同态再刷 缓存键不变 (节流生效)")
 
 
 # 状态变化: 境界金丹+5万灵石+2技能+2装备+法器 -> 6 成就解锁 (金满条/100%) + 部分进度条按 ratio 填充 + 排序已解锁在前
@@ -133,6 +173,51 @@ func _mutate_state() -> void:
 		if not (node as PanelContainer).get_meta("_hl", false):
 			all_ok = false
 	check(all_ok, "排序 前 %d 行均为已解锁 (金框)" % done.size())
+
+
+# 打磨-42: 变化态 (2技能+2装备+1法器+5成就): 4 条同步计数 + 1% 档填充 + 青色 (未满); 再学全技能/全法器 -> 满态金 (金/青混合二态)
+func _assert_collect_bars_mutated() -> void:
+	var g := GameData
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就"}
+	var expect := {"skill": [2, g.skill_ids.size()], "equip": [2, g.equip_ids.size()],
+		"item": [1, 10], "ach": [5, g.ach_ids.size()]}
+	for k in expect:
+		var it: Dictionary = ui._collect_items.get(k, {})
+		if it.is_empty():
+			continue
+		var got: int = int(expect[k][0])
+		var tot: int = int(expect[k][1])
+		var q: int = int(ceil(clampf(float(got) / float(tot), 0.0, 1.0) * 100.0))
+		var bg: ColorRect = it["bar_bg"]
+		var fill: ColorRect = it["bar_fill"]
+		check(str((it["label"] as Label).text) == "%s %d/%d" % [names[k], got, tot], "收集 %s 计数文本 (实际 %s)" % [k, str((it["label"] as Label).text)])
+		check(int(fill.size.x) == int(bg.size.x * float(q) / 100.0), "收集 %s 填充=1%%档 %d%% (fill=%d bg=%d)" % [k, q, int(fill.size.x), int(bg.size.x)])
+		check(fill.color == ui.CYAN, "收集 %s 未满填充色=青" % k)
+		check((it["label"] as Label).get_theme_color("font_color") == ui.CYAN, "收集 %s 未满文字色=青" % k)
+	check(str(ui._collect_text).find("(总 10/287)") >= 0, "收集汇总文本含 总 10/287 (实际 %s)" % str(ui._collect_text))
+	# 满态: 学全技能 + 全法器 -> 技能/法器 满条金色, 装备/成就 仍青色 (金/青 混合二态)
+	g.learned.clear()
+	for sid in g.skill_ids:
+		g.learned.append(sid)
+	g.owned.clear()
+	for itm in g.ITEMS:
+		g.owned.append(str(itm["id"]))
+	ui._refresh()
+	for k in ["skill", "item"]:
+		var it: Dictionary = ui._collect_items[k]
+		var bg: ColorRect = it["bar_bg"]
+		var fill: ColorRect = it["bar_fill"]
+		check(int(fill.size.x) == int(bg.size.x), "收集 %s 满条 (fill=%d bg=%d)" % [k, int(fill.size.x), int(bg.size.x)])
+		check(fill.color == ui.GOLD, "收集 %s 满态金色" % k)
+		check((it["label"] as Label).get_theme_color("font_color") == ui.GOLD, "收集 %s 满态文字金" % k)
+		check(str((it["label"] as Label).text) == "%s %d/%d" % [names[k], int(expect[k][1]), int(expect[k][1])], "收集 %s 满态计数 (实际 %s)" % [k, str((it["label"] as Label).text)])
+	for k in ["equip", "ach"]:
+		var it: Dictionary = ui._collect_items[k]
+		check((it["bar_fill"] as ColorRect).color == ui.CYAN, "收集 %s 未满分态保持青" % k)
+	check(str(ui._collect_text).find("(总 137/287)") >= 0, "满态汇总文本含 总 137/287 (实际 %s)" % str(ui._collect_text))
 
 
 # 打磨-41: 技能/装备/法器 行首品质色竖条 (120+140+10 行, 颜色与 数据tier/价格档 一致)
