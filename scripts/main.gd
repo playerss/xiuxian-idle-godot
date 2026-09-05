@@ -3,6 +3,7 @@ extends Control
 ## 打磨-41: 技能/装备/法器 行首 4px 品质色竖条 (技能 tier 0..5 / 装备 tier 0..6 / 法器按价格档: 凡灰·玄蓝·仙紫·神金)
 ## 打磨-42: 成就页顶栏收集进度一览 mini 进度条 (4 类横排, 满=金/未满=青, 比例 1% 量化档才刷)
 ## 打磨-44: 收集进度一览 点击直达 (技能/装备/法器 点击切对应 Tab+重置筛选, 总计弹口径提示; 纯导航无存档/统计副作用)
+## 打磨-46: 一键系列按钮 tooltip 统一口径 (动作与顺序 / 筛选叠加与作用范围 / 按钮计数口径, 5 按钮)
 
 const BG := Color(0.07, 0.08, 0.11)
 const PANEL_BG := Color(0.12, 0.13, 0.18)
@@ -311,7 +312,8 @@ func _build_training_page(page: Panel) -> void:
 	item_head.add_child(item_sp)
 	_items_buy_btn = _make_button("一键购买")
 	_items_buy_btn.pressed.connect(_on_items_buy_all)
-	_items_buy_btn.tooltip_text = "按价格升序连续买下当前灵石买得起的全部法器, 灵石花到买不起为止。"
+	# 打磨-46: 统一口径 tooltip (动作顺序 / 筛选叠加 / 计数口径)
+	_items_buy_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止。\n不受筛选影响 (全局口径); 购入后法器加成直接生效。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。"
 	item_head.add_child(_items_buy_btn)
 	# 打磨-13: 法器列表可滚动 (10 件避免低分辨率下超出屏幕)
 	var shop_scroll := ScrollContainer.new()
@@ -448,11 +450,14 @@ func _build_skill_page(page: Panel) -> void:
 	tier_bar.add_child(tier_sp)
 	_learn_all_btn = _make_button("一键领悟")
 	_learn_all_btn.pressed.connect(_on_learn_all)
+	# 打磨-46: 统一口径 tooltip (动作与条件 / 筛选叠加 / 计数口径)
+	_learn_all_btn.tooltip_text = "批量领悟 当前境界/层数足够 的 未学 技能 (境界足够且未领悟)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的); 不消耗资源; 已领悟的不重复领悟。\n按钮计数 = 筛选范围内可执行技能数 (与实际执行数一致)。"
 	tier_bar.add_child(_learn_all_btn)
 	# 打磨-30: 一键施展 (释放所有 已学+冷却完毕 的主动神通)
 	_active_all_btn = _make_button("一键施展")
 	_active_all_btn.pressed.connect(_on_active_all)
-	_active_all_btn.tooltip_text = "释放所有已领悟且冷却完毕的主动神通, 一次全部爆发; 施展后各自进入冷却。"
+	# 打磨-46: 统一口径 tooltip (动作与顺序 / 爆发口径 / 计数口径)
+	_active_all_btn.tooltip_text = "一次释放所有 已领悟 且 冷却完毕 的主动神通, 各自爆发 (爆发获得 = 当前灵气速率 x 爆发秒数; 飞升后改为获得道行)。\n施展后各自进入冷却; 未领悟或冷却中的不计入, 不受筛选影响 (全局口径)。\n按钮计数 = 当前可施展 (就绪) 的主动神通数。"
 	tier_bar.add_child(_active_all_btn)
 	# 打磨-38: 只看可学 开关 (与 类别/品质 筛选 AND 叠加: 过滤境界/层不足的未学技能, 已学恒显示在最前)
 	_learnable_btn = _make_button("只看可学")
@@ -710,11 +715,14 @@ func _build_equip_page(page: Panel) -> void:
 	eq_tier_bar.add_child(eq_sp)
 	_buy_all_btn = _make_button("一键购买")
 	_buy_all_btn.pressed.connect(_on_buy_all)
+	# 打磨-46: 统一口径 tooltip (动作顺序 / 自动穿戴规则 / 计数口径)
+	_buy_all_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。"
 	eq_tier_bar.add_child(_buy_all_btn)
 	# 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件, 补 一键购买 只穿首件 的缺口)
 	_equip_best_btn = _make_button("一键最佳")
 	_equip_best_btn.pressed.connect(_on_equip_best)
-	_equip_best_btn.tooltip_text = "各部位自动穿上已拥有的最佳装备 (按 灵气+灵石 主属性, 再突破/离线 综合比较)。"
+	# 打磨-46: 统一口径 tooltip (最佳判定 / 作用范围 / 计数口径)
+	_equip_best_btn.tooltip_text = "各部位自动换上 已拥有 的最佳装备: 主属性 (灵气% + 灵石%) > 突破率 > 离线效率 (id 兜底, 确定性)。\n仅变更 尚未最佳 的槽位; 无拥有件不受影响; 已最佳 = 0 变更 (幂等), 不受 部位/品质 筛选影响 (全局口径)。\n按钮计数 = 可换上更好拥有件的部位槽位数。"
 	eq_tier_bar.add_child(_equip_best_btn)
 
 	# 装备列表 (已拥有=穿戴, 未拥有=购买)

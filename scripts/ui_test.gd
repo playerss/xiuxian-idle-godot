@@ -7,6 +7,8 @@ extends Node
 ##          法器区金边高亮+自动恢复/无存档统计副作用/总计不切页)
 ## 打磨-45: 一键系列统一浮动反馈断言 (变更>0 屏幕中央绿色浮动含数量/0 变更不弹/幂等再点不弹/
 ##          文案/计数/颜色/无 essence 副作用, 5 按钮逐一+重复点击)
+## 打磨-46: 一键系列按钮 tooltip 统一口径断言 (5 按钮 3 行结构: 动作顺序/筛选叠加/计数口径 +
+##          各按钮关键口径词: 境界条件/爆发口径/自动穿戴/最佳判定链/幂等/全局口径)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
@@ -73,6 +75,7 @@ func _ready() -> void:
 	await _assert_collect_bars_mutated()
 	await _assert_collect_jump()
 	await _assert_onekey_float()
+	_assert_onekey_tooltips()
 	_finish()
 
 
@@ -537,6 +540,49 @@ func onekey_assert(expect_text: String, c_before: int) -> void:
 	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "一键 浮动文字=绿")
 	check(absf(fl.position.y + 26.0) < 0.5, "一键 浮动位置复位 y≈-26 (实际 %.2f)" % fl.position.y)
 	check(fl.modulate.a > 0.9, "一键 浮动可见 (alpha=%.2f)" % fl.modulate.a)
+
+
+# 打磨-46: 一键系列按钮 tooltip 统一口径 — 5 按钮 (一键领悟/一键施展/法器一键购买/装备一键购买/
+# 一键最佳) tooltip 统一 3 行: 动作与顺序 / 筛选叠加与作用范围 / 按钮计数口径
+# tooltip 为构建时静态文本 (不随状态刷新), 此处断言 3 行结构 + 各按钮关键口径词
+func _assert_onekey_tooltips() -> void:
+	var btns: Dictionary = {
+		"learn": ui._learn_all_btn,
+		"active": ui._active_all_btn,
+		"item": ui._items_buy_btn,
+		"buy": ui._buy_all_btn,
+		"best": ui._equip_best_btn,
+	}
+	for key in btns:
+		var b: Button = btns[key]
+		var tip: String = str(b.tooltip_text)
+		var lines: PackedStringArray = tip.split("\n")
+		check(tip.length() > 20, "一键系列 tooltip 非空 (%s)" % key)
+		check(lines.size() == 3, "一键系列 tooltip 三行结构 (%s, 实际 %d)" % [key, lines.size()])
+		check(lines.size() >= 3 and lines[2].begins_with("按钮计数 ="), "一键系列 tooltip 第3行=计数口径 (%s)" % key)
+	# 一键领悟: 境界条件 + 筛选 AND 叠加 + 不耗资源
+	var t_learn: String = str(ui._learn_all_btn.tooltip_text)
+	check(t_learn.contains("境界/层数足够"), "一键领悟 tooltip 含 境界/层数足够 条件")
+	check(t_learn.contains("AND 叠加"), "一键领悟 tooltip 含 类别/品质 筛选 AND 叠加口径")
+	check(t_learn.contains("不消耗资源"), "一键领悟 tooltip 含 不消耗资源")
+	# 一键施展: 就绪口径 + 爆发口径 + 飞升后道行
+	var t_active: String = str(ui._active_all_btn.tooltip_text)
+	check(t_active.contains("冷却完毕"), "一键施展 tooltip 含 冷却完毕 口径")
+	check(t_active.contains("当前灵气速率 x 爆发秒数"), "一键施展 tooltip 含 爆发=速率x秒数 口径")
+	check(t_active.contains("飞升后改为获得道行"), "一键施展 tooltip 含 飞升后道行 说明")
+	# 装备一键购买: 购买顺序 + 自动穿戴规则
+	var t_buy: String = str(ui._buy_all_btn.tooltip_text)
+	check(t_buy.contains("同价按数据序"), "装备一键购买 tooltip 含 同价按数据序 顺序")
+	check(t_buy.contains("槽位为空时自动穿戴"), "装备一键购买 tooltip 含 槽位空自动穿戴 规则")
+	# 一键最佳: 最佳判定链 + 幂等
+	var t_best: String = str(ui._equip_best_btn.tooltip_text)
+	check(t_best.contains("灵气% + 灵石%"), "一键最佳 tooltip 含 主属性 判定")
+	check(t_best.contains("突破率 > 离线效率"), "一键最佳 tooltip 含 次属性 判定顺序")
+	check(t_best.contains("幂等"), "一键最佳 tooltip 含 幂等 说明")
+	# 法器一键购买: 全局口径 + 顺序
+	var t_item: String = str(ui._items_buy_btn.tooltip_text)
+	check(t_item.contains("不受筛选影响"), "法器一键购买 tooltip 含 全局口径 说明")
+	check(t_item.contains("同价按数据序"), "法器一键购买 tooltip 含 同价按数据序 顺序")
 
 
 func _finish() -> void:
