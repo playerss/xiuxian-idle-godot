@@ -1184,3 +1184,15 @@ func ladder_current_progress_text() -> String:
 	var cost := breakthrough_cost()
 	return "第 %d/%d 层 · 突破需 %s 灵气 (当前 %s)" % [
 		layer, max_layer, fmt(cost), fmt(essence)]
+
+# ---------- 打磨-35: 当前道行阶段消耗提示 (飞升后阶梯行, 与打磨-34 层内进度口径对齐) ----------
+
+# 道行阶段进度 (飞升后): "道行精进需 X 道行 (当前 X)"
+# 道祖封顶: "已至道祖, 道法自然 ♪"; 未飞升返回 "" (阶梯无道行行, UI 隐藏标签)
+func dao_progress_text() -> String:
+	if not ascended:
+		return ""
+	if dao_level >= IMMORTAL_REALMS.size() - 1:
+		return "已至道祖, 道法自然 ♪"
+	var cost := dao_break_cost()
+	return "道行精进需 %s 道行 (当前 %s)" % [fmt(cost), fmt(dao)]

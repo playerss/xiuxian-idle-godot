@@ -89,6 +89,9 @@ var _ladder_eta: Dictionary = {}     # 打磨-33: "realm_N"/"dao_N" -> ETA 提�
 var _ladder_eta_key := ""            # 打磨-33: ETA 文本快照缓存 (变化才刷)
 var _ladder_prog: Label              # 打磨-34: 当前境界行内层内进度标签 (金色, 飞升后隐藏)
 var _ladder_prog_text := ""          # 打磨-34: 层内进度文本缓存 (变化才刷)
+var _dao_prog: Label                 # 打磨-35: 当前道行阶段行内进度标签 (金色, 未飞升隐藏)
+var _dao_prog_text := ""             # 打磨-35: 道行进度文本缓存 (变化才刷)
+var _dao_prog_hide_idx := 0          # 打磨-35: 未飞升时道行进度标签的隐藏位置 (道行区末行)
 
 
 func _ready() -> void:
@@ -306,6 +309,12 @@ func _build_training_page(page: Panel) -> void:
 		var d_eta := _label("", 12, CYAN)
 		rbox.add_child(d_eta)
 		_ladder_eta["dao_%d" % i] = d_eta
+	# 打磨-35: 当前道行阶段行内 道行精进进度 (初始挂在第 1 个道行 d_eta 下 index=23, 随道行阶段移动; 未飞升隐藏)
+	_dao_prog = _label("", 12, GOLD)
+	_dao_prog.tooltip_text = "当前道行阶段的精进进度: 下次精进所需道行 (当前已攒)。道祖封顶显示圆满。\n未飞升隐藏。"
+	rbox.add_child(_dao_prog)
+	_dao_prog_hide_idx = rbox.get_child_count() - 1   # 道行区末行 (未飞升时藏于此, 视觉最靠下)
+	rbox.move_child(_dao_prog, 23)
 	# 打磨-18: 阶梯高亮随当前境界/道行阶段动态移动 (初始刷一次; 内部连带刷新打磨-33 ETA)
 	_refresh_ladder()
 	var hint := _label("挂机自动积累灵气与灵石, 灵气攒够后点击突破。境界越高, 挂机越快。\n飞升后改修道行: 道行每阶灵气 x2, 直至道祖。\n阶梯下青色为按当前速率的累计预计耗时 (8天+ = 超过 7 天上限), 随境界/资源变化更新。", 13, DIM)
@@ -1037,6 +1046,16 @@ func _refresh_ladder() -> void:
 		var want := 2 * g.realm_idx + 1
 		if _ladder_prog.get_index() != want:
 			_ladder_prog.get_parent().move_child(_ladder_prog, want)
+	# 打磨-35: 道行进度标签移动到当前道行阶段行下 (未飞升隐藏, 挪到道行区末行)
+	if g.ascended:
+		var want_d: int = (_immortal_ladder[g.dao_level] as Label).get_index() + 1
+		if _dao_prog.get_index() != want_d:
+			_dao_prog.get_parent().move_child(_dao_prog, want_d)
+	else:
+		if _dao_prog.text != "":
+			_dao_prog.text = ""
+		if _dao_prog.get_index() != _dao_prog_hide_idx:
+			_dao_prog.get_parent().move_child(_dao_prog, _dao_prog_hide_idx)
 	# 打磨-33: 境界/阶段变化时 ETA 路线口径变了, 立即重算
 	_refresh_ladder_eta(true)
 
@@ -1084,6 +1103,11 @@ func _refresh_ladder_eta(force: bool = false) -> void:
 	if _ladder_prog.text != tp:
 		_ladder_prog.text = tp
 		_ladder_prog_text = tp
+	# 打磨-35: 当前道行阶段行内 道行精进进度 (飞升后才显示; 文本变化才刷)
+	var td: String = g.dao_progress_text()
+	if _dao_prog.text != td:
+		_dao_prog.text = td
+		_dao_prog_text = td
 
 
 # 打磨-33: 当前主资源进度值 (ETA 快照键用; 未飞升=灵气, 飞升后=道行)

@@ -1264,6 +1264,33 @@ func _init() -> void:
 	# 道祖封顶: 仍无层内进度
 	g.dao_level = 8
 	check(g.ladder_current_progress_text() == "", "道祖封顶当前层进度 = 空")
+	# ---------- 打磨-35: 当前道行阶段消耗提示 (飞升后阶梯行, 与打磨-34 层内进度口径对齐) ----------
+	# 未飞升: 无道行进度 (空文本, UI 隐藏标签)
+	g.ascended = false
+	check(g.dao_progress_text() == "", "未飞升道行进度 = 空 (实际 %s)" % g.dao_progress_text())
+	# 飞升后 初仙 第 0 阶段: 精进消耗 1e9 -> "10.0亿"
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 0.0
+	check(g.dao_progress_text() == "道行精进需 10.0亿 道行 (当前 0)",
+		"道行进度 初仙 第0阶段 (实际 %s)" % g.dao_progress_text())
+	# 道行库存 变化时文本同步
+	g.dao = 1.23e9
+	check(g.dao_progress_text() == "道行精进需 10.0亿 道行 (当前 12.3亿)",
+		"道行进度 初仙 库存12.3亿 (实际 %s)" % g.dao_progress_text())
+	# 跨阶段: 少仙 第 1 阶段 精进消耗 1e9*8=8e9 -> "80.0亿"
+	g.dao_level = 1
+	g.dao = 3e9
+	check(g.dao_progress_text() == "道行精进需 80.0亿 道行 (当前 30.0亿)",
+		"道行进度 少仙 第1阶段 (实际 %s)" % g.dao_progress_text())
+	# 后期大数值: 大罗 第 7 阶段 消耗 1e9*8^7 = 2.097e15 -> "2097.2兆", 库存 9e12 -> "9.0兆"
+	g.dao_level = 7
+	g.dao = 9e12
+	check(g.dao_progress_text() == "道行精进需 2097.2兆 道行 (当前 9.0兆)",
+		"道行进度 大罗 第7阶段 (实际 %s)" % g.dao_progress_text())
+	# 道祖封顶: 圆满文案
+	g.dao_level = 8
+	check(g.dao_progress_text() == "已至道祖, 道法自然 ♪", "道祖封顶道行进度 = 圆满 (实际 %s)" % g.dao_progress_text())
 	# 恢复基准态
 	g.ascended = false
 	g.dao_level = 0
