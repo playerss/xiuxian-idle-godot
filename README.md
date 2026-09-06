@@ -57,9 +57,9 @@ PROJECT_PLAN.md          # 项目计划
 
 ```bash
 ~/bin/godot --headless --path .            # 无头冒烟 (应无报错, 会一直挂机运行)
-~/bin/godot --headless --path . -s res://scripts/selftest.gd   # 全流程自测 (学习/购买/穿戴/冷却/存读档/倍率/数值曲线/成就/飞升后道行, 569 项, 退出码 0=通过)
+~/bin/godot --headless --path . -s res://scripts/selftest.gd   # 全流程自测 (学习/购买/穿戴/冷却/存读档/倍率/数值曲线/成就/飞升后道行, 579 项, 退出码 0=通过)
 ~/bin/godot --headless --path . -s res://scripts/stress_test.gd  # 数值曲线压力测试 (全境界/全品质梯度/解锁门槛一致性/后期溢出检查, 613 项, CI 可跑, 退出码 0=通过)
-~/bin/godot --headless --path . res://scenes/ui_test.tscn  # UI 断言 (成就进度条/收集条/品质色/一键系列, scene 模式带 autoload, 1016 项, 退出码 0=通过)
+~/bin/godot --headless --path . res://scenes/ui_test.tscn  # UI 断言 (成就进度条/收集条/品质色/一键系列, scene 模式带 autoload, 1023 项, 退出码 0=通过)
 ```
 
 ## 导出 (打包)

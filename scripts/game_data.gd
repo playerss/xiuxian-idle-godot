@@ -902,6 +902,21 @@ func item_next_target() -> Dictionary:
 	return {"id": str(best["id"]), "name": str(best.get("name", "")),
 		"cost": float(best["cost"]), "shortfall": maxf(float(best["cost"]) - stones, 0.0)}
 
+# ---------- 打磨-48: 下一件缺口 ETA 联动 (复用 打磨-12 eta_seconds/eta_text 口径) ----------
+# 只读: target 空 或 缺口<=0 (买得起) 返回 ""; 灵石速率>0 时返回 " 约 X 可购" (前缀空格供拼接),
+# 无灵石收入 (eta=-1 防御) 时省略 (返回 "")。shortfall=cost-灵石, 与 eta_seconds(cost)=(cost-灵石)/速率 恒等。
+func next_target_eta_text(target: Dictionary) -> String:
+	if target.is_empty():
+		return ""
+	var gap: float = float(target.get("shortfall", 0.0))
+	if gap <= 0.0:
+		return ""
+	var cost: float = float(target.get("cost", 0.0))
+	var t: float = eta_seconds(cost)
+	if t < 0.0:
+		return ""
+	return " " + eta_text(cost)
+
 # ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 的主动神通) ----------
 
 # 当前就绪 (无冷却) 的 已学主动神通 数 (供技能页"一键施展"按钮文案)

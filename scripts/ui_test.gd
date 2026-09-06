@@ -577,6 +577,9 @@ func _assert_onekey_tooltips() -> void:
 	var t_buy: String = str(ui._buy_all_btn.tooltip_text)
 	check(t_buy.contains("同价按数据序"), "装备一键购买 tooltip 含 同价按数据序 顺序")
 	check(t_buy.contains("槽位为空时自动穿戴"), "装备一键购买 tooltip 含 槽位空自动穿戴 规则")
+	# 打磨-48: 一键购买 tooltip 含 缺口 ETA 联动 口径
+	check(t_buy.contains("约 X 可购"), "装备一键购买 tooltip 含 缺口ETA 口径")
+	check(str(ui._items_buy_btn.tooltip_text).contains("约 X 可购"), "法器一键购买 tooltip 含 缺口ETA 口径")
 	# 一键最佳: 最佳判定链 + 幂等
 	var t_best: String = str(ui._equip_best_btn.tooltip_text)
 	check(t_best.contains("灵气% + 灵石%"), "一键最佳 tooltip 含 主属性 判定")
@@ -633,6 +636,10 @@ func _assert_buy_feedback() -> void:
 	check(msg_it.find(GameData.fmt(stones_before_it - g.stones)) >= 0, "法器 共花额=购买前后灵石差 (期望 %s, 实际 %s)" % [GameData.fmt(stones_before_it - g.stones), msg_it])
 	check(msg_it.find("距下一件「%s」" % str(it_target["name"])) >= 0, "法器 缺口行 指向最便宜未拥有 (期望 %s, 实际 %s)" % [str(it_target["name"]), msg_it])
 	check(msg_it.find(GameData.fmt(float(it_target["shortfall"]))) >= 0, "法器 缺口额 正确 (期望 %s, 实际 %s)" % [GameData.fmt(float(it_target["shortfall"])), msg_it])
+	# 打磨-48: 缺口行 追加 ETA (受控态灵石速率>0; 口径=打磨-12 eta_text(cost), 与 next_target_eta_text 同式)
+	var it_eta: String = g.next_target_eta_text(it_target)
+	check(it_eta != "", "受控态 法器 缺口行 ETA 非空 (灵石速率 %s/s)" % g.stone_per_sec())
+	check(msg_it.find("灵石" + it_eta) >= 0, "法器 缺口行 追加 ETA (期望片段 %s, 实际 %s)" % ["灵石" + it_eta, msg_it])
 	check(str(ui._onekey_last_text) == "一键购置 %d 件法器" % n_it, "法器 浮动文案 不含共花 (保持 打磨-45 口径, 实际 %s)" % str(ui._onekey_last_text))
 	# 装备: 同口径 (起始灵石 = 法器买完后的剩余, 非 5万)
 	var sim_eq := g.stones
@@ -657,6 +664,15 @@ func _assert_buy_feedback() -> void:
 	check(msg_eq.find(GameData.fmt(stones_before_eq - g.stones)) >= 0, "装备 共花额=购买前后灵石差 (期望 %s, 实际 %s)" % [GameData.fmt(stones_before_eq - g.stones), msg_eq])
 	check(msg_eq.find("距下一件「%s」" % str(eq_target["name"])) >= 0, "装备 缺口行 指向最便宜未拥有 (期望 %s, 实际 %s)" % [str(eq_target["name"]), msg_eq])
 	check(msg_eq.find(GameData.fmt(float(eq_target["shortfall"]))) >= 0, "装备 缺口额 正确 (期望 %s, 实际 %s)" % [GameData.fmt(float(eq_target["shortfall"])), msg_eq])
+	# 打磨-48: 装备 缺口行 追加 ETA (同 法器 口径)
+	var eq_eta: String = g.next_target_eta_text(eq_target)
+	check(eq_eta != "", "受控态 装备 缺口行 ETA 非空")
+	check(msg_eq.find("灵石" + eq_eta) >= 0, "装备 缺口行 追加 ETA (期望片段 %s, 实际 %s)" % ["灵石" + eq_eta, msg_eq])
+	# 打磨-48: 小额缺口 边界 (缺口=1, 灵石速率>0 -> 不足1分档; 验证 eta 对小额缺口不空)
+	g.stones = float(eq_target["cost"]) - 1.0
+	var eq_eta1: String = g.next_target_eta_text(eq_target)
+	check(eq_eta1 == " 不足1分可购", "缺口=1 灵石速率>0 出 ETA 不足1分档 (实际 %s)" % eq_eta1)
+	# 注: 无灵石收入 (eta=-1 -> 省略) 分支由 selftest next_target_eta 只读接口覆盖 (stone 速率为乘性项, 正常态恒 >0)
 	# --- 全拥有: 0 变更走 买不起 消息, 不追加 共花/缺口 ---
 	for id in g.equip_ids:
 		g.owned_eq.append(str(id))

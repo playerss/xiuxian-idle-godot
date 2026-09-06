@@ -313,7 +313,7 @@ func _build_training_page(page: Panel) -> void:
 	_items_buy_btn = _make_button("一键购买")
 	_items_buy_btn.pressed.connect(_on_items_buy_all)
 	# 打磨-46: 统一口径 tooltip (动作顺序 / 筛选叠加 / 计数口径)
-	_items_buy_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略)。\n不受筛选影响 (全局口径); 购入后法器加成直接生效。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。"
+	_items_buy_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略)。\n不受筛选影响 (全局口径); 购入后法器加成直接生效。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。"
 	item_head.add_child(_items_buy_btn)
 	# 打磨-13: 法器列表可滚动 (10 件避免低分辨率下超出屏幕)
 	var shop_scroll := ScrollContainer.new()
@@ -648,13 +648,15 @@ func _on_buy_all() -> void:
 
 
 # 打磨-47: 下一购买目标缺口文案 — target 空 (全拥有) 或 缺口<=0 (买得起, 口径防御) 返回 ""
+# 打磨-48: 缺口>0 且灵石速率>0 时追加 " 约 X 可购" (复用 GameData.next_target_eta_text 的 打磨-12 eta 口径);
+# 无灵石收入时省略 ETA (避免 "约 无灵石收入可购" 误导), 仅保留缺口数量
 func _next_gap_text(target: Dictionary) -> String:
 	if target.is_empty():
 		return ""
 	var gap: float = float(target.get("shortfall", 0.0))
 	if gap <= 0.0:
 		return ""
-	return " 距下一件「%s」还差 %s 灵石" % [str(target.get("name", "")), GameData.fmt(gap)]
+	return " 距下一件「%s」还差 %s 灵石%s" % [str(target.get("name", "")), GameData.fmt(gap), GameData.next_target_eta_text(target)]
 
 
 # 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件)
@@ -734,7 +736,7 @@ func _build_equip_page(page: Panel) -> void:
 	_buy_all_btn = _make_button("一键购买")
 	_buy_all_btn.pressed.connect(_on_buy_all)
 	# 打磨-46: 统一口径 tooltip (动作顺序 / 自动穿戴规则 / 计数口径)
-	_buy_all_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略)。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。"
+	_buy_all_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略)。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。"
 	eq_tier_bar.add_child(_buy_all_btn)
 	# 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件, 补 一键购买 只穿首件 的缺口)
 	_equip_best_btn = _make_button("一键最佳")

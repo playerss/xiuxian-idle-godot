@@ -1653,6 +1653,26 @@ func _init() -> void:
 	g.equip_next_target()
 	g.item_next_target()
 	check(g.stones == stones_before47 and g.owned_eq.is_empty() and g.owned.is_empty(), "next_target 只读 无副作用")
+	# ---------- 打磨-48: 下一件缺口 ETA 联动 (next_target_eta_text 复用 打磨-12 eta 口径, 只读) ----------
+	# 空 dict / 缺口<=0 (买得起) -> 空文本
+	check(g.next_target_eta_text({}) == "", "next_target_eta 空 dict = 空文本")
+	check(g.next_target_eta_text({"id": "x", "name": "X", "cost": 100.0, "shortfall": 0.0}) == "", "next_target_eta 缺口=0 买得起 = 空文本")
+	check(g.next_target_eta_text({"id": "x", "name": "X", "cost": 100.0, "shortfall": -5.0}) == "", "next_target_eta 缺口<0 clamp = 空文本")
+	# 灵石速率>0: 清空功法/装备/法器 使 stone 速率 = 1.0 * QI_MULT[realm0]=1.0/s (无乘性加成)
+	g.stones = 0.0
+	g.realm_idx = 0
+	g.learned.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	check(absf(g.stone_per_sec() - 1.0) < 1e-6, "打磨-48 受控态 灵石速率=1.0/s (实际 %s)" % g.stone_per_sec())
+	check(g.next_target_eta_text({"id": "x", "name": "X", "cost": 30.0, "shortfall": 30.0}) == " 不足1分可购", "next_target_eta 30秒 不足1分档 (实际 %s)" % g.next_target_eta_text({"id": "x", "name": "X", "cost": 30.0, "shortfall": 30.0}))
+	check(g.next_target_eta_text({"id": "x", "name": "X", "cost": 120.0, "shortfall": 120.0}) == " 约 2分 可购", "next_target_eta 120秒 分钟档 (实际 %s)" % g.next_target_eta_text({"id": "x", "name": "X", "cost": 120.0, "shortfall": 120.0}))
+	check(g.next_target_eta_text({"id": "x", "name": "X", "cost": 60.0, "shortfall": 60.0}) == " 约 1分 可购", "next_target_eta 60秒边界=1分 (实际 %s)" % g.next_target_eta_text({"id": "x", "name": "X", "cost": 60.0, "shortfall": 60.0}))
+	check(g.next_target_eta_text({"id": "x", "name": "X", "cost": 5400.0, "shortfall": 5400.0}) == " 约 1小时30分 可购", "next_target_eta 小时档 (实际 %s)" % g.next_target_eta_text({"id": "x", "name": "X", "cost": 5400.0, "shortfall": 5400.0}))
+	# 口径: shortfall=cost-灵石 与 eta_seconds=(cost-灵石)/速率 恒等 (50 灵石 -> 70 秒)
+	g.stones = 50.0
+	check(g.next_target_eta_text({"id": "x", "name": "X", "cost": 120.0, "shortfall": 70.0}) == " 约 1分 可购", "next_target_eta 按缺口计算 (50灵石->70秒, 实际 %s)" % g.next_target_eta_text({"id": "x", "name": "X", "cost": 120.0, "shortfall": 70.0}))
+	check(absf(g.eta_seconds(120.0) - 70.0) < 1e-6, "next_target_eta 口径=打磨-12 eta (70秒, 实际 %s)" % g.eta_seconds(120.0))
 	# 恢复干净基准态
 	g.stones = 0.0
 	g.learned.clear()
