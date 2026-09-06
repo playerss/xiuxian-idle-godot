@@ -1673,6 +1673,74 @@ func _init() -> void:
 	g.stones = 50.0
 	check(g.next_target_eta_text({"id": "x", "name": "X", "cost": 120.0, "shortfall": 70.0}) == " 约 1分 可购", "next_target_eta 按缺口计算 (50灵石->70秒, 实际 %s)" % g.next_target_eta_text({"id": "x", "name": "X", "cost": 120.0, "shortfall": 70.0}))
 	check(absf(g.eta_seconds(120.0) - 70.0) < 1e-6, "next_target_eta 口径=打磨-12 eta (70秒, 实际 %s)" % g.eta_seconds(120.0))
+	# ---------- 打磨-49: 顶栏灵石 可购进度 (stone_next_target / stone_next_target_tip, 只读) ----------
+	# 受控态: 清拥有 + 灵石速率>0 (境界0, 无功法装备法器 -> 1.0/s)
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.learned.clear()
+	g.realm_idx = 0
+	# 预计算 全量 最便宜 未拥有 (装备+法器), 与 stone_next_target 同口径 (价格升序, 同价 id 确定性)
+	var gcosts: Array[float] = []
+	for id in g.equip_ids:
+		var cc: float = float(g.equip_by_id[id]["cost"])
+		gcosts.append(cc)
+	var icosts_49: Array[float] = []
+	for it in g.ITEMS:
+		var ci: float = float((it as Dictionary)["cost"])
+		icosts_49.append(ci)
+	var gmin: float = gcosts.min()
+	var imin: float = icosts_49.min()
+	var expect_kind := "装备" if gmin <= imin else "法器"
+	var expect_cost := minf(gmin, imin)
+	var st0: Dictionary = g.stone_next_target()
+	check(not st0.is_empty(), "stone_next 空拥有 非空 (实际 %s)" % str(st0))
+	check(absf(float(st0["cost"]) - expect_cost) < 1e-6, "stone_next cost=全局最便宜 (期望 %.0f, 实际 %.0f)" % [expect_cost, float(st0["cost"])])
+	check(str(st0["kind"]) == expect_kind, "stone_next kind=最便宜件类别 (期望 %s, 实际 %s)" % [expect_kind, str(st0["kind"])])
+	check(st0.has("name") and st0.has("shortfall") and st0.has("id"), "stone_next 字段齐全 (id/name/cost/shortfall/kind)")
+	# tooltip 初始态 (灵石 0, 缺口>0, 速率 1.0): 含 当前 X 灵石/秒 + 距下一件 缺口 + 可购 ETA
+	g.stones = 0.0
+	check(absf(g.stone_per_sec() - 1.0) < 1e-6, "打磨-49 受控态 灵石速率=1.0/s (实际 %s)" % g.stone_per_sec())
+	var tip0: String = g.stone_next_target_tip()
+	check(tip0.begins_with("当前 1 灵石/秒"), "stone_tip 前缀=当前灵石速率 (实际 %s)" % tip0)
+	check(tip0.find("距下一件 %s「" % expect_kind) >= 0, "stone_tip 指向 %s 最便宜件 (实际 %s)" % [expect_kind, tip0])
+	check(tip0.find("可购") >= 0, "stone_tip 含 可购 ETA (实际 %s)" % tip0)
+	check(tip0.find("\n") >= 0, "stone_tip 两行结构 (速率行 + 下一件行)")
+	# 灵石足够: shortfall=0 -> "可立即购买" (无 可购 ETA, 无 还差)
+	g.stones = expect_cost + 1.0
+	var tip1: String = g.stone_next_target_tip()
+	check(tip1.find("可立即购买") >= 0, "stone_tip 灵石足够=可立即购买 (实际 %s)" % tip1)
+	check(tip1.find("还差") < 0, "stone_tip 买得起 不含 还差 (实际 %s)" % tip1)
+	check(tip1.find("可购") < 0, "stone_tip 买得起 不含 可购ETA (实际 %s)" % tip1)
+	# 拥有最便宜件 -> 目标移到次便宜 (口径与 equip/item_next_target 一致)
+	var next_id: String = str(st0["id"])
+	if expect_kind == "装备":
+		g.owned_eq.append(next_id)
+	else:
+		g.owned.append(next_id)
+	g.stones = 0.0
+	var st1: Dictionary = g.stone_next_target()
+	check(not st1.is_empty(), "stone_next 拥有最便宜后 仍非空 (实际 %s)" % str(st1))
+	check(str(st1["id"]) != next_id, "stone_next 指向次便宜 (期望≠%s, 实际 %s)" % [next_id, str(st1["id"])])
+	check(absf(float(st1["cost"]) - maxf(gmin, imin)) < 1e-6, "stone_next 次便宜 cost=次低 (期望 %.0f, 实际 %.0f)" % [maxf(gmin, imin), float(st1["cost"])])
+	var tip2: String = g.stone_next_target_tip()
+	check(tip2.find("还差") >= 0 and tip2.find("可购") >= 0, "stone_tip 次便宜 缺口+ETA (实际 %s)" % tip2)
+	# 全部拥有 -> 空 dict + "已集齐" tooltip
+	g.owned.clear()
+	g.owned_eq.clear()
+	for id in g.equip_ids:
+		g.owned_eq.append(str(id))
+	for it in g.ITEMS:
+		g.owned.append(str((it as Dictionary)["id"]))
+	check(g.stone_next_target().is_empty(), "stone_next 全拥有 = 空 dict")
+	check(g.stone_next_target_tip().find("已集齐") >= 0, "stone_tip 全拥有=已集齐 (实际 %s)" % g.stone_next_target_tip())
+	# 只读性: 调用不消耗灵石/不改变拥有/不改境界
+	var stones_before49: float = g.stones
+	var owned_eq_before: int = g.owned_eq.size()
+	var owned_before: int = g.owned.size()
+	g.stone_next_target()
+	g.stone_next_target_tip()
+	check(g.stones == stones_before49 and g.owned_eq.size() == owned_eq_before and g.owned.size() == owned_before, "stone_next 只读 无副作用")
 	# 恢复干净基准态
 	g.stones = 0.0
 	g.learned.clear()

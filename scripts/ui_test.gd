@@ -79,6 +79,7 @@ func _ready() -> void:
 	await _assert_onekey_float()
 	_assert_onekey_tooltips()
 	_assert_buy_feedback()
+	_assert_stone_tip()
 	_finish()
 
 
@@ -401,12 +402,12 @@ func _assert_collect_jump() -> void:
 	await get_tree().process_frame
 	check(ui._tab.current_tab == 0, "点击 法器 → 切到 修行页 (tab=0) (实际 %d)" % ui._tab.current_tab)
 	var sb_hi: StyleBoxFlat = ui._items_panel.get_theme_stylebox("panel")
-	check(sb_hi != null and sb_hi.get_border_width_all() > 0, "点击 法器 → 法器区金边高亮 (边框宽>0)")
+	check(sb_hi != null and sb_hi.border_width_left > 0, "点击 法器 → 法器区金边高亮 (边框宽>0)")
 	check(sb_hi != null and sb_hi.border_color == ui.GOLD, "点击 法器 → 高亮边框=金")
 	# 等待 tween 结束(1.2s) 后恢复
 	await get_tree().create_timer(1.4).timeout
 	var sb_rest: StyleBoxFlat = ui._items_panel.get_theme_stylebox("panel")
-	check(sb_rest != null and sb_rest.get_border_width_all() == 0, "法器区高亮 1.2s 后自动恢复 (边框宽=0)")
+	check(sb_rest != null and sb_rest.border_width_left == 0, "法器区高亮 1.2s 后自动恢复 (边框宽=0)")
 	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats, "点击 法器 无资源/统计副作用")
 	# --- 点击 成就: 已在成就页, 不切页 (保持 tab=3) ---
 	ui._tab.current_tab = 3
@@ -692,6 +693,60 @@ func _assert_buy_feedback() -> void:
 	check(msg_eq2.find("共花") < 0, "装备 全拥有 不追加 共花 (实际 %s)" % msg_eq2)
 	check(msg_eq2.find("距下一件") < 0, "装备 全拥有 不追加 缺口 (实际 %s)" % msg_eq2)
 	# 恢复基准态
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.essence = 0.0
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	ui._refresh()
+
+
+# 打磨-49: 顶栏灵石行 tooltip = 当前灵石速率 + 距下一件 (最便宜未拥有) 缺口与 ETA
+# 在 _assert_buy_feedback 的基准态 (全空, 境界0, 灵石0, 灵石速率 1.0/s) 上断言 UI 侧:
+# 顶栏 _stones_label.tooltip_text 随 _refresh 动态刷新, 口径与 GameData.stone_next_target_tip 一致。
+func _assert_stone_tip() -> void:
+	var g := GameData
+	# 基准态 (打磨-47/48 恢复): 全空, 境界0, 灵石0 -> 灵石速率 1.0/s, 最便宜未拥有 = 全局最便宜 (装备)
+	check(absf(g.stone_per_sec() - 1.0) < 1e-6, "打磨-49 基准态 灵石速率=1.0/s (实际 %s)" % g.stone_per_sec())
+	var st: Dictionary = g.stone_next_target()
+	check(not st.is_empty(), "基准态 stone_next 非空 (实际 %s)" % str(st))
+	ui._refresh()
+	var tip: String = str(ui._stones_label.tooltip_text)
+	check(tip == g.stone_next_target_tip(), "顶栏灵石 tooltip 与 stone_next_target_tip 一致 (UI %s / 接口 %s)" % [tip, g.stone_next_target_tip()])
+	check(tip.begins_with("当前 1 灵石/秒"), "顶栏灵石 tooltip 前缀=当前灵石速率 (实际 %s)" % tip)
+	check(tip.find("距下一件 %s「%s」" % [str(st["kind"]), str(st["name"])]) >= 0, "顶栏灵石 tooltip 指向 最便宜未拥有 %s (实际 %s)" % [str(st["name"]), tip])
+	check(tip.find("还差 %s 灵石" % g.fmt(float(st["shortfall"]))) >= 0, "顶栏灵石 tooltip 含 缺口额 (实际 %s)" % tip)
+	check(tip.find("可购") >= 0, "顶栏灵石 tooltip 含 可购 ETA (实际 %s)" % tip)
+	# 节流: 同态再刷两帧, tooltip 文本不变 (缓存键生效)
+	var tip_cache: String = str(ui._stone_tip)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stone_tip) == tip_cache, "顶栏灵石 tooltip 同态再刷 缓存不变 (节流生效)")
+	# 状态变化: 灵石足够 -> tooltip 切 可立即购买 (缓存随之更新)
+	g.stones = float(st["cost"]) + 1.0
+	ui._refresh()
+	var tip2: String = str(ui._stones_label.tooltip_text)
+	check(tip2 != tip, "灵石足够后 tooltip 变化 (缓存刷新)")
+	check(tip2.find("可立即购买") >= 0, "灵石足够 tooltip=可立即购买 (实际 %s)" % tip2)
+	check(tip2.find("还差") < 0, "灵石足够 tooltip 不含 还差 (实际 %s)" % tip2)
+	# 状态变化: 全拥有 -> tooltip 切 已集齐
+	for id in g.equip_ids:
+		g.owned_eq.append(str(id))
+	for it in g.ITEMS:
+		g.owned.append(str((it as Dictionary)["id"]))
+	ui._refresh()
+	var tip3: String = str(ui._stones_label.tooltip_text)
+	check(tip3.find("已集齐") >= 0, "全拥有 tooltip=已集齐 (实际 %s)" % tip3)
+	# 恢复基准态 (全空, 灵石0)
 	g.stones = 0.0
 	g.learned.clear()
 	g.owned.clear()

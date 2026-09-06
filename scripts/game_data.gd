@@ -917,7 +917,48 @@ func next_target_eta_text(target: Dictionary) -> String:
 		return ""
 	return " " + eta_text(cost)
 
-# ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 的主动神通) ----------
+# ---------- 打磨-49: 顶栏灵石 可购进度 (最便宜 未拥有 装备/法器, 复用 打磨-47/12/48 口径) ----------
+# 只读: 跨 140 装备 + 10 法器 取 最便宜 未拥有件 (价格升序, 同价按 id 确定性)。
+# 复用 equip_next_target / item_next_target 的 shortfall 口径, 追加 kind = "装备"/"法器" 供 UI 命名。
+# 全部拥有 = {}。
+func stone_next_target() -> Dictionary:
+	var e: Dictionary = equip_next_target()
+	var i: Dictionary = item_next_target()
+	if e.is_empty() and i.is_empty():
+		return {}
+	var pick: Dictionary = e
+	var kind := "装备"
+	if e.is_empty():
+		pick = i
+		kind = "法器"
+	elif not i.is_empty():
+		var ce: float = float(e["cost"])
+		var ci: float = float(i["cost"])
+		if ci < ce or (ci == ce and str(i["id"]) < str(e["id"])):
+			pick = i
+			kind = "法器"
+	pick["kind"] = kind
+	return pick
+
+# 顶栏灵石行 tooltip: 当前灵石速率 + 距下一件 (最便宜未拥有) 缺口与 ETA。
+# 全拥有 = "已集齐"; 灵石已足够 = "可立即购买"; 缺口>0 且 灵石速率>0 = 缺口额 + "约 X 可购"
+# (复用 打磨-12 eta_seconds/eta_text 口径); 无灵石收入 省略 ETA 并标注。
+func stone_next_target_tip() -> String:
+	var rate: float = stone_per_sec()
+	var head := "当前 %s 灵石/秒" % fmt(rate)
+	var target: Dictionary = stone_next_target()
+	if target.is_empty():
+		return head + "\n已集齐全部 装备与法器 (无需再攒灵石)"
+	var gap: float = float(target["shortfall"])
+	var label := "%s「%s」" % [str(target["kind"]), str(target["name"])]
+	if gap <= 0.0:
+		return head + "\n距下一件 %s 灵石已足够, 可立即购买" % label
+	var t: float = eta_seconds(float(target["cost"]))
+	if t < 0.0:
+		return head + ("\n距下一件 %s 还差 %s 灵石 (当前无灵石收入)" % [label, fmt(gap)])
+	return head + ("\n距下一件 %s 还差 %s 灵石 %s" % [label, fmt(gap), eta_text(float(target["cost"]))])
+
+# ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 主动神通) ----------
 
 # 当前就绪 (无冷却) 的 已学主动神通 数 (供技能页"一键施展"按钮文案)
 func active_ready_count() -> int:

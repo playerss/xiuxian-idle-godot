@@ -51,6 +51,7 @@ var _onekey_float_count := 0       # 打磨-45: 浮动提示次数 (自测断言
 var _onekey_last_text := ""        # 打磨-45: 最近一次浮动文案 (自测断言用)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
+var _stone_tip := ""              # 打磨-49: 顶栏灵石行 tooltip 缓存 (变化才刷, 速率/缺口随挂机变化)
 var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
 var _btn_sb_gold: StyleBoxFlat    # 打磨-32: 突破按钮"可突破"金边高亮样式
 var _break_ready := false         # 打磨-32: 上帧可突破状态缓存 (变化才刷样式)
@@ -970,6 +971,11 @@ func _refresh() -> void:
 		_realm_label.tooltip_text = tip
 	_essence_label.text = g.primary_res_text()  # 打磨-19: 顶栏主资源 (未飞升=灵气 / 飞升后=道行)
 	_stones_label.text = "灵石 %s" % g.fmt(g.stones)
+	# 打磨-49: 顶栏灵石行 tooltip = 当前灵石速率 + 距下一件 (最便宜未拥有) 缺口与 ETA (变化才刷)
+	var stone_tip: String = g.stone_next_target_tip()
+	if stone_tip != _stone_tip:
+		_stone_tip = stone_tip
+		_stones_label.tooltip_text = stone_tip
 	var rate_txt := g.fmt(g.qi_per_sec())
 	_qi_label.text = ("道行速率  %s /秒" if g.ascended else "灵气速率  %s /秒") % rate_txt
 	_stone_rate_label.text = "灵石速率  %s /秒" % g.fmt(g.stone_per_sec())
