@@ -2093,6 +2093,75 @@ func _init() -> void:
 	g.learned.clear()
 	var n_read56: int = g.active_learn_available_count()
 	check(n_read56 == n_active56 and g.learned.is_empty(), "打磨-56 计数 只读 (清档后恢复 %d)" % n_read56)
+	# ---------- 打磨-57: 主动神通 冷却完毕转就绪 事件队列 (_tick_active_cd / ready_events / drain_ready_events) ----------
+	# 口径: 冷却在 _process 结束时归零即推入 ready_events (冷却完毕转就绪事件),
+	# UI 每帧 drain_ready_events 消费 (取出即清空, 幂等); 只读, 不改动 状态/存档/统计, 不持久化
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.stones = 0.0
+	g.essence = 0.0
+	# 动态取两个 主动神通 id (不同冷却), 避免硬编码
+	var act_ids57: Array[String] = []
+	for id in g.skill_ids:
+		var s57: Dictionary = g.skill_by_id[id]
+		if str(s57.get("type", "")) == "active":
+			act_ids57.append(id)
+		if act_ids57.size() == 2:
+			break
+	check(act_ids57.size() == 2, "打磨-57 数据存在 2 个主动神通 (实际 %d)" % act_ids57.size())
+	if act_ids57.size() == 2:
+		var a1_57: String = act_ids57[0]
+		var a2_57: String = act_ids57[1]
+		# 两者刚施展 进冷却 (剩余 30/45 秒, 不同步)
+		g.learned.append(a1_57)
+		g.learned.append(a2_57)
+		g._active_cd[a1_57] = 30.0
+		g._active_cd[a2_57] = 45.0
+		check(not g.active_ready(a1_57), "打磨-57 tick 前 a1 未就绪 (冷却中)")
+		check(not g.active_ready(a2_57), "打磨-57 tick 前 a2 未就绪 (冷却中)")
+		check(g.ready_events.is_empty(), "打磨-57 初始 无就绪事件")
+		# tick 30 秒: a1 归零转就绪 (推事件), a2 余 15 秒 (不推)
+		g._tick_active_cd(30.0)
+		check(g.active_ready(a1_57), "打磨-57 30s tick 后 a1 就绪 (冷却完毕)")
+		check(not g.active_ready(a2_57), "打磨-57 30s tick 后 a2 仍冷却 (余 15s)")
+		var ev1_57: Array[String] = g.drain_ready_events()
+		check(ev1_57.size() == 1 and ev1_57[0] == a1_57, "打磨-57 首次 drain 仅 a1 就绪事件 (实际 %s)" % str(ev1_57))
+		# 幂等: 立即再 drain 为空 (事件已消费)
+		var ev1b_57: Array[String] = g.drain_ready_events()
+		check(ev1b_57.is_empty(), "打磨-57 二次 drain 立即为空 (已消费, 幂等)")
+		# 再 tick 15 秒: a2 归零转就绪 (推事件)
+		g._tick_active_cd(15.0)
+		check(g.active_ready(a2_57), "打磨-57 再 15s tick 后 a2 就绪 (冷却完毕)")
+		var ev2_57: Array[String] = g.drain_ready_events()
+		check(ev2_57.size() == 1 and ev2_57[0] == a2_57, "打磨-57 二次 drain 仅 a2 就绪事件 (实际 %s)" % str(ev2_57))
+		# 无重复触发: 两者已就绪, 再 tick 无新事件 (冷却已移除)
+		g._tick_active_cd(5.0)
+		var ev3_57: Array[String] = g.drain_ready_events()
+		check(ev3_57.is_empty(), "打磨-57 就绪后再 tick 不重复触发 (幂等, 无重复)")
+		# 无副作用: tick/drain 不改 资源/统计 (只读, _process 才动 essence/stone)
+		var ess_b57: float = g.essence
+		var sto_b57: float = g.stones
+		var stats_b57: Dictionary = g.stats.duplicate(true)
+		g._active_cd[a1_57] = 1.0
+		g._tick_active_cd(2.0)
+		g.drain_ready_events()
+		check(absf(g.essence - ess_b57) < 1e-9, "打磨-57 tick/drain 无 灵气 副作用")
+		check(absf(g.stones - sto_b57) < 1e-9, "打磨-57 tick/drain 无 灵石 副作用")
+		check(g.stats == stats_b57, "打磨-57 tick/drain 无 统计 副作用")
+	# 恢复干净基准态 (供 后续/收尾 使用)
+	g.learned.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.essence = 0.0
+	g.stones = 0.0
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

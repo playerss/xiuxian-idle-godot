@@ -91,6 +91,9 @@ var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道�
 var _active_cd := {}        # 技能 id -> 剩余冷却秒
 var _save_acc := 0.0
 var _ach_acc := 0.0         # 成就检测节流累计
+# 打磨-57: 主动神通 冷却完毕转就绪 事件队列 (冷却在 _process 结束时产生,
+# UI 每帧 drain_ready_events 消费; 只读不改动 状态/存档/统计, 不持久化)
+var ready_events: Array[String] = []
 
 func _ready() -> void:
 	load_data()
@@ -104,11 +107,7 @@ func _process(delta: float) -> void:
 		essence += qi_per_sec() * delta
 	stones += stone_per_sec() * delta
 	_stat_inc("play_sec", delta)  # 打磨-14: 累计在线时长
-	# 神通冷却
-	for id in _active_cd.keys():
-		_active_cd[id] = maxf(0.0, _active_cd[id] - delta)
-		if _active_cd[id] <= 0.0:
-			_active_cd.erase(id)
+	_tick_active_cd(delta)  # 神通冷却
 	# 成就检测 (节流 1 秒, 幂等; 灵石达标记类成就在挂机中也能触发)
 	_ach_acc += delta
 	if _ach_acc >= 1.0:
@@ -682,6 +681,25 @@ func active_ready(id: String) -> bool:
 
 func active_cd_left(id: String) -> int:
 	return int(ceil(_active_cd.get(id, 0.0)))
+
+# 打磨-57: 神通冷却推进 (从 _process 拆出, 供自测手动驱动): 逐 id 扣减剩余冷却,
+# 归零即移除并推入 ready_events (冷却完毕转就绪事件; 只增不改 状态/存档/统计)
+func _tick_active_cd(delta: float) -> void:
+	for id in _active_cd.keys():
+		_active_cd[id] = maxf(0.0, _active_cd[id] - delta)
+		if _active_cd[id] <= 0.0:
+			_active_cd.erase(id)
+			ready_events.append(str(id))
+
+# 打磨-57: UI 每帧消费就绪事件 (取出即清空, 幂等; 返回的 id 恒为 已学主动神通)
+# 注意: Array[String] 是引用类型, `var out = ready_events` 只是别名 (clear 会连带清空 out),
+# 须逐项拷贝到新数组再清源
+func drain_ready_events() -> Array[String]:
+	var out: Array[String] = []
+	for id in ready_events:
+		out.append(id)
+	ready_events.clear()
+	return out
 
 func use_active_skill(id: String) -> String:
 	var s: Dictionary = skill_by_id.get(id, {})

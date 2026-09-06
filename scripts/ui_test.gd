@@ -11,6 +11,8 @@ extends Node
 ##          各按钮关键口径词: 境界条件/爆发口径/自动穿戴/最佳判定链/幂等/全局口径)
 ## 打磨-55: 单个神通 施展 浮动反馈断言 (成功弹绿色浮动 文案含神通名/未领悟与冷却中 不弹/
 ##          点被动行 不弹/底部消息 与 浮动 并存/skill_use 统计口径不变)
+## 打磨-57: 主动神通 冷却完毕转就绪 浮动断言 (冷却 归零 弹绿色浮动 文案含神通名/同一批多个
+##          就绪 合并一行/按钮同步恢复 施展/tick/drain 无 资源/统计 副作用/无重复触发)
 ## 打磨-47: 一键购买 (装备/法器) 结果反馈断言 (变更>0 底部消息追加 共花灵石+距下一件缺口/
 ##          全拥有 0 变更 不追加/tooltip 说明 结果反馈 口径)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
@@ -86,6 +88,7 @@ func _ready() -> void:
 	await _assert_burst_preview()
 	await _assert_skill_cast_float()
 	await _assert_active_learn()
+	await _assert_ready_float()
 	_finish()
 
 
@@ -1143,6 +1146,112 @@ func _assert_active_learn() -> void:
 	# 收尾: 恢复基准态 (境界0层1, 清 已学/冷却/资源)
 	g.learned.clear()
 	g._active_cd.clear()
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 — 冷却 归零 时 屏幕中央 绿色浮动
+# "✦ 冷却完毕: X ✦" (文案含神通名, 与 一键施展/单个施展 浮动 口径区分), 同一批多个就绪
+# 合并一行; 只读 _active_cd 事件 (不改动 状态/存档/统计); 受控态: 两个 凡品 主动神通 冷却
+# 30/45 秒 不同步, 手动驱动 _tick_active_cd 后 _refresh 消费 就绪事件 触发浮动
+func _assert_ready_float() -> void:
+	var g := GameData
+	# 受控态: 全新基准 (境界0层1, 空 技能/装备/法器, 清 冷却/就绪事件)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	# 节点: 就绪浮动 Label 存在 + 绿色 (与 一键系列 同绿口径) + 初始 无浮动
+	var fl: Label = ui._ready_float_label
+	check(fl != null, "打磨-57 就绪浮动 Label 节点存在")
+	if fl == null:
+		return
+	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "打磨-57 就绪浮动 文字色=绿")
+	check(str(ui._ready_last_text) == "", "打磨-57 初始 无就绪浮动文案 (实际 %s)" % str(ui._ready_last_text))
+	check(ui._ready_float_count == 0, "打磨-57 初始 就绪浮动计数=0 (实际 %d)" % ui._ready_float_count)
+	# 找 两个 凡品 主动神通 (不同 id, 不同冷却: 90s/90s 同档, 用 手动注入 30/45 区分同步)
+	var r_act: Array[String] = []
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id[id]
+		if int(s["tier"]) == 0 and str(s["type"]) == "active":
+			r_act.append(str(id))
+	check(r_act.size() >= 2, "打磨-57 受控态 找到 >=2 个 凡品主动神通 (实际 %d)" % r_act.size())
+	if r_act.size() < 2:
+		return
+	var a1: String = r_act[0]
+	var a2: String = r_act[1]
+	var n1: String = str(g.skill_by_id[a1]["name"])
+	var n2: String = str(g.skill_by_id[a2]["name"])
+	# 注入: 两个 已学 主动神通 冷却中 (30/45 秒 不同步), 就绪事件 清空
+	g.learned.append(a1)
+	g.learned.append(a2)
+	g._active_cd[a1] = 30.0
+	g._active_cd[a2] = 45.0
+	g.ready_events.clear()
+	var c0: int = ui._ready_float_count
+	var stats_b: Dictionary = g.stats.duplicate(true)
+	var ess_b: float = g.essence
+	var sto_b: float = g.stones
+	# --- 手动驱动 冷却 tick 30 秒 (GameData 已冻结 _process, 由测试手动推进): ---
+	# a1 归零转就绪 (推 就绪事件), a2 余 15 秒 (不推)
+	g._tick_active_cd(30.0)
+	check(g.active_ready(a1) and not g.active_ready(a2), "打磨-57 30s tick 后 a1 就绪 a2 仍冷却")
+	# _refresh 消费 就绪事件 -> 弹 就绪浮动 (文案仅含 a1 名, a2 未就绪)
+	ui._refresh()
+	check(ui._ready_float_count == c0 + 1, "打磨-57 a1 冷却完毕 浮动计数+1 (期望 %d, 实际 %d)" % [c0 + 1, ui._ready_float_count])
+	check(str(ui._ready_last_text) == n1, "打磨-57 浮动文案=a1 神通名 (实际 %s)" % str(ui._ready_last_text))
+	check(str(fl.text) == "✦ 冷却完毕: " + n1 + " ✦", "打磨-57 浮动 Label 文本=✦ 冷却完毕: X ✦ (实际 %s)" % str(fl.text))
+	check(absf(fl.position.y + 48.0) < 0.5, "打磨-57 浮动位置复位 y≈-48 (实际 %.2f)" % fl.position.y)
+	check(fl.modulate.a > 0.9, "打磨-57 浮动可见 (alpha=%.2f)" % fl.modulate.a)
+	# 只读: tick/drain 不改动 资源/统计
+	check(absf(g.essence - ess_b) < 1e-9, "打磨-57 tick 无 灵气 副作用 (实际 %.0f)" % g.essence)
+	check(absf(g.stones - sto_b) < 1e-9, "打磨-57 tick 无 灵石 副作用 (实际 %.0f)" % g.stones)
+	check(g.stats == stats_b, "打磨-57 tick 无 统计 副作用")
+	# 技能行 按钮 同步: a1 冷却完毕 -> 按钮 恢复 施展
+	var btn_a1: Button = ui._skill_btns[a1]
+	check(str(btn_a1.text) == "施展" and not btn_a1.disabled, "打磨-57 a1 冷却完毕 按钮恢复 施展 (实际 %s)" % str(btn_a1.text))
+	var btn_a2: Button = ui._skill_btns[a2]
+	check(str(btn_a2.text).begins_with("冷却"), "打磨-57 a2 仍冷却 按钮=冷却N秒 (实际 %s)" % str(btn_a2.text))
+	# 再 tick 15 秒: a2 归零转就绪 -> 同一 _refresh 弹 第二个 就绪浮动 (文案=a2 名)
+	g._tick_active_cd(15.0)
+	check(g.active_ready(a1) and g.active_ready(a2), "打磨-57 再 15s tick 后 a2 也就绪")
+	var c1: int = ui._ready_float_count
+	ui._refresh()
+	check(ui._ready_float_count == c1 + 1, "打磨-57 a2 冷却完毕 浮动计数+1 (期望 %d, 实际 %d)" % [c1 + 1, ui._ready_float_count])
+	check(str(ui._ready_last_text) == n2, "打磨-57 第二次 浮动文案=a2 神通名 (实际 %s)" % str(ui._ready_last_text))
+	check(str(fl.text) == "✦ 冷却完毕: " + n2 + " ✦", "打磨-57 第二次 浮动 Label 文本 (实际 %s)" % str(fl.text))
+	# --- 同一批多个就绪 合并一行: 两神通 同时 进冷却, 同帧 归零 -> 一个 浮动 含 两名 (换行) ---
+	g._active_cd[a1] = 5.0
+	g._active_cd[a2] = 5.0
+	g.ready_events.clear()
+	var c2: int = ui._ready_float_count
+	g._tick_active_cd(5.0)
+	ui._refresh()
+	check(ui._ready_float_count == c2 + 1, "打磨-57 同帧两就绪 仅一个 浮动 (合并, 计数 %d→%d)" % [c2, ui._ready_float_count])
+	var merged: String = str(ui._ready_last_text)
+	check(merged.find(n1) >= 0 and merged.find(n2) >= 0 and merged != "", "打磨-57 合并文案 含 两神通名 (实际 %s)" % merged)
+	check(str(fl.text).find("\n") >= 0, "打磨-57 合并 浮动 Label 多行 (含换行) (实际 %s)" % str(fl.text))
+	# 无重复触发: 均已就绪, 再 tick + _refresh 不弹 新浮动 (计数不变)
+	var c3: int = ui._ready_float_count
+	g._tick_active_cd(10.0)
+	ui._refresh()
+	check(ui._ready_float_count == c3, "打磨-57 就绪后再 tick 不重复触发 浮动 (计数 %d 不变)" % c3)
+	# 收尾: 恢复基准态 (清 已学/冷却/就绪事件/资源)
+	g.learned.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
 	g.essence = 0.0
 	g.stones = 0.0
 	g.dao = 0.0

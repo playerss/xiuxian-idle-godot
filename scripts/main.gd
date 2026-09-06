@@ -51,6 +51,10 @@ var _onekey_float_label: Label     # 打磨-45: 一键系列浮动反馈 (顶层
 var _onekey_float_tween: Tween
 var _onekey_float_count := 0       # 打磨-45: 浮动提示次数 (自测断言用)
 var _onekey_last_text := ""        # 打磨-45: 最近一次浮动文案 (自测断言用)
+var _ready_float_label: Label      # 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (顶层, 居中)
+var _ready_float_tween: Tween
+var _ready_float_count := 0        # 打磨-57: 就绪浮动提示次数 (自测断言用)
+var _ready_last_text := ""         # 打磨-57: 最近一次就绪浮动文案 (自测断言用)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _stone_tip := ""              # 打磨-49: 顶栏灵石行 tooltip 缓存 (变化才刷, 速率/缺口随挂机变化)
@@ -226,6 +230,17 @@ func _build_ui() -> void:
 	_onekey_float_label.modulate = Color(1, 1, 1, 0)
 	_onekey_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_onekey_float_label)
+
+	# 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (居中绿色, 与 一键系列 同口径, 位置错开)
+	_ready_float_label = _label("", 22, Color(0.55, 0.95, 0.55))
+	_ready_float_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_ready_float_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_ready_float_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_ready_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ready_float_label.position = Vector2(0, -48)
+	_ready_float_label.modulate = Color(1, 1, 1, 0)
+	_ready_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_ready_float_label)
 
 
 func _make_page(title: String) -> Panel:
@@ -1314,6 +1329,34 @@ func _refresh() -> void:
 		_ach_float(fresh)
 	if g.ach_done.size() != _ach_prev.size():
 		_ach_prev = g.ach_done.duplicate()
+	# 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (每帧消费 就绪事件; 同一批多个就绪合并一行,
+	# 文案含神通名, 与 一键施展/单个施展 浮动 口径区分; 只读事件 不改动 状态/存档/统计)
+	var fresh_ready: Array[String] = g.drain_ready_events()
+	if not fresh_ready.is_empty():
+		_ready_float(fresh_ready)
+
+
+# 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (居中绿色上浮淡出, 与 打磨-45 一键系列 同口径,
+# 位置 y=-48 与 一键(-26)/成就(-58) 错开; 同一批多个就绪合并一行展示)
+func _ready_float(fresh: Array[String]) -> void:
+	var names := ""
+	for id in fresh:
+		var s: Dictionary = GameData.skill_by_id.get(str(id), {})
+		if s.is_empty():
+			continue
+		names += ("\n" if names != "" else "") + (s["name"] as String)
+	if names == "":
+		return
+	_ready_float_count += 1
+	_ready_last_text = names
+	_ready_float_label.text = "✦ 冷却完毕: " + names + " ✦"
+	_ready_float_label.position = Vector2(0, -48)
+	_ready_float_label.modulate = Color(1, 1, 1, 1)
+	if _ready_float_tween != null and _ready_float_tween.is_valid():
+		_ready_float_tween.kill()
+	_ready_float_tween = create_tween()
+	_ready_float_tween.tween_property(_ready_float_label, "position:y", -86.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_ready_float_tween.parallel().tween_property(_ready_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
 
 
 # 打磨-17: 成就解锁浮动提示 (居中上浮淡出; 同一批多个解锁合并一行展示)
