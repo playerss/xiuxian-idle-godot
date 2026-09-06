@@ -80,6 +80,7 @@ func _ready() -> void:
 	_assert_onekey_tooltips()
 	_assert_buy_feedback()
 	_assert_stone_tip()
+	await _assert_stone_next_inline()
 	_finish()
 
 
@@ -746,6 +747,63 @@ func _assert_stone_tip() -> void:
 	ui._refresh()
 	var tip3: String = str(ui._stones_label.tooltip_text)
 	check(tip3.find("已集齐") >= 0, "全拥有 tooltip=已集齐 (实际 %s)" % tip3)
+	# 恢复基准态 (全空, 灵石0)
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.essence = 0.0
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	ui._refresh()
+
+
+# 打磨-50: 修行页灵石速率行 内联 下一件可购 ETA (UI 侧: _stone_next_label 金色小字)
+# 在 _assert_stone_tip 的基准态 (全空, 境界0, 灵石0, 灵石速率 1.0/s) 上断言:
+# 缺口行文本与接口一致 / 同态节流 / 灵石足够切换 / 灵石归0恢复 / 全拥有已集齐.
+func _assert_stone_next_inline() -> void:
+	var g := GameData
+	check(ui._stone_next_label != null, "打磨-50 _stone_next_label 节点存在")
+	check(ui._stone_next_label.get_theme_color("font_color") == ui.GOLD, "打磨-50 内联标签颜色=金 (实际 %s)" % ui._stone_next_label.get_theme_color("font_color"))
+	# 基准态: 缺口>0, 速率 1.0/s -> 距下一件 最便宜 缺口+ETA
+	var st: Dictionary = g.stone_next_target()
+	check(not st.is_empty(), "打磨-50 基准态 stone_next 非空 (实际 %s)" % str(st))
+	ui._refresh()
+	var t0: String = str(ui._stone_next_label.text)
+	check(t0 == g.stone_next_target_inline(), "打磨-50 内联文本 与接口一致 (UI %s / 接口 %s)" % [t0, g.stone_next_target_inline()])
+	check(t0.begins_with("距下一件 %s「%s」" % [str(st["kind"]), str(st["name"])]), "打磨-50 内联指向最便宜未拥有 (实际 %s)" % t0)
+	check(t0.find("还差 %s 灵石" % g.fmt(float(st["shortfall"]))) >= 0, "打磨-50 内联含缺口额 (实际 %s)" % t0)
+	check(t0.find("可购") >= 0, "打磨-50 内联含 可购 ETA (实际 %s)" % t0)
+	# 节流: 同态再刷, 缓存不变
+	var cache0: String = str(ui._stone_next_text)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stone_next_text) == cache0, "打磨-50 内联 同态再刷 缓存不变 (节流生效)")
+	# 状态变化: 灵石足够 -> 内联切 "灵石已足够, 可立即购买"
+	g.stones = float(st["cost"]) + 1.0
+	ui._refresh()
+	var t1: String = str(ui._stone_next_label.text)
+	check(t1 != t0, "打磨-50 灵石足够后 内联文本变化 (缓存刷新)")
+	check(t1.find("灵石已足够, 可立即购买") >= 0, "打磨-50 灵石足够 内联=可立即购买 (实际 %s)" % t1)
+	# 状态变化: 灵石归 0 -> 回到缺口行 (与接口一致)
+	g.stones = 0.0
+	ui._refresh()
+	check(str(ui._stone_next_label.text) == t0, "打磨-50 灵石归0 内联恢复缺口行 (实际 %s)" % str(ui._stone_next_label.text))
+	# 状态变化: 全拥有 -> 已集齐
+	for id in g.equip_ids:
+		g.owned_eq.append(str(id))
+	for it in g.ITEMS:
+		g.owned.append(str((it as Dictionary)["id"]))
+	ui._refresh()
+	var t2: String = str(ui._stone_next_label.text)
+	check(t2 == "已集齐全部 装备与法器", "打磨-50 全拥有 内联=已集齐 (实际 %s)" % t2)
 	# 恢复基准态 (全空, 灵石0)
 	g.stones = 0.0
 	g.learned.clear()

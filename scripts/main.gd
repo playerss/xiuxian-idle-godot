@@ -19,6 +19,8 @@ var _essence_label: Label
 var _stones_label: Label
 var _qi_label: Label
 var _stone_rate_label: Label
+var _stone_next_label: Label    # 打磨-50: 灵石速率行内联 下一件可购 ETA (修行页)
+var _stone_next_text := ""      # 打磨-50: 内联文本缓存 (变化时才刷)
 var _offline_label: Label      # 打磨-13: 离线每小时收益 (修行页)
 var _offline_text := ""        # 离线文本缓存 (变化时才刷)
 var _break_eta_label: Label    # 打磨-24: 突破/道行精进 ETA (修行页)
@@ -250,6 +252,10 @@ func _build_training_page(page: Panel) -> void:
 	left.add_child(_qi_label)
 	_stone_rate_label = _label("灵石速率  0 /秒", 15, CYAN)
 	left.add_child(_stone_rate_label)
+	# 打磨-50: 灵石速率行内联 下一件可购 ETA (金色小字, 文本变化才刷; 买得起/全集齐 切换提示)
+	_stone_next_label = _label("", 12, GOLD)
+	left.add_child(_stone_next_label)
+	_stone_next_label.tooltip_text = "距下一件可购(最便宜未拥有 装备/法器)所需灵石与预计时间, 复用顶栏灵石口径。灵石足够或已集齐时显示对应提示。"
 	# 打磨-13: 离线/挂机收益可视化 (每小时离线可得资源)
 	_offline_label = _label("", 14, DIM)
 	left.add_child(_offline_label)
@@ -979,6 +985,11 @@ func _refresh() -> void:
 	var rate_txt := g.fmt(g.qi_per_sec())
 	_qi_label.text = ("道行速率  %s /秒" if g.ascended else "灵气速率  %s /秒") % rate_txt
 	_stone_rate_label.text = "灵石速率  %s /秒" % g.fmt(g.stone_per_sec())
+	# 打磨-50: 内联 下一件可购 ETA (缺口>0 显示缺口+ETA; 买得起/全集齐 切换提示, 文本变化才刷)
+	var sn_t: String = g.stone_next_target_inline()
+	if sn_t != _stone_next_text:
+		_stone_next_text = sn_t
+		_stone_next_label.text = sn_t
 	# 打磨-13: 离线每小时收益 (文本变化时才刷)
 	var off_t: String = g.offline_hourly_text()
 	if off_t != _offline_text:

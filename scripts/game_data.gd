@@ -958,6 +958,23 @@ func stone_next_target_tip() -> String:
 		return head + ("\n距下一件 %s 还差 %s 灵石 (当前无灵石收入)" % [label, fmt(gap)])
 	return head + ("\n距下一件 %s 还差 %s 灵石 %s" % [label, fmt(gap), eta_text(float(target["cost"]))])
 
+# ---------- 打磨-50: 修行页灵石速率行 内联 下一件可购提示 (复用 打磨-49 stone_next_target 口径) ----------
+# 只读: 全拥有 -> "已集齐全部 装备与法器"; 灵石足够 -> "「类别·名」灵石已足够, 可立即购买";
+# 缺口>0 且 灵石速率>0 -> "距下一件「类别·名」还差 X 灵石 <ETA 档位>" (复用 打磨-12 eta_text 口径);
+# 缺口>0 且 无灵石收入 -> 省略 ETA 标注 "当前无灵石收入"。无新存档字段。
+func stone_next_target_inline() -> String:
+	var target: Dictionary = stone_next_target()
+	if target.is_empty():
+		return "已集齐全部 装备与法器"
+	var label := "%s「%s」" % [str(target["kind"]), str(target["name"])]
+	var gap: float = float(target["shortfall"])
+	if gap <= 0.0:
+		return label + " 灵石已足够, 可立即购买"
+	var t: float = eta_seconds(float(target["cost"]))
+	if t < 0.0:
+		return "距下一件 %s 还差 %s 灵石 (当前无灵石收入)" % [label, fmt(gap)]
+	return ("距下一件 %s 还差 %s 灵石 " % [label, fmt(gap)]) + eta_text(float(target["cost"]))
+
 # ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 主动神通) ----------
 
 # 当前就绪 (无冷却) 的 已学主动神通 数 (供技能页"一键施展"按钮文案)

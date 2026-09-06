@@ -1748,6 +1748,69 @@ func _init() -> void:
 	g.dao_level = 0
 	g.owned.clear()
 	g.owned_eq.clear()
+	# ---------- 打磨-50: 修行页灵石速率行 内联 下一件可购 (stone_next_target_inline, 只读) ----------
+	# 受控态: 全未拥有 + 境界0 (灵石速率 1.0/s); 最便宜未拥有 = 全局最便宜 (cost 100 装备/法器 同价, 装备优先)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 0.0
+	check(absf(g.stone_per_sec() - 1.0) < 1e-6, "打磨-50 受控态 灵石速率=1.0/s (实际 %s)" % g.stone_per_sec())
+	var st50: Dictionary = g.stone_next_target()
+	check(not st50.is_empty(), "打磨-50 基准态 stone_next 非空 (实际 %s)" % str(st50))
+	var inl0: String = g.stone_next_target_inline()
+	check(inl0.begins_with("距下一件 "), "打磨-50 inline 前缀=距下一件 (实际 %s)" % inl0)
+	check(inl0.find("「%s」" % str(st50["name"])) >= 0, "打磨-50 inline 指向最便宜未拥有 %s (实际 %s)" % [str(st50["name"]), inl0])
+	check(inl0.find("还差 %s 灵石" % g.fmt(float(st50["shortfall"]))) >= 0, "打磨-50 inline 含缺口额 (实际 %s)" % inl0)
+	check(inl0.ends_with("约 1分 可购"), "打磨-50 inline ETA=约 1分 可购 档 (100秒, 实际 %s)" % inl0)
+	check(inl0 == ("距下一件 %s 还差 %s 灵石 约 1分 可购" % ["%s「%s」" % [str(st50["kind"]), str(st50["name"])], g.fmt(float(st50["shortfall"]))]), "打磨-50 inline 全文=口径拼接 (实际 %s)" % inl0)
+	# 缺口 5 灵石 -> 5 秒 -> "不足1分可购" 档 (打磨-12 eta_text 同口径)
+	g.stones = float(st50["cost"]) - 5.0
+	var inl1: String = g.stone_next_target_inline()
+	check(inl1.begins_with("距下一件 "), "打磨-50 缺口5秒 inline 仍指向下一件 (实际 %s)" % inl1)
+	check(inl1.find("还差 5 灵石") >= 0, "打磨-50 缺口5秒 缺口额=5 (实际 %s)" % inl1)
+	check(inl1.ends_with("不足1分可购"), "打磨-50 缺口5秒 ETA=不足1分可购 档 (实际 %s)" % inl1)
+	# 灵石足够 -> "灵石已足够, 可立即购买" (无 还差/无 ETA)
+	g.stones = float(st50["cost"]) + 1.0
+	var inl2: String = g.stone_next_target_inline()
+	check(inl2.find("灵石已足够, 可立即购买") >= 0, "打磨-50 灵石足够=可立即购买 (实际 %s)" % inl2)
+	check(inl2.find("还差") < 0, "打磨-50 灵石足够 不含 还差 (实际 %s)" % inl2)
+	check(inl2.find("可购") < 0, "打磨-50 灵石足够 不含 可购ETA (实际 %s)" % inl2)
+	# 拥有 全部 <500 价 装备+法器 -> 目标移到 cost 500 档 (500 秒 -> "约 8分 可购")
+	g.stones = 0.0
+	for id in g.equip_ids:
+		if float(g.equip_by_id[id]["cost"]) < 500.0:
+			g.owned_eq.append(str(id))
+	for it in g.ITEMS:
+		if float((it as Dictionary)["cost"]) < 500.0:
+			g.owned.append(str((it as Dictionary)["id"]))
+	var st50b: Dictionary = g.stone_next_target()
+	check(not st50b.is_empty() and absf(float(st50b["cost"]) - 500.0) < 1e-6, "打磨-50 拥有便宜件后 目标移到 500 档 (实际 %s)" % str(st50b))
+	var inl3: String = g.stone_next_target_inline()
+	check(inl3 == ("距下一件 %s 还差 %s 灵石 " % ["%s「%s」" % [str(st50b["kind"]), str(st50b["name"])], g.fmt(float(st50b["shortfall"]))]) + g.eta_text(float(st50b["cost"])), "打磨-50 500 档 inline 全文=口径拼接 (实际 %s)" % inl3)
+	check(inl3.ends_with("约 8分 可购"), "打磨-50 500秒档 ETA=约 8分 可购 (实际 %s)" % inl3)
+	# 全部拥有 -> "已集齐全部 装备与法器"
+	g.owned.clear()
+	g.owned_eq.clear()
+	for id in g.equip_ids:
+		g.owned_eq.append(str(id))
+	for it in g.ITEMS:
+		g.owned.append(str((it as Dictionary)["id"]))
+	var inl4: String = g.stone_next_target_inline()
+	check(inl4 == "已集齐全部 装备与法器", "打磨-50 全拥有=已集齐 (实际 %s)" % inl4)
+	# 只读性: 调用不消耗灵石
+	var stones_before50: float = g.stones
+	g.stone_next_target_inline()
+	check(g.stones == stones_before50, "打磨-50 inline 只读 无副作用")
+	# 恢复干净基准态
+	g.stones = 0.0
+	g.learned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.owned.clear()
+	g.owned_eq.clear()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
