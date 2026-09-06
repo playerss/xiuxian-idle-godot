@@ -607,7 +607,20 @@ func _skill_sort(a: String, b: String) -> bool:
 
 func _on_skill_btn(id: String, is_active: bool) -> void:
 	if is_active:
-		_show_msg(GameData.use_active_skill(id))
+		if not GameData.learned.has(id):
+			# 打磨-55 顺带修: 原逻辑 is_active 只走 use_active_skill, 未领悟的神通点按钮
+			# 恒返回 "尚未领悟" 且按钮被禁用, 境界达标的主动神通实际无法领悟; 现 未领悟先领悟
+			_show_msg(GameData.learn_skill(id))
+			return
+		# 打磨-55: 单个神通 施展 成功时同步 屏幕中央绿色浮动 (与 打磨-45 一键系列 同 _onekey_float 口径);
+		# 失败 (冷却中) 只走底部消息不弹浮动; skill_use 统计埋点口径不变 (仍在 use_active_skill 内)
+		var snap_ess: float = GameData.essence
+		var snap_dao: float = GameData.dao
+		var msg: String = GameData.use_active_skill(id)
+		_show_msg(msg)
+		if msg.begins_with("施展") and (GameData.essence > snap_ess or GameData.dao > snap_dao):
+			var name: String = str(GameData.skill_by_id.get(id, {}).get("name", ""))
+			_onekey_float("施展「%s」" % name)
 	else:
 		_show_msg(GameData.learn_skill(id))
 

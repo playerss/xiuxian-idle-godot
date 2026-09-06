@@ -9,6 +9,8 @@ extends Node
 ##          文案/计数/颜色/无 essence 副作用, 5 按钮逐一+重复点击)
 ## 打磨-46: 一键系列按钮 tooltip 统一口径断言 (5 按钮 3 行结构: 动作顺序/筛选叠加/计数口径 +
 ##          各按钮关键口径词: 境界条件/爆发口径/自动穿戴/最佳判定链/幂等/全局口径)
+## 打磨-55: 单个神通 施展 浮动反馈断言 (成功弹绿色浮动 文案含神通名/未领悟与冷却中 不弹/
+##          点被动行 不弹/底部消息 与 浮动 并存/skill_use 统计口径不变)
 ## 打磨-47: 一键购买 (装备/法器) 结果反馈断言 (变更>0 底部消息追加 共花灵石+距下一件缺口/
 ##          全拥有 0 变更 不追加/tooltip 说明 结果反馈 口径)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
@@ -82,6 +84,7 @@ func _ready() -> void:
 	_assert_stone_tip()
 	await _assert_stone_next_inline()
 	await _assert_burst_preview()
+	await _assert_skill_cast_float()
 	_finish()
 
 
@@ -940,6 +943,118 @@ func _assert_burst_preview() -> void:
 			break
 	check(id0 == "sword_0_0", "打磨-54顺带修 首行=已学技能 (实际 %s)" % id0)
 	# 收尾: 等一帧让状态/布局稳定 (同 _assert_stone_next_inline 口径)
+	await get_tree().process_frame
+
+
+# 打磨-55: 单个神通 施展 浮动反馈 — 单个 神通行 点 施展 成功时 屏幕中央 绿色浮动 (复用 打磨-45 _onekey_float 口径,
+# 文案 "施展「X」" 含神通名, 与 一键施展 的 "一键施展 N 个神通" 口径区分); 失败 (未领悟/冷却中) 与
+# 点 被动功法行 不弹; 底部消息 与 浮动 并存; skill_use 统计埋点口径不变 (只增不减, 失败不增)
+func _assert_skill_cast_float() -> void:
+	var g := GameData
+	# 受控态: 全新基准 (境界0层1 速率 1.0, 空 技能/法器/装备/道行)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	ui._tab.current_tab = 1
+	ui._refresh()
+	var fl: Label = ui._onekey_float_label
+	check(fl != null, "打磨-55 浮动 Label 节点存在")
+	if fl == null:
+		_finish()
+		return
+	var c0: int = ui._onekey_float_count
+	# 找 1 个 凡品 主动神通 (境界0层1 可领悟) + 1 个 同档 被动功法 + 1 个 不同件 的 未学 主动
+	var act_id := ""
+	var pas_id := ""
+	var unact_id := ""
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id[id]
+		if int(s["tier"]) != 0:
+			continue
+		if str(s["type"]) == "active" and act_id == "":
+			act_id = str(id)
+		elif str(s["type"]) == "passive" and pas_id == "":
+			pas_id = str(id)
+		if str(s["type"]) == "active" and act_id != "" and unact_id == "" and str(id) != act_id:
+			unact_id = str(id)
+	check(act_id != "" and pas_id != "" and unact_id != "", "打磨-55 受控态 找到 主动/被动/未学主动 (实际 %s/%s/%s)" % [act_id, pas_id, unact_id])
+	# --- 未领悟: 原按钮 disabled 无法领悟 (只能走 一键领悟); 顺带修: 点击 = 领悟 (境界足够), 不弹浮动 ---
+	ui._refresh()
+	var btn_un: Button = ui._skill_btns[unact_id]
+	check(str(btn_un.text) == "未领悟" and btn_un.disabled, "打磨-55 未领悟 按钮=未领悟+禁用 (实际 %s)" % str(btn_un.text))
+	ui._on_skill_btn(unact_id, true)
+	check(g.learned.has(unact_id), "打磨-55顺带修 未领悟 点击=领悟 (境界足够时)")
+	check(ui._onekey_float_count == c0, "打磨-55 领悟 (非施展) 不弹浮动 (计数 %d 不变)" % c0)
+	check(str(ui._msg_label.text).find("领悟「") >= 0, "打磨-55顺带修 未领悟 底部消息=领悟成功 (实际 %s)" % str(ui._msg_label.text))
+	# --- 领悟 目标神通 (技能行 按钮路径): 领悟本身不弹浮动 (只有 施展 弹) ---
+	var stats_use0: int = int(g.stats.get("skill_use", 0.0))
+	# 顺带修: 未领悟的主动神通 点按钮 = 领悟 (原按钮被禁用 无法领悟, 只能走 一键领悟)
+	ui._on_skill_btn(act_id, true)
+	check(g.learned.has(act_id), "打磨-55 领悟 目标神通 (已学 %d)" % g.learned.size())
+	check(int(g.stats.get("skill_use", 0.0)) == stats_use0, "打磨-55 领悟 (非施展) 不增 skill_use")
+	# --- 点击 施展: 成功弹浮动 (绿色/文案含神通名/位置复位/可见) + 爆发真实加灵气 + 底部消息 并存 ---
+	ui._refresh()
+	var btn: Button = ui._skill_btns[act_id]
+	check(str(btn.text) == "施展" and not btn.disabled, "打磨-55 已就绪 按钮=施展 (实际 %s)" % str(btn.text))
+	var name: String = str(g.skill_by_id[act_id]["name"])
+	var ess0: float = g.essence
+	ui._on_skill_btn(act_id, true)
+	check(ui._onekey_float_count == c0 + 1, "打磨-55 施展成功 浮动计数+1 (期望 %d, 实际 %d)" % [c0 + 1, ui._onekey_float_count])
+	check(str(ui._onekey_last_text) == "施展「%s」" % name, "打磨-55 浮动文案=施展「%s」 (实际 %s)" % [name, str(ui._onekey_last_text)])
+	check(str(fl.text) == "✦ 施展「%s」 ✦" % name, "打磨-55 浮动 Label 文本 ✦…✦ (实际 %s)" % str(fl.text))
+	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "打磨-55 浮动文字=绿 (与 一键系列 同绿口径)")
+	check(absf(fl.position.y + 26.0) < 0.5, "打磨-55 浮动位置复位 y≈-26 (实际 %.2f)" % fl.position.y)
+	check(fl.modulate.a > 0.9, "打磨-55 浮动可见 (alpha=%.2f)" % fl.modulate.a)
+	check(g.essence > ess0, "打磨-55 施展 爆发真实加灵气 (爆发前 %.0f → 后 %.0f)" % [ess0, g.essence])
+	check(str(ui._msg_label.text).find("施展「%s」" % name) >= 0, "打磨-55 底部消息 与 浮动 并存 (实际 %s)" % str(ui._msg_label.text))
+	check(int(g.stats.get("skill_use", 0.0)) == stats_use0 + 1, "打磨-55 施展成功 skill_use +1 (口径不变)")
+	# --- 冷却中: 再点 不弹浮动 (只走底部消息), 失败不增 skill_use ---
+	ui._refresh()
+	check(str(btn.text).begins_with("冷却"), "打磨-55 施展后 按钮=冷却N秒 (实际 %s)" % str(btn.text))
+	var stats_use1: int = int(g.stats.get("skill_use", 0.0))
+	ui._on_skill_btn(act_id, true)
+	check(ui._onekey_float_count == c0 + 1, "打磨-55 冷却中 再点 不弹浮动 (计数 %d 不变)" % (c0 + 1))
+	check(str(ui._msg_label.text).find("冷却中") >= 0, "打磨-55 冷却中 底部消息=冷却中 (实际 %s)" % str(ui._msg_label.text))
+	check(int(g.stats.get("skill_use", 0.0)) == stats_use1, "打磨-55 冷却中 失败 不增 skill_use")
+	# --- 被动功法行: 点击 (领悟/已领悟) 不弹浮动 ---
+	ui._refresh()
+	var btn_p: Button = ui._skill_btns[pas_id]
+	ui._on_skill_btn(pas_id, false)
+	check(ui._onekey_float_count == c0 + 1, "打磨-55 被动功法 点击 不弹浮动 (计数 %d 不变)" % (c0 + 1))
+	# --- 飞升态: 口径改道行, 浮动文案 同口径 (复用 _onekey_float, 文案仅 神通名 不涉 资源) ---
+	g.learned.clear()
+	g._active_cd.clear()
+	g.ascended = true
+	g.dao_level = 1
+	g.dao = 0.0
+	g.essence = 0.0
+	check(g.can_learn(act_id), "打磨-55 飞升态 目标神通 门槛可学 (can_learn 只看 境界/层)")
+	g.learned.append(act_id)
+	ui._refresh()
+	var dao0: float = g.dao
+	ui._on_skill_btn(act_id, true)
+	check(ui._onekey_float_count == c0 + 2, "打磨-55 飞升态 施展成功 浮动+1 (期望 %d, 实际 %d)" % [c0 + 2, ui._onekey_float_count])
+	check(str(ui._onekey_last_text) == "施展「%s」" % name, "打磨-55 飞升态 浮动文案 同口径 (实际 %s)" % str(ui._onekey_last_text))
+	check(g.dao > dao0, "打磨-55 飞升态 爆发 加道行 (爆发前 %.0f → 后 %.0f)" % [dao0, g.dao])
+	# 收尾: 恢复基准态 (境界0层1 未飞升, 清 已学/冷却/道行)
+	g.learned.clear()
+	g._active_cd.clear()
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	ui._refresh()
 	await get_tree().process_frame
 
 
