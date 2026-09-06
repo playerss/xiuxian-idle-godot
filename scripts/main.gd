@@ -313,7 +313,7 @@ func _build_training_page(page: Panel) -> void:
 	_items_buy_btn = _make_button("一键购买")
 	_items_buy_btn.pressed.connect(_on_items_buy_all)
 	# 打磨-46: 统一口径 tooltip (动作顺序 / 筛选叠加 / 计数口径)
-	_items_buy_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止。\n不受筛选影响 (全局口径); 购入后法器加成直接生效。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。"
+	_items_buy_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略)。\n不受筛选影响 (全局口径); 购入后法器加成直接生效。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。"
 	item_head.add_child(_items_buy_btn)
 	# 打磨-13: 法器列表可滚动 (10 件避免低分辨率下超出屏幕)
 	var shop_scroll := ScrollContainer.new()
@@ -610,9 +610,13 @@ func _on_learn_all() -> void:
 
 # 打磨-29: 法器 一键购买 (价格升序连买买得起的, 与装备 一键购买 口径一致)
 func _on_items_buy_all() -> void:
+	var before := GameData.stones
 	var r: Dictionary = GameData.buy_items_affordable()
 	if int(r["count"]) > 0:
-		_show_msg("一键购置 %d 件法器 (灵石已花到买不起为止)" % int(r["count"]))
+		# 打磨-47: 追加 共花灵石 + 距下一件 (最便宜未拥有) 缺口 (全拥有省略)
+		var msg := "一键购置 %d 件法器, 共花 %s 灵石" % [int(r["count"]), GameData.fmt(before - GameData.stones)]
+		msg += _next_gap_text(GameData.item_next_target())
+		_show_msg(msg)
 		_onekey_float("一键购置 %d 件法器" % int(r["count"]))
 	else:
 		_show_msg("当前灵石买不起任何一件未拥有的法器")
@@ -631,12 +635,26 @@ func _on_active_all() -> void:
 
 # 打磨-23: 一键购买 (价格升序连买, 灵石花到买不起为止)
 func _on_buy_all() -> void:
+	var before := GameData.stones
 	var r: Dictionary = GameData.buy_affordable()
 	if int(r["count"]) > 0:
-		_show_msg("一键购买 %d 件装备 (槽位空时已自动穿戴)" % int(r["count"]))
+		# 打磨-47: 追加 共花灵石 + 距下一件 (最便宜未拥有) 缺口 (全拥有省略)
+		var msg := "一键购买 %d 件装备, 共花 %s 灵石 (槽位空时已自动穿戴)" % [int(r["count"]), GameData.fmt(before - GameData.stones)]
+		msg += _next_gap_text(GameData.equip_next_target())
+		_show_msg(msg)
 		_onekey_float("一键购买 %d 件装备" % int(r["count"]))
 	else:
 		_show_msg("当前灵石买不起任何一件未拥有的装备")
+
+
+# 打磨-47: 下一购买目标缺口文案 — target 空 (全拥有) 或 缺口<=0 (买得起, 口径防御) 返回 ""
+func _next_gap_text(target: Dictionary) -> String:
+	if target.is_empty():
+		return ""
+	var gap: float = float(target.get("shortfall", 0.0))
+	if gap <= 0.0:
+		return ""
+	return " 距下一件「%s」还差 %s 灵石" % [str(target.get("name", "")), GameData.fmt(gap)]
 
 
 # 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件)
@@ -716,7 +734,7 @@ func _build_equip_page(page: Panel) -> void:
 	_buy_all_btn = _make_button("一键购买")
 	_buy_all_btn.pressed.connect(_on_buy_all)
 	# 打磨-46: 统一口径 tooltip (动作顺序 / 自动穿戴规则 / 计数口径)
-	_buy_all_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。"
+	_buy_all_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略)。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。"
 	eq_tier_bar.add_child(_buy_all_btn)
 	# 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件, 补 一键购买 只穿首件 的缺口)
 	_equip_best_btn = _make_button("一键最佳")

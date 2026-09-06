@@ -9,6 +9,8 @@ extends Node
 ##          文案/计数/颜色/无 essence 副作用, 5 按钮逐一+重复点击)
 ## 打磨-46: 一键系列按钮 tooltip 统一口径断言 (5 按钮 3 行结构: 动作顺序/筛选叠加/计数口径 +
 ##          各按钮关键口径词: 境界条件/爆发口径/自动穿戴/最佳判定链/幂等/全局口径)
+## 打磨-47: 一键购买 (装备/法器) 结果反馈断言 (变更>0 底部消息追加 共花灵石+距下一件缺口/
+##          全拥有 0 变更 不追加/tooltip 说明 结果反馈 口径)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
@@ -76,6 +78,7 @@ func _ready() -> void:
 	await _assert_collect_jump()
 	await _assert_onekey_float()
 	_assert_onekey_tooltips()
+	_assert_buy_feedback()
 	_finish()
 
 
@@ -583,6 +586,109 @@ func _assert_onekey_tooltips() -> void:
 	var t_item: String = str(ui._items_buy_btn.tooltip_text)
 	check(t_item.contains("不受筛选影响"), "法器一键购买 tooltip 含 全局口径 说明")
 	check(t_item.contains("同价按数据序"), "法器一键购买 tooltip 含 同价按数据序 顺序")
+
+
+# 打磨-47: 一键购买 (装备/法器) 结果反馈 — 变更>0 底部消息追加 共花灵石 + 距下一件缺口;
+# 全拥有 0 变更时 不追加 (走 买不起 消息); tooltip 第 1 行 说明 结果反馈 口径 (三行结构不变)
+func _assert_buy_feedback() -> void:
+	var g := GameData
+	# tooltip 口径说明 (构建时静态文本)
+	check(str(ui._buy_all_btn.tooltip_text).contains("共花灵石"), "装备一键购买 tooltip 含 共花灵石 反馈口径")
+	check(str(ui._buy_all_btn.tooltip_text).contains("距下一件"), "装备一键购买 tooltip 含 距下一件 缺口口径")
+	check(str(ui._items_buy_btn.tooltip_text).contains("共花灵石"), "法器一键购买 tooltip 含 共花灵石 反馈口径")
+	check(str(ui._items_buy_btn.tooltip_text).contains("距下一件"), "法器一键购买 tooltip 含 距下一件 缺口口径")
+	# --- 受控态: 灵石 5万, 空 技能/装备/法器 (与 打磨-45 断言末态同口径) ---
+	g.realm_idx = 2
+	g.layer = 1
+	g.stones = 50000.0
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.owned.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.essence = 0.0
+	ui._refresh()
+	# 法器: 期望花费 = 价格升序连买模拟 (与 buy_items_affordable 同口径), 下一件 = item_next_target
+	var sim_it := g.stones
+	var n_it := 0
+	var item_costs: Array = []
+	for it in g.ITEMS:
+		item_costs.append(float((it as Dictionary).get("cost", 1e18)))
+	item_costs.sort()
+	for c in item_costs:
+		var cost: float = float(c)
+		if cost <= sim_it:
+			sim_it -= cost
+			n_it += 1
+	check(n_it > 0, "受控态 法器 存在可购 (实际 %d)" % n_it)
+	ui._tab.current_tab = 0
+	ui._refresh()
+	var stones_before_it := g.stones
+	ui._on_items_buy_all()
+	# 缺口目标在 购买后 取 (最便宜未拥有 = 连买后下一件)
+	var it_target: Dictionary = g.item_next_target()
+	check(not it_target.is_empty(), "受控态 法器 存在下一件 (连买买不起)")
+	var msg_it: String = str(ui._msg_label.text)
+	check(msg_it.find("共花") >= 0, "法器 一键购买 底部消息含 共花灵石 (实际 %s)" % msg_it)
+	check(msg_it.find(GameData.fmt(stones_before_it - g.stones)) >= 0, "法器 共花额=购买前后灵石差 (期望 %s, 实际 %s)" % [GameData.fmt(stones_before_it - g.stones), msg_it])
+	check(msg_it.find("距下一件「%s」" % str(it_target["name"])) >= 0, "法器 缺口行 指向最便宜未拥有 (期望 %s, 实际 %s)" % [str(it_target["name"]), msg_it])
+	check(msg_it.find(GameData.fmt(float(it_target["shortfall"]))) >= 0, "法器 缺口额 正确 (期望 %s, 实际 %s)" % [GameData.fmt(float(it_target["shortfall"])), msg_it])
+	check(str(ui._onekey_last_text) == "一键购置 %d 件法器" % n_it, "法器 浮动文案 不含共花 (保持 打磨-45 口径, 实际 %s)" % str(ui._onekey_last_text))
+	# 装备: 同口径 (起始灵石 = 法器买完后的剩余, 非 5万)
+	var sim_eq := g.stones
+	var n_eq := 0
+	var eq_ids: Array = g.equip_ids.duplicate()
+	eq_ids.sort_custom(g.buy_affordable_cmp)
+	for id in eq_ids:
+		var e: Dictionary = g.equip_by_id[str(id)]
+		var cost: float = float(e.get("cost", 1e18))
+		if cost <= sim_eq:
+			sim_eq -= cost
+			n_eq += 1
+	check(n_eq > 0, "受控态 装备 存在可购 (实际 %d)" % n_eq)
+	ui._tab.current_tab = 2
+	ui._refresh()
+	var stones_before_eq := g.stones
+	ui._on_buy_all()
+	var eq_target: Dictionary = g.equip_next_target()
+	check(not eq_target.is_empty(), "受控态 装备 存在下一件 (连买买不起)")
+	var msg_eq: String = str(ui._msg_label.text)
+	check(msg_eq.find("共花") >= 0, "装备 一键购买 底部消息含 共花灵石 (实际 %s)" % msg_eq)
+	check(msg_eq.find(GameData.fmt(stones_before_eq - g.stones)) >= 0, "装备 共花额=购买前后灵石差 (期望 %s, 实际 %s)" % [GameData.fmt(stones_before_eq - g.stones), msg_eq])
+	check(msg_eq.find("距下一件「%s」" % str(eq_target["name"])) >= 0, "装备 缺口行 指向最便宜未拥有 (期望 %s, 实际 %s)" % [str(eq_target["name"]), msg_eq])
+	check(msg_eq.find(GameData.fmt(float(eq_target["shortfall"]))) >= 0, "装备 缺口额 正确 (期望 %s, 实际 %s)" % [GameData.fmt(float(eq_target["shortfall"])), msg_eq])
+	# --- 全拥有: 0 变更走 买不起 消息, 不追加 共花/缺口 ---
+	for id in g.equip_ids:
+		g.owned_eq.append(str(id))
+	for it in g.ITEMS:
+		g.owned.append(str((it as Dictionary)["id"]))
+	g.stones = 0.0
+	ui._tab.current_tab = 0
+	ui._refresh()
+	ui._on_items_buy_all()
+	var msg_it2: String = str(ui._msg_label.text)
+	check(msg_it2.find("买不起") >= 0, "法器 全拥有 走 买不起 消息 (实际 %s)" % msg_it2)
+	check(msg_it2.find("共花") < 0, "法器 全拥有 不追加 共花 (实际 %s)" % msg_it2)
+	check(msg_it2.find("距下一件") < 0, "法器 全拥有 不追加 缺口 (实际 %s)" % msg_it2)
+	ui._on_buy_all()
+	var msg_eq2: String = str(ui._msg_label.text)
+	check(msg_eq2.find("买不起") >= 0, "装备 全拥有 走 买不起 消息 (实际 %s)" % msg_eq2)
+	check(msg_eq2.find("共花") < 0, "装备 全拥有 不追加 共花 (实际 %s)" % msg_eq2)
+	check(msg_eq2.find("距下一件") < 0, "装备 全拥有 不追加 缺口 (实际 %s)" % msg_eq2)
+	# 恢复基准态
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.essence = 0.0
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	ui._refresh()
 
 
 func _finish() -> void:

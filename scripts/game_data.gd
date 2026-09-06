@@ -869,6 +869,39 @@ func _item_price_cmp(a: Dictionary, b: Dictionary) -> bool:
 		return ca < cb
 	return str(a["id"]) < str(b["id"])
 
+# ---------- 打磨-47: 下一购买目标 (最便宜未拥有件, 供 一键购买 结果反馈) ----------
+# 只读: 返回 价格升序首个未拥有件 {id, name, cost, shortfall}, 全部拥有 = {}
+# shortfall = cost - 当前灵石 (>=0; 连买买不起时恒 >0, 供 UI 追加 "距下一件还差")
+
+func equip_next_target() -> Dictionary:
+	var best: Dictionary = {}
+	for id in equip_ids:
+		if owned_eq.has(id):
+			continue
+		var e: Dictionary = equip_by_id.get(id, {})
+		if e.is_empty():
+			continue
+		var c: float = float(e.get("cost", INF))
+		if best.is_empty() or c < float(best["cost"]) or (c == float(best["cost"]) and str(id) < str(best["id"])):
+			best = e
+	if best.is_empty():
+		return {}
+	return {"id": str(best["id"]), "name": str(best.get("name", "")),
+		"cost": float(best["cost"]), "shortfall": maxf(float(best["cost"]) - stones, 0.0)}
+
+func item_next_target() -> Dictionary:
+	var best: Dictionary = {}
+	for it in ITEMS:
+		if owned.has(str(it["id"])):
+			continue
+		var c: float = float(it["cost"])
+		if best.is_empty() or c < float(best["cost"]) or (c == float(best["cost"]) and str(it["id"]) < str(best["id"])):
+			best = it
+	if best.is_empty():
+		return {}
+	return {"id": str(best["id"]), "name": str(best.get("name", "")),
+		"cost": float(best["cost"]), "shortfall": maxf(float(best["cost"]) - stones, 0.0)}
+
 # ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 的主动神通) ----------
 
 # 当前就绪 (无冷却) 的 已学主动神通 数 (供技能页"一键施展"按钮文案)

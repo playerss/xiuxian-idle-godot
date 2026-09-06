@@ -1576,6 +1576,90 @@ func _init() -> void:
 	g.dao_level = 0
 	g.owned.clear()
 	g.owned_eq.clear()
+	# ---------- 打磨-47: 下一购买目标 (equip_next_target / item_next_target, 只读) ----------
+	# 空拥有: 最便宜件 + shortfall = max(cost - stones, 0) (全量动态计算, 不硬编码价格)
+	var ecosts: Array[float] = []
+	for id in g.equip_ids:
+		ecosts.append(float(g.equip_by_id[id]["cost"]))
+	var ecost_min: float = ecosts.min()
+	var icosts_i: Array[float] = []
+	for it in g.ITEMS:
+		icosts_i.append(float((it as Dictionary)["cost"]))
+	var icost_min: float = icosts_i.min()
+	g.stones = ecost_min * 0.5  # 买不起最便宜件, shortfall > 0
+	var et0: Dictionary = g.equip_next_target()
+	check(not et0.is_empty(), "equip_next 空拥有 非空 (实际 %s)" % str(et0))
+	check(absf(float(et0["cost"]) - ecost_min) < 1e-6, "equip_next cost=全局最便宜 (期望 %.0f, 实际 %.0f)" % [ecost_min, float(et0["cost"])])
+	check(absf(float(et0["shortfall"]) - (ecost_min - ecost_min * 0.5)) < 1e-6, "equip_next shortfall=cost-灵石 (期望 %.0f, 实际 %.0f)" % [ecost_min * 0.5, float(et0["shortfall"])])
+	check(str(et0["name"]) == str(g.equip_by_id[str(et0["id"])]["name"]), "equip_next name 与数据一致 (%s)" % str(et0["id"]))
+	var it0: Dictionary = g.item_next_target()
+	check(not it0.is_empty(), "item_next 空拥有 非空 (实际 %s)" % str(it0))
+	check(absf(float(it0["cost"]) - icost_min) < 1e-6, "item_next cost=全局最便宜 (期望 %.0f, 实际 %.0f)" % [icost_min, float(it0["cost"])])
+	check(absf(float(it0["shortfall"]) - maxf(icost_min - ecost_min * 0.5, 0.0)) < 1e-6, "item_next shortfall=max(cost-灵石,0) (期望 %.0f, 实际 %.0f)" % [maxf(icost_min - ecost_min * 0.5, 0.0), float(it0["shortfall"])])
+	# shortfall 不为负 (买得起时 clamp 到 0)
+	g.stones = 1e12
+	check(float(g.equip_next_target()["shortfall"]) == 0.0, "equip_next 灵石充足 shortfall=0")
+	check(float(g.item_next_target()["shortfall"]) == 0.0, "item_next 灵石充足 shortfall=0")
+	# 已拥有最便宜件 -> 目标移到次便宜 (价格+id 确定性)
+	var e_id_min: String = ""
+	for id in g.equip_ids:
+		var c: float = float(g.equip_by_id[id]["cost"])
+		if e_id_min == "" or c < float(g.equip_by_id[e_id_min]["cost"]) or (c == float(g.equip_by_id[e_id_min]["cost"]) and id < e_id_min):
+			e_id_min = str(id)
+	g.owned_eq.clear()
+	g.owned_eq.append(e_id_min)
+	var ecosts2: Array[float] = []
+	for id in g.equip_ids:
+		if str(id) != e_id_min:
+			ecosts2.append(float(g.equip_by_id[id]["cost"]))
+	g.stones = ecosts2.min() * 0.5  # 买不起次便宜件, shortfall > 0
+	var et1: Dictionary = g.equip_next_target()
+	check(str(et1["id"]) != e_id_min, "equip_next 拥有最便宜后 指向次件 (期望≠%s, 实际 %s)" % [e_id_min, str(et1["id"])])
+	check(absf(float(et1["cost"]) - ecosts2.min()) < 1e-6, "equip_next 次便宜 cost 正确 (期望 %.0f, 实际 %.0f)" % [ecosts2.min(), float(et1["cost"])])
+	check(absf(float(et1["shortfall"]) - ecosts2.min() * 0.5) < 1e-6, "equip_next 次便宜 shortfall 正确 (实际 %.0f)" % float(et1["shortfall"]))
+	var i_id_min: String = ""
+	var i_cost_min: float = 0.0
+	for it in g.ITEMS:
+		var c: float = float((it as Dictionary)["cost"])
+		if i_id_min == "":
+			i_id_min = str(it["id"])
+			i_cost_min = c
+		elif c < i_cost_min or (c == i_cost_min and str(it["id"]) < i_id_min):
+			i_id_min = str(it["id"])
+			i_cost_min = c
+	g.owned.clear()
+	g.owned.append(i_id_min)
+	var icosts2: Array[float] = []
+	for it in g.ITEMS:
+		if str((it as Dictionary)["id"]) != i_id_min:
+			icosts2.append(float((it as Dictionary)["cost"]))
+	g.stones = icosts2.min() * 0.5
+	var it1: Dictionary = g.item_next_target()
+	check(str(it1["id"]) != i_id_min, "item_next 拥有最便宜后 指向次件 (期望≠%s, 实际 %s)" % [i_id_min, str(it1["id"])])
+	check(absf(float(it1["shortfall"]) - icosts2.min() * 0.5) < 1e-6, "item_next 次便宜 shortfall 正确 (实际 %.0f)" % float(it1["shortfall"]))
+	# 全部拥有 -> 空 dict
+	g.owned.clear()
+	g.owned_eq.clear()
+	for id in g.equip_ids:
+		g.owned_eq.append(str(id))
+	for it in g.ITEMS:
+		g.owned.append(str((it as Dictionary)["id"]))
+	check(g.equip_next_target().is_empty(), "equip_next 全拥有 = 空 dict")
+	check(g.item_next_target().is_empty(), "item_next 全拥有 = 空 dict")
+	# 只读性: 调用不消耗灵石/不改变拥有
+	g.owned_eq.clear()
+	g.owned.clear()
+	var stones_before47: float = g.stones
+	g.equip_next_target()
+	g.item_next_target()
+	check(g.stones == stones_before47 and g.owned_eq.is_empty() and g.owned.is_empty(), "next_target 只读 无副作用")
+	# 恢复干净基准态
+	g.stones = 0.0
+	g.learned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.owned.clear()
+	g.owned_eq.clear()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
