@@ -69,6 +69,9 @@ var _skill_row_nodes: Dictionary = {}
 var _skill_btns: Dictionary = {}
 var _burst_previews: Dictionary = {}    # 打磨-54: 主动神通 id -> 爆发预览标签 (金色小字, 只读预览)
 var _burst_previews_key: Dictionary = {} # 打磨-54: id -> "已学|预览文本" 缓存键 (tooltip 只在该键变化时重建)
+var _skill_cd_bars: Dictionary = {}     # 打磨-58: 主动神通 id -> {bg, fill, q} 冷却进度条 (青色填充, 归零隐藏)
+var _skill_cd_q: Dictionary = {}        # 打磨-58: id -> "宽|档" 缓存键 (2% 量化+布局宽变化才刷, 防每帧重绘)
+var _skill_cd_acc := 0.0                # 打磨-58: 冷却进度条 1 秒节流累计 (同 打磨-12/33 口径)
 var _filter_btns: Dictionary = {}
 var _filter_active := ""
 var _tier_btns: Dictionary = {}         # 打磨-20: 品质筛选按钮 (key = 品质索引字符串, "" = 全部)
@@ -547,6 +550,22 @@ func _add_skill_row(id: String) -> void:
 		info.add_child(burst)
 		_burst_previews[id] = burst
 		_burst_previews_key[id] = ""
+		# 打磨-58: 冷却进度条 (细 6px, 青色按 剩余/总冷却 填充; 冷却中显示, 归零隐藏;
+		# 1 秒节流 + 2% 量化档 + 布局宽变化才刷, 防挂机每帧重绘)
+		var cd_bg := ColorRect.new()
+		cd_bg.color = Color(0.22, 0.24, 0.31)
+		cd_bg.custom_minimum_size = Vector2(0, 6)
+		cd_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cd_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cd_bg.visible = false
+		var cd_fill := ColorRect.new()
+		cd_fill.color = CYAN
+		cd_fill.position = Vector2.ZERO
+		cd_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cd_bg.add_child(cd_fill)
+		info.add_child(cd_bg)
+		_skill_cd_bars[id] = {"bg": cd_bg, "fill": cd_fill}
+		_skill_cd_q[id] = ""
 
 	var btn := _make_button("领悟")
 	btn.custom_minimum_size = Vector2(76, 0)
@@ -1312,6 +1331,11 @@ func _refresh() -> void:
 	if _eta_acc >= 1.0:
 		_eta_acc = 0.0
 		_refresh_eta()
+	# 打磨-58: 神通冷却进度条 (1 秒节流 + 2% 量化档 + 布局宽变化才刷, 防挂机每帧重绘)
+	_skill_cd_acc += get_process_delta_time()
+	if _skill_cd_acc >= 1.0:
+		_skill_cd_acc = 0.0
+		_refresh_skill_cd_bars()
 	# 打磨-18: 境界阶梯高亮随当前境界/道行阶段移动 (状态变化才刷)
 	_refresh_ladder()
 	# 打磨-33: 境界阶梯 ETA 路线 (1 秒节流, 文本变化才刷)
@@ -1515,6 +1539,38 @@ func _refresh_eta() -> void:
 		var t2 := "" if g.owned_eq.has(id) else g.eta_text(float(e["cost"]))
 		if l2.text != t2:
 			l2.text = t2
+
+
+# 打磨-58: 神通冷却进度条 (冷却中=青色按 剩余/总冷却 填充, 归零即隐藏;
+# 2% 量化档 + 布局宽变化才写, 防挂机每帧 24 行重绘; 只读 active_cd_ratio, 无副作用)
+func _refresh_skill_cd_bars() -> void:
+	var g := GameData
+	for id in _skill_cd_bars:
+		var r58: Dictionary = _skill_cd_bars[id]
+		var bg58: ColorRect = r58["bg"]
+		var fill58: ColorRect = r58["fill"]
+		if not g.learned.has(id):
+			if bg58.visible:
+				bg58.visible = false
+				fill58.size = Vector2.ZERO
+			_skill_cd_q[id] = "hidden"
+			continue
+		var ratio58: float = g.active_cd_ratio(id)
+		if ratio58 <= 0.0:
+			if bg58.visible:
+				bg58.visible = false
+				fill58.size = Vector2.ZERO
+			_skill_cd_q[id] = "hidden"
+			continue
+		if not bg58.visible:
+			bg58.visible = true
+		var q58: int = int(ceil(clampf(ratio58, 0.0, 1.0) * 50.0))
+		var key58 := "%d|%d" % [int(bg58.size.x), q58]
+		if str(_skill_cd_q.get(id, "")) == key58:
+			continue
+		_skill_cd_q[id] = key58
+		fill58.color = CYAN
+		fill58.size = Vector2(bg58.size.x * float(q58) / 50.0, bg58.size.y)
 
 
 # 打磨-18: 境界阶梯高亮 (当前境界 / 飞升后当前道行阶段 金色, 其余白字; 状态变化才刷)

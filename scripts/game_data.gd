@@ -682,6 +682,18 @@ func active_ready(id: String) -> bool:
 func active_cd_left(id: String) -> int:
 	return int(ceil(_active_cd.get(id, 0.0)))
 
+# 打磨-58: 冷却进度 (0..1, 剩余/总冷却) — 未学/非主动/已就绪=0.0, 冷却中=剩余比例
+# (只读, 不改动 状态/存档/统计; 神通行 冷却进度条 用, 与 打磨-57 就绪事件 同 _active_cd 口径)
+func active_cd_ratio(id: String) -> float:
+	var rem: float = _active_cd.get(id, 0.0)
+	if rem <= 0.0:
+		return 0.0
+	var s: Dictionary = skill_by_id.get(id, {})
+	var cd: float = float(s.get("cooldown", 0.0))
+	if cd <= 0.0:
+		return 0.0
+	return clampf(rem / cd, 0.0, 1.0)
+
 # 打磨-57: 神通冷却推进 (从 _process 拆出, 供自测手动驱动): 逐 id 扣减剩余冷却,
 # 归零即移除并推入 ready_events (冷却完毕转就绪事件; 只增不改 状态/存档/统计)
 func _tick_active_cd(delta: float) -> void:

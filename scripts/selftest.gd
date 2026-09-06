@@ -2162,6 +2162,80 @@ func _init() -> void:
 	g.ready_events.clear()
 	g.essence = 0.0
 	g.stones = 0.0
+	# ---------- 打磨-58: 神通冷却进度比例 active_cd_ratio (神通行 冷却进度条 只读接口) ----------
+	# 口径: 剩余/总冷却 (0..1); 未学/非主动/已就绪/未知 id=0.0; tick 后比例同步下降; 只读无副作用
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.stones = 0.0
+	g.essence = 0.0
+	var act_ids58: Array[String] = []
+	for id in g.skill_ids:
+		var s58: Dictionary = g.skill_by_id[id]
+		if str(s58.get("type", "")) == "active":
+			act_ids58.append(id)
+		if act_ids58.size() == 2:
+			break
+	if act_ids58.size() == 2:
+		var b1_58: String = act_ids58[0]
+		var b2_58: String = act_ids58[1]
+		var cd1_58: float = float(g.skill_by_id[b1_58]["cooldown"])
+		check(cd1_58 > 0.0, "打磨-58 数据存在 主动神通且 总冷却>0 (实际 %.0f)" % cd1_58)
+		# 未知 id / 非主动 (取第一个 被动功法 id) / 未学主动 均 = 0.0
+		check(g.active_cd_ratio("no_such_id_58") == 0.0, "打磨-58 未知 id 比例=0.0")
+		var passive_id58 := ""
+		for id in g.skill_ids:
+			var sp58: Dictionary = g.skill_by_id[id]
+			if str(sp58.get("type", "")) != "active":
+				passive_id58 = id
+				break
+		check(g.active_cd_ratio(passive_id58) == 0.0, "打磨-58 非主动 (被动功法) 比例=0.0")
+		check(g.active_cd_ratio(b1_58) == 0.0, "打磨-58 未学主动 比例=0.0 (未入冷却)")
+		# 已学+冷却中: 剩余 30 / 总 cd1 -> ratio=30/cd1 (clamp 0..1)
+		g.learned.append(b1_58)
+		g._active_cd[b1_58] = 30.0
+		var r_a58: float = g.active_cd_ratio(b1_58)
+		check(absf(r_a58 - minf(30.0 / cd1_58, 1.0)) < 1e-9, "打磨-58 冷却中 比例=剩余/总冷却 (期望 %.4f 实际 %.4f)" % [minf(30.0 / cd1_58, 1.0), r_a58])
+		# tick 10 秒: 剩余 20 -> 比例同步下降
+		g._tick_active_cd(10.0)
+		g.drain_ready_events()
+		var r_b58: float = g.active_cd_ratio(b1_58)
+		check(absf(r_b58 - minf(20.0 / cd1_58, 1.0)) < 1e-9, "打磨-58 tick 10s 后 比例下降 (期望 %.4f 实际 %.4f)" % [minf(20.0 / cd1_58, 1.0), r_b58])
+		check(r_b58 < r_a58, "打磨-58 tick 后 比例单调下降")
+		# 剩余 > 总冷却 防御: clamp 上限 1.0 (用 b2 自身 总冷却 口径)
+		var cd2_58: float = float(g.skill_by_id[b2_58]["cooldown"])
+		g._active_cd[b2_58] = cd2_58 * 2.0
+		check(g.active_cd_ratio(b2_58) == 1.0, "打磨-58 剩余>总冷却 clamp=1.0 (剩余 %.0f/总 %.0f)" % [cd2_58 * 2.0, cd2_58])
+		# 归零 (tick 到 0 移除) -> 比例 回 0.0 (就绪即隐藏 口径)
+		g._active_cd[b1_58] = 5.0
+		g._tick_active_cd(5.0)
+		g.drain_ready_events()
+		check(g.active_cd_ratio(b1_58) == 0.0, "打磨-58 归零后 比例=0.0 (冷却完毕)")
+		# 只读性: ratio 调用 不改动 冷却/已学/资源/统计
+		g._active_cd[b2_58] = 15.0
+		var cd_b58: Dictionary = g._active_cd.duplicate(true)
+		var learned_b58: Array = g.learned.duplicate()
+		var ess_b58: float = g.essence
+		var stats_b58: Dictionary = g.stats.duplicate(true)
+		g.active_cd_ratio(b1_58)
+		g.active_cd_ratio(b2_58)
+		g.active_cd_ratio("no_such_id_58")
+		check(g._active_cd == cd_b58, "打磨-58 ratio 只读 不改动 冷却")
+		check(g.learned == learned_b58, "打磨-58 ratio 只读 不改动 已学")
+		check(absf(g.essence - ess_b58) < 1e-9 and g.stats == stats_b58, "打磨-58 ratio 只读 不改动 资源/统计")
+	# 恢复干净基准态
+	g.learned.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.essence = 0.0
+	g.stones = 0.0
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

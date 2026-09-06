@@ -89,6 +89,7 @@ func _ready() -> void:
 	await _assert_skill_cast_float()
 	await _assert_active_learn()
 	await _assert_ready_float()
+	await _assert_cd_bars()
 	_finish()
 
 
@@ -1255,6 +1256,133 @@ func _assert_ready_float() -> void:
 	g.essence = 0.0
 	g.stones = 0.0
 	g.dao = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-58: 神通冷却进度条 — 24 个主动神通行内细条 (冷却中=青色按 剩余/总冷却 填充, 归零隐藏);
+# 1 秒节流 + 2% 量化档 + 布局宽变化才刷 (同 打磨-40 成就条 口径)。
+# 注: 进度条初始隐藏 (未学), 容器布局跳过隐藏子节点 -> 首次 显示 当帧 宽度仍为 0 (布局未落定),
+# 宽度 在下一 process_frame 落定后 由 宽变化缓存键 触发 重算填充 (自愈, 最迟 1 秒档 内 填充到位)。
+# 测试手动驱动 _skill_cd_acc 跨节流档 + 直接调 _refresh_skill_cd_bars 断言 填充/节流/归零隐藏。
+func _assert_cd_bars() -> void:
+	var g := GameData
+	# 受控态: 全新基准 (境界0层1, 空 技能/装备/法器, 清 冷却/就绪事件)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	ui._skill_cd_acc = 0.0
+	ui._tab.current_tab = 1
+	ui._refresh()
+	await get_tree().process_frame
+	# 节点: 24 个主动神通 均有 {bg, fill} 结构, 挂在行内信息 VBox, 初始 全部隐藏 (未学)
+	var n_active := 0
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id[id]
+		if str(s["type"]) != "active":
+			continue
+		n_active += 1
+		var r58: Dictionary = ui._skill_cd_bars.get(str(id), {})
+		check(r58.size() >= 2 and r58.get("bg") != null and r58.get("fill") != null, "打磨-58 %s 进度条节点 {bg,fill} 存在" % str(id))
+		if r58.size() < 2:
+			continue
+		var bg58: ColorRect = r58["bg"]
+		check(bg58.get_parent() is VBoxContainer, "打磨-58 %s 进度条 挂 行内信息 VBox" % str(id))
+		check(bg58.size.y >= 5.0, "打磨-58 %s 进度条高>=5 (实际 %.1f)" % [str(id), bg58.size.y])
+		check(bg58.color == Color(0.22, 0.24, 0.31), "打磨-58 %s 进度条底色 (实际 %s)" % [str(id), str(bg58.color)])
+		check(not bg58.visible, "打磨-58 %s 初始 未学 进度条隐藏" % str(id))
+	check(n_active == 24, "打磨-58 主动神通行数量=24 (实际 %d)" % n_active)
+	# 找 两个 凡品主动神通 (cd 90s), 手动注入 冷却 (不同同步: a1 余 45 / a2 余 90=满)
+	var r_act: Array[String] = []
+	for id in g.skill_ids:
+		var s2: Dictionary = g.skill_by_id[id]
+		if int(s2["tier"]) == 0 and str(s2["type"]) == "active":
+			r_act.append(str(id))
+	check(r_act.size() >= 2, "打磨-58 受控态 找到 >=2 个 凡品主动神通 (实际 %d)" % r_act.size())
+	if r_act.size() < 2:
+		return
+	var a1: String = r_act[0]
+	var a2: String = r_act[1]
+	g.learned.append(a1)
+	g.learned.append(a2)
+	g._active_cd[a1] = 45.0
+	g._active_cd[a2] = 90.0
+	var stats_b: Dictionary = g.stats.duplicate(true)
+	var ess_b: float = g.essence
+	# 首次 显示: 跨节流档 直调 (可见=true, 当帧 宽度 仍 0 -> 填充 0, 待 布局落定 自愈)
+	ui._skill_cd_acc = 1.0
+	ui._refresh_skill_cd_bars()
+	var r1: Dictionary = ui._skill_cd_bars[a1]
+	var r2: Dictionary = ui._skill_cd_bars[a2]
+	var bg1: ColorRect = r1["bg"]
+	var bg2: ColorRect = r2["bg"]
+	check(bg1.visible, "打磨-58 a1 冷却中 进度条 显示")
+	check(bg2.visible, "打磨-58 a2 冷却中 进度条 显示")
+	# 等一帧 布局落定 (宽度 0 -> 实际 宽), 再 直调 一次 由 宽变化缓存键 触发 填充
+	await get_tree().process_frame
+	check(bg1.size.x > 0.0, "打磨-58 a1 布局落定 宽度>0 (实际 %.1f)" % bg1.size.x)
+	ui._refresh_skill_cd_bars()
+	check(r1["fill"].color == ui.CYAN, "打磨-58 a1 填充色=青")
+	check(absf(r1["fill"].size.x - bg1.size.x * 0.5) < 0.5, "打磨-58 a1 填充=50%% 宽 (余45/总90, 期望 %.1f 实际 %.1f)" % [bg1.size.x * 0.5, r1["fill"].size.x])
+	check(absf(r2["fill"].size.x - bg2.size.x) < 0.5, "打磨-58 a2 填充=100%% 宽 (满冷却, 期望 %.1f 实际 %.1f)" % [bg2.size.x, r2["fill"].size.x])
+	# 节流门: 未跨 1 秒档时 _refresh() 内 不触发 _refresh_skill_cd_bars (缓存键/填充 不变)
+	var q1_before: String = str(ui._skill_cd_q[a1])
+	var f1_before: float = r1["fill"].size.x
+	ui._skill_cd_acc = 0.5
+	ui._refresh()
+	check(str(ui._skill_cd_q[a1]) == q1_before, "打磨-58 节流: 未跨档 不刷 (缓存键不变, 实际 %s)" % str(ui._skill_cd_q[a1]))
+	check(r1["fill"].size.x == f1_before, "打磨-58 节流: 未跨档 填充不写 (宽不变)")
+	# 冷却递减 (tick 25s: a1 余 20/90, a2 余 65/90) -> 跨档 直调 后 填充 同步缩短
+	g._tick_active_cd(25.0)
+	g.drain_ready_events()
+	ui._skill_cd_acc = 1.0
+	ui._refresh_skill_cd_bars()
+	var q_a1: int = int(ceil(minf(20.0 / 90.0, 1.0) * 50.0))
+	var q_a2: int = int(ceil(minf(65.0 / 90.0, 1.0) * 50.0))
+	check(absf(r1["fill"].size.x - bg1.size.x * float(q_a1) / 50.0) < 0.5, "打磨-58 a1 余 20/90 填充=%d/50 档 (期望 %.1f 实际 %.1f)" % [q_a1, bg1.size.x * float(q_a1) / 50.0, r1["fill"].size.x])
+	check(absf(r2["fill"].size.x - bg2.size.x * float(q_a2) / 50.0) < 0.5, "打磨-58 a2 余 65/90 填充=%d/50 档 (期望 %.1f 实际 %.1f)" % [q_a2, bg2.size.x * float(q_a2) / 50.0, r2["fill"].size.x])
+	check(q_a1 < 25 and q_a2 < 50, "打磨-58 tick 后 填充档 单调下降 (a1 %d<25, a2 %d<50)" % [q_a1, q_a2])
+	# 只读: 刷条 不改动 资源/统计/冷却
+	check(absf(g.essence - ess_b) < 1e-9 and g.stats == stats_b, "打磨-58 刷条 无 资源/统计 副作用")
+	check(absf(g._active_cd[a1] - 20.0) < 1e-9 and absf(g._active_cd[a2] - 65.0) < 1e-9, "打磨-58 刷条 无 冷却 副作用")
+	# 归零即隐藏: tick 20s -> a1 就绪 (条 隐藏+填充清零), a2 仍冷却 (条 保持 填充)
+	g._tick_active_cd(20.0)
+	g.drain_ready_events()
+	check(g.active_ready(a1) and not g.active_ready(a2), "打磨-58 tick 后 a1 就绪 a2 仍冷却")
+	ui._skill_cd_acc = 1.0
+	ui._refresh_skill_cd_bars()
+	check(not bg1.visible and r1["fill"].size == Vector2.ZERO, "打磨-58 a1 就绪 进度条 隐藏+填充清零")
+	check(bg2.visible and r2["fill"].size.x > 0.0, "打磨-58 a2 仍冷却 进度条 保持 填充 (实际 %.1f)" % r2["fill"].size.x)
+	check(str(ui._skill_cd_q[a1]) == "hidden", "打磨-58 a1 隐藏态 缓存键=hidden (实际 %s)" % str(ui._skill_cd_q[a1]))
+	# 全部就绪: a2 也 tick 到 0 -> 全部 隐藏 (无残留显示)
+	g._tick_active_cd(65.0)
+	g.drain_ready_events()
+	ui._skill_cd_acc = 1.0
+	ui._refresh_skill_cd_bars()
+	check(not bg1.visible and not bg2.visible, "打磨-58 全部就绪 进度条 全隐藏")
+	# 未学隐藏: a1 取消领悟 (冷却已无) -> 条 保持 隐藏 (未学不显示)
+	g.learned.erase(a1)
+	ui._skill_cd_acc = 1.0
+	ui._refresh_skill_cd_bars()
+	check(not bg1.visible, "打磨-58 取消领悟 进度条 隐藏 (未学不显示)")
+	# 收尾: 恢复基准态
+	g.learned.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	ui._skill_cd_acc = 0.0
 	ui._refresh()
 	await get_tree().process_frame
 
