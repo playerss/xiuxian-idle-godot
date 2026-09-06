@@ -1896,6 +1896,71 @@ func _init() -> void:
 	g.dao_level = 0
 	g.owned.clear()
 	g.owned_eq.clear()
+	# ---------- 打磨-52: 装备 一键购买/一键最佳 浮动文案 灵气速率变化量 ----------
+	# 口径: 装备购买/换装改变 功法装备段 (1+Σ), 灵气速率 前后差作浮动反馈 (delta>0 才追加, 0 变化省略);
+	# GameData 无新接口 (qi_per_sec 前后差), 此处验证 delta 数值与 0 变化省略 口径
+	# 受控态: 境界 0 (基础 x1.0), 无功法/法器/装备, 灵石 1500 (可买 12 件, 5 部位首穿 qi 和 0.25)
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 1500.0
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	# 模拟 buy_affordable 连买数 (价格升序, 同价 id 升序 — 与 buy_affordable_cmp 同序)
+	var n52 := 0
+	var sim52: float = g.stones
+	var ids52: Array = g.equip_ids.duplicate()
+	ids52.sort_custom(g.buy_affordable_cmp)
+	for id in ids52:
+		var e52: Dictionary = g.equip_by_id[str(id)]
+		var c52: float = float(e52.get("cost", 1e18))
+		if c52 <= sim52:
+			sim52 -= c52
+			n52 += 1
+	check(n52 > 0, "打磨-52 受控态 1500灵石 存在可购装备 (实际 %d)" % n52)
+	var qi0_52: float = g.qi_per_sec()
+	check(absf(qi0_52 - 1.0) < 1e-9, "打磨-52 购买前 灵气速率=基础 1.0 (无功法装备法器, 实际 %s)" % g.fmt(qi0_52))
+	var r52: Dictionary = g.buy_affordable()
+	check(int(r52["count"]) == n52, "打磨-52 一键购买数=模拟数 (期望 %d, 实际 %d)" % [n52, int(r52["count"])])
+	var eq_sum1_52 := 0.0
+	for slot in g.SLOTS:
+		var e1_52: String = str(g.equipped.get(slot, ""))
+		if e1_52 != "":
+			eq_sum1_52 += float(g.equip_by_id[e1_52].get("qi_mult", 0.0))
+	var qi1_52: float = g.qi_per_sec()
+	var d1_52: float = qi1_52 - qi0_52
+	check(d1_52 > 0.0, "打磨-52 一键购买后 灵气速率上升 (delta %s/秒)" % g.fmt(d1_52))
+	check(absf(d1_52 - eq_sum1_52) < 1e-6, "打磨-52 购买 delta=首穿装备 qi 段和 (期望 %s, 实际 %s)" % [g.fmt(eq_sum1_52), g.fmt(d1_52)])
+	# 一键最佳: 各部位换最优 (主属性判定), delta = 最佳 qi 段和 - 首穿 qi 段和
+	var n_best52: int = g.equip_best_pending()
+	check(n_best52 > 0, "打磨-52 购买后 存在待改进槽位 (实际 %d)" % n_best52)
+	var r53: Dictionary = g.equip_best()
+	check(int(r53["count"]) == n_best52, "打磨-52 一键最佳变更数=待改进槽位 (期望 %d, 实际 %d)" % [n_best52, int(r53["count"])])
+	var eq_sum2_52 := 0.0
+	for slot in g.SLOTS:
+		var e2_52: String = str(g.equipped.get(slot, ""))
+		if e2_52 != "":
+			eq_sum2_52 += float(g.equip_by_id[e2_52].get("qi_mult", 0.0))
+	var d2_52: float = g.qi_per_sec() - qi1_52
+	check(d2_52 > 0.0, "打磨-52 一键最佳后 灵气速率再升 (delta %s/秒)" % g.fmt(d2_52))
+	check(absf(d2_52 - (eq_sum2_52 - eq_sum1_52)) < 1e-6, "打磨-52 换装 delta=最佳段和-首穿段和 (期望 %s, 实际 %s)" % [g.fmt(eq_sum2_52 - eq_sum1_52), g.fmt(d2_52)])
+	# 幂等: 已最佳再点 0 变更, 灵气速率不变 (main.gd 0 变更不弹浮动)
+	var r54: Dictionary = g.equip_best()
+	var qi2_52: float = g.qi_per_sec()
+	check(int(r54["count"]) == 0 and absf(qi2_52 - qi1_52 - d2_52) < 1e-9, "打磨-52 一键最佳幂等 0变更 速率不变 (实际 %s)" % g.fmt(qi2_52))
+	# 0 变化省略 口径: delta<=0 时浮动片段为空 (与 main.gd _on_buy_all/_on_equip_best 的 extra 逻辑同式)
+	var delta0_52: float = 0.0
+	var extra0_52 := (" (灵气速率 +%s/秒)" % g.fmt(delta0_52)) if delta0_52 > 0.0 else ""
+	check(extra0_52 == "", "打磨-52 delta=0 时 浮动片段为空 (省略)")
+	var extra1_52: String = (" (灵气速率 +%s/秒)" % g.fmt(d2_52)) if d2_52 > 0.0 else ""
+	check(extra1_52.begins_with(" (灵气速率 +"), "打磨-52 delta>0 时 浮动片段 灵气速率 前缀 (实际 %s)" % extra1_52)
+	# 恢复干净基准态
+	g.stones = 0.0
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

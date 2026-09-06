@@ -647,13 +647,18 @@ func _on_active_all() -> void:
 # 打磨-23: 一键购买 (价格升序连买, 灵石花到买不起为止)
 func _on_buy_all() -> void:
 	var before := GameData.stones
+	# 打磨-52: 购买前 灵气速率 快照 (功法装备段 1+Σ 随购买/自动穿戴变化, 前后差作浮动反馈)
+	var qi_before: float = GameData.qi_per_sec()
 	var r: Dictionary = GameData.buy_affordable()
 	if int(r["count"]) > 0:
 		# 打磨-47: 追加 共花灵石 + 距下一件 (最便宜未拥有) 缺口 (全拥有省略)
 		var msg := "一键购买 %d 件装备, 共花 %s 灵石 (槽位空时已自动穿戴)" % [int(r["count"]), GameData.fmt(before - GameData.stones)]
 		msg += _next_gap_text(GameData.equip_next_target())
 		_show_msg(msg)
-		_onekey_float("一键购买 %d 件装备" % int(r["count"]))
+		# 打磨-52: 浮动文案追加 灵气速率 变化量 (购买后速率-购买前速率, 0 变化省略; 与 打磨-51 法器口径一致)
+		var qi_delta: float = GameData.qi_per_sec() - qi_before
+		var extra := (" (灵气速率 +%s/秒)" % GameData.fmt(qi_delta)) if qi_delta > 0.0 else ""
+		_onekey_float("一键购买 %d 件装备%s" % [int(r["count"]), extra])
 	else:
 		_show_msg("当前灵石买不起任何一件未拥有的装备")
 
@@ -672,10 +677,15 @@ func _next_gap_text(target: Dictionary) -> String:
 
 # 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件)
 func _on_equip_best() -> void:
+	# 打磨-52: 换装前 灵气速率 快照 (换装改变 功法装备段 1+Σ, 前后差作浮动反馈)
+	var qi_before: float = GameData.qi_per_sec()
 	var r: Dictionary = GameData.equip_best()
 	if int(r["count"]) > 0:
 		_show_msg("最佳穿戴 %d 件 (各部位已换上最佳装备)" % int(r["count"]))
-		_onekey_float("最佳穿戴 %d 件" % int(r["count"]))
+		# 打磨-52: 浮动文案追加 灵气速率 变化量 (换装后速率-换装前速率, 0 变化省略; 与 打磨-51 法器口径一致)
+		var qi_delta: float = GameData.qi_per_sec() - qi_before
+		var extra := (" (灵气速率 +%s/秒)" % GameData.fmt(qi_delta)) if qi_delta > 0.0 else ""
+		_onekey_float("最佳穿戴 %d 件%s" % [int(r["count"]), extra])
 	else:
 		_show_msg("各部位已是最佳穿戴 (或尚无已拥有装备)")
 
@@ -747,13 +757,13 @@ func _build_equip_page(page: Panel) -> void:
 	_buy_all_btn = _make_button("一键购买")
 	_buy_all_btn.pressed.connect(_on_buy_all)
 	# 打磨-46: 统一口径 tooltip (动作顺序 / 自动穿戴规则 / 计数口径)
-	_buy_all_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略)。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。"
+	_buy_all_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略), 浮动提示追加 灵气速率 +N/秒 变化量 (购买后速率-购买前速率, 0 变化省略)。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。"
 	eq_tier_bar.add_child(_buy_all_btn)
 	# 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件, 补 一键购买 只穿首件 的缺口)
 	_equip_best_btn = _make_button("一键最佳")
 	_equip_best_btn.pressed.connect(_on_equip_best)
 	# 打磨-46: 统一口径 tooltip (最佳判定 / 作用范围 / 计数口径)
-	_equip_best_btn.tooltip_text = "各部位自动换上 已拥有 的最佳装备: 主属性 (灵气% + 灵石%) > 突破率 > 离线效率 (id 兜底, 确定性)。\n仅变更 尚未最佳 的槽位; 无拥有件不受影响; 已最佳 = 0 变更 (幂等), 不受 部位/品质 筛选影响 (全局口径)。\n按钮计数 = 可换上更好拥有件的部位槽位数。"
+	_equip_best_btn.tooltip_text = "各部位自动换上 已拥有 的最佳装备: 主属性 (灵气% + 灵石%) > 突破率 > 离线效率 (id 兜底, 确定性); 浮动提示追加 灵气速率 +N/秒 变化量 (换装后速率-换装前速率, 0 变化省略)。\n仅变更 尚未最佳 的槽位; 无拥有件不受影响; 已最佳 = 0 变更 (幂等), 不受 部位/品质 筛选影响 (全局口径)。\n按钮计数 = 可换上更好拥有件的部位槽位数。"
 	eq_tier_bar.add_child(_equip_best_btn)
 
 	# 装备列表 (已拥有=穿戴, 未拥有=购买)

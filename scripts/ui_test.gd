@@ -513,8 +513,12 @@ func _assert_onekey_float() -> void:
 	check(n_equip > 0, "受控态 存在可购装备 (实际 %d)" % n_equip)
 	ui._tab.current_tab = 2
 	ui._refresh()
+	# 打磨-52: 浮动文案含 灵气速率 增量 (购买前 qi 快照, 与 打磨-51 法器 口径一致)
+	var qi_pre52: float = g.qi_per_sec()
 	ui._on_buy_all()
-	onekey_assert("一键购买 %d 件装备" % n_equip, c0)
+	var qi_delta52: float = g.qi_per_sec() - qi_pre52
+	check(qi_delta52 > 0.0, "装备一键购买后 灵气速率上升 (delta %s)" % g.fmt(qi_delta52))
+	onekey_assert("一键购买 %d 件装备 (灵气速率 +%s/秒)" % [n_equip, g.fmt(qi_delta52)], c0)
 	c0 = ui._onekey_float_count
 	check(g.owned_eq.size() == n_equip, "装备 买到 %d (实际 %d)" % [n_equip, g.owned_eq.size()])
 	check(g.equipped.size() == 5, "槽位空时已自动穿戴 (5 部位, 实际 %d)" % g.equipped.size())
@@ -523,8 +527,12 @@ func _assert_onekey_float() -> void:
 	var n_best: int = g.equip_best_pending()
 	check(n_best > 0, "受控态 存在待改进槽位 (实际 %d)" % n_best)
 	ui._refresh()
+	# 打磨-52: 换装前 qi 快照, 换装后 delta>0 追加 灵气速率 增量
+	var qi_pre53: float = g.qi_per_sec()
 	ui._on_equip_best()
-	onekey_assert("最佳穿戴 %d 件" % n_best, c0)
+	var qi_delta53: float = g.qi_per_sec() - qi_pre53
+	check(qi_delta53 > 0.0, "一键最佳换装后 灵气速率再升 (delta %s)" % g.fmt(qi_delta53))
+	onekey_assert("最佳穿戴 %d 件 (灵气速率 +%s/秒)" % [n_best, g.fmt(qi_delta53)], c0)
 	c0 = ui._onekey_float_count
 	check(g.equip_best_pending() == 0, "一键最佳后 无待改进槽位 (实际 %d)" % g.equip_best_pending())
 	check(g.essence == snap_ess2, "一键最佳 无灵气副作用 (实际 %.0f)" % g.essence)
@@ -594,6 +602,10 @@ func _assert_onekey_tooltips() -> void:
 	var t_item: String = str(ui._items_buy_btn.tooltip_text)
 	check(t_item.contains("不受筛选影响"), "法器一键购买 tooltip 含 全局口径 说明")
 	check(t_item.contains("同价按数据序"), "法器一键购买 tooltip 含 同价按数据序 顺序")
+	# 打磨-52: 装备一键购买/一键最佳 tooltip 含 灵气速率 增量 口径 (0 变化省略)
+	check(t_buy.contains("灵气速率 +N/秒"), "装备一键购买 tooltip 含 灵气速率增量 口径 (打磨-52)")
+	check(t_best.contains("灵气速率 +N/秒"), "一键最佳 tooltip 含 灵气速率增量 口径 (打磨-52)")
+	check(t_best.contains("0 变化省略"), "一键最佳 tooltip 含 0变化省略 口径 (打磨-52)")
 
 
 # 打磨-47: 一键购买 (装备/法器) 结果反馈 — 变更>0 底部消息追加 共花灵石 + 距下一件缺口;
