@@ -460,9 +460,14 @@ func _assert_onekey_float() -> void:
 	check(n_learn > 0, "受控态 存在可学技能 (实际 %d)" % n_learn)
 	ui._tab.current_tab = 1
 	ui._refresh()
+	# 打磨-53: 学习前 qi 快照, 学习后 delta>0 追加 灵气速率 增量 (与 打磨-51/52 法器/装备 同口径)
+	var qi_pre_l53: float = g.qi_per_sec()
 	ui._on_learn_all()
-	onekey_assert("一键领悟 %d 个技能" % n_learn, c0)
+	var qi_delta_l53: float = g.qi_per_sec() - qi_pre_l53
+	var extra_l53 := (" (灵气速率 +%s/秒)" % g.fmt(qi_delta_l53)) if qi_delta_l53 > 0.0 else ""
+	onekey_assert("一键领悟 %d 个技能%s" % [n_learn, extra_l53], c0)
 	c0 = ui._onekey_float_count
+	check(qi_delta_l53 > 0.0, "一键领悟后 灵气速率上升 (delta %s/秒)" % g.fmt(qi_delta_l53))
 	check(g.learned.size() == n_learn, "一键领悟 学到 %d (实际 %d)" % [n_learn, g.learned.size()])
 	check(g.essence == snap_ess, "一键领悟 无灵气副作用 (实际 %.0f)" % g.essence)
 	# --- 一键施展: 期望数 = active_ready_count (冷却清空, 刚学的主动神通全部就绪; 爆发真实加灵气) ---
@@ -606,6 +611,9 @@ func _assert_onekey_tooltips() -> void:
 	check(t_buy.contains("灵气速率 +N/秒"), "装备一键购买 tooltip 含 灵气速率增量 口径 (打磨-52)")
 	check(t_best.contains("灵气速率 +N/秒"), "一键最佳 tooltip 含 灵气速率增量 口径 (打磨-52)")
 	check(t_best.contains("0 变化省略"), "一键最佳 tooltip 含 0变化省略 口径 (打磨-52)")
+	# 打磨-53: 一键领悟 tooltip 含 灵气速率 增量 口径 (0 变化省略, 与法器/装备同口径)
+	check(t_learn.contains("灵气速率 +N/秒"), "一键领悟 tooltip 含 灵气速率增量 口径 (打磨-53)")
+	check(t_learn.contains("0 变化省略"), "一键领悟 tooltip 含 0变化省略 口径 (打磨-53)")
 
 
 # 打磨-47: 一键购买 (装备/法器) 结果反馈 — 变更>0 底部消息追加 共花灵石 + 距下一件缺口;

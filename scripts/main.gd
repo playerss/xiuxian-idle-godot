@@ -458,7 +458,7 @@ func _build_skill_page(page: Panel) -> void:
 	_learn_all_btn = _make_button("一键领悟")
 	_learn_all_btn.pressed.connect(_on_learn_all)
 	# 打磨-46: 统一口径 tooltip (动作与条件 / 筛选叠加 / 计数口径)
-	_learn_all_btn.tooltip_text = "批量领悟 当前境界/层数足够 的 未学 技能 (境界足够且未领悟)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的); 不消耗资源; 已领悟的不重复领悟。\n按钮计数 = 筛选范围内可执行技能数 (与实际执行数一致)。"
+	_learn_all_btn.tooltip_text = "批量领悟 当前境界/层数足够 的 未学 技能 (境界足够且未领悟); 浮动提示追加 灵气速率 +N/秒 变化量 (学习后速率-学习前速率, 0 变化省略)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的); 不消耗资源; 已领悟的不重复领悟。\n按钮计数 = 筛选范围内可执行技能数 (与实际执行数一致)。"
 	tier_bar.add_child(_learn_all_btn)
 	# 打磨-30: 一键施展 (释放所有 已学+冷却完毕 的主动神通)
 	_active_all_btn = _make_button("一键施展")
@@ -604,13 +604,18 @@ func _on_skill_btn(id: String, is_active: bool) -> void:
 # 打磨-23: 一键领悟 (与当前 类别/品质 筛选叠加; 只学 未学+境界足够 的)
 func _on_learn_all() -> void:
 	var tier_i := int(_tier_active) if _tier_active != "" else -1
+	# 打磨-53: 学习前 灵气速率 快照 (被动功法 qi_mult/all_mult 改变 功法装备段 1+Σ, 前后差作浮动反馈)
+	var qi_before: float = GameData.qi_per_sec()
 	var r: Dictionary = GameData.learn_all_available(_filter_active, tier_i)
 	if int(r["count"]) > 0:
 		var msg := "一键领悟 %d 个技能" % int(r["count"])
 		msg += (", " + GameData.skill_tier_name(int(_tier_active))) if _tier_active != "" else ""
 		_show_msg(msg)
 		# 打磨-45: 变更>0 统一浮动反馈 (文案含数量)
-		_onekey_float("一键领悟 %d 个技能" % int(r["count"]))
+		# 打磨-53: 浮动文案追加 灵气速率 变化量 (学习后速率-学习前速率, 0 变化省略; 与 打磨-51/52 法器/装备 同口径)
+		var qi_delta: float = GameData.qi_per_sec() - qi_before
+		var extra := (" (灵气速率 +%s/秒)" % GameData.fmt(qi_delta)) if qi_delta > 0.0 else ""
+		_onekey_float("一键领悟 %d 个技能%s" % [int(r["count"]), extra])
 	else:
 		_show_msg("当前境界下没有可领悟的新技能 (或筛选范围内已全部领悟)")
 

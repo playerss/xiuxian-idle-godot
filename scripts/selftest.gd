@@ -1954,11 +1954,53 @@ func _init() -> void:
 	check(extra0_52 == "", "打磨-52 delta=0 时 浮动片段为空 (省略)")
 	var extra1_52: String = (" (灵气速率 +%s/秒)" % g.fmt(d2_52)) if d2_52 > 0.0 else ""
 	check(extra1_52.begins_with(" (灵气速率 +"), "打磨-52 delta>0 时 浮动片段 灵气速率 前缀 (实际 %s)" % extra1_52)
+	# 恢复干净基准态 (打磨-53 前置: 须清 equipped, 否则残留穿戴装备使 速率基准 ≠1)
+	g.stones = 0.0
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	# ---------- 打磨-53: 技能 一键领悟 浮动文案 灵气速率变化量 ----------
+	# 口径: 被动功法 (qi_mult/all_mult) 改变 功法装备段 (1+Σ), 学习前后 灵气速率 差作浮动反馈
+	# (delta>0 才追加, 0 变化省略; 与 打磨-51/52 法器/装备 同口径; GameData 无新接口, qi_per_sec 前后差)
+	# 受控态: 境界0 层1 (QI_MULT[0]=1.0), 无功法/法器/装备 (速率基准=1.0), 学习不耗资源
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	var qi0_53: float = g.qi_per_sec()
+	check(absf(qi0_53 - 1.0) < 1e-6, "打磨-53 学习前 灵气速率=基础 1.0 (无功法装备法器, 实际 %s)" % g.fmt(qi0_53))
+	var n_learn53: int = g.learn_available_count()
+	check(n_learn53 > 0, "打磨-53 境界0层1 存在可学技能 (实际 %d)" % n_learn53)
+	# 期望 delta = 本次将学到的 灵气相关被动 (qi_mult/all_mult) value 和 (境界0层1 门槛内)
+	var exp53 := 0.0
+	var n_qi53 := 0
+	for id in g.skill_ids:
+		var s53: Dictionary = g.skill_by_id[str(id)]
+		if int(s53.get("unlock_realm", 0)) <= 0 and int(s53.get("unlock_layer", 99)) <= 1:
+			if str(s53.get("type", "")) == "passive" and str(s53.get("effect", "")) in ["qi_mult", "all_mult"]:
+				exp53 += float(s53.get("value", 0.0))
+				n_qi53 += 1
+	check(n_qi53 > 0, "打磨-53 可学技能含 灵气相关被动 (qi/all_mult 共 %d 个)" % n_qi53)
+	check(exp53 > 0.0, "打磨-53 期望灵气速率增量 >0 (期望 %s)" % g.fmt(exp53))
+	var r55: Dictionary = g.learn_all_available()
+	check(int(r55["count"]) == n_learn53, "打磨-53 一键领悟数=可学数 (期望 %d, 实际 %d)" % [n_learn53, int(r55["count"])])
+	var d53: float = g.qi_per_sec() - qi0_53
+	check(d53 > 0.0, "打磨-53 一键领悟后 灵气速率上升 (delta %s/秒)" % g.fmt(d53))
+	check(absf(d53 - exp53) < 1e-6, "打磨-53 学习 delta=可学 qi/all 被动 value 和 (期望 %s, 实际 %s)" % [g.fmt(exp53), g.fmt(d53)])
+	check(absf(g.qi_per_sec() - (1.0 + d53)) < 1e-6, "打磨-53 学习后 速率=基础 x (1+delta) (实际 %s)" % g.fmt(g.qi_per_sec()))
+	# 0 变化省略 口径: 全学完再点 0 变更, 速率不变, 浮动片段为空 (与 main.gd _on_learn_all 的 extra 逻辑同式)
+	var r56: Dictionary = g.learn_all_available()
+	check(int(r56["count"]) == 0 and absf(g.qi_per_sec() - (1.0 + d53)) < 1e-6, "打磨-53 全学完再点 0变更 速率不变 (实际 %s)" % g.fmt(g.qi_per_sec()))
+	var d0_53: float = 0.0
+	var extra0_53 := (" (灵气速率 +%s/秒)" % g.fmt(d0_53)) if d0_53 > 0.0 else ""
+	check(extra0_53 == "", "打磨-53 delta=0 时 浮动片段为空 (省略)")
+	var extra1_53: String = (" (灵气速率 +%s/秒)" % g.fmt(d53)) if d53 > 0.0 else ""
+	check(extra1_53.begins_with(" (灵气速率 +"), "打磨-53 delta>0 时 浮动片段 灵气速率 前缀 (实际 %s)" % extra1_53)
 	# 恢复干净基准态
 	g.stones = 0.0
 	g.owned.clear()
 	g.owned_eq.clear()
 	g.equipped.clear()
+	g.learned.clear()
 	g.realm_idx = 0
 	g.layer = 1
 	# ---------- 汇报 ----------
