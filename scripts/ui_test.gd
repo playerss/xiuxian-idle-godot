@@ -85,6 +85,7 @@ func _ready() -> void:
 	await _assert_stone_next_inline()
 	await _assert_burst_preview()
 	await _assert_skill_cast_float()
+	await _assert_active_learn()
 	_finish()
 
 
@@ -567,12 +568,13 @@ func onekey_assert(expect_text: String, c_before: int) -> void:
 	check(fl.modulate.a > 0.9, "一键 浮动可见 (alpha=%.2f)" % fl.modulate.a)
 
 
-# 打磨-46: 一键系列按钮 tooltip 统一口径 — 5 按钮 (一键领悟/一键施展/法器一键购买/装备一键购买/
+# 打磨-46: 一键系列按钮 tooltip 统一口径 — 6 按钮 (一键领悟/一键神通/一键施展/法器一键购买/装备一键购买/
 # 一键最佳) tooltip 统一 3 行: 动作与顺序 / 筛选叠加与作用范围 / 按钮计数口径
 # tooltip 为构建时静态文本 (不随状态刷新), 此处断言 3 行结构 + 各按钮关键口径词
 func _assert_onekey_tooltips() -> void:
 	var btns: Dictionary = {
 		"learn": ui._learn_all_btn,
+		"actlearn": ui._active_learn_btn,
 		"active": ui._active_all_btn,
 		"item": ui._items_buy_btn,
 		"buy": ui._buy_all_btn,
@@ -1054,6 +1056,96 @@ func _assert_skill_cast_float() -> void:
 	g.essence = 0.0
 	g.realm_idx = 0
 	g.layer = 1
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-56: 技能页 一键神通 — 只学 筛选范围内 未学+境界足够 的 主动神通 (与 一键领悟 同口径 仅 type 过滤不同):
+# 按钮节点存在 / 计数文案 "一键神通 xN" 按 当前 类别/品质 筛选 (AND 叠加, 变化才刷) / 点击 只学主动神通
+# (learned 全为 active, 无被动副作用, 无灵气变化) / 绿色浮动 "一键神通 N 个" (与 一键领悟 文案区分,
+# 主动无被动加成故无 灵气速率 增量) / 学完 "已无新神通" / 幂等 0 变更 不弹 / tooltip 3 行口径
+func _assert_active_learn() -> void:
+	var g := GameData
+	# 受控态: 全新基准 (境界0层1 速率 1.0, 空 技能/法器/装备/道行)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.essence = 0.0
+	g.stones = 0.0
+	# 数据锚定: 境界0层1 可学 主动神通 = 6 (tier0 全 6 件, tier1+ 境界不足)
+	var n_act56: int = g.active_learn_available_count()
+	check(n_act56 == 6, "打磨-56 受控态 全局可学神通=6 (实际 %d)" % n_act56)
+	check(g.active_learn_available_count() < g.learn_available_count(), "打磨-56 神通数 < 技能总数 (含被动)")
+	# 节点: 按钮存在 + 默认文案
+	var btn: Button = ui._active_learn_btn
+	check(btn != null, "打磨-56 一键神通 按钮节点存在")
+	if btn == null:
+		return
+	check(btn.get_parent() is HBoxContainer, "打磨-56 按钮 挂 技能页 品质筛选行")
+	ui._tab.current_tab = 1  # 技能页
+	ui._refresh()
+	var t_init56 := ("一键神通 x%d" % n_act56)
+	check(btn.text == t_init56, "打磨-56 初始文案=一键神通 x%d (实际 %s)" % [n_act56, btn.text])
+	# 筛选 AND 叠加: sword → x1 (sword_0_3); sword×tier1 → 已无新神通 (境界不足); 恢复全部 → x6
+	ui._on_filter("sword")
+	ui._refresh()
+	check(btn.text == "一键神通 x1", "打磨-56 类别 sword 文案 x1 (实际 %s)" % btn.text)
+	ui._on_tier_filter("1")
+	ui._refresh()
+	check(btn.text == "已无新神通", "打磨-56 sword×tier1 境界不足 文案 已无新神通 (实际 %s)" % btn.text)
+	ui._on_tier_filter("")
+	ui._refresh()
+	check(btn.text == "一键神通 x1", "打磨-56 品质重置 恢复 sword x1 (实际 %s)" % btn.text)
+	ui._on_filter("")
+	ui._refresh()
+	var t_full56 := ("一键神通 x%d" % n_act56)
+	check(btn.text == t_full56, "打磨-56 类别重置 恢复 全局 x%d (实际 %s)" % [n_act56, btn.text])
+	# 点击: 只学 6 个主动神通, 绿色浮动 "一键神通 6 个" (与 一键领悟 "一键领悟 6 个技能" 口径区分)
+	var c0: int = ui._onekey_float_count
+	var snap_ess: float = g.essence
+	var qi0: float = g.qi_per_sec()
+	ui._on_active_learn()
+	onekey_assert("一键神通 %d 个" % n_act56, c0)
+	check(str(ui._onekey_last_text).find("灵气速率") < 0, "打磨-56 浮动文案 无 灵气速率 增量 (神通无被动加成, 实际 %s)" % str(ui._onekey_last_text))
+	check(str(ui._msg_label.text).find("一键神通 %d 个主动神通" % n_act56) >= 0, "打磨-56 底部消息 含数量 (实际 %s)" % str(ui._msg_label.text))
+	check(g.learned.size() == n_act56, "打磨-56 学到 %d (实际 %d)" % [n_act56, g.learned.size()])
+	var only_act: bool = true
+	for id in g.learned:
+		if str(g.skill_by_id[str(id)].get("type", "")) != "active":
+			only_act = false
+	check(only_act, "打磨-56 只学主动神通 (learned 全为 active)")
+	check(absf(g.qi_per_sec() - qi0) < 1e-9, "打磨-56 学神通 无 灵气速率 变化 (实际 %s)" % g.fmt(g.qi_per_sec()))
+	check(g.essence == snap_ess, "打磨-56 无 灵气 副作用 (实际 %.0f)" % g.essence)
+	# 学完: 按钮文案 切换 已无新神通 (文本变化才刷)
+	ui._refresh()
+	check(btn.text == "已无新神通", "打磨-56 学完文案=已无新神通 (实际 %s)" % btn.text)
+	# 幂等: 再点 0 变更 不弹浮动, 走底部消息
+	var c1: int = ui._onekey_float_count
+	ui._on_active_learn()
+	check(ui._onekey_float_count == c1, "打磨-56 0变更再点 不弹浮动 (计数 %d 不变)" % c1)
+	check(str(ui._msg_label.text).find("没有可领悟的新主动神通") >= 0, "打磨-56 0变更 走底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# tooltip 3 行结构 + 口径词 (构建时静态文本)
+	var tip: String = str(btn.tooltip_text)
+	var lines: PackedStringArray = tip.split("\n")
+	check(lines.size() == 3, "打磨-56 tooltip 三行结构 (实际 %d)" % lines.size())
+	check(lines.size() >= 3 and lines[2].begins_with("按钮计数 ="), "打磨-56 tooltip 第3行=计数口径 (实际 %s)" % (lines[2] if lines.size() >= 3 else ""))
+	check(tip.contains("主动神通"), "打磨-56 tooltip 含 主动神通 范围说明")
+	check(tip.contains("AND 叠加"), "打磨-56 tooltip 含 筛选 AND 叠加口径")
+	check(tip.contains("不消耗资源"), "打磨-56 tooltip 含 不消耗资源")
+	check(tip.contains("飞升后"), "打磨-56 tooltip 含 飞升后 口径说明")
+	# 收尾: 恢复基准态 (境界0层1, 清 已学/冷却/资源)
+	g.learned.clear()
+	g._active_cd.clear()
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
 	ui._refresh()
 	await get_tree().process_frame
 

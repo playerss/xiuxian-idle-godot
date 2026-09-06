@@ -73,6 +73,7 @@ var _equip_box: VBoxContainer
 var _equip_row_nodes: Dictionary = {}
 var _equip_btns: Dictionary = {}
 var _learn_all_btn: Button           # 打磨-23: 一键领悟 (技能页)
+var _active_learn_btn: Button        # 打磨-56: 一键神通 (技能页, 只学 筛选范围内 未学+境界足够 的 主动神通)
 var _active_all_btn: Button         # 打磨-30: 一键施展 (技能页, 释放所有就绪主动神通)
 var _buy_all_btn: Button            # 打磨-23: 一键购买 (装备页)
 var _equip_best_btn: Button         # 打磨-26: 一键最佳穿戴 (装备页)
@@ -462,6 +463,12 @@ func _build_skill_page(page: Panel) -> void:
 	# 打磨-46: 统一口径 tooltip (动作与条件 / 筛选叠加 / 计数口径)
 	_learn_all_btn.tooltip_text = "批量领悟 当前境界/层数足够 的 未学 技能 (境界足够且未领悟); 浮动提示追加 灵气速率 +N/秒 变化量 (学习后速率-学习前速率, 0 变化省略)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的); 不消耗资源; 已领悟的不重复领悟。\n按钮计数 = 筛选范围内可执行技能数 (与实际执行数一致)。"
 	tier_bar.add_child(_learn_all_btn)
+	# 打磨-56: 一键神通 (只学 筛选范围内 未学+境界足够 的 主动神通, 与 一键领悟 同口径 仅 type 过滤不同)
+	_active_learn_btn = _make_button("一键神通")
+	_active_learn_btn.pressed.connect(_on_active_learn)
+	# 打磨-46 口径 统一 tooltip (动作与条件 / 筛选叠加 / 计数口径)
+	_active_learn_btn.tooltip_text = "批量领悟 当前境界/层数足够 的 未学 主动神通 (境界足够且未领悟); 浮动提示追加 灵气速率 +N/秒 变化量 (本按钮仅学主动神通, 不学被动, 0 变化省略)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的 主动神通); 不消耗资源; 已领悟的不重复领悟; 飞升后 主动神通 爆发口径 道行 不变, 亦可作 飞升后 补齐入口。\n按钮计数 = 筛选范围内可执行 主动神通数 (与实际执行数一致)。"
+	tier_bar.add_child(_active_learn_btn)
 	# 打磨-30: 一键施展 (释放所有 已学+冷却完毕 的主动神通)
 	_active_all_btn = _make_button("一键施展")
 	_active_all_btn.pressed.connect(_on_active_all)
@@ -642,6 +649,25 @@ func _on_learn_all() -> void:
 		_onekey_float("一键领悟 %d 个技能%s" % [int(r["count"]), extra])
 	else:
 		_show_msg("当前境界下没有可领悟的新技能 (或筛选范围内已全部领悟)")
+
+
+# 打磨-56: 一键神通 (只学 筛选范围内 未学+境界足够 的 主动神通, 与 一键领悟 同口径 仅 type 过滤不同)
+# 变更>0 时绿色浮动 "一键神通 N 个" (与 一键领悟 的 "一键领悟 N 个技能" 口径区分);
+# 主动神通 无被动加成, 灵气速率 恒 0 变化, 浮动不追加 速率增量 (与 打磨-53 同口径 防御)
+func _on_active_learn() -> void:
+	var tier_i := int(_tier_active) if _tier_active != "" else -1
+	var qi_before: float = GameData.qi_per_sec()
+	var r: Dictionary = GameData.learn_all_active(_filter_active, tier_i)
+	if int(r["count"]) > 0:
+		var msg := "一键神通 %d 个主动神通" % int(r["count"])
+		msg += (", " + GameData.skill_tier_name(int(_tier_active))) if _tier_active != "" else ""
+		_show_msg(msg)
+		# 打磨-45: 变更>0 统一浮动反馈 (文案含数量, 与 一键领悟/一键施展 区分)
+		var qi_delta: float = GameData.qi_per_sec() - qi_before
+		var extra := (" (灵气速率 +%s/秒)" % GameData.fmt(qi_delta)) if qi_delta > 0.0 else ""
+		_onekey_float("一键神通 %d 个%s" % [int(r["count"]), extra])
+	else:
+		_show_msg("当前境界下没有可领悟的新主动神通 (或筛选范围内已全部领悟)")
 
 
 # 打磨-29: 法器 一键购买 (价格升序连买买得起的, 与装备 一键购买 口径一致)
@@ -1145,12 +1171,14 @@ func _refresh() -> void:
 			btn.disabled = worn
 	# 打磨-23: 批量按钮 (境界/灵石/已学数变化时才刷, 避免每帧写文本)
 	# 打磨-27: 一键领悟按当前 类别/品质 筛选计可学数 (点击只学筛选内技能, 计数与执行口径一致)
+	# 顺带修: 原 ternary ("一键领悟 x%d" if ... else ...) 返回未格式化字面量 x%d, 计数从未真正显示;
+	# 现各按钮 计数文案 按 %d 格式化 可执行数 (与 打磨-56 断言口径一致)
 	var tier_i27 := int(_tier_active) if _tier_active != "" else -1
 	var ll_avail: int = g.learn_available_count(_filter_active, tier_i27)
-	var ll_txt := ("一键领悟 x%d" if ll_avail > 0 else "已无新技能")
+	var ll_txt := ("一键领悟 x%d" % ll_avail) if ll_avail > 0 else "已无新技能"
 	# 打磨-30: 一键施展 (可施展数变化才刷; 就绪数随冷却倒计时变化)
 	var ar_avail: int = g.active_ready_count()
-	var ar_txt := ("一键施展 x%d" if ar_avail > 0 else "冷却中")
+	var ar_txt := ("一键施展 x%d" % ar_avail) if ar_avail > 0 else "冷却中"
 	if _active_all_btn.text != ar_txt:
 		_active_all_btn.text = ar_txt
 	var buy_n := 0
@@ -1158,24 +1186,29 @@ func _refresh() -> void:
 		var ee: Dictionary = g.equip_by_id[eid]
 		if not g.owned_eq.has(eid) and g.stones >= float(ee["cost"]):
 			buy_n += 1
-	var ba_txt := ("一键购买 x%d" if buy_n > 0 else "灵石不足")
+	var ba_txt := ("一键购买 x%d" % buy_n) if buy_n > 0 else "灵石不足"
 	if _learn_all_btn.text != ll_txt:
 		_learn_all_btn.text = ll_txt
+	# 打磨-56: 一键神通 (按当前 类别/品质 筛选 计 可学 主动神通数, 文本变化才刷, 与 一键领悟 同口径)
+	var al_avail: int = g.active_learn_available_count(_filter_active, tier_i27)
+	var al_txt := ("一键神通 x%d" % al_avail) if al_avail > 0 else "已无新神通"
+	if _active_learn_btn.text != al_txt:
+		_active_learn_btn.text = al_txt
 	if _buy_all_btn.text != ba_txt:
 		_buy_all_btn.text = ba_txt
 	# 打磨-38: 只看可学 开关 (按钮按 当前 类别/品质 筛选 内 可显示数 计口径, 开关态变化才刷)
 	var lb_avail: int = g.learnable_display_count(_filter_active, tier_i27)
-	var lb_txt := ("显示全部" if _learnable_on else ("只看可学 x%d" if lb_avail > 0 else "无可学"))
+	var lb_txt := "显示全部" if _learnable_on else (("只看可学 x%d" % lb_avail) if lb_avail > 0 else "无可学")
 	if _learnable_btn.text != lb_txt:
 		_learnable_btn.text = lb_txt
 	# 打磨-26: 一键最佳穿戴 (可改进槽位数变化时才刷, 购买/穿戴/卸下/读档 触发重排时自然生效)
 	var best_n: int = g.equip_best_pending()
-	var eb_txt := ("一键最佳 x%d" if best_n > 0 else "已最佳")
+	var eb_txt := ("一键最佳 x%d" % best_n) if best_n > 0 else "已最佳"
 	if _equip_best_btn.text != eb_txt:
 		_equip_best_btn.text = eb_txt
 	# 打磨-29: 法器 一键购买 (可买数变化时才刷, 与 一键购买/一键最佳 按可执行数计 口径一致)
 	var ib_avail: int = g.item_affordable_count()
-	var ib_txt := ("一键购买 x%d" if ib_avail > 0 else "灵石不足")
+	var ib_txt := ("一键购买 x%d" % ib_avail) if ib_avail > 0 else "灵石不足"
 	if _items_buy_btn.text != ib_txt:
 		_items_buy_btn.text = ib_txt
 	# 槽位

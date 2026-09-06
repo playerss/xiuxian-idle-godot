@@ -2050,6 +2050,49 @@ func _init() -> void:
 	g.layer = 1
 	g.ascended = false
 	g.dao_level = 0
+	# ---------- 打磨-56: 技能页 一键神通 (只学 筛选范围内 未学+境界足够 的 主动神通) ----------
+	# 口径: 与 learn_all_available(cat,tier) 完全一致, 仅多一道 type=="active" 过滤 (打磨-27 计数口径对齐);
+	# 学习复用 learn_skill 口径 (learned.append + can_learn 门槛), 无 统计/存档 新副作用; 幂等 0 变更
+	g.stones = 0.0
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	var n_active56: int = g.active_learn_available_count()
+	check(n_active56 == 6, "打磨-56 境界0层1 全局可学主动神通=6 (实际 %d)" % n_active56)
+	check(g.active_learn_available_count() == n_active56 and g.learned.is_empty(), "打磨-56 计数只读无副作用")
+	var n_all56: int = g.learn_available_count()
+	check(n_all56 > n_active56, "打磨-56 可学技能总数(含被动) > 可学神通数 (技能 %d, 神通 %d)" % [n_all56, n_active56])
+	check(g.active_learn_available_count("sword") == 1, "打磨-56 类别筛选 sword 可学神通=1 (实际 %d)" % g.active_learn_available_count("sword"))
+	check(g.active_learn_available_count("divine") == 2, "打磨-56 类别筛选 divine 可学神通=2 (实际 %d)" % g.active_learn_available_count("divine"))
+	check(g.active_learn_available_count("", 0) == 6, "打磨-56 品质筛选 tier0 可学神通=6 (实际 %d)" % g.active_learn_available_count("", 0))
+	check(g.active_learn_available_count("", 1) == 0, "打磨-56 品质筛选 tier1 境界不足=0")
+	check(g.active_learn_available_count("sword", 0) == 1, "打磨-56 叠加筛选 sword×tier0 可学神通=1")
+	var qi0_56: float = g.qi_per_sec()
+	check(absf(qi0_56 - 1.0) < 1e-6, "打磨-56 学习前 灵气速率=基准 1.0 (实际 %s)" % g.fmt(qi0_56))
+	var r56a: Dictionary = g.learn_all_active()
+	check(int(r56a["count"]) == n_active56, "打磨-56 一键神通数=可学神通数 (期望 %d, 实际 %d)" % [n_active56, int(r56a["count"])])
+	check(g.learned.size() == n_active56, "打磨-56 学习后 learned 仅新增 神通 (实际 %d)" % g.learned.size())
+	var only_active56 := true
+	for id in g.learned:
+		if str(g.skill_by_id[str(id)].get("type", "")) != "active":
+			only_active56 = false
+	check(only_active56, "打磨-56 只学主动神通, 未学任何被动 (learned 全为 active)")
+	# 主动神通无被动加成: 学习后 灵气速率 不变 (浮动不追加 速率增量, 与 打磨-53 同口径 防御)
+	check(absf(g.qi_per_sec() - qi0_56) < 1e-9, "打磨-56 学神通后 灵气速率不变 (神通无被动加成, 实际 %s)" % g.fmt(g.qi_per_sec()))
+	# 幂等: 再调 0 变更, learned 不变
+	var r56b: Dictionary = g.learn_all_active()
+	check(int(r56b["count"]) == 0 and g.learned.size() == n_active56, "打磨-56 一键神通幂等 0变更 (learned %d 不变)" % g.learned.size())
+	check(g.active_learn_available_count() == 0, "打磨-56 全学后 可学神通数=0 (已无新神通)")
+	# 境界不足的技能不被学习: 飞升类 (tier5) 神通在 境界0 不在 learned
+	var no_tier5_56 := true
+	for id in g.learned:
+		if int(g.skill_by_id[str(id)].get("tier", -1)) == 5:
+			no_tier5_56 = false
+	check(no_tier5_56, "打磨-56 境界不足 (tier5) 神通未被学习")
+	# 只读性: 计数调用不改动状态
+	g.learned.clear()
+	var n_read56: int = g.active_learn_available_count()
+	check(n_read56 == n_active56 and g.learned.is_empty(), "打磨-56 计数 只读 (清档后恢复 %d)" % n_read56)
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

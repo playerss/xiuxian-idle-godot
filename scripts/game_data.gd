@@ -637,6 +637,46 @@ func learnable_display_count(cat: String = "", tier: int = -1) -> int:
 			n += 1
 	return n
 
+# 打磨-56: 筛选范围内 可学主动神通 数 (未学+境界足够+匹配 类别/品质 筛选, 仅 type=="active")
+# 口径与 learn_all_available(cat, tier) 完全一致, 仅多一道 type 过滤 (与 打磨-27 计数口径对齐,
+# 供技能页"一键神通"按钮文案; 24 个主动神通混在 96 被动里逐个找成本高, 此按钮一次补齐)
+func active_learn_available_count(cat: String = "", tier: int = -1) -> int:
+	var n := 0
+	for id in skill_ids:
+		if learned.has(id):
+			continue
+		var s: Dictionary = skill_by_id.get(id, {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if cat != "" and str(s["category"]) != cat:
+			continue
+		if tier >= 0 and int(s["tier"]) != tier:
+			continue
+		if can_learn(id):
+			n += 1
+	return n
+
+# 打磨-56: 一键神通 — 批量学习 筛选范围内 未学+境界足够 的 主动神通 (仅 type=="active")
+# 复用 learn_skill 同口径 (learned.append + can_learn 门槛), 无 统计/存档 新副作用;
+# 变更 0 (无新神通) 再调 = 0 幂等; 飞升后 主动神通 爆发口径 道行 不变, 亦作 飞升后 补齐入口
+func learn_all_active(cat: String = "", tier: int = -1) -> Dictionary:
+	var n := 0
+	for id in skill_ids:
+		if learned.has(id):
+			continue
+		var s: Dictionary = skill_by_id.get(id, {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if cat != "" and str(s["category"]) != cat:
+			continue
+		if tier >= 0 and int(s["tier"]) != tier:
+			continue
+		if not can_learn(id):
+			continue
+		learned.append(id)
+		n += 1
+	return {"count": n}
+
 func active_ready(id: String) -> bool:
 	return _active_cd.get(id, 0.0) <= 0.0
 
