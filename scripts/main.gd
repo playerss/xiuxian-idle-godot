@@ -320,7 +320,7 @@ func _build_training_page(page: Panel) -> void:
 	_items_buy_btn = _make_button("一键购买")
 	_items_buy_btn.pressed.connect(_on_items_buy_all)
 	# 打磨-46: 统一口径 tooltip (动作顺序 / 筛选叠加 / 计数口径)
-	_items_buy_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略)。\n不受筛选影响 (全局口径); 购入后法器加成直接生效。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。"
+	_items_buy_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略)。\n不受筛选影响 (全局口径); 购入后法器加成直接生效; 浮动提示追加 灵气速率 +N/秒 变化量 (购买后速率-购买前速率)。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。"
 	item_head.add_child(_items_buy_btn)
 	# 打磨-13: 法器列表可滚动 (10 件避免低分辨率下超出屏幕)
 	var shop_scroll := ScrollContainer.new()
@@ -618,13 +618,17 @@ func _on_learn_all() -> void:
 # 打磨-29: 法器 一键购买 (价格升序连买买得起的, 与装备 一键购买 口径一致)
 func _on_items_buy_all() -> void:
 	var before := GameData.stones
+	var qi_before: float = GameData.qi_per_sec()
 	var r: Dictionary = GameData.buy_items_affordable()
 	if int(r["count"]) > 0:
 		# 打磨-47: 追加 共花灵石 + 距下一件 (最便宜未拥有) 缺口 (全拥有省略)
 		var msg := "一键购置 %d 件法器, 共花 %s 灵石" % [int(r["count"]), GameData.fmt(before - GameData.stones)]
 		msg += _next_gap_text(GameData.item_next_target())
 		_show_msg(msg)
-		_onekey_float("一键购置 %d 件法器" % int(r["count"]))
+		# 打磨-51: 浮动文案追加 灵气速率 增加量 (购买后速率 - 购买前速率, 有购买恒 >0)
+		var delta: float = GameData.qi_per_sec() - qi_before
+		var extra := (" (灵气速率 +%s/秒)" % GameData.fmt(delta)) if delta > 0.0 else ""
+		_onekey_float("一键购置 %d 件法器%s" % [int(r["count"]), extra])
 	else:
 		_show_msg("当前灵石买不起任何一件未拥有的法器")
 
@@ -1147,8 +1151,15 @@ func _refresh() -> void:
 			row2.tooltip_text = g.equip_detail(id)
 	for id in _shop_row_nodes:
 		var row3: Node = _shop_row_nodes[id]
-		if int(row3.get_meta("_dk", -1)) != int(g.owned.has(id)):
-			row3.set_meta("_dk", int(g.owned.has(id)))
+		# 打磨-51: tooltip 含 当前贡献/购买后预览 (随 拥有状态+法器连乘+境界+功法装备+飞升 变化)
+		# 0.1 档量化 + 1 秒节流 (与 打磨-33 速率档口径一致), 避免挂机每帧 10 行文本重建
+		var boost_q51 := int(round(g.item_boost() * 10.0)) / 10.0
+		var mult_q51 := int(round(g.qi_mult_skill_equip() * 100.0)) / 100.0
+		var key51 := "%d|%d|%d|%d|%d|%.1f|%.2f" % [
+			int(g.owned.has(id)), g.realm_idx, int(g.ascended), g.dao_level,
+			g.learned.size(), boost_q51, mult_q51]
+		if str(row3.get_meta("_dkey", "")) != key51:
+			row3.set_meta("_dkey", key51)
 			row3.tooltip_text = g.item_detail(id)
 	# 打磨-25: 换装对比提示 (穿上本件后该部位 灵气/灵石 差值; 文本变化才写标签, 并同步行 tooltip)
 	for id in _equip_swap:

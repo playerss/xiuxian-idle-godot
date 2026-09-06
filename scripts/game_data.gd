@@ -444,14 +444,52 @@ func equip_detail(id: String) -> String:
 		tip += "\n换装对比: %s" % str(sw["text"])
 	return tip
 
-# 法器详情 (tooltip: 名称/描述/价格/增幅/状态)
+# 法器详情 (tooltip: 名称/描述/价格/增幅/状态/属性构成对比 打磨-51)
 func item_detail(item_id: String) -> String:
 	for it in ITEMS:
 		if str(it["id"]) == item_id:
 			var tip := "「%s」\n%s\n灵石 %s\n灵气速率 x%.1f" % [it["name"], it["desc"], fmt(float(it["cost"])), float(it["boost"])]
 			tip += "\n状态: %s" % ("已拥有" if owned.has(item_id) else "未拥有")
+			tip += "\n" + item_attr_line(item_id)  # 打磨-51: 属性构成 (购买后数值预览, 刷新口径与 _refresh 一致)
 			return tip
 	return ""
+
+# ---------- 打磨-51: 法器区属性构成 tooltip ----------
+
+# 灵气速率构成文本: 当前灵气/秒 = 境界基础 x 功法装备 x 法器连乘 x 飞升道行倍率
+# (未飞升时 飞升段 x1.0 省略; 供 法器行 tooltip / 一键购买 浮动文案 复用)
+func item_qi_compose() -> String:
+	var base: float = QI_MULT[realm_idx]
+	if ascended:
+		base *= immortal_mult()
+	var parts := "境界基础 x%.1f" % base
+	if ascended:
+		parts += " x 飞升x%.0f" % immortal_mult()
+	parts += " x 功法装备 x%.2f x 法器连乘 x%.1f" % [qi_mult_skill_equip(), item_boost()]
+	parts += " = 当前灵气 %s/秒" % fmt(qi_per_sec())
+	return parts
+
+# 法器行 tooltip 属性构成行: 未拥有 = 当前贡献(法器连乘未含本件) + 购买后预览; 已拥有 = 当前构成
+# 只读: 不改状态; 未拥有时 购买后 = 当前 x 本件boost (与 qi_per_sec 连乘口径一致)
+func item_attr_line(item_id: String) -> String:
+	var found: Dictionary = {}
+	for it in ITEMS:
+		if str(it["id"]) == item_id:
+			found = it
+			break
+	if found.is_empty():
+		return ""
+	var b: float = float(found["boost"])
+	if owned.has(item_id):
+		return "属性构成: " + item_qi_compose()
+	var base: float = QI_MULT[realm_idx]
+	if ascended:
+		base *= immortal_mult()
+	var mult: float = base * qi_mult_skill_equip()
+	var cur: float = mult * item_boost()   # 未拥有: 当前 法器连乘 未含本件
+	var aft: float = cur * b
+	return "当前贡献: 法器连乘 x%.1f = 灵气 %s/秒" % [item_boost(), fmt(cur)] + \
+		"\n购买后: 法器连乘 x%.1f = 灵气 %s/秒 (x%.1f)" % [item_boost() * b, fmt(aft), b]
 
 # ================= 加成汇总 (打磨-9: 面板顶部展示) =================
 

@@ -489,11 +489,14 @@ func _assert_onekey_float() -> void:
 			n_item += 1
 	check(n_item > 0, "受控态 存在可购法器 (实际 %d)" % n_item)
 	var snap_ess2 := g.essence
+	var qi_pre51: float = g.qi_per_sec()   # 打磨-51: 浮动文案含 灵气速率 +delta (购买前快照)
 	ui._tab.current_tab = 0
 	ui._refresh()
 	ui._on_items_buy_all()
-	onekey_assert("一键购置 %d 件法器" % n_item, c0)
+	var qi_delta51: float = g.qi_per_sec() - qi_pre51
+	onekey_assert("一键购置 %d 件法器 (灵气速率 +%s/秒)" % [n_item, g.fmt(qi_delta51)], c0)
 	c0 = ui._onekey_float_count
+	check(qi_delta51 > 0.0, "法器购买后 灵气速率上升 (delta %s)" % g.fmt(qi_delta51))
 	check(g.owned.size() == n_item, "法器 买到 %d (实际 %d)" % [n_item, g.owned.size()])
 	check(g.essence == snap_ess2, "一键购置 无灵气副作用 (实际 %.0f)" % g.essence)
 	# --- 装备 一键购买 (装备页): 期望数按 与 buy_affordable 完全一致的顺序 (价格升序, 同价 id 升序) 连买模拟 ---
@@ -642,7 +645,11 @@ func _assert_buy_feedback() -> void:
 	var it_eta: String = g.next_target_eta_text(it_target)
 	check(it_eta != "", "受控态 法器 缺口行 ETA 非空 (灵石速率 %s/s)" % g.stone_per_sec())
 	check(msg_it.find("灵石" + it_eta) >= 0, "法器 缺口行 追加 ETA (期望片段 %s, 实际 %s)" % ["灵石" + it_eta, msg_it])
-	check(str(ui._onekey_last_text) == "一键购置 %d 件法器" % n_it, "法器 浮动文案 不含共花 (保持 打磨-45 口径, 实际 %s)" % str(ui._onekey_last_text))
+	# 打磨-51: 浮动文案追加 灵气速率 +delta (购买前 qi 快照在 _on_items_buy_all 之前取, 此处按连买口径复算)
+	var qi_pre_fb: float = g.qi_per_sec() / g.item_boost()  # 逆连乘还原 购买前 qi (本件连乘全部刚购, 无其它拥有)
+	var qi_delta_fb: float = g.qi_per_sec() - qi_pre_fb
+	check(qi_delta_fb > 0.0, "打磨-51 法器连购后 灵气速率上升 (delta %s)" % g.fmt(qi_delta_fb))
+	check(str(ui._onekey_last_text) == "一键购置 %d 件法器 (灵气速率 +%s/秒)" % [n_it, g.fmt(qi_delta_fb)], "法器 浮动文案 含 灵气速率增量 (打磨-51, 实际 %s)" % str(ui._onekey_last_text))
 	# 装备: 同口径 (起始灵石 = 法器买完后的剩余, 非 5万)
 	var sim_eq := g.stones
 	var n_eq := 0

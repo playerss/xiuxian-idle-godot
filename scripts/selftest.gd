@@ -338,6 +338,91 @@ func _init() -> void:
 	var bst: String = g.bonus_summary_text()
 	check(bst.find("灵气 x") >= 0 and bst.find("法器 x") >= 0 and bst.find("离线") >= 0, "bonus_summary_text 含灵气/离线/法器段 (实际: %s)" % bst)
 
+
+	# ---------- 打磨-51: 法器区属性构成 tooltip (item_qi_compose / item_attr_line) ----------
+	# 独立受控态 (全量快照/恢复, 不污染 存档往返 节依赖的 50 技能/10 装备/10 法器/统计):
+	# 练气第1层 + 1 个 qi_mult 被动 (0.03) + 已拥有 木剑 (boost 1.5)
+	var qm51 := ""
+	for sid in g.skill_ids:
+		var ss: Dictionary = g.skill_by_id[sid]
+		if str(ss["type"]) == "passive" and str(ss.get("effect", "")) == "qi_mult" and int(ss["unlock_realm"]) == 0:
+			qm51 = sid
+			break
+	check(qm51 != "", "打磨-51 存在 练气 qi_mult 被动功法")
+	var qm_val51: float = float(g.skill_by_id[qm51]["value"])
+	check(absf(qm_val51 - 0.03) < 1e-9, "打磨-51 qi_mult 受控功法 value=0.03 (实际 %s)" % str(qm_val51))
+	# 快照
+	var snap_learned: Array = g.learned.duplicate()
+	var snap_owned: Array = g.owned.duplicate()
+	var snap_oeq: Array = g.owned_eq.duplicate()
+	var snap_eq: Dictionary = g.equipped.duplicate()
+	var snap_st51: float = g.stones
+	var snap_r51: int = g.realm_idx
+	var snap_l51: int = g.layer
+	var snap_a51: bool = g.ascended
+	var snap_d51: int = g.dao_level
+	# 清空后建受控态 (realm 0 层 1 练气: 木剑 100 灵石可买, 玉符 1000 买不起)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.stones = 500.0
+	check(g.learn_skill(qm51).find("领悟") >= 0, "打磨-51 受控态 学 qi_mult 功法")
+	check(g.try_buy_item("wooden_sword").find("购得") >= 0, "打磨-51 受控态 购 木剑")
+	check(g.owned.has("wooden_sword"), "打磨-51 受控态 木剑 已拥有")
+	var exp_mult51: float = g.QI_MULT[0] * g.qi_mult_skill_equip() * g.item_boost()
+	var exp_aft51: float = exp_mult51 * 2.0   # 玉符 boost 2.0
+	# 未拥有件 (玉符): 当前贡献(法器连乘未含本件) + 购买后预览
+	var l51a: String = g.item_attr_line("jade_talisman")
+	check(l51a.begins_with("当前贡献: 法器连乘 x1.5 = 灵气 %s/秒" % g.fmt(exp_mult51)), "打磨-51 未拥有 当前贡献行 (实际 %s)" % l51a)
+	check(l51a.split("\n")[1] == "购买后: 法器连乘 x3.0 = 灵气 %s/秒 (x2.0)" % g.fmt(exp_aft51), "打磨-51 未拥有 购买后预览行 (实际 %s)" % str(l51a.split("\n")[1]))
+	check(absf(exp_aft51 / exp_mult51 - 2.0) < 1e-9, "打磨-51 预览 购买后/当前 = 本件 boost (x2.0)")
+	# item_detail 追加构成行 (未拥有=当前贡献 / 已拥有=属性构成)
+	check(g.item_detail("jade_talisman").find(l51a) >= 0, "打磨-51 item_detail 未拥有 含构成行")
+	# 已拥有件 (木剑): 属性构成 = compose 全文
+	var comp: String = g.item_qi_compose()
+	check(comp == "境界基础 x1.0 x 功法装备 x1.03 x 法器连乘 x1.5 = 当前灵气 %s/秒" % g.fmt(g.qi_per_sec()), "打磨-51 compose 全文 (实际 %s)" % comp)
+	check(g.item_attr_line("wooden_sword") == "属性构成: " + comp, "打磨-51 已拥有=当前构成")
+	check(g.item_detail("wooden_sword").find("属性构成: " + comp) >= 0, "打磨-51 item_detail 已拥有 含构成行")
+	# 未知 id 返回空
+	check(g.item_attr_line("not_exist") == "", "打磨-51 未知 id 构成行=空")
+	# 飞升态: compose 含 飞升x2 段, 未拥有件 购买后预览 恒等 (当前 x boost)
+	# (境界取 当前值 动态基准 — 前文成就节 境界有变动, 不写死 x4.0)
+	var base_r51: int = g.realm_idx
+	g.ascended = true
+	g.dao_level = 1
+	var exp_base51: float = g.QI_MULT[base_r51] * g.immortal_mult()
+	var comp2: String = g.item_qi_compose()
+	check(comp2.begins_with("境界基础 x%.1f x 飞升x2" % exp_base51), "打磨-51 飞升 compose 境界+飞升段 (实际 %s)" % comp2)
+	var l51f: String = g.item_attr_line("jade_talisman")
+	check(l51f.begins_with("当前贡献: 法器连乘 x1.5 = 灵气 %s/秒" % g.fmt(g.qi_per_sec())), "打磨-51 飞升 未拥有 当前贡献 (实际 %s)" % l51f)
+	check(l51f.split("\n")[1] == "购买后: 法器连乘 x3.0 = 灵气 %s/秒 (x2.0)" % g.fmt(g.qi_per_sec() * 2.0), "打磨-51 飞升 购买后预览 恒等 (实际 %s)" % str(l51f.split("\n")[1]))
+	g.ascended = false
+	g.dao_level = 0
+	# 只读性: 调用不消耗灵石 / 不改状态
+	var stones_before51: float = g.stones
+	var qi_before51: float = g.qi_per_sec()
+	var owned_n51: int = g.owned.size()
+	g.item_attr_line("jade_talisman")
+	g.item_qi_compose()
+	check(g.stones == stones_before51 and g.qi_per_sec() == qi_before51 and g.owned.size() == owned_n51, "打磨-51 构成行 只读 无副作用")
+	# 恢复全量快照 (买不起的 购得 尝试不改状态/统计; 存档往返 节依赖 原 50 技能/10 装备/10 法器)
+	g.learned = snap_learned
+	g.owned = snap_owned
+	g.owned_eq = snap_oeq
+	g.equipped = snap_eq
+	g.stones = snap_st51
+	g.realm_idx = snap_r51
+	g.layer = snap_l51
+	g.ascended = snap_a51
+	g.dao_level = snap_d51
+	check(g.learned.size() == snap_learned.size() and g.owned.size() == snap_owned.size() and g.owned_eq.size() == snap_oeq.size(), "打磨-51 快照恢复 技能/法器/装备数一致 (实际 %d/%d/%d)" % [g.learned.size(), g.owned.size(), g.owned_eq.size()])
+	check(g.realm_idx == snap_r51 and g.ascended == snap_a51 and g.stones == snap_st51, "打磨-51 快照恢复 境界/飞升/灵石 一致")
+
 	# ---------- 打磨-10: 飞升后道行 (真仙境 9 阶, 每阶灵气 x2) ----------
 	check(g.fmt(1.5e8) == "1.5亿", "fmt 亿 (实际 %s)" % g.fmt(1.5e8))
 	check(g.fmt(1.0e12) == "1.0兆", "fmt 兆 (实际 %s)" % g.fmt(1.0e12))
