@@ -81,6 +81,7 @@ func _ready() -> void:
 	_assert_buy_feedback()
 	_assert_stone_tip()
 	await _assert_stone_next_inline()
+	await _assert_burst_preview()
 	_finish()
 
 
@@ -845,6 +846,101 @@ func _assert_stone_next_inline() -> void:
 	g.realm_idx = 0
 	g.layer = 1
 	ui._refresh()
+
+
+# 打磨-54: 主动神通 爆发预览断言 (行内金色标签: 未领悟隐藏/已领悟显示 当前灵气速率 x 爆发秒数;
+# 预览随 境界/飞升 变化刷新; tooltip 含同口径预览行; 缓存键防重复重建)
+func _assert_burst_preview() -> void:
+	var g := GameData
+	# 受控态: 全新基准 (境界0层1, 速率 1.0, 无功法/法器/装备)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.stones = 0.0
+	g.essence = 0.0
+	# 主动神通总数 (数据驱动: 5 类 x 6 品质, 每类 1 个主动变体 = 24)
+	var n_active := 0
+	for id in g.skill_ids:
+		if str(g.skill_by_id[id]["type"]) == "active":
+			n_active += 1
+	check(n_active == 24, "打磨-54 数据含 24 主动神通 (实际 %d)" % n_active)
+	check(ui._burst_previews.size() == n_active, "打磨-54 行内预览标签数=主动神通数 (实际 %d)" % ui._burst_previews.size())
+	check(not ui._burst_previews.has("sword_0_0"), "打磨-54 被动功法行 无预览标签")
+	ui._tab.current_tab = 1  # 技能页
+	ui._refresh()
+	# 未领悟: 全部隐藏 + 文本空
+	var all_hidden := true
+	for id in ui._burst_previews:
+		var l: Label = ui._burst_previews[id]
+		if l.visible or l.text != "":
+			all_hidden = false
+	check(all_hidden, "打磨-54 未领悟 爆发预览 全部隐藏")
+	# tooltip 含 爆发预览行 (构建时初值已刷; 受控态 速率 1.0 x 60 秒)
+	var row3: Node = ui._skill_row_nodes["sword_0_3"]
+	check(str(row3.tooltip_text).find("爆发 +60 灵气 (当前 1/秒 x 60 秒)") >= 0, "打磨-54 未领悟 tooltip 含爆发预览行 (实际 %s)" % str(row3.tooltip_text))
+	# 领悟 主动神通: 标签显示 + 金色 12px + tooltip 状态行同步
+	g.learned.append("sword_0_3")
+	ui._refresh()
+	var lb: Label = ui._burst_previews["sword_0_3"]
+	check(lb.visible, "打磨-54 已领悟 爆发预览 显示")
+	check(lb.text == "爆发 +60 灵气 (当前 1/秒 x 60 秒)", "打磨-54 已领悟 预览文本 (实际 %s)" % lb.text)
+	check(lb.get_theme_color("font_color") == ui.GOLD, "打磨-54 预览 金色")
+	check(int(lb.get_theme_font_size("font_size")) == 12, "打磨-54 预览 12px")
+	check(lb.get_parent() is VBoxContainer and lb.get_parent().get_child_count() > 0, "打磨-54 预览 挂 行内信息 VBox")
+	check(str(row3.tooltip_text).find("状态: 已领悟") >= 0, "打磨-54 领悟后 tooltip 状态行=已领悟")
+	# 境界提升 (筑基 x4): 速率 4.0 -> 预览数值 同步提升 (已领悟+未领悟 两口径)
+	g.realm_idx = 1
+	ui._refresh()
+	check(lb.text == "爆发 +240 灵气 (当前 4/秒 x 60 秒)", "打磨-54 境界提升 预览数值 提升 (实际 %s)" % lb.text)
+	var row_body: Node = ui._skill_row_nodes["body_0_3"]  # 未领悟 主动
+	check(str(row_body.tooltip_text).find("当前 4/秒 x 60 秒") >= 0, "打磨-54 境界提升 未领悟 tooltip 预览 同步 (实际 %s)" % str(row_body.tooltip_text))
+	# 飞升 (道行 x2): 速率 8.0 -> 口径 改 道行
+	g.ascended = true
+	g.dao_level = 1
+	ui._refresh()
+	check(lb.text == "爆发 +480 道行 (当前 8/秒 x 60 秒)", "打磨-54 飞升后 预览 口径改道行 (实际 %s)" % lb.text)
+	# 缓存键: 与 当前 已学|预览 口径一致 (防重复重建 口径对齐)
+	check(str(ui._burst_previews_key["sword_0_3"]) == "1|%s" % g.skill_burst_preview("sword_0_3"), "打磨-54 缓存键=已学|预览文本 (实际 %s)" % str(ui._burst_previews_key["sword_0_3"]))
+	# 幂等: 再刷一次 无状态变化 -> 文本不变 (标签/tooltip 同值)
+	var tip_before: String = str(row3.tooltip_text)
+	ui._refresh()
+	check(lb.text == "爆发 +480 道行 (当前 8/秒 x 60 秒)" and str(row3.tooltip_text) == tip_before, "打磨-54 重复刷新 幂等不变")
+	# 恢复基准态: 取消领悟 -> 标签 再隐藏
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	ui._refresh()
+	check(not lb.visible and lb.text == "", "打磨-54 取消领悟 预览 再隐藏")
+	check(str(row3.tooltip_text).find("爆发 +60 灵气 (当前 1/秒 x 60 秒)") >= 0, "打磨-54 恢复基准 未领悟 tooltip 预览 回退")
+	# 顺带修回归: 技能列表 已学在前 (原 _skill_sort 比较式语义相反, 已学被排到列表底部)
+	g.learned.append("sword_0_0")
+	ui._on_filter("")
+	ui._refresh()
+	var box54: VBoxContainer = ui._skill_box
+	var first10_54 := 0
+	for i in 10:
+		var rn: Node = box54.get_child(i)
+		for k in ui._skill_row_nodes:
+			if ui._skill_row_nodes[k] == rn and g.learned.has(str(k)):
+				first10_54 += 1
+				break
+	check(first10_54 >= 1, "打磨-54顺带修 技能列表 已学在前 (前 10 行含已学 %d)" % first10_54)
+	var rn0: Node = box54.get_child(0)
+	var id0 := ""
+	for k in ui._skill_row_nodes:
+		if ui._skill_row_nodes[k] == rn0:
+			id0 = str(k)
+			break
+	check(id0 == "sword_0_0", "打磨-54顺带修 首行=已学技能 (实际 %s)" % id0)
+	# 收尾: 等一帧让状态/布局稳定 (同 _assert_stone_next_inline 口径)
+	await get_tree().process_frame
 
 
 func _finish() -> void:

@@ -412,6 +412,16 @@ func new_ach_since(prev: Array) -> Array[String]:
 
 # ================= 详情提示 (打磨-9: 行 tooltip) =================
 
+# 打磨-54: 主动神通 爆发预览 (当前灵气速率 x 爆发秒数; 飞升后口径=道行)
+# 只读预览, 不改状态; 未知 id / 非主动 返回 ""; 供 技能行 内联标签 + tooltip 复用
+func skill_burst_preview(id: String) -> String:
+	var s: Dictionary = skill_by_id.get(id, {})
+	if s.is_empty() or str(s.get("type", "")) != "active":
+		return ""
+	return "爆发 +%s %s (当前 %s/秒 x %d 秒)" % [
+		fmt(float(qi_per_sec()) * float(s["value"])), primary_res_name(),
+		fmt(float(qi_per_sec())), int(s["value"])]
+
 # 技能详情 (tooltip: 名称/品质/类型/效果/领悟条件/状态)
 func skill_detail(id: String) -> String:
 	var s: Dictionary = skill_by_id.get(id, {})
@@ -420,6 +430,8 @@ func skill_detail(id: String) -> String:
 	var type_cn := "主动·神通" if str(s["type"]) == "active" else "被动·功法"
 	var tip := "「%s」 %s · %s\n%s" % [s["name"], s["tier_name"], type_cn, s["desc"]]
 	if str(s["type"]) == "active":
+		# 打磨-54: 爆发预览行 (与行内联标签同文本; 数值随 速率/境界/飞升 变化, 刷新口径见 main.gd _refresh)
+		tip += "\n" + skill_burst_preview(id)
 		tip += "\n(飞升后: 爆发转为获得道行)"
 	var r: Dictionary = REALMS[int(s["unlock_realm"])]
 	tip += "\n领悟条件: %s 第%d层" % [r["name"], int(s["unlock_layer"])]

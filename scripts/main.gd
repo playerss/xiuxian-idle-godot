@@ -63,6 +63,8 @@ var _tab: TabContainer
 var _skill_box: VBoxContainer
 var _skill_row_nodes: Dictionary = {}
 var _skill_btns: Dictionary = {}
+var _burst_previews: Dictionary = {}    # 打磨-54: 主动神通 id -> 爆发预览标签 (金色小字, 只读预览)
+var _burst_previews_key: Dictionary = {} # 打磨-54: id -> "已学|预览文本" 缓存键 (tooltip 只在该键变化时重建)
 var _filter_btns: Dictionary = {}
 var _filter_active := ""
 var _tier_btns: Dictionary = {}         # 打磨-20: 品质筛选按钮 (key = 品质索引字符串, "" = 全部)
@@ -516,6 +518,13 @@ func _add_skill_row(id: String) -> void:
 	name_row.add_child(_label("[" + ("神通" if is_active else "功法") + "] " + str(s["category_name"]), 13, CYAN if is_active else DIM))
 	info.add_child(_label(s["desc"] as String, 13, WHITEISH))
 	info.add_child(_label("领悟条件: %s 第%d层" % [GameData.REALMS[int(s["unlock_realm"])]["name"], int(s["unlock_layer"])], 12, DIM))
+	# 打磨-54: 主动神通 爆发预览 (金色小字; 未领悟隐藏, 已领悟显示 当前灵气速率 x 爆发秒数, 随速率/境界/飞升变化才刷)
+	if is_active:
+		var burst := _label("", 12, GOLD)
+		burst.visible = false
+		info.add_child(burst)
+		_burst_previews[id] = burst
+		_burst_previews_key[id] = ""
 
 	var btn := _make_button("领悟")
 	btn.custom_minimum_size = Vector2(76, 0)
@@ -587,8 +596,10 @@ func _skill_sort(a: String, b: String) -> bool:
 	var sb2: Dictionary = GameData.skill_by_id[b]
 	var a_learned := int(GameData.learned.has(a))
 	var b_learned := int(GameData.learned.has(b))
+	# 打磨-54 顺带修: 原式 a_learned < b_learned 语义相反 (sort_custom 返回 true=a 在前),
+	# 已学技能被排到列表底部, 与计划文档/注释 "已学在前" 不符; 现 已学在前
 	if a_learned != b_learned:
-		return a_learned < b_learned
+		return a_learned > b_learned
 	if int(sa["tier"]) != int(sb2["tier"]):
 		return int(sa["tier"]) < int(sb2["tier"])
 	return a < b
@@ -1090,6 +1101,24 @@ func _refresh() -> void:
 			else:
 				btn.text = "未解锁"
 				btn.disabled = true
+	# 打磨-54: 主动神通 爆发预览 (未领悟隐藏; 已领悟显示 当前灵气速率 x 爆发秒数,
+	# 标签文本变化才刷; tooltip 预览行按 已学|预览文本 键变化才重建 — 预览值只随
+	# 离散状态 (领悟/购买/穿戴/突破/飞升) 变化, 挂机期间恒定, 无需节流;
+	# 未领悟时 tooltip 预览行同样随速率变化刷新, 与 打磨-9 状态行互补)
+	for id in _burst_previews:
+		var l54: Label = _burst_previews[id]
+		var t54: String = g.skill_burst_preview(id)
+		if g.learned.has(id):
+			if l54.text != t54 or not l54.visible:
+				l54.text = t54
+				l54.visible = true
+		elif l54.visible:
+			l54.visible = false
+			l54.text = ""
+		var key54 := "%d|%s" % [int(g.learned.has(id)), t54]
+		if str(_burst_previews_key[id]) != key54:
+			_burst_previews_key[id] = key54
+			(_skill_row_nodes[id] as Node).tooltip_text = g.skill_detail(id)
 	# 装备
 	for id in _equip_btns:
 		var e: Dictionary = GameData.equip_by_id[id]

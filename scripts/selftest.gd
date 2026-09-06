@@ -1995,7 +1995,52 @@ func _init() -> void:
 	check(extra0_53 == "", "打磨-53 delta=0 时 浮动片段为空 (省略)")
 	var extra1_53: String = (" (灵气速率 +%s/秒)" % g.fmt(d53)) if d53 > 0.0 else ""
 	check(extra1_53.begins_with(" (灵气速率 +"), "打磨-53 delta>0 时 浮动片段 灵气速率 前缀 (实际 %s)" % extra1_53)
-	# 恢复干净基准态
+	# ---------- 打磨-54: 主动神通 爆发预览 (只读, 随 速率/境界/飞升 变化) ----------
+	# 口径: 爆发 = 当前灵气速率 qi_per_sec x 技能 value (爆发秒数); 飞升后 资源口径 改 道行
+	# GameData.skill_burst_preview(id) 只读, 不改状态 (与 打磨-51 法器属性构成 口径对齐)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.stones = 0.0
+	g.essence = 0.0
+	var qps0_54: float = g.qi_per_sec()
+	check(absf(qps0_54 - 1.0) < 1e-6, "打磨-54 基准态 灵气速率=1.0 (实际 %s)" % g.fmt(qps0_54))
+	check(g.skill_burst_preview("sword_0_0") == "", "打磨-54 被动功法 爆发预览为空 (实际 %s)" % g.skill_burst_preview("sword_0_0"))
+	check(g.skill_burst_preview("no_such_skill") == "", "打磨-54 未知id 爆发预览为空")
+	var bp0_54: String = g.skill_burst_preview("sword_0_3")
+	check(bp0_54 == "爆发 +60 灵气 (当前 1/秒 x 60 秒)", "打磨-54 主动神通 基准爆发预览 (实际 %s)" % bp0_54)
+	var det0_54: String = g.skill_detail("sword_0_3")
+	check(det0_54.find("爆发 +60 灵气 (当前 1/秒 x 60 秒)") >= 0, "打磨-54 主动 skill_detail 含爆发预览行")
+	check(det0_54.find("(飞升后: 爆发转为获得道行)") >= 0, "打磨-54 主动 skill_detail 含飞升口径说明")
+	check(g.skill_detail("sword_0_0").find("爆发 +") < 0, "打磨-54 被动 skill_detail 不含爆发预览行")
+	check(g.skill_burst_preview("sword_0_3") == bp0_54 and g.qi_per_sec() == qps0_54, "打磨-54 爆发预览 只读无副作用")
+	# 学 被动功法 (qi_mult 0.03) -> 速率 1.03 -> 预览数值 提升 (61.8 -> 61)
+	g.stones = 10000.0
+	g.learn_skill("sword_0_0")
+	var qps1_54: float = g.qi_per_sec()
+	check(absf(qps1_54 - 1.03) < 1e-6, "打磨-54 学功法后 灵气速率=1.03 (实际 %s)" % g.fmt(qps1_54))
+	var bp1_54: String = g.skill_burst_preview("sword_0_3")
+	check(bp1_54 == "爆发 +61 灵气 (当前 1/秒 x 60 秒)", "打磨-54 速率提升后 爆发预览数值 提升 (实际 %s)" % bp1_54)
+	# 穿戴装备 (qi_mult 0.05) -> 速率 1.08 -> 预览 64.8 -> 64
+	g.buy_equipment("weapon_0_0")  # 槽位空 自动穿戴
+	var qps2_54: float = g.qi_per_sec()
+	check(absf(qps2_54 - 1.08) < 1e-6, "打磨-54 穿装备后 灵气速率=1.08 (实际 %s)" % g.fmt(qps2_54))
+	var bp2_54: String = g.skill_burst_preview("sword_0_3")
+	check(bp2_54 == "爆发 +64 灵气 (当前 1/秒 x 60 秒)", "打磨-54 穿装备后 爆发预览数值 再提升 (实际 %s)" % bp2_54)
+	# 飞升后: 资源口径 改 道行, immortal_mult = 2^1 = 2.0 -> 速率 2.16 -> 预览 129.6 -> 129
+	g.ascended = true
+	g.dao_level = 1
+	var qps3_54: float = g.qi_per_sec()
+	check(absf(qps3_54 - 2.16) < 1e-6, "打磨-54 飞升后 灵气速率=2.16 (实际 %s)" % g.fmt(qps3_54))
+	var bp3_54: String = g.skill_burst_preview("sword_0_3")
+	check(bp3_54 == "爆发 +129 道行 (当前 2/秒 x 60 秒)", "打磨-54 飞升后 爆发预览 口径改道行 (实际 %s)" % bp3_54)
+	check(g.skill_detail("sword_0_3").find("爆发 +129 道行") >= 0, "打磨-54 飞升后 skill_detail 含道行口径")
+	# 恢复干净基准态 (供 存档往返 节使用)
 	g.stones = 0.0
 	g.owned.clear()
 	g.owned_eq.clear()
@@ -2003,6 +2048,8 @@ func _init() -> void:
 	g.learned.clear()
 	g.realm_idx = 0
 	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
