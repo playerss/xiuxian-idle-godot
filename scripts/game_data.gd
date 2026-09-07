@@ -91,6 +91,12 @@ var _offline_stone := 0.0   # 离线收获 灵石
 var last_break_result := 0  # 上次突破: 0=未触发 1=成功 2=失败 3=飞升
 var break_seq := 0          # 突破事件序号 (每次成功/失败/飞升 +1, UI 据此触发闪烁)
 var auto_break := false     # 打磨-67: 自动突破 (开=资源攒够自动尝试 突破/道行精进, 存档持久化)
+var auto_buy := false       # 打磨-68: 自动购置 (开=灵石攒够自动购买 法器/装备 + 自动最佳穿戴, 存档持久化)
+var _auto_buy_seq := 0      # 打磨-68: 自动购置 变更事件计数 (每轮 实际变更 +1, 不持久化, UI 据此刷底部消息)
+var _auto_buy_last_items := 0   # 打磨-68: 上轮 新购 法器 件数 (内存态, 供 auto_buy_last_text)
+var _auto_buy_last_equip := 0   # 打磨-68: 上轮 新购 装备 件数 (内存态, 供 auto_buy_last_text)
+var _auto_buy_last_cost := 0.0  # 打磨-68: 上轮 花费 灵石 (内存态, 供 auto_buy_last_text)
+var _auto_buy_last_swap := 0    # 打磨-68: 上轮 最佳换装 槽位数 (内存态, 供 auto_buy_last_text)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备, 读档时 _load_stats 兜底)
 
 var _active_cd := {}        # 技能 id -> 剩余冷却秒
@@ -114,6 +120,9 @@ func _process(delta: float) -> void:
 	# 打磨-67: 自动突破 (开启时 资源攒够 自动尝试; _try_auto_break 自门控于 auto_break,
 	# 每帧至多一次, 突破后资源已低于 下一档 阈值, 无热循环)
 	_try_auto_break()
+	# 打磨-68: 自动购置 (开启时 灵石攒够 自动购入 法器/装备 并 最佳换装; _try_auto_buy 自门控于
+	# auto_buy, 灵石攒够才触发, 每帧至多一轮; 无浮动/闪烁 反馈 防 挂机刷屏)
+	_try_auto_buy()
 	_stat_inc("play_sec", delta)  # 打磨-14: 累计在线时长
 	_tick_active_cd(delta)  # 神通冷却
 	# 成就检测 (节流 1 秒, 幂等; 灵石达标记类成就在挂机中也能触发)
@@ -945,6 +954,56 @@ func _try_auto_break(roll: float = -1.0) -> void:
 		if essence >= breakthrough_cost():
 			try_breakthrough(roll)
 
+# 打磨-68: 自动购置 (挂机时 灵石 攒够 自动 购入 未拥有 法器/装备 + 自动 最佳换装,
+# 与 一键购置/一键购买/一键最佳 同口径; GameData._process 每帧驱动, 自门控于 auto_buy,
+# 关闭时直接返回 故可直接调用测试; 每帧 至多一轮: 先 法器 一键口径 (价格升序连买买得起的),
+# 再 装备 一键口径 (价格升序连买买得起的, 槽位空自动穿戴), 最后 一键最佳 (各部位换上
+# 拥有件中的 主属性最优, 补 首穿非最优 缺口); 本轮 有任何 变更 则 _auto_buy_seq+1
+# (UI 可 据 变化刷 底部提示, 无屏幕浮动 防 挂机刷屏); 灵石 花到 买不起 为止,
+# 购买后 最便宜未拥有件 恒 买不起, 无热循环; 全拥有+已最佳 时 0 变更 幂等)
+func _try_auto_buy() -> void:
+	if not auto_buy:
+		return
+	var items_before: int = owned.size()
+	var equip_before: int = owned_eq.size()
+	var stones_before: float = stones
+	var eq_slots_before: Dictionary = equipped.duplicate(true)
+	# 性能门: 最便宜 未拥有 件 (跨 法器+装备) 买不起时 跳过 购买 连买 (避免 每帧 140 件排序),
+	# 但仍 执行 一键最佳 (换装 无 灵石 门槛)
+	var target68: Dictionary = stone_next_target()
+	var can_buy68: bool = not target68.is_empty() and float(target68.get("shortfall", INF)) <= 0.0
+	if can_buy68:
+		buy_items_affordable()
+		buy_affordable()
+	var r_best: Dictionary = equip_best()
+	var n_items: int = owned.size() - items_before
+	var n_equip: int = owned_eq.size() - equip_before
+	var n_swap: int = int(r_best.get("count", 0))
+	var changed: bool = (n_items > 0 or n_equip > 0 or equipped != eq_slots_before)
+	if not changed:
+		return
+	_auto_buy_seq += 1
+	_auto_buy_last_items = n_items
+	_auto_buy_last_equip = n_equip
+	_auto_buy_last_cost = stones_before - stones
+	_auto_buy_last_swap = n_swap
+
+# 打磨-68: 自动购置 上一轮 变更 文案 (只读; seq<=0 [从未触发/读档重置] 返回 "")
+# 口径: 有新购 "自动购置 法器 N 件 + 装备 M 件, 花费 X 灵石"; 仅换装 "自动最佳换装 N 件"
+func auto_buy_last_text() -> String:
+	if _auto_buy_seq <= 0:
+		return ""
+	var parts: Array = []
+	if _auto_buy_last_items > 0:
+		parts.append("法器 %d 件" % _auto_buy_last_items)
+	if _auto_buy_last_equip > 0:
+		parts.append("装备 %d 件" % _auto_buy_last_equip)
+	if not parts.is_empty():
+		return "自动购置 %s, 花费 %s 灵石" % [" + ".join(parts), fmt(_auto_buy_last_cost)]
+	if _auto_buy_last_swap > 0:
+		return "自动最佳换装 %d 件" % _auto_buy_last_swap
+	return ""
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0
@@ -1233,6 +1292,7 @@ func save_game() -> void:
 		"dao_level": dao_level,
 		"stats": stats,
 		"auto_break": auto_break,  # 打磨-67: 自动突破开关 (旧档缺字段默认关)
+		"auto_buy": auto_buy,      # 打磨-68: 自动购置开关 (旧档缺字段默认关)
 		"ts": int(Time.get_unix_time_from_system()),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -1261,6 +1321,7 @@ func load_game() -> void:
 	ach_done = _str_array(parsed.get("ach_done", []))
 	_load_stats(parsed.get("stats", {}))  # 打磨-14: 修行统计 (旧档缺字段默认 0)
 	auto_break = bool(parsed.get("auto_break", false))  # 打磨-67: 自动突破开关 (旧档缺字段默认关)
+	auto_buy = bool(parsed.get("auto_buy", false))      # 打磨-68: 自动购置开关 (旧档缺字段默认关)
 	equipped = {}
 	var eq: Dictionary = parsed.get("equipped", {})
 	if typeof(eq) == TYPE_DICTIONARY:

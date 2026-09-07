@@ -38,6 +38,9 @@ var _bar_fill: ColorRect
 var _break_btn: Button
 var _auto_break_btn: Button     # 打磨-67: 自动突破开关 (toggle, 存档持久化)
 var _auto_break_on := false     # 打磨-67: 上帧开关状态缓存 (变化才刷按钮态)
+var _auto_buy_btn: Button       # 打磨-68: 自动购置开关 (toggle, 存档持久化)
+var _auto_buy_on := false       # 打磨-68: 上帧开关状态缓存 (变化才刷按钮态)
+var _auto_buy_msg_seq := 0      # 打磨-68: 已提示过的 自动购置 变更事件序号 (避免重复提示; 启动=0 与 GameData 同态)
 var _shop_box: VBoxContainer
 var _shop_rows: Dictionary = {}
 var _items_buy_btn: Button          # 打磨-29: 法器 一键购买 (修行页法器区)
@@ -344,6 +347,12 @@ func _build_training_page(page: Panel) -> void:
 	_auto_break_btn.pressed.connect(_on_auto_break)
 	_auto_break_btn.tooltip_text = "资源攒够 突破/道行精进 消耗时 自动尝试, 无需手动点按钮 (挂机时生效; 离线期间不触发, 离线只结算收益, 重新进入游戏后生效)。\n成功弹绿色浮动 / 飞升弹金色浮动 / 失败弹红色浮动 (与手动按钮同口径, 浮动文案追加 自动 标注), 每帧至多尝试一次, 失败不重烧 (资源攒够才再试)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 道祖封顶 恒不触发。"
 	left.add_child(_auto_break_btn)
+	# 打磨-68: 自动购置开关 (灵石攒够 自动购买 法器/装备 + 自动最佳换装; 状态变化才刷按钮态)
+	_auto_buy_btn = _make_button("自动购置: 关")
+	_auto_buy_btn.toggle_mode = true
+	_auto_buy_btn.pressed.connect(_on_auto_buy)
+	_auto_buy_btn.tooltip_text = "灵石攒够 自动购买 未拥有 法器/装备 (与 一键购置/一键购买 同口径: 价格升序连买 买得起 的, 槽位空时自动穿戴), 并自动 换上 各部位 最佳 拥有件 (一键最佳 口径)。\n每帧至多一轮, 灵石花到买不起为止 (购买后最便宜件恒买不起, 无热循环); 购入时底部消息提示 件数与花费 (无屏幕浮动, 避免挂机刷屏)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+	left.add_child(_auto_buy_btn)
 	left.add_child(_sep())
 	# 法器标题 + 打磨-29: 一键购买 (价格升序连买买得起的法器)
 	# 打磨-44: 法器区 包进透明 Panel, 收集进度"法器"点击直达时金边高亮 1.2s
@@ -1181,6 +1190,17 @@ func _refresh() -> void:
 		_auto_break_on = g.auto_break
 		_auto_break_btn.set_pressed_no_signal(g.auto_break)
 		_auto_break_btn.text = ("自动突破: 开" if g.auto_break else "自动突破: 关")
+	# 打磨-68: 自动购置开关 按钮态 (开关状态 变化才刷; 读档恢复/外部改 同步)
+	if g.auto_buy != _auto_buy_on:
+		_auto_buy_on = g.auto_buy
+		_auto_buy_btn.set_pressed_no_signal(g.auto_buy)
+		_auto_buy_btn.text = ("自动购置: 开" if g.auto_buy else "自动购置: 关")
+	# 打磨-68: 自动购置 变更事件 → 底部消息 (变更事件序号 变化 且 有文案 才提示一次, 无屏幕浮动)
+	if g._auto_buy_seq != _auto_buy_msg_seq:
+		_auto_buy_msg_seq = g._auto_buy_seq
+		var ab_t: String = g.auto_buy_last_text()
+		if ab_t != "":
+			_show_msg(ab_t)
 	# 打磨-32: 突破按钮"可突破"金边高亮 (资源攒够时引导点击, 状态变化才刷样式; 闪烁动画期间不干预)
 	var ready_now: bool = g.breakthrough_ready()
 	if ready_now != _break_ready:
@@ -1888,6 +1908,16 @@ func _on_auto_break() -> void:
 	_auto_break_btn.set_pressed_no_signal(GameData.auto_break)
 	_auto_break_btn.text = ("自动突破: 开" if GameData.auto_break else "自动突破: 关")
 	_show_msg("自动突破已开启, 资源攒够将自动突破 (可存档, 离线期间不触发)" if GameData.auto_break else "自动突破已关闭, 恢复手动点击突破")
+
+
+# 打磨-68: 自动购置开关 — 点击切 开/关 (存档持久化, 由 GameData._process 驱动 自动 购入 法器/装备);
+# 底部消息确认口径 (开关动作 本身 无 购买/统计 副作用, 实际 购入 由 _try_auto_buy 走 真实 埋点 路径)
+func _on_auto_buy() -> void:
+	GameData.auto_buy = not GameData.auto_buy
+	_auto_buy_on = GameData.auto_buy
+	_auto_buy_btn.set_pressed_no_signal(GameData.auto_buy)
+	_auto_buy_btn.text = ("自动购置: 开" if GameData.auto_buy else "自动购置: 关")
+	_show_msg("自动购置已开启, 灵石攒够将自动购买法器/装备 (可存档, 离线期间不触发)" if GameData.auto_buy else "自动购置已关闭, 恢复手动点击购买")
 
 
 func _on_buy(item_id: String) -> void:

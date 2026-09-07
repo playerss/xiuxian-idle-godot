@@ -97,6 +97,7 @@ func _ready() -> void:
 	await _assert_break_ok_float()
 	_assert_offline_float()
 	await _assert_auto_break()
+	await _assert_auto_buy()
 	_finish()
 
 
@@ -2000,6 +2001,89 @@ func _assert_auto_break() -> void:
 	g.dao = 0.0
 	g.stones = 0.0
 	g.last_break_result = 0
+	g.auto_break = false
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-68: 自动购置 — 开关按钮存在/tooltip/点击切换/开关态同步/灵石不足不触发/灵石够触发变更
+# _refresh 出底部消息 (无屏幕浮动)/幂等0变更不再刷/开关切换无资源统计副作用; 收尾恢复基准态
+func _assert_auto_buy() -> void:
+	var g := GameData
+	var btn: Button = ui._auto_buy_btn
+	check(btn != null, "打磨-68 自动购置开关按钮存在")
+	if btn == null:
+		return
+	check(btn.toggle_mode, "打磨-68 开关按钮 toggle_mode")
+	check(btn.tooltip_text.find("自动购买") >= 0 and btn.tooltip_text.find("存档") >= 0,
+		"打磨-68 tooltip 含 自动购买/存档 口径 (实际 %s)" % btn.tooltip_text)
+	check(btn.tooltip_text.find("无屏幕浮动") >= 0, "打磨-68 tooltip 含 无屏幕浮动 口径")
+	check(g.auto_buy == false and not btn.button_pressed and str(btn.text) == "自动购置: 关",
+		"打磨-68 初始 关 态 (文本/按压/存档值 一致)")
+	# 点击切换: 开 (底部消息 + 按钮态 + 存档值)
+	ui._on_auto_buy()
+	check(g.auto_buy == true, "打磨-68 点击后 auto_buy=true (实际 %s)" % str(g.auto_buy))
+	check(btn.button_pressed and str(btn.text) == "自动购置: 开", "打磨-68 点击后 按钮按压+文本 开")
+	check(str(ui._msg_label.text).find("自动购置已开启") >= 0, "打磨-68 开启 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# 点击切换: 关
+	ui._on_auto_buy()
+	check(g.auto_buy == false and not btn.button_pressed and str(btn.text) == "自动购置: 关", "打磨-68 再点 关 态")
+	check(str(ui._msg_label.text).find("自动购置已关闭") >= 0, "打磨-68 关闭 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# 外部改存档值: _refresh 同步按钮态 (读档恢复 场景)
+	g.auto_buy = true
+	ui._refresh()
+	check(btn.button_pressed and str(btn.text) == "自动购置: 开", "打磨-68 _refresh 同步 外部置 开 按钮态")
+	# 灵石不足: _try_auto_buy 不购买 (最便宜 100 灵石, 当前 50)
+	var owned0: int = g.owned.size()
+	var eq0: int = g.owned_eq.size()
+	var seq0: int = g._auto_buy_seq
+	var stats0: Dictionary = g.stats.duplicate(true)
+	g.stones = 50.0
+	g._try_auto_buy()
+	check(g.owned.size() == owned0 and g.owned_eq.size() == eq0 and g._auto_buy_seq == seq0,
+		"打磨-68 灵石不足 不购买 (owned=%d eq=%d seq=%d)" % [g.owned.size(), g.owned_eq.size(), g._auto_buy_seq])
+	check(g.stats == stats0, "打磨-68 灵石不足 无 统计 副作用")
+	# 灵石够: 手动驱动 _try_auto_buy 触发 变更 (最便宜法器 木剑 100 + 装备 tier0), _refresh 出 底部消息
+	g.stones = 700.0
+	var msg_before: String = str(ui._msg_label.text)
+	g._try_auto_buy()
+	check(g._auto_buy_seq == seq0 + 1, "打磨-68 灵石够 触发 变更 事件 seq+1 (实际 %d)" % g._auto_buy_seq)
+	check(g.owned.size() > owned0 or g.owned_eq.size() > eq0, "打磨-68 灵石够 有 购入 (owned=%d eq=%d)" % [g.owned.size(), g.owned_eq.size()])
+	check(str(g.auto_buy_last_text()).find("自动购置") >= 0, "打磨-68 auto_buy_last_text 含 自动购置 (实际 %s)" % g.auto_buy_last_text())
+	ui._refresh()
+	check(str(ui._msg_label.text).find("自动购置") >= 0 and str(ui._msg_label.text) != msg_before,
+		"打磨-68 _refresh 变更 后 底部消息 含 自动购置 (实际 %s)" % str(ui._msg_label.text))
+	# 幂等: 再驱动一次 (买不起 下一件 + 已最佳) 0 变更, 底部消息 不再刷 (保持 上条 自动购置 文案)
+	var msg_after: String = str(ui._msg_label.text)
+	var seq1: int = g._auto_buy_seq
+	g._try_auto_buy()
+	check(g._auto_buy_seq == seq1, "打磨-68 幂等 0变更 不增 事件 (seq=%d)" % g._auto_buy_seq)
+	ui._refresh()
+	check(str(ui._msg_label.text) == msg_after, "打磨-68 幂等 后 底部消息 不变 (实际 %s)" % str(ui._msg_label.text))
+	# 开关不消耗资源/不计 购买 统计 (开关动作 本身 无 副作用; 前置 置 关 保证 双击 后 仍 关)
+	g.auto_buy = false
+	g.stones = 3.0
+	var seq_ab: int = g._auto_buy_seq
+	var stats_ab: Dictionary = g.stats.duplicate(true)
+	var owned_ab: int = g.owned.size()
+	ui._on_auto_buy()
+	ui._on_auto_buy()
+	check(g.auto_buy == false and g._auto_buy_seq == seq_ab and g.stats == stats_ab and g.owned.size() == owned_ab,
+		"打磨-68 开关切换 无 资源/事件/统计 副作用")
+	# 收尾: 恢复基准态 (防污染)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g.last_break_result = 0
+	g.auto_buy = false
 	g.auto_break = false
 	ui._refresh()
 	await get_tree().process_frame

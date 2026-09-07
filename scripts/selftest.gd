@@ -2577,6 +2577,130 @@ func _init() -> void:
 	g.auto_break = true
 	g.load_game()
 	check(g.auto_break == false, "打磨-67 旧档缺 auto_break 默认 false")
+	# ---------- 打磨-68: 自动购置 (_try_auto_buy, 自门控于 auto_buy, 灵石攒够 自动 购入 法器/装备 + 最佳换装) ----------
+	# 受控态: 清空 拥有/穿戴/已学 (基准: 无 功法/装备 加成), 冻结 _process 已生效
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	check(g.auto_buy == false, "打磨-68 默认 auto_buy=false")
+	# 开关关: _try_auto_buy 自门控 直接返回 (灵石攒够 也不购买)
+	g.auto_buy = false
+	var seq68: int = g._auto_buy_seq
+	var stats68: Dictionary = g.stats.duplicate(true)
+	g.stones = 1000.0
+	g._try_auto_buy()
+	check(g.stones == 1000.0 and g.owned.is_empty() and g.owned_eq.is_empty(),
+		"打磨-68 关 不购买 (stones=%s)" % g.fmt(g.stones))
+	check(g._auto_buy_seq == seq68 and g.stats == stats68, "打磨-68 关 不增 事件/统计")
+	# 开关开 + 灵石够: 价格升序连买 法器+装备 (槽位空自动穿戴) + 最佳换装
+	# 期望 按 贪心 口径 动态计算 (与 buy_items_affordable/buy_affordable 的 价格升序 口径 恒等):
+	# 先 法器 ITEMS 价格升序 贪心, 剩余预算 装备 equip_ids 价格升序 贪心
+	var S68: float = 1365.0
+	var exp_items := 0
+	var budget68: float = S68
+	var items68: Array = g.ITEMS.duplicate()
+	items68.sort_custom(func(a, b): return float(a["cost"]) < float(b["cost"]))
+	for it in items68:
+		if budget68 >= float(it["cost"]):
+			budget68 -= float(it["cost"])
+			exp_items += 1
+	var exp_equip := 0
+	var eids68: Array = g.equip_ids.duplicate()
+	eids68.sort_custom(func(a, b):
+		var ca: float = float(g.equip_by_id[a].get("cost", INF))
+		var cb: float = float(g.equip_by_id[b].get("cost", INF))
+		if ca != cb:
+			return ca < cb
+		return str(a) < str(b))
+	for eid68 in eids68:
+		var ce68: float = float(g.equip_by_id[eid68].get("cost", INF))
+		if budget68 >= ce68:
+			budget68 -= ce68
+			exp_equip += 1
+	g.auto_buy = true
+	g.stones = S68
+	g._try_auto_buy()
+	check(g.owned.size() == exp_items, "打磨-68 开+灵石1365 购入法器 %d 件 (实际 %d)" % [exp_items, g.owned.size()])
+	check(g.owned_eq.size() == exp_equip, "打磨-68 开+灵石1365 购入装备 %d 件 (实际 %d)" % [exp_equip, g.owned_eq.size()])
+	check(g.stones >= 0.0 and (S68 - g.stones) > 0.0, "打磨-68 灵石 有 扣减 (剩余 %s)" % g.fmt(g.stones))
+	check(g._auto_buy_seq == seq68 + 1, "打磨-68 一轮变更 _auto_buy_seq+1")
+	check(float(g.stats.get("item_buy", 0.0)) == float(stats68.get("item_buy", 0.0)) + float(exp_items), "打磨-68 item_buy+%d 埋点" % exp_items)
+	check(float(g.stats.get("equip_buy", 0.0)) == float(stats68.get("equip_buy", 0.0)) + float(exp_equip), "打磨-68 equip_buy+%d 埋点" % exp_equip)
+	# 槽位 自动 穿戴: 已购 装备 覆盖的 部位 全部 穿满
+	var slot_cov68: Dictionary = {}
+	for eid69 in g.owned_eq:
+		slot_cov68[str(g.equip_by_id[eid69].get("slot", ""))] = true
+	check(g.equipped.size() == slot_cov68.size(), "打磨-68 槽位空 自动穿戴 %d 部位 (实际 %d)" % [slot_cov68.size(), g.equipped.size()])
+	# auto_buy_last_text: 件数 + 花费 (花费=前后灵石差 口径, 动态期望)
+	var spent68: float = S68 - g.stones
+	check(g.auto_buy_last_text() == "自动购置 法器 %d 件 + 装备 %d 件, 花费 %s 灵石" % [exp_items, exp_equip, g.fmt(spent68)],
+		"打磨-68 auto_buy_last_text 件数+花费 (实际 %s)" % g.auto_buy_last_text())
+	# 幂等: 已买 本轮 买不起 下一件 (最便宜未拥有 恒 买不起) + 已最佳 -> 0 变更
+	var stones68b: float = g.stones
+	var equipped68b: Dictionary = g.equipped.duplicate(true)
+	g._try_auto_buy()
+	check(g._auto_buy_seq == seq68 + 1 and absf(g.stones - stones68b) < 1e-9 and g.equipped == equipped68b,
+		"打磨-68 幂等 0变更 不增 事件 (stones=%s)" % g.fmt(g.stones))
+	# 仅 换装 变更 (无新购): 手动购 2 件灵珠 (槽位空 首件 自动穿戴, 最佳=次件), 再驱动 _try_auto_buy
+	# (灵石 0 -> 性能门 跳过 购买, equip_best 把 槽位 换到 最佳; 文案 只 报 花费 0; seq +1)
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 225.0
+	g.buy_equipment("bead_0_0")
+	g.buy_equipment("bead_0_1")
+	check(absf(g.stones) < 1e-9 and g.owned_eq.size() == 2, "打磨-68 仅换装 前置 购入 2 件灵珠 (owned_eq=%d)" % g.owned_eq.size())
+	var best68: String = g.equip_best_id("bead")
+	check(best68 != "" and str(g.equipped.get("bead", "")) != best68,
+		"打磨-68 仅换装 前置 首穿 非最佳 (实际 %s, 最佳 %s)" % [str(g.equipped.get("bead", "")), best68])
+	g._auto_buy_last_items = 0
+	g._auto_buy_last_equip = 0
+	g._auto_buy_last_cost = 0.0
+	g._try_auto_buy()
+	check(str(g.equipped.get("bead", "")) == best68, "打磨-68 仅换装 槽位换 最佳件 (实际 %s)" % str(g.equipped.get("bead", "")))
+	check(g._auto_buy_seq == seq68 + 2, "打磨-68 仅换装 _auto_buy_seq+1 (实际 %d)" % g._auto_buy_seq)
+	check(g.auto_buy_last_text() == "自动最佳换装 1 件", "打磨-68 仅换装 文案=换装口径 (实际 %s)" % g.auto_buy_last_text())
+	# _process 集成: 手动驱动一帧 (已冻结, 无并发) — 开关关 -> 不自动购买
+	g.auto_buy = false
+	var before68c: int = g.owned.size() + g.owned_eq.size()
+	var seq68c: int = g._auto_buy_seq
+	g.stones = S68
+	g._process(0.016)
+	check(g.owned.size() + g.owned_eq.size() == before68c and g._auto_buy_seq == seq68c,
+		"打磨-68 _process 关 不自动购买 (owned=%d)" % (g.owned.size() + g.owned_eq.size()))
+	# _process 集成: 开关开 + 灵石 够 -> 挂机帧 自动 购入 (灵石 每帧 累积 也计入)
+	g.auto_buy = true
+	g.stones = S68
+	g._process(0.016)
+	check(g._auto_buy_seq == seq68c + 1, "打磨-68 _process 开 灵石够 自动购入 (seq+1)")
+	check(g.owned.size() + g.owned_eq.size() > before68c, "打磨-68 _process 开 拥有数 增加 (实际 %d)" % (g.owned.size() + g.owned_eq.size()))
+	# 存档往返: auto_buy 保存/读取 一致
+	g.auto_buy = false
+	g.save_game()
+	g.auto_buy = true
+	g.load_game()
+	check(g.auto_buy == false, "打磨-68 存档 auto_buy=false 往返 (实际 %s)" % str(g.auto_buy))
+	g.auto_buy = true
+	g.save_game()
+	var sd68: Dictionary = _save_json()
+	check(bool(sd68.get("auto_buy", false)) == true, "打磨-68 存档含 auto_buy=true 字段 (实际 %s)" % str(sd68.get("auto_buy")))
+	g.load_game()
+	check(g.auto_buy == true, "打磨-68 读档恢复 auto_buy=true")
+	# 旧档兼容: 缺 auto_buy 字段 默认 false
+	var wf68 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	wf68.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 5.0, "stones": 7.0}))
+	wf68.close()
+	g.auto_buy = true
+	g.load_game()
+	check(g.auto_buy == false, "打磨-68 旧档缺 auto_buy 默认 false")
+	# 收尾: 清空 拥有/穿戴 (防 后续 段/存档 污染) + 恢复 基准
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.auto_buy = false
 	# 恢复干净基准态 + 解冻 _process (供 后续 段 正常 挂机)
 	g.ascended = false
 	g.dao_level = 0
