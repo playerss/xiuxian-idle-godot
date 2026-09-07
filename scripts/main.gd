@@ -497,7 +497,7 @@ func _build_skill_page(page: Panel) -> void:
 	_active_all_btn = _make_button("一键施展")
 	_active_all_btn.pressed.connect(_on_active_all)
 	# 打磨-46: 统一口径 tooltip (动作与顺序 / 爆发口径 / 计数口径)
-	_active_all_btn.tooltip_text = "一次释放所有 已领悟 且 冷却完毕 的主动神通, 各自爆发 (爆发获得 = 当前灵气速率 x 爆发秒数; 飞升后改为获得道行)。\n施展后各自进入冷却; 未领悟或冷却中的不计入, 不受筛选影响 (全局口径)。\n按钮计数 = 当前可施展 (就绪) 的主动神通数。"
+	_active_all_btn.tooltip_text = "一次释放所有 已领悟 且 冷却完毕 的主动神通, 各自爆发 (爆发获得 = 当前灵气速率 x 爆发秒数; 飞升后改为获得道行); 浮动提示追加 本批 爆发 获得 总量 \"爆发+N 灵气/道行\" (与 底部消息 爆发 总量 同口径)。\n施展后各自进入冷却; 未领悟或冷却中的不计入, 不受筛选影响 (全局口径)。\n按钮计数 = 当前可施展 (就绪) 的主动神通数。"
 	tier_bar.add_child(_active_all_btn)
 	# 打磨-38: 只看可学 开关 (与 类别/品质 筛选 AND 叠加: 过滤境界/层不足的未学技能, 已学恒显示在最前)
 	_learnable_btn = _make_button("只看可学")
@@ -732,12 +732,15 @@ func _on_items_buy_all() -> void:
 
 
 # 打磨-30: 一键施展 (释放所有 就绪 的主动神通, 与 一键领悟/一键购买/一键最佳 系列口径一致)
+# 打磨-60: 浮动文案追加 本批 爆发 获得 总量 (与 打磨-51/52/53 法器/装备/技能 一键 浮动 追加
+# 灵气速率增量 口径对齐; 本按钮 爆发 直接 获得 资源, 增量 即 爆发总量; 飞升后 口径=道行;
+# use_all_active 已返回 {count, burst}, GameData 无新接口)
 func _on_active_all() -> void:
+	var res := "灵气" if not GameData.ascended else "道行"
 	var r: Dictionary = GameData.use_all_active()
 	if int(r["count"]) > 0:
-		var res := "灵气" if not GameData.ascended else "道行"
 		_show_msg("一键施展 %d 个神通, 爆发%s %s" % [int(r["count"]), res, GameData.fmt(float(r["burst"]))])
-		_onekey_float("一键施展 %d 个神通" % int(r["count"]))
+		_onekey_float("一键施展 %d 个神通 (爆发+%s %s)" % [int(r["count"]), GameData.fmt(float(r["burst"])), res])
 	else:
 		_show_msg("没有可施展的主动神通 (未领悟或冷却中)")
 

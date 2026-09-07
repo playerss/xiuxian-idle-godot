@@ -486,7 +486,11 @@ func _assert_onekey_float() -> void:
 	ui._refresh()
 	var snap_ess_act := g.essence
 	ui._on_active_all()
-	onekey_assert("一键施展 %d 个神通" % n_act, c0)
+	# 打磨-60: 浮动文案追加 本批 爆发 获得 总量 (爆发=前后 主资源 差, 与 底部消息 同口径;
+	# GameData 无新接口, use_all_active 已返回 burst)
+	var burst_act: float = g.essence - snap_ess_act
+	check(burst_act > 0.0, "打磨-60 一键施展 爆发总量>0 (实际 %s)" % g.fmt(burst_act))
+	onekey_assert("一键施展 %d 个神通 (爆发+%s 灵气)" % [n_act, g.fmt(burst_act)], c0)
 	c0 = ui._onekey_float_count
 	check(g.active_ready_count() == 0, "施展后 全部进冷却 (就绪 0, 实际 %d)" % g.active_ready_count())
 	check(g.essence > snap_ess_act, "施展 爆发真实加灵气 (爆发前 %.0f → 后 %.0f)" % [snap_ess_act, g.essence])
@@ -602,6 +606,8 @@ func _assert_onekey_tooltips() -> void:
 	check(t_active.contains("冷却完毕"), "一键施展 tooltip 含 冷却完毕 口径")
 	check(t_active.contains("当前灵气速率 x 爆发秒数"), "一键施展 tooltip 含 爆发=速率x秒数 口径")
 	check(t_active.contains("飞升后改为获得道行"), "一键施展 tooltip 含 飞升后道行 说明")
+	# 打磨-60: 一键施展 tooltip 含 爆发总量 口径 (浮动追加 爆发+N 灵气/道行, 与底部消息同口径)
+	check(t_active.contains("爆发+N 灵气/道行"), "一键施展 tooltip 含 爆发总量口径 (打磨-60)")
 	# 装备一键购买: 购买顺序 + 自动穿戴规则
 	var t_buy: String = str(ui._buy_all_btn.tooltip_text)
 	check(t_buy.contains("同价按数据序"), "装备一键购买 tooltip 含 同价按数据序 顺序")
