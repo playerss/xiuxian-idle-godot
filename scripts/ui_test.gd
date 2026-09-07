@@ -93,6 +93,7 @@ func _ready() -> void:
 	await _assert_cd_bars()
 	await _assert_ready_flash()
 	await _assert_chance_expect_tip()
+	await _assert_break_fail_float()
 	_finish()
 
 
@@ -1421,9 +1422,14 @@ func _assert_cd_bars() -> void:
 	var bg2: ColorRect = r2["bg"]
 	check(bg1.visible, "打磨-58 a1 冷却中 进度条 显示")
 	check(bg2.visible, "打磨-58 a2 冷却中 进度条 显示")
-	# 等一帧 布局落定 (宽度 0 -> 实际 宽), 再 直调 一次 由 宽变化缓存键 触发 填充
-	await get_tree().process_frame
+	# 等 布局落定 (宽度 0 -> 实际 宽, headless 高负载时 1 帧可能不够, 上限 20 帧; 顺带修既有 flake)
+	for _i58 in 20:
+		await get_tree().process_frame
+		if bg1.size.x > 0.0 and bg2.size.x > 0.0:
+			break
 	check(bg1.size.x > 0.0, "打磨-58 a1 布局落定 宽度>0 (实际 %.1f)" % bg1.size.x)
+	check(bg2.size.x > 0.0, "打磨-58 a2 布局落定 宽度>0 (实际 %.1f)" % bg2.size.x)
+	# 宽度落定后 再 直调 一次 由 宽变化缓存键 触发 填充
 	ui._refresh_skill_cd_bars()
 	check(r1["fill"].color == ui.CYAN, "打磨-58 a1 填充色=青")
 	check(absf(r1["fill"].size.x - bg1.size.x * 0.5) < 0.5, "打磨-58 a1 填充=50%% 宽 (余45/总90, 期望 %.1f 实际 %.1f)" % [bg1.size.x * 0.5, r1["fill"].size.x])
@@ -1537,8 +1543,6 @@ func _assert_ready_flash() -> void:
 	# 冷却中: 跨节流档 直调 把 条 刷成 可见 (a1 满 100% / a2 135 注入 首轮 仍冷却)
 	ui._skill_cd_acc = 1.0
 	ui._refresh_skill_cd_bars()
-	await get_tree().process_frame  # 布局落定
-	ui._refresh_skill_cd_bars()
 	var r1: Dictionary = ui._skill_cd_bars[a1]
 	var r2: Dictionary = ui._skill_cd_bars[a2]
 	var bg1: ColorRect = r1["bg"]
@@ -1546,6 +1550,12 @@ func _assert_ready_flash() -> void:
 	var fill1: ColorRect = r1["fill"]
 	var fill2: ColorRect = r2["fill"]
 	check(bg1.visible and bg2.visible, "打磨-59 冷却中 两行 进度条 可见 (a1=%s a2=%s)" % [str(bg1.visible), str(bg2.visible)])
+	# 等 布局落定 (宽度 0 -> 实际 宽, headless 高负载时 1 帧可能不够, 上限 20 帧; 与 打磨-58 同款加固)
+	for _i59 in 20:
+		await get_tree().process_frame
+		if bg1.size.x > 0.0 and bg2.size.x > 0.0:
+			break
+	ui._refresh_skill_cd_bars()
 	check(fill1.size.x > 0.0 and fill2.size.x > 0.0, "打磨-59 冷却中 填充>0 (a1=%.1f a2=%.1f)" % [fill1.size.x, fill2.size.x])
 	# 记 按钮 默认样式 边框色 (恢复后 normal 边框 须 回到 默认; 用 颜色 断言 而非 对象引用 —
 	# get_theme_stylebox 返回 拷贝, 对象引用 不稳定, 颜色 才是 语义 判据)
@@ -1672,6 +1682,86 @@ func _assert_chance_expect_tip() -> void:
 	var tip3: String = str(ui._chance_label.tooltip_text)
 	check(tip3.find("已至道祖") >= 0, "打磨-63 道祖 tooltip 圆满文案 (实际 %s)" % tip3)
 	check(tip3.find("期望次数") < 0 and tip3.find("期望总消耗") < 0, "打磨-63 道祖 tooltip 不追加 预期成本 (实际 %s)" % tip3)
+	# 恢复基准态
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-64: 突破/道行精进 失败 浮动提示 含 本次消耗+预期成本 (UI 侧: _float_label 文案=接口, 红色;
+# 资源不足不触发 / 道祖封顶 基础文案; _on_break 真实路径 扣资源+埋点 口径验证)
+func _assert_break_fail_float() -> void:
+	var g := GameData
+	# 受控态: 全新基准 (基准态 由 打磨-63 收尾 保证)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	var fl: Label = ui._float_label
+	var stats_b: Dictionary = g.stats.duplicate(true)
+	# 0=未触发: _float_break 直接返回, 文案不变
+	fl.text = "SENTINEL_64"
+	g.last_break_result = 0
+	ui._float_break()
+	check(str(fl.text) == "SENTINEL_64", "打磨-64 last_break_result=0 不触发 浮动 (实际 %s)" % str(fl.text))
+	# 未飞升 失败: 注入 roll=0.999 必失败 (85% 成功率, 确定性), 再驱动 UI _float_break 渲染
+	g.essence = 20.0
+	var ess_b: float = g.essence
+	g.try_breakthrough(0.999)
+	ui._float_break()
+	var txt64: String = str(fl.text)
+	var expect64: String = g.break_fail_float_text()
+	check(txt64 == expect64, "打磨-64 未飞升 失败浮动=接口文案 (实际 %s / 接口 %s)" % [txt64, expect64])
+	check(txt64.begins_with("✖ 突破失败… ✖  本次耗 "), "打磨-64 未飞升 前缀+本次耗 (实际 %s)" % txt64)
+	check(txt64.find("期望次数 ~1.2 次") >= 0 and txt64.find("期望总消耗 ~11 灵气") >= 0, "打磨-64 未飞升 含 预期成本 (实际 %s)" % txt64)
+	check(fl.get_theme_color("font_color") == Color(1.0, 0.45, 0.4), "打磨-64 未飞升 失败浮动 红色")
+	check(absf(g.essence - (ess_b - 10.0)) < 1e-9, "打磨-64 失败 扣突破消耗 10 灵气 (实际 %s)" % g.essence)
+	check(float(g.stats.get("break_fail", 0.0)) == float(stats_b.get("break_fail", 0.0)) + 1.0, "打磨-64 失败 break_fail+1 埋点")
+	# 资源不足: try_breakthrough 走 灵气不足 分支 (roll 前返回), last_break_result 保持 0 -> 不弹浮动
+	fl.text = "SENTINEL_64"
+	g.essence = 5.0
+	var msg64: String = g.try_breakthrough()
+	ui._float_break()
+	check(str(fl.text) == "SENTINEL_64", "打磨-64 资源不足 不触发 浮动 (实际 %s)" % str(fl.text))
+	check(msg64.find("灵气不足") >= 0, "打磨-64 资源不足 返回 灵气不足 消息 (实际 %s)" % msg64)
+	# 飞升后 失败: 道行 口径 (初仙 90%, cost 1e9 -> 10.0亿 道行)
+	g.ascended = true
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 2.0e9
+	var dao_b: float = g.dao
+	g.try_dao_break(0.999)
+	ui._float_break()
+	var txt65: String = str(fl.text)
+	expect64 = g.break_fail_float_text()
+	check(txt65 == expect64, "打磨-64 飞升 失败浮动=接口文案 (实际 %s / 接口 %s)" % [txt65, expect64])
+	check(txt65.begins_with("✖ 道行精进失败… ✖  本次耗 10.0亿 道行"), "打磨-64 飞升 前缀+本次耗 道行 (实际 %s)" % txt65)
+	check(txt65.find("期望次数 ~1.1 次") >= 0 and txt65.find("期望总消耗 ~11.1亿 道行") >= 0, "打磨-64 飞升 含 预期成本 道行 口径 (实际 %s)" % txt65)
+	check(fl.get_theme_color("font_color") == Color(1.0, 0.45, 0.4), "打磨-64 飞升 失败浮动 红色")
+	check(absf(g.dao - (dao_b - 1.0e9)) < 1e-6, "打磨-64 飞升失败 扣道行 1e9 (实际 %s)" % g.dao)
+	# 道祖封顶: try_dao_break 直接返回 (圆满 无失败), last_break_result=0 -> 不弹浮动
+	g.dao_level = 8
+	fl.text = "SENTINEL_64"
+	var msg65: String = g.try_dao_break()
+	ui._float_break()
+	check(str(fl.text) == "SENTINEL_64", "打磨-64 道祖 不触发 浮动 (实际 %s)" % str(fl.text))
+	check(msg65.find("已至道祖") >= 0, "打磨-64 道祖 返回 圆满 消息 (实际 %s)" % msg65)
+	check(g.break_fail_float_text() == "✖ 道行精进失败… ✖", "打磨-64 道祖 接口=基础文案 不追加 (实际 %s)" % g.break_fail_float_text())
 	# 恢复基准态
 	g.ascended = false
 	g.dao_level = 0

@@ -1405,6 +1405,22 @@ func breakthrough_expect_text() -> String:
 	var cost: float = dao_break_cost() if ascended else breakthrough_cost()
 	return "· 期望次数 ~%.1f 次 (成功率 %d%%)\n· 期望总消耗 ~%s %s" % [1.0 / ch, pct, fmt(cost / ch), res_name]
 
+# 打磨-64: 突破/道行精进 失败 浮动提示 文案 (含 本次消耗 + 预期成本, 复用 打磨-63 口径)
+# 口径: "✖ 突破失败… ✖  本次耗 X 灵气 · 期望次数 ~N 次 · 期望总消耗 ~Y 灵气 (成功率 P%)";
+# 飞升后 前缀=道行精进失败 / 口径=道行; 道祖封顶 (圆满 无失败) 返回 基础 失败文案 不追加.
+# 只读无副作用 (不改动 状态/存档/统计).
+func break_fail_float_text() -> String:
+	var prefix: String = "✖ 道行精进失败… ✖" if ascended else "✖ 突破失败… ✖"
+	var p: Dictionary = primary_break_chance_parts()
+	if bool(p["cap"]):
+		return prefix
+	var ch: float = clampf(float(p["chance"]), 0.05, 1.0)
+	var pct := int(round(ch * 100.0))
+	var res_name: String = "道行" if ascended else "灵气"
+	var cost: float = dao_break_cost() if ascended else breakthrough_cost()
+	return "%s  本次耗 %s %s · 期望次数 ~%.1f 次 · 期望总消耗 ~%s %s (成功率 %d%%)" % [
+		prefix, fmt(cost), res_name, 1.0 / ch, fmt(cost / ch), res_name, pct]
+
 # 成功率构成 tooltip 文本 (成功率行动态展示; 境界/阶段/功法装备变化才变)
 # 打磨-63: 构成段 之后 追加 预期成本 两行 (期望次数/期望总消耗, 道祖封顶 不追加)
 func primary_break_chance_tip() -> String:

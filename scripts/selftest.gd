@@ -2303,6 +2303,56 @@ func _init() -> void:
 	g.essence = 0.0
 	g.dao = 0.0
 	g.stones = 0.0
+	# ---------- 打磨-64: 突破/道行精进 失败 浮动提示 文案 (break_fail_float_text, 只读) ----------
+	# 口径: "✖ 失败… ✖  本次耗 X 灵气/道行 · 期望次数 ~N 次 · 期望总消耗 ~Y 灵气/道行 (成功率 P%)"
+	# 复用 打磨-63 预期成本 (1/P, cost/P, fmt); 道祖封顶 只返回 基础 失败文案.
+	# 基准: 练气第1层 85%, cost=10 -> 期望 1.2 次 / 10/0.85=11.76 -> fmt "11"
+	var ff64: String = g.break_fail_float_text()
+	check(ff64 == "✖ 突破失败… ✖  本次耗 10 灵气 · 期望次数 ~1.2 次 · 期望总消耗 ~11 灵气 (成功率 85%)",
+		"打磨-64 基准 失败浮动 文案 (实际 %s)" % ff64)
+	# 恒等: 期望次数=1/P, 期望总消耗=cost/P (与 打磨-63 同口径)
+	var ch64: float = g.primary_break_chance()
+	var cost64: float = g.breakthrough_cost()
+	check(ff64.find("本次耗 %s 灵气" % g.fmt(cost64)) >= 0, "打磨-64 含 本次耗=breakthrough_cost fmt (实际 %s)" % ff64)
+	check(ff64.find("期望次数 ~%.1f 次" % (1.0 / ch64)) >= 0, "打磨-64 期望次数=1/P (实际 %s)" % ff64)
+	check(ff64.find("期望总消耗 ~%s 灵气" % g.fmt(cost64 / ch64)) >= 0, "打磨-64 期望总消耗=cost/P fmt (实际 %s)" % ff64)
+	# 境界变化: 筑基第2层 81%, cost=60 -> 60/0.81=74.07 -> fmt "74"
+	g.realm_idx = 1
+	g.layer = 2
+	ff64 = g.break_fail_float_text()
+	check(ff64 == "✖ 突破失败… ✖  本次耗 60 灵气 · 期望次数 ~1.2 次 · 期望总消耗 ~74 灵气 (成功率 81%)",
+		"打磨-64 筑基 失败浮动 文案 (实际 %s)" % ff64)
+	g.realm_idx = 0
+	g.layer = 1
+	# 飞升后: 初仙 90%, cost=1e9 -> 期望 1.1 次 / 1e9/0.9=1.1111e9 -> fmt "11.1亿" 道行
+	g.ascended = true
+	g.dao_level = 0
+	ff64 = g.break_fail_float_text()
+	check(ff64 == "✖ 道行精进失败… ✖  本次耗 10.0亿 道行 · 期望次数 ~1.1 次 · 期望总消耗 ~11.1亿 道行 (成功率 90%)",
+		"打磨-64 飞升 初仙 失败浮动 文案 (实际 %s)" % ff64)
+	# 阶段递增: 混元(第7) 69%, cost=1e9x8^7=2.0972e12 -> fmt "2097.2兆" / 2.0972e12/0.69=3.0394e12 -> fmt "3039.4兆"
+	g.dao_level = 7
+	ff64 = g.break_fail_float_text()
+	check(ff64 == "✖ 道行精进失败… ✖  本次耗 2097.2兆 道行 · 期望次数 ~1.4 次 · 期望总消耗 ~3039.4兆 道行 (成功率 69%)",
+		"打磨-64 混元 失败浮动 文案 (实际 %s)" % ff64)
+	# 道祖封顶: 圆满 无失败 -> 只返回 基础 失败文案 (不追加 预期成本)
+	g.dao_level = 8
+	check(g.break_fail_float_text() == "✖ 道行精进失败… ✖", "打磨-64 道祖 失败浮动 = 基础文案 不追加 (实际 %s)" % g.break_fail_float_text())
+	# 只读性: 调用 不改动 资源/统计/境界
+	var stats64: Dictionary = g.stats.duplicate(true)
+	var learned64: Array = g.learned.duplicate()
+	g.break_fail_float_text()
+	check(g.essence == 0.0 and g.dao == 0.0 and g.stones == 0.0, "打磨-64 只读 不改动 资源")
+	check(g.stats == stats64 and g.learned == learned64, "打磨-64 只读 不改动 统计/已学")
+	check(g.dao_level == 8 and g.ascended, "打磨-64 只读 不改动 飞升/道行阶段")
+	# 恢复干净基准态
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
