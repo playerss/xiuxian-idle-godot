@@ -89,6 +89,7 @@ func _ready() -> void:
 	await _assert_skill_cast_float()
 	await _assert_active_learn()
 	await _assert_ready_float()
+	await _assert_ready_float_burst()
 	await _assert_cd_bars()
 	await _assert_ready_flash()
 	_finish()
@@ -1206,6 +1207,9 @@ func _assert_ready_float() -> void:
 	var a2: String = r_act[1]
 	var n1: String = str(g.skill_by_id[a1]["name"])
 	var n2: String = str(g.skill_by_id[a2]["name"])
+	# 打磨-62: 受控态 速率=1.0 (境界0层1, 无 功法/装备/法器), 爆发 恒等 速率 x 爆发秒数
+	var v1: int = int(g.skill_by_id[a1]["value"])
+	var v2: int = int(g.skill_by_id[a2]["value"])
 	# 注入: 两个 已学 主动神通 冷却中 (30/45 秒 不同步), 就绪事件 清空
 	g.learned.append(a1)
 	g.learned.append(a2)
@@ -1224,7 +1228,7 @@ func _assert_ready_float() -> void:
 	ui._refresh()
 	check(ui._ready_float_count == c0 + 1, "打磨-57 a1 冷却完毕 浮动计数+1 (期望 %d, 实际 %d)" % [c0 + 1, ui._ready_float_count])
 	check(str(ui._ready_last_text) == n1, "打磨-57 浮动文案=a1 神通名 (实际 %s)" % str(ui._ready_last_text))
-	check(str(fl.text) == "✦ 冷却完毕: " + n1 + " ✦", "打磨-57 浮动 Label 文本=✦ 冷却完毕: X ✦ (实际 %s)" % str(fl.text))
+	check(str(fl.text) == "✦ 冷却完毕: " + n1 + " ✦ (爆发+%d 灵气)" % v1, "打磨-62 浮动 Label 文本=✦ 冷却完毕: X ✦ (爆发+N 灵气) (实际 %s)" % str(fl.text))
 	check(absf(fl.position.y + 48.0) < 0.5, "打磨-57 浮动位置复位 y≈-48 (实际 %.2f)" % fl.position.y)
 	check(fl.modulate.a > 0.9, "打磨-57 浮动可见 (alpha=%.2f)" % fl.modulate.a)
 	# 只读: tick/drain 不改动 资源/统计
@@ -1243,7 +1247,7 @@ func _assert_ready_float() -> void:
 	ui._refresh()
 	check(ui._ready_float_count == c1 + 1, "打磨-57 a2 冷却完毕 浮动计数+1 (期望 %d, 实际 %d)" % [c1 + 1, ui._ready_float_count])
 	check(str(ui._ready_last_text) == n2, "打磨-57 第二次 浮动文案=a2 神通名 (实际 %s)" % str(ui._ready_last_text))
-	check(str(fl.text) == "✦ 冷却完毕: " + n2 + " ✦", "打磨-57 第二次 浮动 Label 文本 (实际 %s)" % str(fl.text))
+	check(str(fl.text) == "✦ 冷却完毕: " + n2 + " ✦ (爆发+%d 灵气)" % v2, "打磨-62 第二次 浮动 Label 文本=爆发+N 灵气 (实际 %s)" % str(fl.text))
 	# --- 同一批多个就绪 合并一行: 两神通 同时 进冷却, 同帧 归零 -> 一个 浮动 含 两名 (换行) ---
 	g._active_cd[a1] = 5.0
 	g._active_cd[a2] = 5.0
@@ -1252,6 +1256,7 @@ func _assert_ready_float() -> void:
 	g._tick_active_cd(5.0)
 	ui._refresh()
 	check(ui._ready_float_count == c2 + 1, "打磨-57 同帧两就绪 仅一个 浮动 (合并, 计数 %d→%d)" % [c2, ui._ready_float_count])
+	check(str(fl.text) == "✦ 冷却完毕: " + n1 + "\n" + n2 + " ✦ (爆发+%d 灵气)" % (v1 + v2), "打磨-62 合并浮动 爆发总量=两神通值之和 (实际 %s)" % str(fl.text))
 	var merged: String = str(ui._ready_last_text)
 	check(merged.find(n1) >= 0 and merged.find(n2) >= 0 and merged != "", "打磨-57 合并文案 含 两神通名 (实际 %s)" % merged)
 	check(str(fl.text).find("\n") >= 0, "打磨-57 合并 浮动 Label 多行 (含换行) (实际 %s)" % str(fl.text))
@@ -1269,6 +1274,82 @@ func _assert_ready_float() -> void:
 	g.dao = 0.0
 	ui._refresh()
 	await get_tree().process_frame
+
+
+# 打磨-62: 冷却完毕 浮动 追加 爆发总量 — 飞升态 口径=道行 (飞升后 灵气速率 x2,
+# 爆发 = 速率 x 爆发秒数 x 2), 文案 与 打磨-60/61 "爆发+N 灵气/道行" 同格式, 2 态 精确匹配。
+# 注: 就绪事件 触发 打磨-59 收口+微光 (tween+标记), 且 UI 自动 _process 每帧 _refresh 会与 手动驱动 竞争;
+# 全程 冻结 UI 手动 驱动 _refresh, 收尾 手动驱动 收口/微光 终态 回调 + 清 标记, 避免 泄漏 污染 后续 58 测试。
+func _assert_ready_float_burst() -> void:
+	var g := GameData
+	# 受控态: 全新基准 (境界0层1, 空 技能/装备/法器)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	# 冻结 UI 自动 _refresh (同 打磨-59 口径: UI 自动 drain 就绪事件 会与 手动驱动 竞争 致 断言竞态)
+	ui.set_process(false)
+	# 清 遗留 收口/微光 标记 (前序测试 UI 自动 drain 可能 残留)
+	ui._skill_active_close.clear()
+	ui._skill_active_glow.clear()
+	# 找 1 个 凡品 主动神通
+	var a1 := ""
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id[id]
+		if int(s["tier"]) == 0 and str(s["type"]) == "active":
+			a1 = str(id)
+			break
+	check(a1 != "", "打磨-62 受控态 找到 凡品主动神通 (实际 %s)" % a1)
+	if a1 == "":
+		ui.set_process(true)
+		return
+	var name: String = str(g.skill_by_id[a1]["name"])
+	var v: int = int(g.skill_by_id[a1]["value"])
+	var fl: Label = ui._ready_float_label
+	# --- 态1 未飞升: 速率 1.0, 冷却归零 就绪 -> 浮动 含 "爆发+v 灵气" 精确匹配 ---
+	g.learned.append(a1)
+	g._active_cd[a1] = 30.0
+	g.ready_events.clear()
+	g._tick_active_cd(30.0)
+	ui._refresh()
+	check(str(fl.text) == "✦ 冷却完毕: " + name + " ✦ (爆发+%d 灵气)" % v, "打磨-62 未飞升 浮动文案=爆发+%d 灵气 (实际 %s)" % [v, str(fl.text)])
+	# --- 态2 飞升: 速率 x2 (道行阶段1, 同 打磨-61 飞升态口径), 冷却归零 就绪 -> 浮动 含 "爆发+2v 道行" ---
+	g._active_cd[a1] = 30.0
+	g.ready_events.clear()
+	g.ascended = true
+	g.dao_level = 1
+	g._tick_active_cd(30.0)
+	ui._refresh()
+	check(str(fl.text) == "✦ 冷却完毕: " + name + " ✦ (爆发+%d 道行)" % (v * 2), "打磨-62 飞升态 浮动文案=爆发+%d 道行 (实际 %s)" % [v * 2, str(fl.text)])
+	# 收尾: 恢复基准态 (未飞升, 清 已学/冷却/就绪事件/资源)
+	g.learned.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	# 手动驱动 打磨-59 收口/微光 终态 回调 (headless 不依赖 tween 自然跑完, 清 标记 并 恢复 默认样式/隐藏条,
+	# 避免 泄漏 污染 后续 打磨-58 进度条 断言)
+	ui._skill_close_done(a1)
+	ui._skill_glow_done(a1)
+	ui._skill_cd_acc = 0.0
+	ui._skill_active_close.clear()
+	ui._skill_active_glow.clear()
+	ui.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+
 
 
 # 打磨-58: 神通冷却进度条 — 24 个主动神通行内细条 (冷却中=青色按 剩余/总冷却 填充, 归零隐藏);

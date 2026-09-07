@@ -1381,6 +1381,9 @@ func _refresh() -> void:
 
 # 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (居中绿色上浮淡出, 与 打磨-45 一键系列 同口径,
 # 位置 y=-48 与 一键(-26)/成就(-58) 错开; 同一批多个就绪合并一行展示)
+# 打磨-62: 浮动文案 追加 本批 就绪神通 的 爆发 总量 "(爆发+N 灵气/道行)" — 每个 id 按
+# qi_per_sec x value 口径 求和 (与 打磨-54 爆发预览/打磨-60 一键施展 同口径, 飞升后=道行),
+# 求和<=0 省略 (速率 0 等极端态防御); 只读 不改 状态/存档/统计
 func _ready_float(fresh: Array[String]) -> void:
 	var names := ""
 	for id in fresh:
@@ -1390,9 +1393,21 @@ func _ready_float(fresh: Array[String]) -> void:
 		names += ("\n" if names != "" else "") + (s["name"] as String)
 	if names == "":
 		return
+	# 打磨-62: 本批 就绪神通 爆发 总量 (每 id = 当前灵气速率 x 爆发秒数, 与 打磨-54/60 同口径;
+	# 飞升后 口径=道行 由 primary_res_name 统一; 速率 0 等极端态 求和<=0 省略)
+	var burst := 0.0
+	var rate := GameData.qi_per_sec()
+	for id in fresh:
+		var sk: Dictionary = GameData.skill_by_id.get(str(id), {})
+		if sk.is_empty():
+			continue
+		burst += rate * float(sk["value"])
+	var burst_tag := ""
+	if burst > 0.0:
+		burst_tag = " (爆发+%s %s)" % [GameData.fmt(burst), GameData.primary_res_name()]
 	_ready_float_count += 1
 	_ready_last_text = names
-	_ready_float_label.text = "✦ 冷却完毕: " + names + " ✦"
+	_ready_float_label.text = "✦ 冷却完毕: " + names + " ✦" + burst_tag
 	_ready_float_label.position = Vector2(0, -48)
 	_ready_float_label.modulate = Color(1, 1, 1, 1)
 	if _ready_float_tween != null and _ready_float_tween.is_valid():
