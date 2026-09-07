@@ -1517,8 +1517,9 @@ func _init() -> void:
 	check(absf(float(p37["clamp"])) < 1e-9, "构成 基准 clamp = 0 (实际 %s)" % p37["clamp"])
 	check(absf(float(p37["chance"]) - 0.85) < 1e-9, "构成 基准 chance = 0.85 (实际 %s)" % p37["chance"])
 	check(not bool(p37["cap"]), "构成 基准 cap = false (实际 %s)" % p37["cap"])
-	check(g.primary_break_chance_tip() == "突破成功率 85% 构成:\n· 境界 (练气) 基础 85%\n· 功法 +0.0%\n· 装备 +0.0%\n→ 85% (受控区间 5%~99%)",
-		"构成 tooltip 基准 (实际 %s)" % g.primary_break_chance_tip())
+	# 打磨-63 后 tooltip 末尾 追加 预期成本 两行 (基准 85%: cost 10 -> 期望 1.2 次/12 灵气)
+	check(g.primary_break_chance_tip() == "突破成功率 85% 构成:\n· 境界 (练气) 基础 85%\n· 功法 +0.0%\n· 装备 +0.0%\n→ 85% (受控区间 5%~99%)\n· 期望次数 ~1.2 次 (成功率 85%)\n· 期望总消耗 ~11 灵气",
+		"构成 tooltip 基准 (含 打磨-63 预期成本) (实际 %s)" % g.primary_break_chance_tip())
 	check(absf(g.primary_break_chance() - 0.85) < 1e-9, "构成 与 primary_break_chance 一致 (基准)")
 	# 功法 石剑意 +7.0% -> 92% (直接挂 learned, 不受 境界 限制)
 	g.learned.append("sword_0_2")
@@ -2235,6 +2236,72 @@ func _init() -> void:
 	g._active_cd.clear()
 	g.ready_events.clear()
 	g.essence = 0.0
+	g.stones = 0.0
+	# ---------- 打磨-63: 突破成功率 tooltip 预期成本 (breakthrough_expect_text, 只读) ----------
+	# 口径: 期望次数 = 1/P (1 位小数), 期望总消耗 = 单次消耗/P (fmt 口径); 未飞升=灵气/飞升=道行/道祖="".
+	g.learned.clear()
+	for _s63 in g.SLOTS:
+		g.equipped.erase(_s63)
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	# 基准: 练气第1层 85%, cost=10x3^0x1=10 -> 期望次数 1.2 次 / 期望总消耗 10/0.85=11.76 -> fmt "11" (截断)
+	var ex63: String = g.breakthrough_expect_text()
+	check(ex63 == "· 期望次数 ~1.2 次 (成功率 85%)\n· 期望总消耗 ~11 灵气",
+		"打磨-63 基准 期望文本 (实际 %s)" % ex63)
+	# 恒等: 期望次数=1/P, 期望总消耗=cost/P (P=primary_break_chance, cost=breakthrough_cost)
+	var ch63: float = g.primary_break_chance()
+	var cost63: float = g.breakthrough_cost()
+	check(absf(1.0 / ch63 - 1.0 / 0.85) < 1e-9, "打磨-63 期望次数口径 1/P (实际 %.4f)" % (1.0 / ch63))
+	check(g.fmt(cost63 / ch63) == "11", "打磨-63 期望总消耗 fmt(cost/P) = 11 (实际 %s)" % g.fmt(cost63 / ch63))
+	check(absf(cost63 / ch63 - 11.7647059) < 1e-4, "打磨-63 期望总消耗 = cost/P 恒等 (实际 %.4f)" % (cost63 / ch63))
+	# tooltip 末尾 追加 预期成本 两行 (与 打磨-37 构成段 共存)
+	check(g.primary_break_chance_tip().ends_with("\n" + ex63), "打磨-63 tooltip 末尾含 预期成本 两行 (实际 %s)" % g.primary_break_chance_tip())
+	check(g.primary_break_chance_tip().find("· 期望次数 ~1.2 次") >= 0 and g.primary_break_chance_tip().find("· 期望总消耗 ~11 灵气") >= 0,
+		"打磨-63 tooltip 含 期望次数/期望总消耗 片段")
+	check(g.primary_break_chance_tip().find("→ 85% (受控区间 5%~99%)") >= 0, "打磨-63 构成段 保持 (与 打磨-37 共存)")
+	# 境界提升: 筑基第2层 81%, cost=10x3x2=60 -> 60/0.81=74.07 -> fmt "74"
+	g.realm_idx = 1
+	g.layer = 2
+	ex63 = g.breakthrough_expect_text()
+	check(ex63 == "· 期望次数 ~1.2 次 (成功率 81%)\n· 期望总消耗 ~74 灵气",
+		"打磨-63 筑基 期望文本 (实际 %s)" % ex63)
+	g.realm_idx = 0
+	g.layer = 1
+	# 飞升后: 初仙 90%, cost=1e9 -> 期望次数 1.1 次 / 1e9/0.9=1.1111e9 -> fmt "11.1亿" 道行
+	g.ascended = true
+	g.dao_level = 0
+	ex63 = g.breakthrough_expect_text()
+	check(ex63 == "· 期望次数 ~1.1 次 (成功率 90%)\n· 期望总消耗 ~11.1亿 道行",
+		"打磨-63 飞升 初仙 期望文本 (实际 %s)" % ex63)
+	check(g.primary_break_chance_tip().ends_with("\n" + ex63), "打磨-63 飞升 tooltip 末尾含 道行 口径 (实际 %s)" % g.primary_break_chance_tip())
+	# 阶段递增: 混元(第7) 69%, cost=1e9x8^7=2.0972e12 -> 2.0972e12/0.69=3.0394e12 -> fmt "3039.4兆"
+	g.dao_level = 7
+	ex63 = g.breakthrough_expect_text()
+	check(ex63 == "· 期望次数 ~1.4 次 (成功率 69%)\n· 期望总消耗 ~3039.4兆 道行",
+		"打磨-63 混元 期望文本 (实际 %s)" % ex63)
+	# 道祖封顶: 圆满, 预期成本 空, tooltip 保持 圆满 文案 (不追加)
+	g.dao_level = 8
+	check(g.breakthrough_expect_text() == "", "打磨-63 道祖 预期成本 = 空 (实际 %s)" % g.breakthrough_expect_text())
+	check(g.primary_break_chance_tip() == "已至道祖 · 道法自然 ♪\n道行圆满, 无失败风险。",
+		"打磨-63 道祖 tooltip 不追加 预期成本 (实际 %s)" % g.primary_break_chance_tip())
+	# 只读性: 调用 不改动 资源/统计/已学
+	var stats63: Dictionary = g.stats.duplicate(true)
+	var learned63: Array = g.learned.duplicate()
+	g.breakthrough_expect_text()
+	g.primary_break_chance_tip()
+	check(g.essence == 0.0 and g.dao == 0.0 and g.stones == 0.0, "打磨-63 只读 不改动 资源")
+	check(g.stats == stats63 and g.learned == learned63, "打磨-63 只读 不改动 统计/已学")
+	# 恢复干净基准态
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
 	g.stones = 0.0
 	# ---------- 汇报 ----------
 	print("")

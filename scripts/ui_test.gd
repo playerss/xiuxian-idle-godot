@@ -92,6 +92,7 @@ func _ready() -> void:
 	await _assert_ready_float_burst()
 	await _assert_cd_bars()
 	await _assert_ready_flash()
+	await _assert_chance_expect_tip()
 	_finish()
 
 
@@ -1621,6 +1622,64 @@ func _assert_ready_flash() -> void:
 	ui._skill_active_close.clear()
 	ui._skill_active_glow.clear()
 	ui.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-63: 突破成功率 tooltip 预期成本 (UI 侧: _chance_label.tooltip_text 随 _refresh 刷新, 含 期望次数/期望总消耗)
+# 在 打磨-59 收尾 基准态 (全空, 练气第1层, 未飞升) 上断言: tooltip=构成段+预期成本两行, 口径与接口一致,
+# 状态变化 (境界/飞升) 刷新, 道祖封顶 不追加.
+func _assert_chance_expect_tip() -> void:
+	var g := GameData
+	check(ui._chance_label != null, "打磨-63 _chance_label 节点存在")
+	# 基准态: 练气第1层 85%, cost 10 -> 构成段 + 预期成本两行
+	check(absf(g.primary_break_chance() - 0.85) < 1e-9, "打磨-63 基准态 成功率=0.85 (实际 %s)" % g.primary_break_chance())
+	ui._tab.current_tab = 0
+	ui._refresh()
+	var tip0: String = str(ui._chance_label.tooltip_text)
+	check(tip0 == g.primary_break_chance_tip(), "打磨-63 UI tooltip 与接口一致 (UI %s / 接口 %s)" % [tip0, g.primary_break_chance_tip()])
+	check(tip0.find("突破成功率 85% 构成:") >= 0, "打磨-63 基准 tooltip 含 构成段 (实际 %s)" % tip0)
+	check(tip0.find("· 期望次数 ~1.2 次 (成功率 85%)") >= 0, "打磨-63 基准 tooltip 含 期望次数 (实际 %s)" % tip0)
+	check(tip0.find("· 期望总消耗 ~11 灵气") >= 0, "打磨-63 基准 tooltip 含 期望总消耗 灵气 口径 (实际 %s)" % tip0)
+	# 节流: 同态再刷 缓存不变
+	var cache0: String = str(ui._chance_tip)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._chance_tip) == cache0, "打磨-63 同态再刷 缓存不变 (节流生效)")
+	# 状态变化: 筑基第2层 81%, cost 60 -> 期望 1.2 次/74 灵气 (tooltip 随之刷新)
+	g.realm_idx = 1
+	g.layer = 2
+	ui._refresh()
+	var tip1: String = str(ui._chance_label.tooltip_text)
+	check(tip1 != tip0, "打磨-63 境界变化后 tooltip 刷新 (缓存更新)")
+	check(tip1.find("突破成功率 81%") >= 0, "打磨-63 筑基 tooltip 成功率 81%% (实际 %s)" % tip1)
+	check(tip1.find("· 期望总消耗 ~74 灵气") >= 0, "打磨-63 筑基 tooltip 期望总消耗 74 灵气 (实际 %s)" % tip1)
+	# 状态变化: 飞升 初仙 90% -> 道行 口径 (cost 1e9 -> 11.1亿 道行)
+	g.ascended = true
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	ui._refresh()
+	var tip2: String = str(ui._chance_label.tooltip_text)
+	check(tip2.find("道行精进成功率 90%") >= 0, "打磨-63 飞升 tooltip 道行精进 90%% (实际 %s)" % tip2)
+	check(tip2.find("· 期望次数 ~1.1 次 (成功率 90%)") >= 0, "打磨-63 飞升 tooltip 期望次数 (实际 %s)" % tip2)
+	check(tip2.find("· 期望总消耗 ~11.1亿 道行") >= 0, "打磨-63 飞升 tooltip 期望总消耗 道行 口径 (实际 %s)" % tip2)
+	# 状态变化: 道祖封顶 -> 圆满文案, 不追加 预期成本
+	g.dao_level = 8
+	ui._refresh()
+	var tip3: String = str(ui._chance_label.tooltip_text)
+	check(tip3.find("已至道祖") >= 0, "打磨-63 道祖 tooltip 圆满文案 (实际 %s)" % tip3)
+	check(tip3.find("期望次数") < 0 and tip3.find("期望总消耗") < 0, "打磨-63 道祖 tooltip 不追加 预期成本 (实际 %s)" % tip3)
+	# 恢复基准态
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
 	ui._refresh()
 	await get_tree().process_frame
 

@@ -1392,7 +1392,21 @@ func _signed_pct(v: float) -> String:
 		return "+0.0%"
 	return "%+.1f%%" % (v * 100.0)
 
+# 打磨-63: 主突破 预期成本 (成功率 tooltip 末尾追加 期望次数/期望总消耗)
+# 口径: 期望次数 = 1/P (1 位小数), 期望总消耗 = 单次消耗/P (fmt 口径, 失败全耗重攒).
+# 未飞升=灵气 / 飞升后=道行 / 道祖封顶="" (圆满, 不再精进, tooltip 不追加). 只读无副作用.
+func breakthrough_expect_text() -> String:
+	var p: Dictionary = primary_break_chance_parts()
+	if bool(p["cap"]):
+		return ""
+	var ch: float = clampf(float(p["chance"]), 0.05, 1.0)
+	var pct := int(round(ch * 100.0))
+	var res_name := "道行" if ascended else "灵气"
+	var cost: float = dao_break_cost() if ascended else breakthrough_cost()
+	return "· 期望次数 ~%.1f 次 (成功率 %d%%)\n· 期望总消耗 ~%s %s" % [1.0 / ch, pct, fmt(cost / ch), res_name]
+
 # 成功率构成 tooltip 文本 (成功率行动态展示; 境界/阶段/功法装备变化才变)
+# 打磨-63: 构成段 之后 追加 预期成本 两行 (期望次数/期望总消耗, 道祖封顶 不追加)
 func primary_break_chance_tip() -> String:
 	var p: Dictionary = primary_break_chance_parts()
 	if bool(p["cap"]):
@@ -1405,8 +1419,12 @@ func primary_break_chance_tip() -> String:
 	var tail := "→ %d%% (受控区间 5%%~99%%" % pct
 	if float(p["clamp"]) != 0.0:
 		tail += " · 已钳制"
-	return "%s %d%% 构成:\n· %s (%s) 基础 %d%%\n· 功法 %s\n· 装备 %s\n%s)" % [
+	var tip: String = "%s %d%% 构成:\n· %s (%s) 基础 %d%%\n· 功法 %s\n· 装备 %s\n%s)" % [
 		prefix, pct, stage_word, stage_name, base_pct, _signed_pct(float(p["skill"])), _signed_pct(float(p["equip"])), tail]
+	var expect := breakthrough_expect_text()
+	if not expect.is_empty():
+		tip += "\n" + expect
+	return tip
 
 # ---------- 打磨-31: 下一目标提示 (修行页: 玩家下一步该做什么) ----------
 
