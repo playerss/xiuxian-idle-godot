@@ -90,6 +90,7 @@ func _ready() -> void:
 	await _assert_active_learn()
 	await _assert_ready_float()
 	await _assert_cd_bars()
+	await _assert_ready_flash()
 	_finish()
 
 
@@ -1355,22 +1356,29 @@ func _assert_cd_bars() -> void:
 	# 只读: 刷条 不改动 资源/统计/冷却
 	check(absf(g.essence - ess_b) < 1e-9 and g.stats == stats_b, "打磨-58 刷条 无 资源/统计 副作用")
 	check(absf(g._active_cd[a1] - 20.0) < 1e-9 and absf(g._active_cd[a2] - 65.0) < 1e-9, "打磨-58 刷条 无 冷却 副作用")
-	# 归零即隐藏: tick 20s -> a1 就绪 (条 隐藏+填充清零), a2 仍冷却 (条 保持 填充)
+	# 归零: tick 20s -> a1 就绪; 打磨-59 后 隐藏 由 收口动画 (_skill_close_done) 负责,
+	# _refresh_skill_cd_bars 对 就绪条 只 停填充 不抢先 隐藏; a2 仍冷却 (条 保持 填充)
 	g._tick_active_cd(20.0)
 	g.drain_ready_events()
 	check(g.active_ready(a1) and not g.active_ready(a2), "打磨-58 tick 后 a1 就绪 a2 仍冷却")
+	var a1_fill_pre: float = r1["fill"].size.x
 	ui._skill_cd_acc = 1.0
 	ui._refresh_skill_cd_bars()
-	check(not bg1.visible and r1["fill"].size == Vector2.ZERO, "打磨-58 a1 就绪 进度条 隐藏+填充清零")
+	check(bg1.visible and r1["fill"].size.x == a1_fill_pre, "打磨-58 a1 就绪 _refresh_skill_cd_bars 不抢先隐藏 (打磨-59 收口动画 收尾, 填充 %.1f 不变)" % r1["fill"].size.x)
 	check(bg2.visible and r2["fill"].size.x > 0.0, "打磨-58 a2 仍冷却 进度条 保持 填充 (实际 %.1f)" % r2["fill"].size.x)
+	# 收口动画 收尾 (真实流程由 _refresh 消费 就绪事件 触发; 此处 手动驱动 终态)
+	ui._skill_close_done(a1)
+	check(not bg1.visible and r1["fill"].size == Vector2.ZERO, "打磨-58 a1 收口后 进度条 隐藏+填充清零")
 	check(str(ui._skill_cd_q[a1]) == "hidden", "打磨-58 a1 隐藏态 缓存键=hidden (实际 %s)" % str(ui._skill_cd_q[a1]))
-	# 全部就绪: a2 也 tick 到 0 -> 全部 隐藏 (无残留显示)
+	# 全部就绪: a2 也 tick 到 0 -> 收口后 全部 隐藏 (无残留显示)
 	g._tick_active_cd(65.0)
 	g.drain_ready_events()
+	check(g.active_ready(a2), "打磨-58 再 65s tick 后 a2 就绪")
 	ui._skill_cd_acc = 1.0
 	ui._refresh_skill_cd_bars()
-	check(not bg1.visible and not bg2.visible, "打磨-58 全部就绪 进度条 全隐藏")
-	# 未学隐藏: a1 取消领悟 (冷却已无) -> 条 保持 隐藏 (未学不显示)
+	ui._skill_close_done(a2)
+	check(not bg1.visible and not bg2.visible, "打磨-58 全部就绪 收口后 进度条 全隐藏")
+	# 未学隐藏: a1 取消领悟 (冷却已无) -> 条 保持 隐藏 (未学不显示; 此路径 仍由 _refresh_skill_cd_bars 亲手隐藏)
 	g.learned.erase(a1)
 	ui._skill_cd_acc = 1.0
 	ui._refresh_skill_cd_bars()
@@ -1383,6 +1391,145 @@ func _assert_cd_bars() -> void:
 	g.stones = 0.0
 	g.dao = 0.0
 	ui._skill_cd_acc = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-59: 冷却完毕 收口动画 + 按钮金边微光 — 就绪事件 触发后:
+# 进度条 满档 快速收窄至 0 后隐藏 (与 打磨-57 就绪浮动 同帧), 施展按钮 金边微光 渐隐回默认。
+# 测试手动驱动: 注入冷却 -> 先 跨节流档 _refresh_skill_cd_bars 把条刷到 50% 可见 -> tick 归零
+# -> _refresh 消费 就绪事件 (触发 收口+微光) -> 帧推进 让 tween 完成 -> 断言 终态。
+func _assert_ready_flash() -> void:
+	var g := GameData
+	# 受控态: 全新基准
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	var stats_b: Dictionary = g.stats.duplicate(true)
+	# 冻结 UI 自动 _refresh (UI._process 每帧 drain 就绪事件, 会与手动驱动竞争, 致断言竞态);
+	# 本测试 全程 手动 驱动 _refresh; tween 由 SceneTree 推进, 不受 set_process(false) 影响
+	ui.set_process(false)
+	# 清 遗留 收口/微光 标记 (前序测试 UI 自动 drain 可能 残留)
+	ui._skill_active_close.clear()
+	ui._skill_active_glow.clear()
+	# 找 两个 凡品 主动神通
+	var r_act: Array[String] = []
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id[id]
+		if int(s["tier"]) == 0 and str(s["type"]) == "active":
+			r_act.append(str(id))
+	check(r_act.size() >= 2, "打磨-59 受控态 找到 >=2 个 凡品主动神通 (实际 %d)" % r_act.size())
+	if r_act.size() < 2:
+		ui.set_process(true)
+		return
+	var a1: String = r_act[0]
+	var a2: String = r_act[1]
+	var seq0: int = ui._skill_ready_seq
+	g.learned.append(a1)
+	g.learned.append(a2)
+	g._active_cd[a1] = 90.0
+	g._active_cd[a2] = 135.0  # >90: 首轮 tick 90s 后 a2 仍余 45s 不就绪
+	ui._tab.current_tab = 1
+	ui._refresh()
+	await get_tree().process_frame
+	# 冷却中: 跨节流档 直调 把 条 刷成 可见 (a1 满 100% / a2 135 注入 首轮 仍冷却)
+	ui._skill_cd_acc = 1.0
+	ui._refresh_skill_cd_bars()
+	await get_tree().process_frame  # 布局落定
+	ui._refresh_skill_cd_bars()
+	var r1: Dictionary = ui._skill_cd_bars[a1]
+	var r2: Dictionary = ui._skill_cd_bars[a2]
+	var bg1: ColorRect = r1["bg"]
+	var bg2: ColorRect = r2["bg"]
+	var fill1: ColorRect = r1["fill"]
+	var fill2: ColorRect = r2["fill"]
+	check(bg1.visible and bg2.visible, "打磨-59 冷却中 两行 进度条 可见 (a1=%s a2=%s)" % [str(bg1.visible), str(bg2.visible)])
+	check(fill1.size.x > 0.0 and fill2.size.x > 0.0, "打磨-59 冷却中 填充>0 (a1=%.1f a2=%.1f)" % [fill1.size.x, fill2.size.x])
+	# 记 按钮 默认样式 边框色 (恢复后 normal 边框 须 回到 默认; 用 颜色 断言 而非 对象引用 —
+	# get_theme_stylebox 返回 拷贝, 对象引用 不稳定, 颜色 才是 语义 判据)
+	var btn_a1: Button = ui._skill_btns[a1]
+	var btn_a2: Button = ui._skill_btns[a2]
+	var DEF_BORDER := Color(0.3, 0.35, 0.45)  # _make_btn_sb_normal 边框色
+	# --- a1 归零: tick 90 秒 -> a1 就绪 (a2 余 45 不就绪) ---
+	g._tick_active_cd(90.0)
+	check(g.active_ready(a1) and not g.active_ready(a2), "打磨-59 tick 后 a1 就绪 a2 仍冷却")
+	# 手动 _refresh 消费 就绪事件 -> 浮动 + 收口 + 微光 同帧 (UI 自动 _process 已冻结, 无竞争)
+	ui._refresh()
+	check(ui._skill_ready_seq == seq0 + 1, "打磨-59 就绪批次计数+1 (期望 %d 实际 %d)" % [seq0 + 1, ui._skill_ready_seq])
+	check(ui._skill_active_close.has(a1), "打磨-59 a1 收口动画 进行中 (标记存在)")
+	check(ui._skill_active_glow.has(a1), "打磨-59 a1 按钮微光 进行中 (标记存在)")
+	check(not ui._skill_active_close.has(a2) and not ui._skill_active_glow.has(a2), "打磨-59 a2 未就绪 无收口/微光 标记")
+	# 微光中: 按钮 金边样式 已套 (边框色=金 0.98,0.86,0.5)
+	var sb_glow: StyleBoxFlat = btn_a1.get_theme_stylebox("normal")
+	check(sb_glow is StyleBoxFlat and sb_glow.border_color == Color(0.98, 0.86, 0.5), "打磨-59 a1 微光中 按钮 normal=金边 (实际 %s)" % str(sb_glow))
+	# 收口中: 条 保持 可见 (收口动画 负责 收窄+隐藏 终态, 节流刷新 不抢先 隐藏 就绪条)
+	check(bg1.visible, "打磨-59 a1 收口中 条 保持 可见 (动画负责终态)")
+	# a2 不受 a1 事件影响: 条 保持 冷却 填充
+	check(bg2.visible and fill2.size.x > 0.0, "打磨-59 a2 仍冷却 条保持 (实际 %.1f)" % fill2.size.x)
+	# 节流门: 就绪条 被 _refresh_skill_cd_bars 跳过 (不 隐藏/不清零, 由 收口动画 收尾)
+	var fill1_pre: float = fill1.size.x
+	ui._skill_cd_acc = 1.0
+	ui._refresh_skill_cd_bars()
+	check(bg1.visible and fill1.size.x == fill1_pre, "打磨-59 收口中 节流刷新 跳过 a1 不抢先隐藏 (填充 %.1f 不变)" % fill1.size.x)
+	check(str(ui._skill_cd_q[a1]) != "hidden", "打磨-59 收口中 a1 缓存键 未 归 hidden (实际 %s)" % str(ui._skill_cd_q[a1]))
+	# --- 收口 终态 手动驱动 (headless 帧时间不确定, 不依赖 tween 自然跑完; 驱动 动画结束回调) ---
+	ui._skill_close_done(a1)
+	check(not bg1.visible, "打磨-59 a1 收口完成 条 隐藏")
+	check(fill1.size == Vector2.ZERO, "打磨-59 a1 收口完成 填充清零 (实际 %s)" % str(fill1.size))
+	check(str(ui._skill_cd_q[a1]) == "hidden", "打磨-59 a1 缓存键=hidden (实际 %s)" % str(ui._skill_cd_q[a1]))
+	check(not ui._skill_active_close.has(a1), "打磨-59 a1 收口标记 已清除")
+	# --- 微光 终态 手动驱动 (驱动 微光结束回调, 恢复 默认样式) ---
+	ui._skill_glow_done(a1)
+	var sb_n_after: StyleBoxFlat = btn_a1.get_theme_stylebox("normal")
+	check(sb_n_after is StyleBoxFlat and sb_n_after.border_color == DEF_BORDER, "打磨-59 a1 微光结束 normal 边框 恢复 默认 (实际 %s)" % str(sb_n_after))
+	check(not ui._skill_active_glow.has(a1), "打磨-59 a1 微光标记 已清除")
+	# 恢复后 冷却 刷新 可再次 驱动 a1 (无残留 卡死)
+	g._active_cd[a1] = 45.0
+	ui._skill_cd_acc = 1.0
+	ui._refresh_skill_cd_bars()
+	check(bg1.visible and fill1.size.x > 0.0, "打磨-59 恢复后 再进冷却 条可再次 显示 (实际 %.1f)" % fill1.size.x)
+	# --- 同批多就绪: a1/a2 同时 归零 -> 一个批次 触发 双收口+双微光 ---
+	# 注: a1 刚重注 45s, a2 尚余 45s, 本次 tick 45s 使 a1/a2 同帧 归零 -> 同批 两就绪
+	g._tick_active_cd(45.0)
+	check(g.active_ready(a1) and g.active_ready(a2), "打磨-59 同批 tick 后 a1/a2 均就绪")
+	ui._refresh()
+	check(ui._skill_active_close.has(a1) and ui._skill_active_close.has(a2), "打磨-59 同批双就绪 双收口 进行中")
+	check(ui._skill_active_glow.has(a1) and ui._skill_active_glow.has(a2), "打磨-59 同批双就绪 双微光 进行中")
+	# 同批 双 终态 手动驱动
+	ui._skill_close_done(a1)
+	ui._skill_close_done(a2)
+	ui._skill_glow_done(a1)
+	ui._skill_glow_done(a2)
+	check(not ui._skill_active_close.has(a1) and not ui._skill_active_close.has(a2), "打磨-59 同批 收口 全部完成")
+	check(not ui._skill_active_glow.has(a1) and not ui._skill_active_glow.has(a2), "打磨-59 同批 微光 全部完成")
+	check(not bg1.visible and not bg2.visible, "打磨-59 同批 双条 终态 隐藏")
+	var sb_a1_after: StyleBoxFlat = btn_a1.get_theme_stylebox("normal")
+	check(sb_a1_after is StyleBoxFlat and sb_a1_after.border_color == DEF_BORDER, "打磨-59 同批 a1 样式 恢复 默认 (边框 %s)" % str(sb_a1_after))
+	var sb_a2_after: StyleBoxFlat = btn_a2.get_theme_stylebox("normal")
+	check(sb_a2_after is StyleBoxFlat and sb_a2_after.border_color == DEF_BORDER, "打磨-59 同批 a2 样式 恢复 默认 (边框 %s)" % str(sb_a2_after))
+	# 只读: 收口/微光 不改动 资源/统计
+	check(absf(g.essence) < 1e-9 and g.stats == stats_b, "打磨-59 收口/微光 无 资源/统计 副作用")
+	# 收尾: 恢复基准态 + 解冻 UI
+	g.learned.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	ui._skill_cd_acc = 0.0
+	ui._skill_active_close.clear()
+	ui._skill_active_glow.clear()
+	ui.set_process(true)
 	ui._refresh()
 	await get_tree().process_frame
 

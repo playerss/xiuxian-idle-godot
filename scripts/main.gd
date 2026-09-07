@@ -69,7 +69,13 @@ var _skill_row_nodes: Dictionary = {}
 var _skill_btns: Dictionary = {}
 var _burst_previews: Dictionary = {}    # 打磨-54: 主动神通 id -> 爆发预览标签 (金色小字, 只读预览)
 var _burst_previews_key: Dictionary = {} # 打磨-54: id -> "已学|预览文本" 缓存键 (tooltip 只在该键变化时重建)
-var _skill_cd_bars: Dictionary = {}     # 打磨-58: 主动神通 id -> {bg, fill, q} 冷却进度条 (青色填充, 归零隐藏)
+var _skill_cd_bars: Dictionary = {}     # 打磨-58: 主动神通 id -> {bg, fill} 冷却进度条 (青色填充, 归零隐藏)
+# 打磨-59: 冷却完毕 收口动画 + 按钮微光 (就绪事件触发: 进度条 满条快速收窄 青色闪烁,
+# 施展按钮 短暂 金边微光; 纯视觉, 无 状态/存档/统计 副作用)
+var _skill_active_glow: Dictionary = {} # 打磨-59: 主动神通 id -> true (按钮金边微光进行中, 防 _refresh 覆盖)
+var _skill_active_close: Dictionary = {} # 打磨-59: 主动神通 id -> {tween} (进度条收口动画进行中, 防 _refresh 重绘)
+var _skill_glow_restored: Dictionary = {} # 打磨-59: 按钮 默认样式缓存 (id -> [normal,hover,pressed], 微光结束恢复)
+var _skill_ready_seq := 0               # 打磨-59: 收口+微光 触发批次计数 (每批就绪 +1, 自测断言用)
 var _skill_cd_q: Dictionary = {}        # 打磨-58: id -> "宽|档" 缓存键 (2% 量化+布局宽变化才刷, 防每帧重绘)
 var _skill_cd_acc := 0.0                # 打磨-58: 冷却进度条 1 秒节流累计 (同 打磨-12/33 口径)
 var _filter_btns: Dictionary = {}
@@ -573,6 +579,9 @@ func _add_skill_row(id: String) -> void:
 	hb.add_child(btn)
 	_skill_btns[id] = btn
 	_skill_row_nodes[id] = row
+	# 打磨-59: 按钮 默认样式 缓存 (微光结束恢复; 构建时取当前 normal/hover/pressed 样式, 此后不变)
+	_skill_glow_restored[id] = [btn.get_theme_stylebox("normal"),
+		btn.get_theme_stylebox("hover"), btn.get_theme_stylebox("pressed")]
 
 
 func _on_filter(cat: String) -> void:
@@ -1355,9 +1364,12 @@ func _refresh() -> void:
 		_ach_prev = g.ach_done.duplicate()
 	# 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (每帧消费 就绪事件; 同一批多个就绪合并一行,
 	# 文案含神通名, 与 一键施展/单个施展 浮动 口径区分; 只读事件 不改动 状态/存档/统计)
-	var fresh_ready: Array[String] = g.drain_ready_events()
-	if not fresh_ready.is_empty():
-		_ready_float(fresh_ready)
+	# 打磨-59: 就绪 同帧触发 进度条 收口动画 + 施展按钮 金边微光 (纯视觉, 复用同一事件)
+	var ready_ids: Array[String] = g.drain_ready_events()
+	if not ready_ids.is_empty():
+		_skill_ready_seq += 1
+		_ready_float(ready_ids)
+		_skill_ready_flash(ready_ids)
 
 
 # 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (居中绿色上浮淡出, 与 打磨-45 一键系列 同口径,
@@ -1541,36 +1553,115 @@ func _refresh_eta() -> void:
 			l2.text = t2
 
 
-# 打磨-58: 神通冷却进度条 (冷却中=青色按 剩余/总冷却 填充, 归零即隐藏;
+# 打磨-58: 神通冷却进度条 (冷却中=青色按 剩余/总冷却 填充;
 # 2% 量化档 + 布局宽变化才写, 防挂机每帧 24 行重绘; 只读 active_cd_ratio, 无副作用)
+# 打磨-59: 冷却 归零 (就绪) 的条 由 收口动画 负责 终态 隐藏 (_skill_close_done),
+# 本函数 对 就绪条 只 停止 填充 (continue), 不抢先 隐藏 (否则 收口动画 无 起点 可见 条)
 func _refresh_skill_cd_bars() -> void:
 	var g := GameData
 	for id in _skill_cd_bars:
+		if not g.learned.has(id):
+			_hide_cd_bar(id)
+			continue
+		if g.active_cd_ratio(id) <= 0.0:
+			# 就绪: 收口动画 负责 收窄+隐藏 (打磨-59); 条 已 隐藏 则 无需 处理
+			continue
 		var r58: Dictionary = _skill_cd_bars[id]
 		var bg58: ColorRect = r58["bg"]
 		var fill58: ColorRect = r58["fill"]
-		if not g.learned.has(id):
-			if bg58.visible:
-				bg58.visible = false
-				fill58.size = Vector2.ZERO
-			_skill_cd_q[id] = "hidden"
-			continue
-		var ratio58: float = g.active_cd_ratio(id)
-		if ratio58 <= 0.0:
-			if bg58.visible:
-				bg58.visible = false
-				fill58.size = Vector2.ZERO
-			_skill_cd_q[id] = "hidden"
-			continue
 		if not bg58.visible:
 			bg58.visible = true
-		var q58: int = int(ceil(clampf(ratio58, 0.0, 1.0) * 50.0))
+		var q58: int = int(ceil(clampf(g.active_cd_ratio(id), 0.0, 1.0) * 50.0))
 		var key58 := "%d|%d" % [int(bg58.size.x), q58]
 		if str(_skill_cd_q.get(id, "")) == key58:
 			continue
 		_skill_cd_q[id] = key58
 		fill58.color = CYAN
 		fill58.size = Vector2(bg58.size.x * float(q58) / 50.0, bg58.size.y)
+
+
+# 打磨-58/59: 隐藏 神通行 冷却条 (填充清零 + 缓存键 hidden, 终态一致)
+func _hide_cd_bar(id: String) -> void:
+	var r59: Dictionary = _skill_cd_bars.get(id, {})
+	if r59.is_empty():
+		return
+	var bg59: ColorRect = r59["bg"]
+	var fill59: ColorRect = r59["fill"]
+	if bg59.visible:
+		bg59.visible = false
+		fill59.size = Vector2.ZERO
+	_skill_cd_q[id] = "hidden"
+
+
+# 打磨-59: 冷却完毕 收口动画 + 按钮金边微光 (复用 打磨-57 就绪事件, 与 就绪浮动 同帧触发;
+# 进度条 由 当前填充 快速收窄至 0 (青色短促闪烁) 后隐藏, 与 打磨-58 归零隐藏 时序衔接;
+# 施展按钮 短暂 金边微光 (复用 打磨-32 _btn_sb_gold 样式, 结束恢复 构建时缓存 默认样式);
+# 纯视觉 无 状态/存档/统计 副作用; 收口 仅对 当前 条 仍 可见 (冷却中) 的 神通 触发,
+# 已隐藏 的条 (如 未学/已就绪) 无 起点 填充 可 收, 跳过 (按钮微光 不受影响)
+func _skill_ready_flash(fresh: Array[String]) -> void:
+	for id in fresh:
+		var sid: String = str(id)
+		var btn: Button = _skill_btns.get(sid)
+		if btn != null:
+			_btn_glow59(sid, btn)
+		# 收口: 仅当 该条 当前 仍 可见 (冷却中) 时 才有 起点 填充 可 收窄; 已 隐藏 的 跳过
+		var r59: Dictionary = _skill_cd_bars.get(sid, {})
+		if r59.is_empty():
+			continue
+		var bg59: ColorRect = r59["bg"]
+		var fill59: ColorRect = r59["fill"]
+		if not bg59.visible:
+			continue
+		var old: Tween = _skill_active_close.get(sid)
+		if old != null and old.is_valid():
+			old.kill()
+		var tw: Tween = create_tween()
+		_skill_active_close[sid] = tw
+		tw.tween_property(fill59, "size:x", 0.0, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_callback(_skill_close_done.bind(sid))
+
+
+# 打磨-59: 收口动画 结束 (隐藏条+填充清零+缓存键归 hidden, 与 打磨-58 归零隐藏 终态一致)
+func _skill_close_done(id: String) -> void:
+	_skill_active_close.erase(id)
+	var r59: Dictionary = _skill_cd_bars.get(id, {})
+	if r59.is_empty():
+		return
+	var bg59: ColorRect = r59["bg"]
+	var fill59: ColorRect = r59["fill"]
+	fill59.size = Vector2.ZERO
+	bg59.visible = false
+	_skill_cd_q[id] = "hidden"
+
+
+# 打磨-59: 施展按钮 金边微光 (金边/金棕底 短暂驻留 后 透明度+底色 渐隐回默认,
+# 与 打磨-32 突破按钮 金边同风格; 结束恢复 构建时缓存 默认样式, 不干扰 后续 _refresh)
+func _btn_glow59(id: String, btn: Button) -> void:
+	var old: Tween = _skill_active_glow.get(id)
+	if old != null and old.is_valid():
+		old.kill()
+	var sb: StyleBoxFlat = _btn_sb_gold.duplicate()
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", sb.duplicate())
+	btn.add_theme_stylebox_override("pressed", sb.duplicate())
+	var tw: Tween = create_tween()
+	_skill_active_glow[id] = tw
+	tw.tween_property(sb, "border_color", Color(0.98, 0.86, 0.5, 0.0), 0.5)
+	tw.parallel().tween_property(sb, "bg_color", Color(0.16, 0.17, 0.23), 0.5)
+	tw.tween_callback(_skill_glow_done.bind(id))
+
+
+# 打磨-59: 微光 结束 恢复 按钮 默认样式 (构建时缓存的 normal/hover/pressed)
+func _skill_glow_done(id: String) -> void:
+	_skill_active_glow.erase(id)
+	var btn: Button = _skill_btns.get(id)
+	if btn == null:
+		return
+	var def: Array = _skill_glow_restored.get(id, [])
+	if def.size() == 3:
+		btn.add_theme_stylebox_override("normal", def[0])
+		btn.add_theme_stylebox_override("hover", def[1])
+		btn.add_theme_stylebox_override("pressed", def[2])
 
 
 # 打磨-18: 境界阶梯高亮 (当前境界 / 飞升后当前道行阶段 金色, 其余白字; 状态变化才刷)
