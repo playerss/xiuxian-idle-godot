@@ -2473,6 +2473,121 @@ func _init() -> void:
 	g.essence = 0.0
 	g.dao = 0.0
 	g.stones = 0.0
+	# ---------- 打磨-67: 自动突破 (_try_auto_break, 自门控于 auto_break, 开关持久化, 事件与手动按钮同口径) ----------
+	# 冻结 GameData._process (防 挂机 灵气 累积 + randf 自动突破 干扰 断言; 段尾恢复)
+	# 受控态: 干净基准 (打磨-65 收尾 保证: 无加成, 练气第1层, 资源 0, 成功率 85%)
+	# 突破消耗 = 10 * 3^realm_idx * layer (练气: 层1=10 层2=20 层3=30 …)
+	g.set_process(false)
+	check(g.auto_break == false, "打磨-67 默认 auto_break=false")
+	# 开关关: _try_auto_break 自门控 直接返回 (资源攒够 也不触发/不消耗)
+	g.auto_break = false
+	var seq67: int = g.break_seq
+	g.last_break_result = 0
+	g.essence = 20.0
+	g._try_auto_break(0.01)
+	check(g.last_break_result == 0, "打磨-67 关 不触发 事件保持 0 (实际 %d)" % g.last_break_result)
+	check(absf(g.essence - 20.0) < 1e-9 and g.layer == 1, "打磨-67 关 不消耗/不升层 (essence=%s)" % g.essence)
+	check(g.break_seq == seq67, "打磨-67 关 不增 break_seq")
+	# 开关开 + 资源够 + 注入成功: 自动突破 (同 try_breakthrough 口径: 扣资源/升层/埋点/事件)
+	# 练气第1层 cost=10, essence=10 刚好够 -> 成功 升 练气第2层 (cost 变 20)
+	g.auto_break = true
+	var stats67: Dictionary = g.stats.duplicate(true)
+	g.essence = 10.0
+	g._try_auto_break(0.01)
+	check(g.last_break_result == 1 and g.layer == 2, "打磨-67 开+成功 事件=1 升 练气第2层 (实际 %s)" % g.realm_display())
+	check(absf(g.essence) < 1e-9, "打磨-67 开+成功 扣突破消耗 (实际 %s)" % g.essence)
+	check(g.break_seq == seq67 + 1, "打磨-67 开+成功 break_seq+1")
+	check(float(g.stats.get("break_ok", 0.0)) == float(stats67.get("break_ok", 0.0)) + 1.0, "打磨-67 开+成功 break_ok+1 埋点")
+	# 开关开 + 资源够 + 注入失败: 失败 也 走 事件 口径 (break_fail 埋点, 浮动 由 UI 统一驱动)
+	# 练气第2层 cost=20, essence=20 刚好够 -> 失败 (仍 练气第2层, 不升层)
+	g.essence = 20.0
+	g._try_auto_break(0.999)
+	check(g.last_break_result == 2, "打磨-67 开+失败 事件=2 (实际 %d)" % g.last_break_result)
+	check(float(g.stats.get("break_fail", 0.0)) == float(stats67.get("break_fail", 0.0)) + 1.0, "打磨-67 开+失败 break_fail+1 埋点")
+	check(absf(g.essence) < 1e-9 and g.layer == 2, "打磨-67 开+失败 扣资源 不升层 (layer=%d)" % g.layer)
+	# 资源不足: 不触发 (不消耗, 事件 保持)
+	# 练气第2层 cost=20, essence=5 不足 -> 不尝试
+	g.essence = 5.0
+	g._try_auto_break(0.01)
+	check(absf(g.essence - 5.0) < 1e-9 and g.last_break_result == 2 and g.break_seq == seq67 + 2,
+		"打磨-67 资源不足 不触发/不消耗 (essence=%s)" % g.essence)
+	# _process 集成: 手动驱动一帧 (已冻结, 无并发) — 开关关 且 资源够 -> 不自动突破
+	g.auto_break = false
+	g.essence = 10.0
+	var seq67b: int = g.break_seq
+	g.last_break_result = 0
+	g._process(0.016)
+	# 练气第2层 cost=20, essence=10+挂机增量 仍 <20 -> 不触发 (防 挂机 累积 越线)
+	check(g.layer == 2 and g.break_seq == seq67b and g.last_break_result == 0,
+		"打磨-67 _process 关 资源不足 不自动突破 (layer=%d seq=%d)" % [g.layer, g.break_seq])
+	# _process 集成: 开关开 且 资源不足 -> 挂机 不触发 (攒够才试)
+	g.auto_break = true
+	g.essence = 1.0
+	g._process(0.016)
+	check(g.last_break_result == 0 and g.layer == 2 and g.break_seq == seq67b,
+		"打磨-67 _process 开 资源不足 不触发 (essence=%s)" % g.fmt(g.essence))
+	# 飞升后 自动 道行精进: 初仙 攒够 1e9 道行 注入成功 -> 晋阶 少仙
+	g.ascended = true
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 1.0e9
+	g.last_break_result = 0
+	g._try_auto_break(0.01)
+	check(g.last_break_result == 4 and g.dao_level == 1, "打磨-67 飞升+精进成功 事件=4 晋阶 少仙 (实际 %d)" % g.last_break_result)
+	# 道祖封顶: 恒不触发 (不消耗道行, 阶段不变)
+	g.dao_level = 8
+	g.dao = 8.0e9
+	var seq67c: int = g.break_seq
+	g._try_auto_break(0.01)
+	check(absf(g.dao - 8.0e9) < 1e-6 and g.dao_level == 8 and g.break_seq == seq67c,
+		"打磨-67 道祖封顶 不触发/不消耗 (dao=%s)" % g.fmt(g.dao))
+	# 未飞升 真仙境 顶层: 资源够 也 自动 飞升 (口径=try_breakthrough, 飞升 后 转 道行 精进)
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 9
+	g.layer = 1
+	g.essence = 10.0 * pow(3.0, 9.0)  # 196830 灵气 (真仙境 顶层 突破消耗)
+	g.dao = 0.0
+	g.last_break_result = 0
+	g._try_auto_break(0.01)
+	check(g.last_break_result == 3 and g.ascended, "打磨-67 未飞升顶层 资源够 自动飞升 (实际 %d)" % g.last_break_result)
+	# 飞升后 道祖 封顶: _try_auto_break 恒不触发 (圆满 无事件) — 先 晋阶 至 道祖 (dao_level=8)
+	g.dao_level = 8
+	g.dao = 1.0e13
+	g.last_break_result = 0
+	g._try_auto_break(0.01)
+	check(g.last_break_result == 0 and g.dao_level == 8 and g.break_seq == seq67c + 1,
+		"打磨-67 飞升后道祖 _try 不触发 无事件 (dao_level=%d)" % g.dao_level)
+	# 存档往返: auto_break 保存/读取 一致 (先 false 存, 置 true 读 -> 仍 false; 再 true 存 -> 读 true)
+	g.auto_break = false
+	g.save_game()
+	g.auto_break = true
+	g.load_game()
+	check(g.auto_break == false, "打磨-67 存档 auto_break=false 往返 (实际 %s)" % str(g.auto_break))
+	g.auto_break = true
+	g.save_game()
+	var sd67: Dictionary = _save_json()
+	check(bool(sd67.get("auto_break", false)) == true, "打磨-67 存档含 auto_break=true 字段 (实际 %s)" % str(sd67.get("auto_break")))
+	g.load_game()
+	check(g.auto_break == true, "打磨-67 读档恢复 auto_break=true")
+	# 旧档兼容: 缺 auto_break 字段 默认 false
+	var wf67 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	wf67.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 5.0, "stones": 7.0}))
+	wf67.close()
+	g.auto_break = true
+	g.load_game()
+	check(g.auto_break == false, "打磨-67 旧档缺 auto_break 默认 false")
+	# 恢复干净基准态 + 解冻 _process (供 后续 段 正常 挂机)
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.last_break_result = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g.auto_break = false
+	g.set_process(true)
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

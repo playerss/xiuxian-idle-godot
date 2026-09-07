@@ -96,6 +96,7 @@ func _ready() -> void:
 	await _assert_break_fail_float()
 	await _assert_break_ok_float()
 	_assert_offline_float()
+	await _assert_auto_break()
 	_finish()
 
 
@@ -1907,6 +1908,99 @@ func _assert_offline_float() -> void:
 	g._offline_qi = 0.0
 	g._offline_stone = 0.0
 	g.ascended = false
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-67: 自动突破 — 开关按钮存在/tooltip/点击切换/开关态同步/浮动文案 "(自动)" 标注 (成功绿+标注,
+# 失败红+标注, 关闭不标注); 事件走 break_seq 统一驱动 (浮动/闪烁 与手动按钮 同口径); 收尾恢复基准态
+func _assert_auto_break() -> void:
+	var g := GameData
+	var btn: Button = ui._auto_break_btn
+	check(btn != null, "打磨-67 自动突破开关按钮存在")
+	if btn == null:
+		return
+	check(btn.toggle_mode, "打磨-67 开关按钮 toggle_mode")
+	check(btn.tooltip_text.find("资源攒够") >= 0 and btn.tooltip_text.find("存档") >= 0,
+		"打磨-67 tooltip 含 资源攒够/存档 口径 (实际 %s)" % btn.tooltip_text)
+	check(btn.tooltip_text.find("离线期间不触发") >= 0, "打磨-67 tooltip 含 离线期间不触发 口径")
+	check(g.auto_break == false and not btn.button_pressed and str(btn.text) == "自动突破: 关",
+		"打磨-67 初始 关 态 (文本/按压/存档值 一致)")
+	# 点击切换: 开 (底部消息 + 按钮态 + 存档值)
+	ui._on_auto_break()
+	check(g.auto_break == true, "打磨-67 点击后 auto_break=true (实际 %s)" % str(g.auto_break))
+	check(btn.button_pressed and str(btn.text) == "自动突破: 开", "打磨-67 点击后 按钮按压+文本 开")
+	check(str(ui._msg_label.text).find("自动突破已开启") >= 0, "打磨-67 开启 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# 点击切换: 关
+	ui._on_auto_break()
+	check(g.auto_break == false and not btn.button_pressed and str(btn.text) == "自动突破: 关", "打磨-67 再点 关 态")
+	check(str(ui._msg_label.text).find("自动突破已关闭") >= 0, "打磨-67 关闭 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# 外部改存档值: _refresh 同步按钮态 (读档恢复 场景)
+	g.auto_break = true
+	ui._refresh()
+	check(btn.button_pressed and str(btn.text) == "自动突破: 开", "打磨-67 _refresh 同步 外部置 开 按钮态")
+	# 浮动文案 "(自动)" 标注: 成功 (手动 _try_auto_break 注入 roll, 事件走 break_seq, 手动驱动 _float_break)
+	# 受控态: 重置 基准 (练气第1层, 无加成, cost=10, 成功率 85%)
+	var fl: Label = ui._float_label
+	var stats_ab: Dictionary = g.stats.duplicate(true)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 10.0
+	g.dao = 0.0
+	g.last_break_result = 0
+	g._try_auto_break(0.01)
+	check(g.last_break_result == 1 and g.layer == 2, "打磨-67 UI 自动成功 事件=1 升层 (实际 %s)" % g.realm_display())
+	fl.text = "SENTINEL_67"
+	ui._float_break()
+	check(str(fl.text) == g.break_ok_float_text() + " (自动)", "打磨-67 成功浮动=接口+ (自动) 标注 (实际 %s)" % str(fl.text))
+	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "打磨-67 成功浮动 绿色")
+	check(float(g.stats.get("break_ok", 0.0)) == float(stats_ab.get("break_ok", 0.0)) + 1.0, "打磨-67 自动成功 break_ok+1 埋点")
+	# 失败: 红浮动 + (自动) 标注 (练气第2层 cost=20, essence=20 刚好够, 注入失败)
+	g.essence = 20.0
+	g._try_auto_break(0.999)
+	fl.text = "SENTINEL_67"
+	ui._float_break()
+	check(str(fl.text) == g.break_fail_float_text() + " (自动)", "打磨-67 失败浮动=接口+ (自动) 标注 (实际 %s)" % str(fl.text))
+	check(fl.get_theme_color("font_color") == Color(1.0, 0.45, 0.4), "打磨-67 失败浮动 红色")
+	# 关闭 开关: 浮动 无 标注 (手动 口径 不变; 重置 练气第1层 cost=10)
+	g.auto_break = false
+	g.last_break_result = 0
+	g.layer = 1
+	g.essence = 10.0
+	g.try_breakthrough(0.01)
+	check(g.last_break_result == 1, "打磨-67 关闭时 手动成功 事件=1 (实际 %d)" % g.last_break_result)
+	fl.text = "SENTINEL_67"
+	ui._float_break()
+	check(str(fl.text) == g.break_ok_float_text() and str(fl.text).find("(自动)") < 0,
+		"打磨-67 关闭时 浮动 无 (自动) 标注 (实际 %s)" % str(fl.text))
+	# 开关不消耗资源/不计突破统计 (开关动作 本身 无 事件)
+	g.essence = 3.0
+	var seq_ab: int = g.break_seq
+	var stats_ab2: Dictionary = g.stats.duplicate(true)
+	ui._on_auto_break()
+	ui._on_auto_break()
+	check(g.auto_break == false and g.break_seq == seq_ab and g.stats == stats_ab2,
+		"打磨-67 开关切换 无 资源/事件/统计 副作用")
+	# 收尾: 恢复基准态 (防污染)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g.last_break_result = 0
+	g.auto_break = false
 	ui._refresh()
 	await get_tree().process_frame
 

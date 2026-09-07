@@ -90,6 +90,7 @@ var _offline_qi := 0.0      # 离线收获 灵气/道行
 var _offline_stone := 0.0   # 离线收获 灵石
 var last_break_result := 0  # 上次突破: 0=未触发 1=成功 2=失败 3=飞升
 var break_seq := 0          # 突破事件序号 (每次成功/失败/飞升 +1, UI 据此触发闪烁)
+var auto_break := false     # 打磨-67: 自动突破 (开=资源攒够自动尝试 突破/道行精进, 存档持久化)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备, 读档时 _load_stats 兜底)
 
 var _active_cd := {}        # 技能 id -> 剩余冷却秒
@@ -110,6 +111,9 @@ func _process(delta: float) -> void:
 	else:
 		essence += qi_per_sec() * delta
 	stones += stone_per_sec() * delta
+	# 打磨-67: 自动突破 (开启时 资源攒够 自动尝试; _try_auto_break 自门控于 auto_break,
+	# 每帧至多一次, 突破后资源已低于 下一档 阈值, 无热循环)
+	_try_auto_break()
 	_stat_inc("play_sec", delta)  # 打磨-14: 累计在线时长
 	_tick_active_cd(delta)  # 神通冷却
 	# 成就检测 (节流 1 秒, 幂等; 灵石达标记类成就在挂机中也能触发)
@@ -924,6 +928,23 @@ func equip_best() -> Dictionary:
 
 # ================= 突破 =================
 
+# 打磨-67: 自动突破 (GameData._process 每帧驱动; 自门控于 auto_break 开关, 关闭时直接返回,
+# 故可直接调用测试; 资源攒够 自动尝试 突破/道行精进, 每帧至多一次; 突破后资源已低于 下一档
+# 阈值, 无热循环; 成功/失败 事件 与 手动按钮 同口径 (浮动/闪烁 由 break_seq 统一驱动);
+# 道祖封顶 不触发; 真仙境 顶层 资源够 也 自动 飞升 (口径=try_breakthrough, 飞升后转道行精进))
+# roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf() (同 try_breakthrough 口径)
+func _try_auto_break(roll: float = -1.0) -> void:
+	if not auto_break:
+		return
+	if ascended:
+		if dao_level >= IMMORTAL_REALMS.size() - 1:
+			return
+		if dao >= dao_break_cost():
+			try_dao_break(roll)
+	else:
+		if essence >= breakthrough_cost():
+			try_breakthrough(roll)
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0
@@ -1211,6 +1232,7 @@ func save_game() -> void:
 		"dao": dao,
 		"dao_level": dao_level,
 		"stats": stats,
+		"auto_break": auto_break,  # 打磨-67: 自动突破开关 (旧档缺字段默认关)
 		"ts": int(Time.get_unix_time_from_system()),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -1238,6 +1260,7 @@ func load_game() -> void:
 	owned_eq = _str_array(parsed.get("eq_owned", []))
 	ach_done = _str_array(parsed.get("ach_done", []))
 	_load_stats(parsed.get("stats", {}))  # 打磨-14: 修行统计 (旧档缺字段默认 0)
+	auto_break = bool(parsed.get("auto_break", false))  # 打磨-67: 自动突破开关 (旧档缺字段默认关)
 	equipped = {}
 	var eq: Dictionary = parsed.get("equipped", {})
 	if typeof(eq) == TYPE_DICTIONARY:

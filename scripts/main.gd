@@ -36,6 +36,8 @@ var _progress_label: Label
 var _bar_bg: ColorRect
 var _bar_fill: ColorRect
 var _break_btn: Button
+var _auto_break_btn: Button     # 打磨-67: 自动突破开关 (toggle, 存档持久化)
+var _auto_break_on := false     # 打磨-67: 上帧开关状态缓存 (变化才刷按钮态)
 var _shop_box: VBoxContainer
 var _shop_rows: Dictionary = {}
 var _items_buy_btn: Button          # 打磨-29: 法器 一键购买 (修行页法器区)
@@ -336,6 +338,12 @@ func _build_training_page(page: Panel) -> void:
 	_break_btn = _make_button("尝试突破")
 	_break_btn.pressed.connect(_on_break)
 	left.add_child(_break_btn)
+	# 打磨-67: 自动突破开关 (资源攒够自动尝试 突破/道行精进; 状态变化才刷按钮态)
+	_auto_break_btn = _make_button("自动突破: 关")
+	_auto_break_btn.toggle_mode = true
+	_auto_break_btn.pressed.connect(_on_auto_break)
+	_auto_break_btn.tooltip_text = "资源攒够 突破/道行精进 消耗时 自动尝试, 无需手动点按钮 (挂机时生效; 离线期间不触发, 离线只结算收益, 重新进入游戏后生效)。\n成功弹绿色浮动 / 飞升弹金色浮动 / 失败弹红色浮动 (与手动按钮同口径, 浮动文案追加 自动 标注), 每帧至多尝试一次, 失败不重烧 (资源攒够才再试)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 道祖封顶 恒不触发。"
+	left.add_child(_auto_break_btn)
 	left.add_child(_sep())
 	# 法器标题 + 打磨-29: 一键购买 (价格升序连买买得起的法器)
 	# 打磨-44: 法器区 包进透明 Panel, 收集进度"法器"点击直达时金边高亮 1.2s
@@ -1168,6 +1176,11 @@ func _refresh() -> void:
 	else:
 		_break_btn.text = "尝试突破 · 耗 %s 灵气 (成功率%0.0f%%)" % [g.fmt(g.breakthrough_cost()), g.breakthrough_chance() * 100.0]
 		_break_btn.disabled = false
+	# 打磨-67: 自动突破开关 按钮态 (开关状态 变化才刷; 读档恢复/外部改 同步)
+	if g.auto_break != _auto_break_on:
+		_auto_break_on = g.auto_break
+		_auto_break_btn.set_pressed_no_signal(g.auto_break)
+		_auto_break_btn.text = ("自动突破: 开" if g.auto_break else "自动突破: 关")
 	# 打磨-32: 突破按钮"可突破"金边高亮 (资源攒够时引导点击, 状态变化才刷样式; 闪烁动画期间不干预)
 	var ready_now: bool = g.breakthrough_ready()
 	if ready_now != _break_ready:
@@ -1377,9 +1390,11 @@ func _refresh() -> void:
 		_eta_ladder_acc = 0.0
 		_refresh_ladder_eta(false)
 	# 突破/道行精进闪烁: 事件序号变化时触发 (成功绿闪 / 失败红闪, 打磨-10)
+	# 打磨-67: 浮动 同事件驱动 (手动/自动 突破 统一经 break_seq 弹 屏幕中央浮动, 手动按钮不再直调)
 	if g.break_seq != _break_flash_seq:
 		_break_flash_seq = g.break_seq
 		_break_flash(int(g.last_break_result))
+		_float_break()
 	# 打磨-17: 成就解锁浮动提示 (与上一帧快照对比, 检测新解锁; 只增不减, 数量变化即快照)
 	var fresh: Array = g.new_ach_since(_ach_prev)
 	if not fresh.is_empty():
@@ -1860,9 +1875,19 @@ func _find_item(item_id: String) -> Dictionary:
 
 func _on_break() -> void:
 	# 飞升后同一按钮用于道行精进 (打磨-10)
+	# 打磨-67: 浮动 改由 _refresh 的 break_seq 事件统一驱动 (手动/自动 同路径, 避免 双弹)
 	var msg := GameData.try_dao_break() if GameData.ascended else GameData.try_breakthrough()
 	_show_msg(msg)
-	_float_break()
+
+
+# 打磨-67: 自动突破开关 — 点击切 开/关 (存档持久化, 由 GameData._process 驱动尝试);
+# 底部消息确认口径 (开关不消耗资源/不计 突破 统计, 实际 尝试 由 _try_auto_break 走 真实 埋点 路径)
+func _on_auto_break() -> void:
+	GameData.auto_break = not GameData.auto_break
+	_auto_break_on = GameData.auto_break
+	_auto_break_btn.set_pressed_no_signal(GameData.auto_break)
+	_auto_break_btn.text = ("自动突破: 开" if GameData.auto_break else "自动突破: 关")
+	_show_msg("自动突破已开启, 资源攒够将自动突破 (可存档, 离线期间不触发)" if GameData.auto_break else "自动突破已关闭, 恢复手动点击突破")
 
 
 func _on_buy(item_id: String) -> void:
@@ -2018,6 +2043,9 @@ func _float_break() -> void:
 		_:
 			_float_label.text = "✖ 突破失败… ✖"
 			_float_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
+	# 打磨-67: 自动突破触发时 文案追加 "(自动)" 标注 (与 手动 按钮 口径区分; 颜色/位置 不变)
+	if GameData.auto_break:
+		_float_label.text += " (自动)"
 	_float_label.position = Vector2(0, 12)
 	_float_label.modulate = Color(1, 1, 1, 1)
 	if _float_tween != null and _float_tween.is_valid():
