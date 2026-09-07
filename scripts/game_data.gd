@@ -1421,6 +1421,23 @@ func break_fail_float_text() -> String:
 	return "%s  本次耗 %s %s · 期望次数 ~%.1f 次 · 期望总消耗 ~%s %s (成功率 %d%%)" % [
 		prefix, fmt(cost), res_name, 1.0 / ch, fmt(cost / ch), res_name, pct]
 
+# 打磨-65: 突破/道行精进 成功 浮动提示 文案 (含 新境界 + 当前成功率, 与 打磨-64 失败浮动 互补)
+# 口径: "✦ 突破成功! 晋升 %s (当前成功率 P%) ✦" (1=普通成功, 境界=突破后新境界);
+# "☀ 飞升真仙! 仙凡两隔, 灵气 x100000 ☀" (3=飞升, 仙凡两隔 无成功率口径);
+# "✦ 道行精进! 晋阶 %s (当前成功率 P%) ✦" (4=飞升后精进, 阶段=精进后新阶段).
+# 只在 last_break_result 已置位后调用 (0=未触发 返回空串); 只读无副作用.
+func break_ok_float_text() -> String:
+	match last_break_result:
+		1:
+			var pct := int(round(primary_break_chance() * 100.0))
+			return "✦ 突破成功! 晋升 %s (当前成功率 %d%%) ✦" % [realm_display(), pct]
+		3:
+			return "☀ 飞升真仙! 仙凡两隔, 灵气 x100000 ☀"
+		4:
+			var dpct := int(round(primary_break_chance() * 100.0))
+			return "✦ 道行精进! 晋阶 %s (当前成功率 %d%%) ✦" % [IMMORTAL_REALMS[dao_level], dpct]
+	return ""
+
 # 成功率构成 tooltip 文本 (成功率行动态展示; 境界/阶段/功法装备变化才变)
 # 打磨-63: 构成段 之后 追加 预期成本 两行 (期望次数/期望总消耗, 道祖封顶 不追加)
 func primary_break_chance_tip() -> String:

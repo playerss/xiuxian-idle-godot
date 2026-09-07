@@ -2353,6 +2353,62 @@ func _init() -> void:
 	g.essence = 0.0
 	g.dao = 0.0
 	g.stones = 0.0
+	# ---------- 打磨-65: 突破/道行精进 成功 浮动提示 文案 (break_ok_float_text, 只读) ----------
+	# 口径: "✦ 突破成功! 晋升 境界 (当前成功率 P%) ✦" / "☀ 飞升真仙! 仙凡两隔, 灵气 x100000 ☀" /
+	#       "✦ 道行精进! 晋阶 阶段 (当前成功率 P%) ✦"; last_break_result=0 未触发 返回空串.
+	# 受控态: 干净基准 (打磨-64 收尾 保证: 无功法/装备加成, 练气第1层, 资源 0)
+	var ok65: String = ""
+	# 未触发: last_break_result=0 -> 空串
+	g.last_break_result = 0
+	check(g.break_ok_float_text() == "", "打磨-65 未触发 返回空串 (实际 %s)" % g.break_ok_float_text())
+	# 普通成功: 练气1层 攒够 10 灵气, roll=0.01 必成功 (85% 成功率) -> 晋升 练气第2层, 成功率仍 85%
+	g.essence = 10.0
+	g.try_breakthrough(0.01)
+	check(g.last_break_result == 1, "打磨-65 普通成功 last_break_result=1")
+	check(g.realm_idx == 0 and g.layer == 2, "打磨-65 成功后 境界=练气第2层 (实际 %s)" % g.realm_display())
+	ok65 = g.break_ok_float_text()
+	check(ok65 == "✦ 突破成功! 晋升 练气 第 2 层 (当前成功率 85%) ✦",
+		"打磨-65 普通成功 文案 含 新境界+成功率 (实际 %s)" % ok65)
+	# 跨境界成功: 练气顶层第 9 层, 突破消耗 10*3^0*9=90 -> 筑基第1层 (成功率 85-4=81%)
+	g.layer = 9
+	g.essence = 90.0
+	g.try_breakthrough(0.01)
+	check(g.realm_idx == 1 and g.layer == 1, "打磨-65 跨境界成功 境界=筑基第1层 (实际 %s)" % g.realm_display())
+	ok65 = g.break_ok_float_text()
+	check(ok65 == "✦ 突破成功! 晋升 筑基 第 1 层 (当前成功率 81%) ✦",
+		"打磨-65 跨境界成功 文案 境界+新成功率 81%% (实际 %s)" % ok65)
+	# 飞升: 真仙境(第 9 境) 顶层第 1 层, 突破消耗 10*3^9*1=196830 灵气, 成功 -> 飞升真仙 (last_break_result=3, 无成功率口径)
+	g.realm_idx = 9
+	g.layer = 1
+	g.essence = 10.0 * pow(3.0, 9.0)
+	g.try_breakthrough(0.01)
+	check(g.last_break_result == 3 and g.ascended, "打磨-65 飞升 last_break_result=3+ascended (实际 %d)" % g.last_break_result)
+	ok65 = g.break_ok_float_text()
+	check(ok65 == "☀ 飞升真仙! 仙凡两隔, 灵气 x100000 ☀",
+		"打磨-65 飞升 文案 (实际 %s)" % ok65)
+	# 道行精进: 初仙 攒够 1e9 道行, 成功 -> 晋阶 少仙 (87% = 90-3x1)
+	g.dao = 1.0e9
+	g.try_dao_break(0.01)
+	check(g.last_break_result == 4 and g.dao_level == 1, "打磨-65 精进成功 last_break_result=4+阶段=1 (实际 %d)" % g.last_break_result)
+	ok65 = g.break_ok_float_text()
+	check(ok65 == "✦ 道行精进! 晋阶 少仙 (当前成功率 87%) ✦",
+		"打磨-65 精进成功 文案 阶段+成功率 87%% (实际 %s)" % ok65)
+	# 只读性: 调用 不改动 资源/统计/境界 (last_break_result 保持 4)
+	var stats65: Dictionary = g.stats.duplicate(true)
+	var learned65: Array = g.learned.duplicate()
+	g.break_ok_float_text()
+	check(absf(g.dao) < 1e-9 and g.essence == 0.0 and g.stones == 0.0, "打磨-65 只读 不改动 资源 (实际 dao=%s)" % g.dao)
+	check(g.stats == stats65 and g.learned == learned65, "打磨-65 只读 不改动 统计/已学")
+	check(g.last_break_result == 4 and g.ascended and g.dao_level == 1 and g.realm_idx == 9, "打磨-65 只读 不改动 境界/阶段/事件")
+	# 恢复干净基准态
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.last_break_result = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

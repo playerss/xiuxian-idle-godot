@@ -94,6 +94,7 @@ func _ready() -> void:
 	await _assert_ready_flash()
 	await _assert_chance_expect_tip()
 	await _assert_break_fail_float()
+	await _assert_break_ok_float()
 	_finish()
 
 
@@ -1767,6 +1768,83 @@ func _assert_break_fail_float() -> void:
 	g.dao_level = 0
 	g.realm_idx = 0
 	g.layer = 1
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-65: 突破/道行精进 成功 浮动提示 含 新境界+当前成功率 (UI 侧: _float_label 文案=接口, 绿色/金色;
+# 未触发不弹; 与 打磨-64 失败浮动 互补)
+func _assert_break_ok_float() -> void:
+	var g := GameData
+	# 受控态: 全新基准 (基准态 由 打磨-64 收尾 保证)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	g.last_break_result = 0
+	var fl: Label = ui._float_label
+	# 普通成功: 练气1层 攒够 10 灵气, roll=0.01 必成功 -> 晋升 练气第2层 (成功率仍 85%)
+	g.essence = 10.0
+	g.try_breakthrough(0.01)
+	ui._float_break()
+	var ok65: String = str(fl.text)
+	check(ok65 == g.break_ok_float_text(), "打磨-65 普通成功 浮动=接口 (实际 %s / 接口 %s)" % [ok65, g.break_ok_float_text()])
+	check(ok65 == "✦ 突破成功! 晋升 练气 第 2 层 (当前成功率 85%) ✦", "打磨-65 普通成功 文案 新境界+成功率 (实际 %s)" % ok65)
+	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "打磨-65 普通成功 绿色")
+	check(absf(g.essence - (10.0 - 10.0)) < 1e-9, "打磨-65 成功 扣突破消耗 10 灵气 (实际 %s)" % g.essence)
+	# 跨境界成功: 练气顶层第 9 层 (消耗 90) -> 筑基第1层 -> 成功率 81%
+	fl.text = "SENTINEL_65"
+	g.layer = 9
+	g.essence = 90.0
+	g.try_breakthrough(0.01)
+	check(g.realm_idx == 1 and g.layer == 1, "打磨-65 跨境界成功 境界=筑基第1层 (实际 %s)" % g.realm_display())
+	ui._float_break()
+	ok65 = str(fl.text)
+	check(ok65 == g.break_ok_float_text(), "打磨-65 跨境界成功 浮动=接口 (实际 %s)" % ok65)
+	check(ok65.find("晋升 筑基 第 1 层") >= 0 and ok65.find("当前成功率 81%") >= 0, "打磨-65 跨境界成功 文案 新境界+新成功率 (实际 %s)" % ok65)
+	# 飞升: 真仙境(第 9 境) 顶层第 1 层 (消耗 196830) 成功 -> 飞升 (金色, 无成功率口径)
+	g.realm_idx = 9
+	g.layer = 1
+	fl.text = "SENTINEL_65"
+	g.essence = 196830.0
+	g.try_breakthrough(0.01)
+	ui._float_break()
+	ok65 = str(fl.text)
+	check(ok65 == g.break_ok_float_text(), "打磨-65 飞升 浮动=接口 (实际 %s)" % ok65)
+	check(ok65 == "☀ 飞升真仙! 仙凡两隔, 灵气 x100000 ☀", "打磨-65 飞升 文案 (实际 %s)" % ok65)
+	check(fl.get_theme_color("font_color") == Color(0.98, 0.86, 0.5), "打磨-65 飞升 金色")
+	# 道行精进: 初仙 攒够 1e9 道行 成功 -> 晋阶 少仙 (成功率 87%)
+	g.dao = 1.0e9
+	fl.text = "SENTINEL_65"
+	g.try_dao_break(0.01)
+	ui._float_break()
+	ok65 = str(fl.text)
+	check(ok65 == g.break_ok_float_text(), "打磨-65 精进成功 浮动=接口 (实际 %s)" % ok65)
+	check(ok65 == "✦ 道行精进! 晋阶 少仙 (当前成功率 87%) ✦", "打磨-65 精进成功 文案 阶段+成功率 (实际 %s)" % ok65)
+	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "打磨-65 精进成功 绿色")
+	# 未触发: last_break_result=0 -> 不弹 浮动 (文案不变)
+	g.last_break_result = 0
+	fl.text = "SENTINEL_65"
+	ui._float_break()
+	check(str(fl.text) == "SENTINEL_65", "打磨-65 未触发 不弹 浮动 (实际 %s)" % str(fl.text))
+	# 恢复基准态
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.last_break_result = 0
 	g.essence = 0.0
 	g.dao = 0.0
 	g.stones = 0.0

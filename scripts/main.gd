@@ -1965,17 +1965,20 @@ func _float_break() -> void:
 		return
 	match GameData.last_break_result:
 		1:
-			_float_label.text = "✦ 突破成功! ✦"
+			# 打磨-65: 成功浮动 文案 由 GameData 接口生成 (含 新境界 + 当前成功率, 与 打磨-64 失败浮动 互补)
+			_float_label.text = GameData.break_ok_float_text()
 			_float_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.55))
 		2:
 			# 打磨-64: 失败浮动 文案 由 GameData 接口生成 (复用 打磨-63 预期成本口径, 含 本次耗 + 期望次数/总消耗)
 			_float_label.text = GameData.break_fail_float_text()
 			_float_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
 		3:
-			_float_label.text = "☀ 飞升真仙! 仙凡两隔 ☀"
+			# 打磨-65: 飞升 浮动 (仙凡两隔, 无成功率口径, 与接口同口径)
+			_float_label.text = GameData.break_ok_float_text()
 			_float_label.add_theme_color_override("font_color", GOLD)
 		4:
-			_float_label.text = "✦ 道行精进! ✦"
+			# 打磨-65: 道行精进 成功 浮动 含 新阶段 + 当前成功率
+			_float_label.text = GameData.break_ok_float_text()
 			_float_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.55))
 		_:
 			_float_label.text = "✖ 突破失败… ✖"
