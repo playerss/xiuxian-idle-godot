@@ -55,6 +55,10 @@ var _ready_float_label: Label      # 打磨-57: 主动神通 冷却完毕转就�
 var _ready_float_tween: Tween
 var _ready_float_count := 0        # 打磨-57: 就绪浮动提示次数 (自测断言用)
 var _ready_last_text := ""         # 打磨-57: 最近一次就绪浮动文案 (自测断言用)
+var _offline_float_label: Label    # 打磨-66: 离线收益 启动浮动提示 (顶层, 居中, 金色)
+var _offline_float_tween: Tween
+var _offline_float_count := 0      # 打磨-66: 离线浮动提示次数 (自测断言用)
+var _offline_last_text := ""       # 打磨-66: 最近一次离线浮动文案 (自测断言用)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _stone_tip := ""              # 打磨-49: 顶栏灵石行 tooltip 缓存 (变化才刷, 速率/缺口随挂机变化)
@@ -143,6 +147,8 @@ func _ready() -> void:
 	_build_ui()
 	if GameData.offline_msg != "":
 		_show_msg(GameData.offline_msg)
+		# 打磨-66: 离线收益 启动金色浮动 (底部消息仍保留, 两者并存; 不足1分钟/无档 不弹)
+		_offline_float()
 	# 打磨-17: 启动时先取基线快照, 读档恢复的旧解锁不当作"新解锁"弹浮动
 	_ach_prev = GameData.ach_done.duplicate()
 
@@ -250,6 +256,17 @@ func _build_ui() -> void:
 	_ready_float_label.modulate = Color(1, 1, 1, 0)
 	_ready_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_ready_float_label)
+
+	# 打磨-66: 离线收益 启动浮动提示 (居中金色, 位置最高不与其他浮动重叠; 仅启动时弹一次)
+	_offline_float_label = _label("", 22, GOLD)
+	_offline_float_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_offline_float_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_offline_float_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_offline_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_offline_float_label.position = Vector2(0, -84)
+	_offline_float_label.modulate = Color(1, 1, 1, 0)
+	_offline_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_offline_float_label)
 
 
 func _make_page(title: String) -> Panel:
@@ -1451,6 +1468,24 @@ func _onekey_float(text: String) -> void:
 	_onekey_float_tween = create_tween()
 	_onekey_float_tween.tween_property(_onekey_float_label, "position:y", -64.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_onekey_float_tween.parallel().tween_property(_onekey_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
+
+
+# 打磨-66: 离线收益 启动浮动 — 启动读档结算离线收益后, 屏幕中央金色浮动 (仅一次, 底部消息并存);
+# 文案由 GameData.offline_float_text() 提供 (不足 1 分钟/无档 = 空串, 此时不弹)
+func _offline_float() -> void:
+	var text: String = GameData.offline_float_text()
+	if text == "":
+		return
+	_offline_float_count += 1
+	_offline_last_text = text
+	_offline_float_label.text = text
+	_offline_float_label.position = Vector2(0, -84)
+	_offline_float_label.modulate = Color(1, 1, 1, 1)
+	if _offline_float_tween != null and _offline_float_tween.is_valid():
+		_offline_float_tween.kill()
+	_offline_float_tween = create_tween()
+	_offline_float_tween.tween_property(_offline_float_label, "position:y", -122.0, 1.8).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_offline_float_tween.parallel().tween_property(_offline_float_label, "modulate:a", 0.0, 1.8).set_delay(0.6)
 
 
 func _apply_card_hl(row: PanelContainer, hi: bool) -> void:

@@ -95,6 +95,7 @@ func _ready() -> void:
 	await _assert_chance_expect_tip()
 	await _assert_break_fail_float()
 	await _assert_break_ok_float()
+	_assert_offline_float()
 	_finish()
 
 
@@ -1848,6 +1849,64 @@ func _assert_break_ok_float() -> void:
 	g.essence = 0.0
 	g.dao = 0.0
 	g.stones = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-66: 离线收益 启动浮动 — 手动驱动 确定性断言 (不依赖启动时是否真离线, 防 flake):
+# 金色浮动 Label / 文案=offline_float_text / 计数+1 / 可见 / 位置复位 y≈-84;
+# 未飞升(灵气) 与 飞升(道行) 两态口径; 无收益(明细全0) 与 不足1分钟 不弹 计数不变
+func _assert_offline_float() -> void:
+	var g := GameData
+	var ofl: Label = ui._offline_float_label
+	check(ofl != null, "打磨-66 离线浮动 Label 节点存在")
+	if ofl == null:
+		return
+	check(ofl.get_theme_color("font_color") == ui.GOLD, "打磨-66 离线浮动 文字色=金 (实际 %s)" % str(ofl.get_theme_color("font_color")))
+	# --- 未飞升 口径: 确定性明细 (5400s, 各 2700) ---
+	g.ascended = false
+	g._offline_sec = 5400.0
+	g._offline_qi = 2700.0
+	g._offline_stone = 2700.0
+	var exp66: String = g.offline_float_text()
+	check(exp66 == "☾ 离线 1小时30分, 收获 灵气 2700 · 灵石 2700 ☾", "打磨-66 离线浮动 文案(未飞升) (实际 %s)" % exp66)
+	var cnt_before: int = ui._offline_float_count
+	ui._offline_float()
+	check(ui._offline_float_count == cnt_before + 1, "打磨-66 手动驱动 浮动计数+1 (实际 %d)" % ui._offline_float_count)
+	check(str(ui._offline_last_text) == exp66, "打磨-66 离线浮动 文案=offline_float_text (实际 %s)" % str(ui._offline_last_text))
+	check(str(ofl.text) == exp66, "打磨-66 离线浮动 Label 文本=接口 (实际 %s)" % str(ofl.text))
+	check(exp66.find("☾") >= 0 and exp66.find("灵气") >= 0 and exp66.find("灵石") >= 0, "打磨-66 文案含 ☾/灵气/灵石 (实际 %s)" % exp66)
+	check(ofl.modulate.a > 0.5, "打磨-66 离线浮动 可见 (modulate.a>0.5, 实际 %.2f)" % ofl.modulate.a)
+	check(absf(ofl.position.y + 84.0) < 0.5, "打磨-66 离线浮动 位置复位 y≈-84 (实际 %.2f)" % ofl.position.y)
+	# --- 飞升 口径: 主资源=道行 (7200s, 3.6亿) ---
+	g.ascended = true
+	g._offline_sec = 7200.0
+	g._offline_qi = 3.6e8
+	g._offline_stone = 3.6e8
+	var exp66b: String = g.offline_float_text()
+	check(exp66b.find("道行") >= 0 and exp66b.find("2小时") >= 0, "打磨-66 飞升 文案含 道行/2小时 (实际 %s)" % exp66b)
+	var cnt_b2: int = ui._offline_float_count
+	ui._offline_float()
+	check(ui._offline_float_count == cnt_b2 + 1, "打磨-66 飞升 手动驱动 计数+1 (实际 %d)" % ui._offline_float_count)
+	check(str(ofl.text) == exp66b, "打磨-66 飞升 浮动文本=接口 (实际 %s)" % str(ofl.text))
+	# --- 无收益 不弹: 明细全 0 ---
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+	check(g.offline_float_text() == "", "打磨-66 无收益 空串 (实际 %s)" % g.offline_float_text())
+	var cnt_b3: int = ui._offline_float_count
+	ui._offline_float()
+	check(ui._offline_float_count == cnt_b3, "打磨-66 无收益 不弹 计数不变 (实际 %d)" % ui._offline_float_count)
+	# --- 不足 1 分钟 不弹 ---
+	g._offline_sec = 30.0
+	g._offline_qi = 15.0
+	g._offline_stone = 15.0
+	check(g.offline_float_text() == "", "打磨-66 不足1分钟 空串 (实际 %s)" % g.offline_float_text())
+	# 收尾: 恢复明细 (防污染 后续断言/收尾)
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+	g.ascended = false
 	ui._refresh()
 	await get_tree().process_frame
 

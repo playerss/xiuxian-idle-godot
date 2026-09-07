@@ -84,6 +84,10 @@ var dao := 0.0              # 道行 (飞升后挂机资源, 打磨-10)
 var dao_level := 0          # 道行阶段 0..8 (0=初仙, 8=道祖, 打磨-10)
 var ach_done: Array[String] = []   # 已解锁成就 id (打磨-6)
 var offline_msg := ""       # 离线收益提示
+# 打磨-66: 本次离线收益明细 (启动金色浮动提示用; load_game 计算, 只读展示)
+var _offline_sec := 0.0     # 离线时长 (秒, <=60 或无档时 0)
+var _offline_qi := 0.0      # 离线收获 灵气/道行
+var _offline_stone := 0.0   # 离线收获 灵石
 var last_break_result := 0  # 上次突破: 0=未触发 1=成功 2=失败 3=飞升
 var break_seq := 0          # 突破事件序号 (每次成功/失败/飞升 +1, UI 据此触发闪烁)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备, 读档时 _load_stats 兜底)
@@ -235,6 +239,15 @@ func offline_hourly_text() -> String:
 	var h := offline_hourly()
 	return "离线每小时  %s %s · 灵石 %s (效率%0.0f%%, 上限8小时)" % [
 		"道行" if ascended else "灵气", fmt(float(h["qi"])), fmt(float(h["stone"])), float(h["rate"]) * 100.0]
+
+# 打磨-66: 本次离线收益 启动浮动 文案 (load_game 结算后调用; 不足 1 分钟 或 无档 返回空串)
+# 口径: "☾ 离线 X, 收获 灵气/道行 A · 灵石 B ☾" (与 offline_msg 同源, 飞升后主资源=道行). 只读无副作用.
+func offline_float_text() -> String:
+	if _offline_sec < 60.0 or (_offline_qi <= 0.0 and _offline_stone <= 0.0):
+		return ""
+	var res_name: String = "道行" if ascended else "灵气"
+	return "☾ 离线 %s, 收获 %s %s · 灵石 %s ☾" % [
+		fmt_time(_offline_sec), res_name, fmt(_offline_qi), fmt(_offline_stone)]
 
 # ================= 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备) =================
 
@@ -1233,6 +1246,9 @@ func load_game() -> void:
 			if typeof(id) == TYPE_STRING and owned_eq.has(id):
 				equipped[slot] = id
 	# 离线收益
+	_offline_sec = 0.0
+	_offline_qi = 0.0
+	_offline_stone = 0.0
 	var ts := int(parsed.get("ts", 0))
 	if ts > 0:
 		var elapsed := clampf(Time.get_unix_time_from_system() - float(ts), 0.0, OFFLINE_CAP_SEC)
@@ -1241,6 +1257,10 @@ func load_game() -> void:
 			var gq := qi_per_sec() * elapsed * rate
 			var gs := stone_per_sec() * elapsed * rate
 			stones += gs
+			# 打磨-66: 记录本次离线明细, 供启动金色浮动提示 (offline_float_text)
+			_offline_sec = elapsed
+			_offline_qi = gq
+			_offline_stone = gs
 			if ascended:
 				dao += gq
 				offline_msg = "离线 %s, 效率%0.0f%%, 收获道行 %s, 灵石 %s" % [

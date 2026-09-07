@@ -568,6 +568,70 @@ func _init() -> void:
 	check(g.essence == 0.0, "飞升后离线不涨灵气")
 	check(g.offline_msg.find("道行") >= 0, "离线提示含道行 (实际 %s)" % g.offline_msg)
 
+	# ---------- 打磨-66: 离线收益 启动浮动 文案 (offline_float_text) ----------
+	# 当前为 飞升 2小时 离线态 (realm9 速率 1e5, 效率 50%, 2h → ≈3.6e8); elapsed 含极小
+	# 墙钟差 (≈7200.06), 故 明细/文案 断言用 实际 elapsed 动态计算 (相对容差)
+	check(g._offline_sec >= 7200.0 and g._offline_sec < 7201.0, "打磨-66 离线明细 时长≈7200s (实际 %s)" % g._offline_sec)
+	var exp66: float = g.QI_MULT[9] * g._offline_sec * g.offline_rate()
+	check(absf(g._offline_qi - exp66) / exp66 < 1e-6 and absf(g._offline_stone - exp66) / exp66 < 1e-6, "打磨-66 离线明细 道行/灵石=速率x时长x效率 (实际 %s/%s)" % [g.fmt(g._offline_qi), g.fmt(g._offline_stone)])
+	var oft66: String = g.offline_float_text()
+	var oft66_exp: String = "☾ 离线 %s, 收获 道行 %s · 灵石 %s ☾" % [g.fmt_time(g._offline_sec), g.fmt(g._offline_qi), g.fmt(g._offline_stone)]
+	check(oft66 == oft66_exp, "打磨-66 飞升 离线浮动文案 (实际 %s / 期望 %s)" % [oft66, oft66_exp])
+	check(oft66.find("☾") >= 0 and oft66.find("道行") >= 0 and oft66.find("2小时") >= 0, "打磨-66 飞升 文案 含 ☾/道行/2小时 (实际 %s)" % oft66)
+	# 只读: 调用后 状态/存档/统计 不变
+	var ess_66: float = g.essence
+	var st_66: float = g.stones
+	var dao_66: float = g.dao
+	var msg_66: String = g.offline_msg
+	g.offline_float_text()
+	g.offline_float_text()
+	check(absf(g.essence - ess_66) < 1e-9 and absf(g.stones - st_66) < 1e-9 and absf(g.dao - dao_66) < 1e-9, "打磨-66 只读 资源不变")
+	check(g.offline_msg == msg_66, "打磨-66 只读 offline_msg 不变")
+	# 未飞升 口径: 构造 5400s (1小时30分) 未飞升离线档, 速率 1.0 → 各 = 1.0 x elapsed x 0.5
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.essence = 0.0
+	g.stones = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	var f66 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f66.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 0.0, "stones": 0.0, "ts": int(Time.get_unix_time_from_system()) - 5400}))
+	f66.close()
+	g.load_game()
+	check(g._offline_sec >= 5400.0 and g._offline_sec < 5401.0, "打磨-66 未飞升 离线明细 时长≈5400s (实际 %s)" % g._offline_sec)
+	var exp66b: float = g.stone_per_sec() * g._offline_sec * g.offline_rate()
+	check(absf(g._offline_qi - exp66b) / exp66b < 1e-6 and absf(g._offline_stone - exp66b) / exp66b < 1e-6, "打磨-66 未飞升 离线明细 灵气/灵石=速率x时长x效率 (实际 %s/%s)" % [g.fmt(g._offline_qi), g.fmt(g._offline_stone)])
+	oft66 = g.offline_float_text()
+	var oft66b_exp: String = "☾ 离线 %s, 收获 灵气 %s · 灵石 %s ☾" % [g.fmt_time(g._offline_sec), g.fmt(g._offline_qi), g.fmt(g._offline_stone)]
+	check(oft66 == oft66b_exp, "打磨-66 未飞升 离线浮动文案 (实际 %s / 期望 %s)" % [oft66, oft66b_exp])
+	check(oft66.find("灵气") >= 0 and oft66.find("1小时30分") >= 0, "打磨-66 未飞升 文案 含 灵气/1小时30分 (实际 %s)" % oft66)
+	# 不足 1 分钟 (<=60s) 不结算 → 明细清零 → 空串 不弹
+	g._offline_sec = 30.0
+	g._offline_qi = 30.0
+	g._offline_stone = 30.0
+	check(g.offline_float_text() == "", "打磨-66 不足1分钟 不弹 空串 (实际 %s)" % g.offline_float_text())
+	# 无档/未结算 (明细全 0) → 空串 不弹
+	g._offline_sec = 7200.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+	check(g.offline_float_text() == "", "打磨-66 无收益 不弹 空串 (实际 %s)" % g.offline_float_text())
+	# 恢复基准态 (须还原 打磨-10 飞升 态, 供后续 打磨-11 使用)
+	g.ascended = true
+	g.dao_level = 0
+	g.realm_idx = 9
+	g.layer = 1
+	g.dao = 3.6e8
+	g.essence = 0.0
+	g.stones = 0.0
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+
 	# ---------- 打磨-11: 神通飞升后爆发转道行 ----------
 	g.learned.append(active_id)
 	g._active_cd.erase(active_id)
