@@ -1019,11 +1019,14 @@ func _assert_skill_cast_float() -> void:
 	var btn: Button = ui._skill_btns[act_id]
 	check(str(btn.text) == "施展" and not btn.disabled, "打磨-55 已就绪 按钮=施展 (实际 %s)" % str(btn.text))
 	var name: String = str(g.skill_by_id[act_id]["name"])
+	# 打磨-61: 爆发总量 精确值 (受控态 境界0层1 速率 1.0, gain = 速率 x 爆发秒数)
+	var act_val61: int = int(g.skill_by_id[act_id]["value"])
+	var exp61: String = "施展「%s」 (爆发+%d 灵气)" % [name, act_val61]
 	var ess0: float = g.essence
 	ui._on_skill_btn(act_id, true)
 	check(ui._onekey_float_count == c0 + 1, "打磨-55 施展成功 浮动计数+1 (期望 %d, 实际 %d)" % [c0 + 1, ui._onekey_float_count])
-	check(str(ui._onekey_last_text) == "施展「%s」" % name, "打磨-55 浮动文案=施展「%s」 (实际 %s)" % [name, str(ui._onekey_last_text)])
-	check(str(fl.text) == "✦ 施展「%s」 ✦" % name, "打磨-55 浮动 Label 文本 ✦…✦ (实际 %s)" % str(fl.text))
+	check(str(ui._onekey_last_text) == exp61, "打磨-61 浮动文案=爆发+%d 灵气 (实际 %s)" % [act_val61, str(ui._onekey_last_text)])
+	check(str(fl.text) == "✦ %s ✦" % exp61, "打磨-61 浮动 Label 文本 ✦…✦ (实际 %s)" % str(fl.text))
 	check(fl.get_theme_color("font_color") == Color(0.55, 0.95, 0.55), "打磨-55 浮动文字=绿 (与 一键系列 同绿口径)")
 	check(absf(fl.position.y + 26.0) < 0.5, "打磨-55 浮动位置复位 y≈-26 (实际 %.2f)" % fl.position.y)
 	check(fl.modulate.a > 0.9, "打磨-55 浮动可见 (alpha=%.2f)" % fl.modulate.a)
@@ -1056,7 +1059,8 @@ func _assert_skill_cast_float() -> void:
 	var dao0: float = g.dao
 	ui._on_skill_btn(act_id, true)
 	check(ui._onekey_float_count == c0 + 2, "打磨-55 飞升态 施展成功 浮动+1 (期望 %d, 实际 %d)" % [c0 + 2, ui._onekey_float_count])
-	check(str(ui._onekey_last_text) == "施展「%s」" % name, "打磨-55 飞升态 浮动文案 同口径 (实际 %s)" % str(ui._onekey_last_text))
+	# 打磨-61: 飞升态 口径=道行 (飞升后倍率 x2, 速率 = 1.0 x 2)
+	check(str(ui._onekey_last_text) == "施展「%s」 (爆发+%d 道行)" % [name, act_val61 * 2], "打磨-61 飞升态 浮动文案=爆发+%d 道行 (实际 %s)" % [act_val61 * 2, str(ui._onekey_last_text)])
 	check(g.dao > dao0, "打磨-55 飞升态 爆发 加道行 (爆发前 %.0f → 后 %.0f)" % [dao0, g.dao])
 	# 收尾: 恢复基准态 (境界0层1 未飞升, 清 已学/冷却/道行)
 	g.learned.clear()

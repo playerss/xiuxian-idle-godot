@@ -670,7 +670,11 @@ func _on_skill_btn(id: String, is_active: bool) -> void:
 		_show_msg(msg)
 		if msg.begins_with("施展") and (GameData.essence > snap_ess or GameData.dao > snap_dao):
 			var name: String = str(GameData.skill_by_id.get(id, {}).get("name", ""))
-			_onekey_float("施展「%s」" % name)
+			# 打磨-61: 浮动文案追加 本次 爆发 获得 总量 (前后快照差, 与 打磨-60 一键施展 同文案格式;
+			# 飞升后口径=道行; 成功分支恒 gain>0, 无 0 变化分支)
+			var gain := (GameData.essence - snap_ess) + (GameData.dao - snap_dao)
+			var res := "灵气" if not GameData.ascended else "道行"
+			_onekey_float("施展「%s」 (爆发+%s %s)" % [name, GameData.fmt(gain), res])
 	else:
 		_show_msg(GameData.learn_skill(id))
 
