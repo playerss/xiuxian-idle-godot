@@ -2960,6 +2960,90 @@ func _init() -> void:
 	g.auto_buy = false
 	g.auto_cast = false
 	check(g.auto_on_count() == 0, "打磨-73 收尾 三关 计数 0")
+	# ---------- 打磨-75: 一键系列 顶栏 状态汇总 (六项 可执行数, 只读 无副作用) ----------
+	# 受控基准: 境界2 层1 / 灵石 5000 / 空 已学 已拥有 已穿戴 (数据 固定 种子, 期望值 按 数据 锚定)
+	g.realm_idx = 2
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 5000.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	var k75_a: String = g.onekey_summary_key()
+	check(k75_a == "51|14|0|2|60|0", "打磨-75 基准 六项 键=领悟51 神通14 施展0 法器2 装备60 最佳0 (实际 %s)" % k75_a)
+	var v75_a: Array = g.onekey_summary_vals()
+	check(int(v75_a[0]) == 51 and int(v75_a[1]) == 14 and int(v75_a[2]) == 0
+			and int(v75_a[3]) == 2 and int(v75_a[4]) == 60 and int(v75_a[5]) == 0,
+			"打磨-75 基准 vals 六项 值 (实际 %s)" % str(v75_a))
+	# 品质 筛选 tier=0 (领悟/神通 叠加 口径 与 技能页 按钮 一致; 法器/装备/最佳 不受 技能 筛选 影响)
+	check(g.onekey_summary_key("", 0) == "20|6|0|2|60|0",
+			"打磨-75 品质 tier0 键 领悟20 神通6 (法器2 装备60 最佳0 不变) (实际 %s)" % g.onekey_summary_key("", 0))
+	# 学 6 个 可学 主动神通 (tier0) → 施展 就绪数=6 (冷却 0 全就绪), 领悟/神通 可学数 减少
+	var act_t0: Array = []
+	for sid in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(sid), {})
+		if not s.is_empty() and str(s.get("type","")) == "active" and int(s["tier"]) == 0 and g.can_learn(str(sid)):
+			act_t0.append(str(sid))
+	check(act_t0.size() == 6, "打磨-75 受控 可学 主动神通(tier0)=6 (实际 %d)" % act_t0.size())
+	for sid in act_t0:
+		g.learned.append(str(sid))
+	check(g.onekey_summary_key() == "45|8|6|2|60|0",
+			"打磨-75 学6神通后 键 领悟45 神通8 施展6 (实际 %s)" % g.onekey_summary_key())
+	# 只读: 连读 恒定 无 资源/统计 副作用
+	var st75: Dictionary = g.stats.duplicate(true)
+	var stn75: float = g.stones
+	g.onekey_summary_vals()
+	g.onekey_summary_key()
+	check(g.onekey_summary_key() == "45|8|6|2|60|0" and g.stones == stn75 and g.stats == st75,
+			"打磨-75 只读 连读 恒定 无 资源/统计 副作用")
+	# equip_affordable_count 单独 口径 (灵石 单件 买得起 未拥有 装备 数)
+	check(g.equip_affordable_count() == 60, "打磨-75 装备 可买数=60 (灵石5000 单件) (实际 %d)" % g.equip_affordable_count())
+	# 灵石 归 0 → 法器/装备/最佳 全 0 (领悟/神通 不受 灵石 影响)
+	g.stones = 0.0
+	check(g.onekey_summary_key() == "45|8|6|0|0|0",
+			"打磨-75 灵石0 键 法器0 装备0 最佳0 (领悟45 神通8 施展6 不变) (实际 %s)" % g.onekey_summary_key())
+	g.stones = 10000.0
+	# 拥有 各部位 最便宜件 (5 件) 且 未 穿戴 → 最佳 可改进=5 (各部位 最佳>最便宜), 装备可买数 减 5=55
+	for slot in g.SLOTS:
+		var cheapest: Dictionary = {}
+		for eid in g.equip_ids:
+			var e: Dictionary = g.equip_by_id[eid]
+			if str(e["slot"]) != slot:
+				continue
+			if cheapest.is_empty() or float(e["cost"]) < float(cheapest["cost"]):
+				cheapest = e
+		g.owned_eq.append(str(cheapest["id"]))
+	check(g.owned_eq.size() == 5, "打磨-75 拥有 各部位 最便宜件=5 (实际 %d)" % g.owned_eq.size())
+	check(g.onekey_summary_key() == "45|8|6|3|55|5",
+			"打磨-75 拥有5件未穿 键 法器3 装备55 最佳5 (实际 %s)" % g.onekey_summary_key())
+	# 各部位 穿上 最佳 → 最佳 可改进=0 (幂等 已最佳)
+	var eb: Dictionary = g.equip_best()
+	check(g.onekey_summary_key() == "45|8|6|3|55|0",
+			"打磨-75 一键最佳 后 最佳=0 (键 %s)" % g.onekey_summary_key())
+	check(int(eb["count"]) >= 0, "打磨-75 equip_best 返回 count 字段 (实际 %s)" % str(eb))
+	# 收尾: 恢复 干净 基准 (防 污染 后续 段), 三开关 关
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	# 收尾 = 全新开荒基准 (练气第1层, 无 资源/已学/已拥有): 领悟/神通 = 凡品 可学数 (数据 固定),
+	# 施展/法器/装备/最佳 = 0 (无 就绪 主动 / 无 灵石 / 无 拥有件); 断言 与 真实 基准 恒等 (防 污染)
+	check(g.onekey_summary_key() == "11|6|0|0|0|0", "打磨-75 收尾 全新基准 键=11|6|0|0|0|0 (实际 %s)" % g.onekey_summary_key())
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

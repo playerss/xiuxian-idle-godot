@@ -83,6 +83,13 @@ var _auto_restore_count := 0       # 打磨-72: 启动 自动系列 恢复 提�
 var _auto_restore_last_text := ""  # 打磨-72: 最近一次 自动 恢复 提示 文案 (自测断言用)
 var _auto_badge: Button            # 打磨-73/74: 顶栏 自动系列 状态徽标 ("自动 N/3", 任一开关开 显示 全关 隐藏; flat Button 可点击热区=切修行页+汇总行金边高亮)
 var _auto_badge_n := -1            # 打磨-73: 已刷过的 开启开关数 缓存 (-1=未应用, 首帧必刷; 变化才刷)
+# 打磨-75: 一键系列 顶栏 状态汇总 徽标 (六项 可执行数 一览 "一键 N·施N·法N·装N·神N·佳N";
+# 各段 flat Button 热区 点击 直达 对应页/执行 对应批量操作, 复用 打磨-44/71/74 直达模式)
+var _onekey_badge: Button          # 顶栏 一键系列 汇总徽标 (HBox: 前缀 Label + 6 段 flat Button)
+var _onekey_segs: Array = []       # 6 个段标签 (领悟/神通/施展/法器/装备/最佳; 可执行=金 0=灰)
+var _onekey_btns: Array = []       # 6 个段热区 flat Button (点击=直达对应页 或 直接执行 对应批量操作)
+var _onekey_sb_hover: StyleBoxFlat # 段热区 hover (淡底+金边 可点提示, 同 打磨-71 汇总段)
+var _onekey_key := ""              # 已刷过的 状态键 (onekey_summary_key, 变化才刷 文本/颜色)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _stone_tip := ""              # 打磨-49: 顶栏灵石行 tooltip 缓存 (变化才刷, 速率/缺口随挂机变化)
@@ -259,6 +266,73 @@ func _build_ui() -> void:
 	_auto_badge.pressed.connect(_on_auto_badge)
 	_auto_badge.visible = false
 	top.add_child(_auto_badge)
+	# 打磨-75: 顶栏 一键系列 状态汇总 徽标 (六项 可执行数 一览; 各段 可点击 热区:
+	# 领悟/神通/法器/装备/最佳 = 直达对应页 并重置 筛选 (口径 同 打磨-44 收集直达),
+	# 施展 = 直接 执行 一键施展 (核心批量 点击 反馈, 与 各页 一键 按钮 完全 同口径);
+	# 可执行 0 的 段 灰显 (点击 仍 可达/执行, 执行 0 变更 只走 底部消息); 纯展示+导航 无 副作用)
+	_onekey_badge = Button.new()
+	_onekey_badge.flat = true
+	_onekey_badge.toggle_mode = false
+	_onekey_badge.text = ""
+	_onekey_badge.add_theme_font_size_override("font_size", 15)
+	var ok_sb := StyleBoxFlat.new()
+	ok_sb.bg_color = Color(0.07, 0.13, 0.13)
+	ok_sb.set_border_width_all(1)
+	ok_sb.border_color = Color(0.5, 0.8, 0.8)
+	ok_sb.set_corner_radius_all(4)
+	ok_sb.content_margin_left = 6.0
+	ok_sb.content_margin_right = 6.0
+	ok_sb.content_margin_top = 2.0
+	ok_sb.content_margin_bottom = 2.0
+	_onekey_badge.add_theme_stylebox_override("normal", ok_sb)
+	var ok_sb_hover := ok_sb.duplicate() as StyleBoxFlat
+	ok_sb_hover.bg_color = Color(0.11, 0.21, 0.21)
+	ok_sb_hover.border_color = Color(0.75, 0.95, 0.95)
+	_onekey_badge.add_theme_stylebox_override("hover", ok_sb_hover)
+	_onekey_badge.add_theme_stylebox_override("pressed", ok_sb_hover)
+	_onekey_badge.add_theme_stylebox_override("focus", ok_sb_hover)
+	var ok_box := HBoxContainer.new()
+	ok_box.add_theme_constant_override("separation", 2)
+	_onekey_badge.add_child(ok_box)
+	ok_box.add_child(_label("一键:", 12, Color(0.6, 0.85, 0.85)))
+	_onekey_sb_hover = StyleBoxFlat.new()
+	_onekey_sb_hover.bg_color = Color(1, 1, 1, 0.06)
+	_onekey_sb_hover.border_color = Color(0.6, 0.9, 0.9)
+	_onekey_sb_hover.set_border_width_all(1)
+	_onekey_sb_hover.content_margin_left = 2
+	_onekey_sb_hover.content_margin_right = 2
+	var ok_names: Array = ["领悟", "神通", "施展", "法器", "装备", "最佳"]
+	var ok_handlers: Array = [_on_onekey_jump.bind("learn"), _on_onekey_jump.bind("active_learn"),
+		_on_onekey_jump.bind("cast"), _on_onekey_jump.bind("item"), _on_onekey_jump.bind("equip"),
+		_on_onekey_jump.bind("best")]
+	var ok_tips: Array = [
+		"一键领悟 — 批量学习 全部 未学+境界足够 的技能 (与技能页按钮 同口径, 受 类别/品质 筛选 叠加); 点击 直达 技能页 (重置 类别/品质 筛选)",
+		"一键神通 — 只学 筛选范围内 未学+境界足够 的 主动神通 (与技能页按钮 同口径); 点击 直达 技能页 (重置 类别/品质 筛选)",
+		"一键施展 — 一次释放 所有 已学+冷却完毕 的 主动神通 (与技能页按钮 同口径, 爆发=当前灵气速率 x 爆发秒数, 飞升后=道行); 点击 直接 执行 (无需切页)",
+		"一键购买 (法器) — 按 价格升序 连买 买得起 的 法器 (与修行页按钮 同口径); 点击 直达 修行页·法器区 (金边高亮)",
+		"一键购买 (装备) — 按 价格升序 连买 买得起 的 装备, 槽位空 自动穿戴 (与装备页按钮 同口径); 点击 直达 装备页 (重置 部位/品质 筛选)",
+		"一键最佳 — 各部位 换上 拥有的 主属性 最优 件 (与装备页按钮 同口径, 判定链 灵气+灵石 > 突破 > 离线); 点击 直达 装备页 (重置 部位/品质 筛选)",
+	]
+	for oi in ok_names.size():
+		var seg_l := _label("", 12, DIM)
+		var seg_btn := Button.new()
+		seg_btn.flat = true
+		seg_btn.toggle_mode = false
+		seg_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		var seg_sb_n := StyleBoxFlat.new()
+		seg_sb_n.bg_color = Color(0, 0, 0, 0)
+		seg_btn.add_theme_stylebox_override("normal", seg_sb_n)
+		seg_btn.add_theme_stylebox_override("hover", _onekey_sb_hover)
+		seg_btn.add_theme_stylebox_override("pressed", _onekey_sb_hover)
+		seg_btn.add_theme_stylebox_override("focus", _onekey_sb_hover)
+		seg_btn.tooltip_text = str(ok_tips[oi]) + "\n段计数 = 当前 可执行数 (0=灰显, 与 各页 一键 按钮 计数 口径一致)"
+		seg_btn.add_child(seg_l)
+		seg_btn.pressed.connect(ok_handlers[oi])
+		ok_box.add_child(seg_btn)
+		_onekey_segs.append(seg_l)
+		_onekey_btns.append(seg_btn)
+	_onekey_badge.tooltip_text = "一键系列 状态汇总 (可执行=金 / 0=灰, 与 各页 一键 按钮 计数 同口径): 领悟/神通=当前 类别·品质 筛选内 可学技能·可学神通数, 施展=就绪 主动神通 数, 法器/装备=当前灵石 单件买得起 的 未拥有件 数, 最佳=可改进 槽位数。\n各段可点击: 领悟/神通→技能页, 法器→修行页·法器区, 装备/最佳→装备页 (均重置对应筛选), 施展→直接 执行 一键施展。\n纯 导航/执行 操作, 不产生 额外 存档 副作用 (执行 各批量操作 自身 口径 不变)。"
+	top.add_child(_onekey_badge)
 
 	# Tab
 	_tab = TabContainer.new()
@@ -1365,6 +1439,15 @@ func _refresh() -> void:
 			_auto_badge.visible = false
 			_auto_badge.text = ""
 			_auto_badge.tooltip_text = ""
+	# 打磨-75: 顶栏 一键系列 状态汇总 (6 段 可执行数, 与 各页 一键 按钮 计数 同口径 —
+	# 领悟/神通 段 复用 技能页 当前 类别/品质 筛选 (打磨-27 计数口径统一), 其余 全局 口径;
+	# 状态键 变化才刷 文本/颜色 — 领悟/神通 随 境界/筛选/已学, 施展 随 冷却/已学,
+	# 法器/装备 随 灵石/已拥有, 最佳 随 购买/穿戴/读档; 纯展示 无 存档/统计 副作用)
+	var tier_i75 := int(_tier_active) if _tier_active != "" else -1
+	var okk: String = g.onekey_summary_key(_filter_active, tier_i75)
+	if okk != _onekey_key:
+		_onekey_key = okk
+		_apply_onekey_summary(_filter_active, tier_i75)
 	# 打磨-32: 突破按钮"可突破"金边高亮 (资源攒够时引导点击, 状态变化才刷样式; 闪烁动画期间不干预)
 	var ready_now: bool = g.breakthrough_ready()
 	if ready_now != _break_ready:
@@ -2123,6 +2206,53 @@ func _apply_auto_summary() -> void:
 		var seg_l: Label = _auto_sum_segs[i]
 		seg_l.text = names[i] + (" ✓" if on[i] else " ✗")
 		seg_l.add_theme_color_override("font_color", GOLD if on[i] else DIM)
+
+
+# 打磨-75: 顶栏 一键系列 汇总 刷新 (状态键 变化时 调用; 6 段 = 领悟/神通/施展/法器/装备/最佳,
+# 各段 可执行数 与 对应页 一键 按钮 计数 完全 同口径 (领悟/神通 受 当前 技能页 筛选 叠加),
+# 可执行>0 金 / =0 灰; 纯展示 无 副作用)
+func _apply_onekey_summary(cat: String = "", tier: int = -1) -> void:
+	var g := GameData
+	var names: Array = ["领悟", "神通", "施展", "法器", "装备", "最佳"]
+	var vals: Array = g.onekey_summary_vals(cat, tier)
+	for i in names.size():
+		var seg_l: Label = _onekey_segs[i]
+		var n: int = int(vals[i])
+		seg_l.text = names[i] + (" %d" % n if n > 0 else "")
+		seg_l.add_theme_color_override("font_color", GOLD if n > 0 else DIM)
+
+
+# 打磨-75: 顶栏 一键 汇总 段 点击 — 直达 对应页 (并重置 对应 筛选, 口径 同 打磨-44 收集直达)
+# 或 直接 执行 对应 批量 操作 (施展 = 一键施展, 其余 5 段 纯导航 不执行, 避免 误点 花灵石/学技能);
+# 执行 复用 各页 现有 处理器 (_on_*), 不产生 额外 存档/统计 副作用 (批量操作 自身 口径 不变)
+func _on_onekey_jump(oseg: String) -> void:
+	match oseg:
+		"learn":
+			_tab.current_tab = 1
+			_on_filter("")
+			_on_tier_filter("")
+			_show_msg("直达 技能页·一键领悟 (全部类别 · 全部品质)")
+		"active_learn":
+			_tab.current_tab = 1
+			_on_filter("")
+			_on_tier_filter("")
+			_show_msg("直达 技能页·一键神通 (全部类别 · 全部品质)")
+		"cast":
+			_on_active_all()
+		"item":
+			_tab.current_tab = 0
+			_flash_items_panel()
+			_show_msg("直达 修行页·法器区·一键购买")
+		"equip":
+			_tab.current_tab = 2
+			_on_equip_filter("")
+			_on_equip_tier_filter("")
+			_show_msg("直达 装备页·一键购买 (全部部位 · 全部品质)")
+		"best":
+			_tab.current_tab = 2
+			_on_equip_filter("")
+			_on_equip_tier_filter("")
+			_show_msg("直达 装备页·一键最佳 (全部部位 · 全部品质)")
 
 
 func _on_buy(item_id: String) -> void:

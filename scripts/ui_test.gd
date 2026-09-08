@@ -123,6 +123,7 @@ func _ready() -> void:
 	_assert_auto_restore()
 	await _assert_auto_badge()
 	await _assert_auto_badge_jump()
+	await _assert_onekey_badge()
 	_finish()
 
 
@@ -2565,4 +2566,185 @@ func _finish() -> void:
 		if rf != null:
 			rf.store_string("\n".join(_fail))
 			rf.close()
-		get_tree().quit(1)
+
+
+# 打磨-75: 顶栏 一键系列 状态汇总徽标 — 顶栏 青色 徽标 "一键:" + 6 段热区 (领悟/神通/施展/法器/装备/最佳,
+# 可执行>0 金色带计数 / =0 灰; 与 各页 一键 按钮 计数 同口径, 领悟/神通 受 技能页 筛选 叠加);
+# 段 点击 直达 对应页 (重置 筛选) 或 直接 执行 一键施展 (施展 段).
+# 断言 (手动驱动 确定性): 徽标节点 顶栏同父/6 段 flat Button+手型/tooltip 口径/受控基准 6 段 计数+着色/
+# 键 缓存/同态 节流 无副作用/筛选 叠加 (tier0)/学 6 神通 施展段 变金/施展段 点击 直接 执行
+# (爆发=速率x秒数 精确 匹配+统计+冷却后 段 回灰)/5 段 直达 (切页+重置筛选+底部消息 无副作用)/
+# 全 0 态 6 段 全灰/收尾 恢复
+func _assert_onekey_badge() -> void:
+	var g := GameData
+	# 徽标 节点: 顶栏 子节点 (与 自动 徽标 同父), flat Button 容器
+	var badge: Button = ui._onekey_badge
+	check(badge != null, "打磨-75 顶栏 一键 汇总 徽标 节点 存在")
+	check(badge is Button and badge.flat == true, "打磨-75 徽标 flat Button (可点热区容器)")
+	check(badge.get_parent() == ui._auto_badge.get_parent(),
+			"打磨-75 徽标 挂在 顶栏 (与 自动 徽标 同父; 实际 %s)" % str(badge.get_parent()))
+	check(ui._onekey_segs.size() == 6 and ui._onekey_btns.size() == 6,
+			"打磨-75 6 段 标签/按钮 齐全 (实际 %d/%d)" % [ui._onekey_segs.size(), ui._onekey_btns.size()])
+	for i in 6:
+		var seg_btn: Button = ui._onekey_btns[i]
+		var seg_l: Label = ui._onekey_segs[i]
+		check(seg_btn is Button and seg_btn.flat == true and seg_btn.toggle_mode == false,
+				"打磨-75 段%d flat 非toggle 热区" % i)
+		check(seg_btn.mouse_default_cursor_shape == Control.CURSOR_POINTING_HAND,
+				"打磨-75 段%d 手型光标" % i)
+		check(seg_l.get_parent() == seg_btn, "打磨-75 段%d 标签 挂在 热区 下" % i)
+		check(str(seg_btn.tooltip_text).find("段计数 = 当前 可执行数") >= 0,
+				"打磨-75 段%d tooltip 含 段计数 口径 (实际 %s)" % [i, str(seg_btn.tooltip_text).left(40)])
+	check(str(badge.tooltip_text).find("一键系列 状态汇总") >= 0
+			and str(badge.tooltip_text).find("施展→直接 执行 一键施展") >= 0
+			and str(badge.tooltip_text).find("纯 导航/执行") >= 0,
+			"打磨-75 徽标 tooltip 含 汇总口径/施展执行/无副作用 说明")
+	# 受控基准: 境界2 层1 灵石 5000 全空 状态 (防 前序 测试 残留 污染)
+	g.realm_idx = 2
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 5000.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	ui._on_filter("")
+	ui._on_tier_filter("")
+	ui._on_equip_filter("")
+	ui._on_equip_tier_filter("")
+	ui._refresh()
+	# 6 段 计数 与 着色 (基准 键 51|14|0|2|60|0, 期望值 与 selftest 同 数据 锚定;
+	# 段 0 可执行 时 文本=名称 (灰), >0 时 追加 " N" (金))
+	check(ui._onekey_key == "51|14|0|2|60|0", "打磨-75 基准 键=51|14|0|2|60|0 (实际 %s)" % ui._onekey_key)
+	var exp_txt: Array = ["领悟 51", "神通 14", "施展", "法器 2", "装备 60", "最佳"]
+	var exp_gold: Array = [true, true, false, true, true, false]
+	for i in 6:
+		var seg_l: Label = ui._onekey_segs[i]
+		check(str(seg_l.text) == str(exp_txt[i]),
+				"打磨-75 基准 段%d 文本=%s (实际 %s)" % [i, str(exp_txt[i]), str(seg_l.text)])
+		var col: Color = seg_l.get_theme_color("font_color")
+		check(col == ui.GOLD if exp_gold[i] else col == ui.DIM,
+				"打磨-75 基准 段%d 着色 %s (实际 %s)" % [i, "金" if exp_gold[i] else "灰", str(col)])
+	# 同态 节流: 再 _refresh 键不变 不重写 (文本 稳定 + 无 资源/统计 副作用)
+	var st75: Dictionary = g.stats.duplicate(true)
+	var stones75: float = g.stones
+	var txt75: String = str(ui._onekey_segs[0].text) + "|" + str(ui._onekey_segs[4].text)
+	ui._refresh()
+	check(ui._onekey_key == "51|14|0|2|60|0"
+			and str(ui._onekey_segs[0].text) + "|" + str(ui._onekey_segs[4].text) == txt75
+			and g.stones == stones75 and g.stats == st75,
+			"打磨-75 同态 节流 文本稳定 无 资源/统计 副作用")
+	# 筛选 叠加: 品质 tier0 → 领悟/神通 段 减, 法器/装备/最佳 不变 (口径 与 技能页 按钮 一致)
+	ui._on_tier_filter("0")
+	ui._refresh()
+	check(ui._onekey_key == "20|6|0|2|60|0", "打磨-75 筛选 tier0 键=20|6|0|2|60|0 (实际 %s)" % ui._onekey_key)
+	check(str(ui._onekey_segs[0].text) == "领悟 20" and str(ui._onekey_segs[1].text) == "神通 6",
+			"打磨-75 tier0 领悟 20 神通 6 (实际 %s / %s)" % [str(ui._onekey_segs[0].text), str(ui._onekey_segs[1].text)])
+	check(str(ui._onekey_segs[3].text) == "法器 2" and str(ui._onekey_segs[4].text) == "装备 60",
+			"打磨-75 tier0 法器/装备 段 不受 技能 筛选 影响")
+	ui._on_tier_filter("")
+	ui._refresh()
+	# 学 6 个 可学 主动神通 (tier0) → 施展 段 变金 "施展 6"
+	var act_t0: Array = []
+	for sid in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(sid), {})
+		if not s.is_empty() and str(s.get("type","")) == "active" and int(s["tier"]) == 0 and g.can_learn(str(sid)):
+			act_t0.append(str(sid))
+	check(act_t0.size() == 6, "打磨-75 受控 可学 主动神通(tier0)=6 (实际 %d)" % act_t0.size())
+	for sid in act_t0:
+		g.learned.append(str(sid))
+	ui._refresh()
+	check(ui._onekey_key == "45|8|6|2|60|0", "打磨-75 学6神通 键=45|8|6|2|60|0 (实际 %s)" % ui._onekey_key)
+	check(str(ui._onekey_segs[2].text) == "施展 6" and ui._onekey_segs[2].get_theme_color("font_color") == ui.GOLD,
+			"打磨-75 施展 段 就绪 6 金色 (实际 %s)" % str(ui._onekey_segs[2].text))
+	# 施展 段 点击 = 直接 执行 一键施展 (不切页; 爆发=速率x秒数 精确; 冷却后 段 回灰)
+	var qi_rate: float = g.qi_per_sec()
+	var exp_burst := 0.0
+	for sid in act_t0:
+		exp_burst += float(g.skill_by_id[str(sid)]["value"]) * qi_rate
+	var ess_before: float = g.essence
+	var use_before: float = float(g.stats.get("skill_use", 0.0))
+	var fcnt_before: int = ui._onekey_float_count
+	var tab_before: int = ui._tab.current_tab
+	ui._on_onekey_jump("cast")
+	check(g.essence == ess_before + exp_burst, "打磨-75 施展执行 爆发=%s (实际 +%s)" % [str(exp_burst), str(g.essence - ess_before)])
+	check(float(g.stats.get("skill_use", 0.0)) == use_before + 6.0, "打磨-75 施展执行 skill_use+6")
+	check(ui._onekey_float_count == fcnt_before + 1 and str(ui._onekey_last_text).find("一键施展 6 个神通 (爆发+") >= 0,
+			"打磨-75 施展执行 浮动 文案含 数量+爆发 (实际 %s)" % str(ui._onekey_last_text))
+	check(ui._tab.current_tab == tab_before, "打磨-75 施展执行 不切页 (实际 %d)" % ui._tab.current_tab)
+	ui._refresh()
+	check(str(ui._onekey_segs[2].text) == "施展" and ui._onekey_segs[2].get_theme_color("font_color") == ui.DIM,
+			"打磨-75 施展后 全冷却 施展 段 回灰 无计数 (实际 %s)" % str(ui._onekey_segs[2].text))
+	check(str(ui._onekey_segs[1].text) == "神通 8", "打磨-75 施展执行 不改变 神通 可学数")
+	# 5 段 直达: 切页 + 重置 筛选 + 底部 消息; 不执行 学习/购买 (只 施展 段 执行)
+	var snap_ess: float = g.essence
+	var snap_st: float = g.stones
+	var snap_learn: int = g.learned.size()
+	var snap_own: int = g.owned_eq.size()
+	var snap_stats: Dictionary = g.stats.duplicate(true)
+	ui._on_onekey_jump("learn")
+	check(ui._tab.current_tab == 1 and ui._filter_active == "" and ui._tier_active == ""
+			and str(ui._msg_label.text).find("直达 技能页·一键领悟") >= 0,
+			"打磨-75 领悟段 点击 → 技能页+重置 筛选+底部消息 (tab=%d %s)" % [ui._tab.current_tab, str(ui._msg_label.text)])
+	check(g.learned.size() == snap_learn, "打磨-75 领悟段 直达 不 执行 学习")
+	ui._on_onekey_jump("active_learn")
+	check(ui._tab.current_tab == 1 and str(ui._msg_label.text).find("一键神通") >= 0,
+			"打磨-75 神通段 点击 → 技能页 一键神通 消息")
+	ui._on_onekey_jump("item")
+	check(ui._tab.current_tab == 0 and str(ui._msg_label.text).find("法器区") >= 0,
+			"打磨-75 法器段 点击 → 修行页·法器区")
+	var ip_sb: StyleBoxFlat = ui._items_panel.get_theme_stylebox("panel")
+	check(ip_sb != null and ip_sb.border_width_left == 2 and ip_sb.border_color == ui.GOLD,
+			"打磨-75 法器段 点击 → 法器区 金边高亮 (边框宽=2 金)")
+	ui._on_onekey_jump("equip")
+	check(ui._tab.current_tab == 2 and ui._equip_filter_active == "" and ui._equip_tier_active == ""
+			and str(ui._msg_label.text).find("直达 装备页·一键购买") >= 0,
+			"打磨-75 装备段 点击 → 装备页+重置 部位/品质 筛选")
+	ui._on_onekey_jump("best")
+	check(ui._tab.current_tab == 2 and str(ui._msg_label.text).find("一键最佳") >= 0,
+			"打磨-75 最佳段 点击 → 装备页 一键最佳 消息")
+	check(g.essence == snap_ess and g.stones == snap_st and g.learned.size() == snap_learn
+			and g.owned_eq.size() == snap_own and g.stats == snap_stats,
+			"打磨-75 5 段 直达 均 不 执行 批量操作 (无 资源/学习/购买 副作用)")
+	# 等待 法器区 高亮 1.2s 自动恢复 (重入 口径 与 打磨-44 一致, 防 污染 收尾)
+	await get_tree().create_timer(1.4).timeout
+	var ip_rest: StyleBoxFlat = ui._items_panel.get_theme_stylebox("panel")
+	check(ip_rest != null and ip_rest.border_width_left == 0, "打磨-75 法器区 高亮 1.2s 后 自动恢复 (边框宽=0)")
+	# 全新 开荒 基准: 清空 状态 + 灵石 0 + 境界归 练气1层 → 施展/法器/装备/最佳 全 0 灰,
+	# 领悟/神通 = 凡品 可学数 11/6 (与 各页 按钮 同口径; 防 前序 测试 残留 污染)
+	g.stones = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	ui._refresh()
+	check(ui._onekey_key == "11|6|0|0|0|0", "打磨-75 全新基准 键=11|6|0|0|0|0 (实际 %s)" % ui._onekey_key)
+	var exp0_names: Array = ["施展", "法器", "装备", "最佳"]
+	for i in [2, 3, 4, 5]:
+		var seg_l: Label = ui._onekey_segs[i]
+		check(str(seg_l.text) == exp0_names[i - 2] and seg_l.get_theme_color("font_color") == ui.DIM,
+				"打磨-75 全新基准 段%d 灰 仅名称 无计数 (实际 %s)" % [i, str(seg_l.text)])
+	check(str(ui._onekey_segs[0].text) == "领悟 11" and str(ui._onekey_segs[1].text) == "神通 6",
+			"打磨-75 全新基准 领悟11 神通6 金色 (实际 %s / %s)" % [str(ui._onekey_segs[0].text), str(ui._onekey_segs[1].text)])
+	# 收尾: 恢复 干净 基准 (防 污染 后续 测试)
+	g.stones = 0.0
+	g.essence = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	ui._refresh()
+	await get_tree().process_frame

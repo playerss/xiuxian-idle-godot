@@ -1294,6 +1294,34 @@ func use_all_active() -> Dictionary:
 			burst += primary_res_value() - before
 	return {"count": n, "burst": burst}
 
+# ---------- 打磨-75: 一键系列 顶栏 状态汇总 (六项 可执行数 一览, 与 各页 一键 按钮 计数 同口径) ----------
+# 只读: 六项 = [一键领悟, 一键神通, 一键施展, 法器一键购买, 装备一键购买, 一键最佳] 的 可执行数。
+# 口径 完全 复用 各页 按钮 计数 (领悟/神通 受 当前 技能页 类别/品质 筛选 叠加 — cat/tier 参数
+# 由 UI 传入; 施展=就绪主动神通数; 法器/装备=灵石 单件 买得起 的 未拥有件 数 (连买以预算耗尽为准);
+# 最佳=可改进 槽位数)。供 顶栏 汇总徽标 展示 与 段 着色 (0=灰), 无 状态/存档/统计 副作用。
+
+# 当前灵石 单件 买得起 的 未拥有装备 数 (口径 = main.gd 装备页 一键购买 按钮计数: 逐件 灵石>=价)
+func equip_affordable_count() -> int:
+	var n := 0
+	for eid in equip_ids:
+		var e: Dictionary = equip_by_id.get(str(eid), {})
+		if e.is_empty():
+			continue
+		if not owned_eq.has(str(eid)) and stones >= float(e["cost"]):
+			n += 1
+	return n
+
+# 六项 可执行数 [领悟, 神通, 施展, 法器, 装备, 最佳] (只读; cat/tier = 当前 技能页 筛选,
+# "" = 全部类别 / -1 = 全部品质, 与 技能页 按钮 同口径)
+func onekey_summary_vals(cat: String = "", tier: int = -1) -> Array:
+	return [learn_available_count(cat, tier), active_learn_available_count(cat, tier),
+		active_ready_count(), item_affordable_count(), equip_affordable_count(), equip_best_pending()]
+
+# 汇总 状态键 (只读; 变化才刷 UI 文本/颜色) — cat/tier 同 onekey_summary_vals
+func onekey_summary_key(cat: String = "", tier: int = -1) -> String:
+	var v: Array = onekey_summary_vals(cat, tier)
+	return "%d|%d|%d|%d|%d|%d" % [int(v[0]), int(v[1]), int(v[2]), int(v[3]), int(v[4]), int(v[5])]
+
 # ================= 打磨-10: 道行 (飞升后目标) =================
 
 func dao_break_cost() -> float:
