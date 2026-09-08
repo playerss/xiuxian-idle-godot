@@ -2821,6 +2821,49 @@ func _init() -> void:
 	g.auto_cast = true
 	g.load_game()
 	check(g.auto_cast == false, "打磨-69 旧档缺 auto_cast 默认 false")
+	# ---------- 打磨-70: 自动系列 状态汇总 (只读接口 auto_summary_key/auto_summary_text, 纯展示无副作用) ----------
+	# 基准态 (三开关全关): 状态键 0|0|0, 文案 全 ✗
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	check(g.auto_summary_key() == "0|0|0", "打磨-70 三关 状态键 0|0|0 (实际 %s)" % g.auto_summary_key())
+	check(g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✗ · 施展 ✗",
+		"打磨-70 三关 文案 (实际 %s)" % g.auto_summary_text())
+	# 只读性: 连读多次 键/文案 恒定, 且 不改动 开关/资源/统计
+	var sum_snap: Dictionary = g.stats.duplicate(true)
+	var stones_sum: float = g.stones
+	var key_sum0: String = g.auto_summary_key()
+	var txt_sum0: String = g.auto_summary_text()
+	for _i70 in 3:
+		g.auto_summary_key()
+		g.auto_summary_text()
+	check(g.auto_summary_key() == key_sum0 and g.auto_summary_text() == txt_sum0, "打磨-70 只读 连读 恒定")
+	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
+			and g.stats == sum_snap and g.stones == stones_sum, "打磨-70 只读 无 开关/资源/统计 副作用")
+	# 状态切换: 单开/组合开 键与文案 恒等 (与 开关 一一对应)
+	g.auto_break = true
+	check(g.auto_summary_key() == "1|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✗ · 施展 ✗",
+		"打磨-70 仅突破 开 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
+	g.auto_buy = true
+	check(g.auto_summary_key() == "1|1|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✗",
+		"打磨-70 突破+购置 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
+	g.auto_cast = true
+	check(g.auto_summary_key() == "1|1|1" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✓",
+		"打磨-70 三开 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
+	# 关回 单开 组合 (购置+施展 开, 突破 关)
+	g.auto_break = false
+	check(g.auto_summary_key() == "0|1|1" and g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✓ · 施展 ✓",
+		"打磨-70 购置+施展 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
+	# 存档往返后 状态 与 键 一致 (读档 恢复 开关, 汇总 口径 同源)
+	g.save_game()
+	g.auto_break = true
+	g.load_game()
+	check(g.auto_summary_key() == "0|1|1", "打磨-70 读档恢复 后 键 与 存档 一致 (实际 %s)" % g.auto_summary_key())
+	check(g.auto_break == false and g.auto_buy == true and g.auto_cast == true, "打磨-70 读档恢复 三开关 值")
+	# 收尾: 三开关 全 关 (防 污染 后续 段)
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
 	# 收尾: 清空 拥有/穿戴/已学 (防 后续 段/存档 污染) + 恢复 基准
 	g.owned.clear()
 	g.owned_eq.clear()

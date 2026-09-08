@@ -48,6 +48,10 @@ var _auto_cast_float_tween: Tween
 var _auto_cast_msg_seq := 0     # 打磨-69: 已处理过的 自动施展 变更事件序号 (避免重复弹浮动; 启动=0 与 GameData 同态)
 var _auto_cast_float_count := 0  # 打磨-69: 自动施展 浮动提示次数 (自测断言用)
 var _auto_cast_last_text := ""   # 打磨-69: 最近一次自动施展 浮动文案 (自测断言用)
+var _auto_sum_box: HBoxContainer  # 打磨-70: 自动系列 状态汇总行 (修行页左栏, 自动施展开关下)
+var _auto_sum_prefix: Label       # 打磨-70: "自动:" 前缀标签 (灰)
+var _auto_sum_segs: Array = []    # 打磨-70: 3 个状态标签 (突破/购置/施展; 开=金 / 关=灰)
+var _auto_sum_key := ""           # 打磨-70: 已刷过的状态键 (auto_summary_key, 变化才刷)
 var _shop_box: VBoxContainer
 var _shop_rows: Dictionary = {}
 var _items_buy_btn: Button          # 打磨-29: 法器 一键购买 (修行页法器区)
@@ -377,6 +381,19 @@ func _build_training_page(page: Panel) -> void:
 	_auto_cast_btn.pressed.connect(_on_auto_cast)
 	_auto_cast_btn.tooltip_text = "已学 主动神通 冷却完毕 自动 施展 爆发 (与 一键施展 同口径: 一次释放所有 就绪 的 主动神通, 各神通 爆发=当前灵气速率 x 爆发秒数, 飞升后=道行; 施展后 各自 进冷却)。\n每帧至多一轮 (施展后 各神通 进冷却, 全冷却中 0 施展, 无热循环); 施展时屏幕中央绿色浮动 提示 数量与 爆发总量 (与 一键施展 浮动 同口径)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
 	left.add_child(_auto_cast_btn)
+	# 打磨-70: 自动系列 状态汇总行 (三个开关 开启后 扫视 不知 哪些 已 生效;
+	# 一行摘要 "自动: 突破 ✓/✗ · 购置 ✓/✗ · 施展 ✓/✗", 开启 金 / 未开 灰, 状态 变化 才刷)
+	_auto_sum_box = HBoxContainer.new()
+	_auto_sum_box.add_theme_constant_override("separation", 4)
+	_auto_sum_prefix = _label("自动:", 12, DIM)
+	_auto_sum_box.add_child(_auto_sum_prefix)
+	_auto_sum_segs = []
+	for seg_name in ["突破", "购置", "施展"]:
+		var seg_l := _label("", 12, DIM)
+		_auto_sum_box.add_child(seg_l)
+		_auto_sum_segs.append(seg_l)
+	_auto_sum_box.tooltip_text = "挂机自动系列 状态汇总 (✓=开 ✗=关, 与上方三个 自动开关 同步):\n· 自动突破 — 资源攒够 自动 尝试 突破/道行精进\n· 自动购置 — 灵石攒够 自动 购入 法器/装备 + 最佳换装\n· 自动施展 — 已学 主动神通 冷却完毕 自动 施展 爆发\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+	left.add_child(_auto_sum_box)
 	left.add_child(_sep())
 	# 法器标题 + 打磨-29: 一键购买 (价格升序连买买得起的法器)
 	# 打磨-44: 法器区 包进透明 Panel, 收集进度"法器"点击直达时金边高亮 1.2s
@@ -1234,6 +1251,11 @@ func _refresh() -> void:
 	if g._auto_cast_seq != _auto_cast_msg_seq:
 		_auto_cast_msg_seq = g._auto_cast_seq
 		_auto_cast_float(g.auto_cast_last_text())
+	# 打磨-70: 自动系列 状态汇总行 (状态键 变化才刷 文本/颜色; 读档恢复/外部改 同步)
+	var ak: String = g.auto_summary_key()
+	if ak != _auto_sum_key:
+		_auto_sum_key = ak
+		_apply_auto_summary()
 	# 打磨-32: 突破按钮"可突破"金边高亮 (资源攒够时引导点击, 状态变化才刷样式; 闪烁动画期间不干预)
 	var ready_now: bool = g.breakthrough_ready()
 	if ready_now != _break_ready:
@@ -1981,6 +2003,17 @@ func _on_auto_cast() -> void:
 	_auto_cast_btn.set_pressed_no_signal(GameData.auto_cast)
 	_auto_cast_btn.text = ("自动施展: 开" if GameData.auto_cast else "自动施展: 关")
 	_show_msg("自动施展已开启, 主动神通冷却完毕将自动施展爆发 (可存档, 离线期间不触发)" if GameData.auto_cast else "自动施展已关闭, 恢复手动点击施展")
+
+
+# 打磨-70: 自动系列 状态汇总行 刷新 (状态键 变化时 调用; 开启 金 / 未开 灰,
+# 口径 与 三个 自动开关 按钮 一致; 纯展示 无 存档/统计 副作用)
+func _apply_auto_summary() -> void:
+	var names: Array = ["突破", "购置", "施展"]
+	var on: Array = [GameData.auto_break, GameData.auto_buy, GameData.auto_cast]
+	for i in names.size():
+		var seg_l: Label = _auto_sum_segs[i]
+		seg_l.text = names[i] + (" ✓" if on[i] else " ✗")
+		seg_l.add_theme_color_override("font_color", GOLD if on[i] else DIM)
 
 
 func _on_buy(item_id: String) -> void:

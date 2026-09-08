@@ -1038,6 +1038,16 @@ func auto_cast_last_text() -> String:
 		return ""
 	return "自动施展 %d 个神通 (爆发+%s %s)" % [_auto_cast_last_n, fmt(_auto_cast_last_burst), primary_res_name()]
 
+# 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1" = 突破|购置|施展, 1=开 0=关;
+# UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
+func auto_summary_key() -> String:
+	return "%d|%d|%d" % [1 if auto_break else 0, 1 if auto_buy else 0, 1 if auto_cast else 0]
+
+# 打磨-70: 自动系列 状态汇总 文案 (只读; ✓=开 ✗=关, 口径 与 三个 开关 按钮 一致)
+func auto_summary_text() -> String:
+	return "自动: 突破 %s · 购置 %s · 施展 %s" % [
+		"✓" if auto_break else "✗", "✓" if auto_buy else "✗", "✓" if auto_cast else "✗"]
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0

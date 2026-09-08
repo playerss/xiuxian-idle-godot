@@ -99,6 +99,7 @@ func _ready() -> void:
 	await _assert_auto_break()
 	await _assert_auto_buy()
 	await _assert_auto_cast()
+	await _assert_auto_summary()
 	_finish()
 
 
@@ -2207,6 +2208,76 @@ func _assert_auto_cast() -> void:
 	g._active_cd = {}
 	g.ready_events.clear()
 	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-70: 自动系列 状态汇总 — 汇总行存在 (前缀+3 段标签)/tooltip 口径/三关 初始 全灰 ✗/
+# 开关切换 (按钮点击+外部置) 后 _refresh 同步 文本/颜色 (开=金 关=灰)/节流 (键不变不重刷)/
+# 无 存档/统计 副作用; 收尾 三开关 全 关 + 汇总 恢复 三关 态
+func _assert_auto_summary() -> void:
+	var g := GameData
+	var box: HBoxContainer = ui._auto_sum_box
+	check(box != null, "打磨-70 自动系列 汇总行 节点存在")
+	if box == null:
+		return
+	check(ui._auto_sum_prefix != null and str(ui._auto_sum_prefix.text) == "自动:",
+		"打磨-70 前缀标签 文本=自动: (实际 %s)" % str(ui._auto_sum_prefix.text))
+	check(ui._auto_sum_segs.size() == 3, "打磨-70 3 个 状态段标签 (实际 %d)" % ui._auto_sum_segs.size())
+	check(box.tooltip_text.find("自动突破") >= 0 and box.tooltip_text.find("自动购置") >= 0
+			and box.tooltip_text.find("自动施展") >= 0 and box.tooltip_text.find("离线期间不触发") >= 0,
+		"打磨-70 汇总行 tooltip 含 三开关 口径 (实际 %s)" % box.tooltip_text)
+	# 初始态: 三关 (打磨-69 收尾 已 全 关 + _refresh)
+	ui._refresh()
+	check(ui._auto_sum_key == "0|0|0", "打磨-70 初始 状态键 0|0|0 (实际 %s)" % ui._auto_sum_key)
+	var seg0: Label = ui._auto_sum_segs[0]
+	var seg1: Label = ui._auto_sum_segs[1]
+	var seg2: Label = ui._auto_sum_segs[2]
+	check(str(seg0.text) == "突破 ✗" and str(seg1.text) == "购置 ✗" and str(seg2.text) == "施展 ✗",
+		"打磨-70 三关 段文本 全 ✗ (实际 %s/%s/%s)" % [str(seg0.text), str(seg1.text), str(seg2.text)])
+	check(seg0.get_theme_color("font_color") == ui.DIM and seg1.get_theme_color("font_color") == ui.DIM
+			and seg2.get_theme_color("font_color") == ui.DIM, "打磨-70 三关 段颜色 全灰")
+	# 点击 自动突破 开关 → _refresh 同步 (突破 段 转金 ✓)
+	ui._on_auto_break()
+	ui._refresh()
+	check(g.auto_break == true, "打磨-70 点击后 auto_break=true (实际 %s)" % str(g.auto_break))
+	check(ui._auto_sum_key == "1|0|0", "打磨-70 键 1|0|0 (实际 %s)" % ui._auto_sum_key)
+	check(str(seg0.text) == "突破 ✓" and seg0.get_theme_color("font_color") == ui.GOLD,
+		"打磨-70 突破 段 金 ✓ (实际 %s)" % str(seg0.text))
+	check(str(seg1.text) == "购置 ✗" and seg1.get_theme_color("font_color") == ui.DIM,
+		"打磨-70 购置 段 保持 灰 ✗")
+	# 外部置 购置 开 (读档恢复 场景): _refresh 同步 (键变化 才刷, 仅 购置 段 变色)
+	g.auto_buy = true
+	var key_before: String = ui._auto_sum_key
+	ui._refresh()
+	check(ui._auto_sum_key == "1|1|0" and key_before == "1|0|0", "打磨-70 外部置 购置 键 1|1|0 (实际 %s)" % ui._auto_sum_key)
+	check(str(seg1.text) == "购置 ✓" and seg1.get_theme_color("font_color") == ui.GOLD,
+		"打磨-70 购置 段 金 ✓ (实际 %s)" % str(seg1.text))
+	check(str(seg0.text) == "突破 ✓" and seg0.get_theme_color("font_color") == ui.GOLD, "打磨-70 突破 段 保持 金")
+	# 节流: 状态键 未变 时 _refresh 不重刷 (缓存键 保持, 段文本/颜色 稳定)
+	ui._refresh()
+	check(ui._auto_sum_key == "1|1|0" and str(seg1.text) == "购置 ✓", "打磨-70 键不变 节流 不重刷")
+	# 点击 自动施展 开关 → 三开 (施展 段 转金)
+	ui._on_auto_cast()
+	ui._refresh()
+	check(ui._auto_sum_key == "1|1|1" and str(seg2.text) == "施展 ✓"
+			and seg2.get_theme_color("font_color") == ui.GOLD, "打磨-70 三开 施展 段 金 ✓ (实际 %s)" % ui._auto_sum_key)
+	# 开关切换 无 存档/统计 副作用 (汇总行 纯展示)
+	var stats_sum: Dictionary = g.stats.duplicate(true)
+	var stones_sum: float = g.stones
+	var seq_sum: int = g._auto_cast_seq
+	ui._on_auto_buy()
+	ui._refresh()
+	check(g.auto_buy == false and ui._auto_sum_key == "1|0|1"
+			and g.stats == stats_sum and g.stones == stones_sum and g._auto_cast_seq == seq_sum,
+		"打磨-70 开关切换 无 统计/资源/事件 副作用 (键=%s)" % ui._auto_sum_key)
+	# 收尾: 三开关 全 关, 汇总 恢复 三关 态 (防污染)
+	ui._on_auto_break()
+	ui._on_auto_cast()
+	ui._refresh()
+	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
+			and ui._auto_sum_key == "0|0|0"
+			and str(seg0.text) == "突破 ✗" and str(seg1.text) == "购置 ✗" and str(seg2.text) == "施展 ✗",
+		"打磨-70 收尾 三关 汇总 恢复 全 ✗")
 	await get_tree().process_frame
 
 
