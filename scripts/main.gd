@@ -51,6 +51,8 @@ var _auto_cast_last_text := ""   # 打磨-69: 最近一次自动施展 浮动文
 var _auto_sum_box: HBoxContainer  # 打磨-70: 自动系列 状态汇总行 (修行页左栏, 自动施展开关下)
 var _auto_sum_prefix: Label       # 打磨-70: "自动:" 前缀标签 (灰)
 var _auto_sum_segs: Array = []    # 打磨-70: 3 个状态标签 (突破/购置/施展; 开=金 / 关=灰)
+var _auto_sum_btns: Array = []    # 打磨-71: 3 个段热区 flat Button (点击切对应自动开关, 与上方按钮同口径)
+var _auto_sum_sb_hover: StyleBoxFlat  # 打磨-71: 汇总段热区 hover (淡底+金边 可点提示)
 var _auto_sum_key := ""           # 打磨-70: 已刷过的状态键 (auto_summary_key, 变化才刷)
 var _shop_box: VBoxContainer
 var _shop_rows: Dictionary = {}
@@ -388,11 +390,41 @@ func _build_training_page(page: Panel) -> void:
 	_auto_sum_prefix = _label("自动:", 12, DIM)
 	_auto_sum_box.add_child(_auto_sum_prefix)
 	_auto_sum_segs = []
-	for seg_name in ["突破", "购置", "施展"]:
+	_auto_sum_btns = []
+	# 打磨-71: 三段 升级为 flat Button 可点击热区 (点击 切 对应 自动开关 开/关,
+	# 与 上方 按钮 同 口径 + 底部 消息 确认 [复用 _on_auto_*], 悬停 淡底+金边 高亮)
+	var sum_sb_n := StyleBoxFlat.new()
+	sum_sb_n.bg_color = Color(0, 0, 0, 0)
+	_auto_sum_sb_hover = StyleBoxFlat.new()
+	_auto_sum_sb_hover.bg_color = Color(1, 1, 1, 0.06)
+	_auto_sum_sb_hover.border_color = GOLD
+	_auto_sum_sb_hover.set_border_width_all(1)
+	_auto_sum_sb_hover.content_margin_left = 2
+	_auto_sum_sb_hover.content_margin_right = 2
+	var sum_names: Array = ["突破", "购置", "施展"]
+	var sum_handlers: Array = [_on_auto_break, _on_auto_buy, _on_auto_cast]
+	var sum_tips: Array = [
+		"点击切换 自动突破 (与上方按钮同口径, 底部消息确认): 资源攒够 自动 尝试 突破/道行精进; 开关 存档 持久化, 离线期间不触发",
+		"点击切换 自动购置 (与上方按钮同口径, 底部消息确认): 灵石攒够 自动 购入 法器/装备 + 最佳换装; 开关 存档 持久化, 离线期间不触发",
+		"点击切换 自动施展 (与上方按钮同口径, 底部消息确认): 已学 主动神通 冷却完毕 自动 施展 爆发; 开关 存档 持久化, 离线期间不触发",
+	]
+	for si in sum_names.size():
 		var seg_l := _label("", 12, DIM)
-		_auto_sum_box.add_child(seg_l)
+		var seg_btn := Button.new()
+		seg_btn.flat = true
+		seg_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		seg_btn.add_theme_stylebox_override("normal", sum_sb_n)
+		seg_btn.add_theme_stylebox_override("hover", _auto_sum_sb_hover)
+		seg_btn.add_theme_stylebox_override("pressed", _auto_sum_sb_hover)
+		seg_btn.add_theme_stylebox_override("focus", _auto_sum_sb_hover)
+		seg_btn.toggle_mode = false
+		seg_btn.tooltip_text = str(sum_tips[si])
+		seg_btn.add_child(seg_l)
+		seg_btn.pressed.connect(sum_handlers[si])
+		_auto_sum_box.add_child(seg_btn)
 		_auto_sum_segs.append(seg_l)
-	_auto_sum_box.tooltip_text = "挂机自动系列 状态汇总 (✓=开 ✗=关, 与上方三个 自动开关 同步):\n· 自动突破 — 资源攒够 自动 尝试 突破/道行精进\n· 自动购置 — 灵石攒够 自动 购入 法器/装备 + 最佳换装\n· 自动施展 — 已学 主动神通 冷却完毕 自动 施展 爆发\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+		_auto_sum_btns.append(seg_btn)
+	_auto_sum_box.tooltip_text = "挂机自动系列 状态汇总 (✓=开 ✗=关, 与上方三个 自动开关 同步; 各段可点击, 点击切换 对应 自动开关, 与上方按钮同口径+底部消息确认):\n· 自动突破 — 资源攒够 自动 尝试 突破/道行精进\n· 自动购置 — 灵石攒够 自动 购入 法器/装备 + 最佳换装\n· 自动施展 — 已学 主动神通 冷却完毕 自动 施展 爆发\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
 	left.add_child(_auto_sum_box)
 	left.add_child(_sep())
 	# 法器标题 + 打磨-29: 一键购买 (价格升序连买买得起的法器)

@@ -5,6 +5,8 @@ extends Node
 ## 打磨-43: 收集进度一览加 总计 mini 进度条断言 (5 条节点/总计=10/287 与 137/287 两态/wrap 换行布局)
 ## 打磨-44: 收集进度一览 点击直达断言 (5 条 flat Button+手型光标/tooltip/点击切 Tab 重置筛选/
 ##          法器区金边高亮+自动恢复/无存档统计副作用/总计不切页)
+## 打磨-71: 自动系列 汇总行 点击直达断言 (3 段热区 flat Button+手型光标/tooltip 口径/点击切
+##          对应 自动开关 同 口径+底部消息+上方按钮同步按压态/节流/无 资源/统计 副作用)
 ## 打磨-45: 一键系列统一浮动反馈断言 (变更>0 屏幕中央绿色浮动含数量/0 变更不弹/幂等再点不弹/
 ##          文案/计数/颜色/无 essence 副作用, 5 按钮逐一+重复点击)
 ## 打磨-46: 一键系列按钮 tooltip 统一口径断言 (5 按钮 3 行结构: 动作顺序/筛选叠加/计数口径 +
@@ -54,6 +56,11 @@ func _ready() -> void:
 	g0.dao = 0.0
 	g0.dao_level = 0
 	g0.ascended = false
+	# 防御性重置 自动系列 三开关 (autoload 启动时 已从 档 load 进内存, 旧档 可能 残留 true;
+	# 不清会导致 打磨-69/70/71 初始态 错位 级联失败 — 每轮 强制 干净 基准)
+	g0.auto_break = false
+	g0.auto_buy = false
+	g0.auto_cast = false
 	g0.learned.clear()
 	g0.owned.clear()
 	g0.owned_eq.clear()
@@ -100,6 +107,7 @@ func _ready() -> void:
 	await _assert_auto_buy()
 	await _assert_auto_cast()
 	await _assert_auto_summary()
+	await _assert_auto_sum_jump()
 	_finish()
 
 
@@ -2278,6 +2286,72 @@ func _assert_auto_summary() -> void:
 			and ui._auto_sum_key == "0|0|0"
 			and str(seg0.text) == "突破 ✗" and str(seg1.text) == "购置 ✗" and str(seg2.text) == "施展 ✗",
 		"打磨-70 收尾 三关 汇总 恢复 全 ✗")
+	await get_tree().process_frame
+
+
+# 打磨-71: 自动系列 汇总行 点击直达 — 3 段热区 flat Button (手型光标+悬停金边)/tooltip 口径/
+# 点击=切 对应 自动开关 (与上方按钮 同 口径: 状态+上方按钮按压态+底部消息确认)/再点=关闭/
+# 节流 (键不变不重刷)/无 资源/统计 副作用; 收尾 三开关 全 关 恢复 0|0|0
+func _assert_auto_sum_jump() -> void:
+	var g := GameData
+	var btns: Array = ui._auto_sum_btns
+	check(btns.size() == 3, "打磨-71 3 个 段热区 按钮 (实际 %d)" % btns.size())
+	if btns.size() < 3:
+		return
+	for i in 3:
+		var b: Button = btns[i]
+		check(b.flat == true and b.mouse_default_cursor_shape == Control.CURSOR_POINTING_HAND,
+			"打磨-71 段%d 热区 flat+手型光标 (flat=%s cursor=%d)" % [i, str(b.flat), b.mouse_default_cursor_shape])
+	check(str(btns[0].tooltip_text).find("点击切换 自动突破") >= 0
+			and str(btns[1].tooltip_text).find("点击切换 自动购置") >= 0
+			and str(btns[2].tooltip_text).find("点击切换 自动施展") >= 0,
+		"打磨-71 段热区 tooltip 含 点击切换 口径 (突破/购置/施展)")
+	check(str(ui._auto_sum_box.tooltip_text).find("各段可点击") >= 0,
+		"打磨-71 汇总行 tooltip 含 各段可点击 说明")
+	# 初始 三关 (打磨-70 收尾 全 关)
+	ui._refresh()
+	check(ui._auto_sum_key == "0|0|0", "打磨-71 初始 状态键 0|0|0 (实际 %s)" % ui._auto_sum_key)
+	# 点击 突破 段 → 自动突破 开 (与上方按钮 同 口径: 状态+按压态+底部消息)
+	var stats0: Dictionary = g.stats.duplicate(true)
+	var stones0: float = g.stones
+	btns[0].pressed.emit()
+	ui._refresh()
+	check(g.auto_break == true and ui._auto_break_btn.is_pressed() == true,
+		"打磨-71 点击 突破 段 auto_break=true+上方按钮 按压态")
+	check(ui._auto_sum_key == "1|0|0", "打磨-71 点击后 键 1|0|0 (实际 %s)" % ui._auto_sum_key)
+	check(str(ui._msg_label.text).find("自动突破已开启") >= 0,
+		"打磨-71 点击 突破 段 底部消息 确认 (实际 %s)" % str(ui._msg_label.text))
+	# 点击 购置 段 → 自动购置 开
+	btns[1].pressed.emit()
+	ui._refresh()
+	check(g.auto_buy == true and ui._auto_buy_btn.is_pressed() == true
+			and ui._auto_sum_key == "1|1|0", "打磨-71 点击 购置 段 auto_buy=true 键 1|1|0 (实际 %s)" % ui._auto_sum_key)
+	check(str(ui._msg_label.text).find("自动购置已开启") >= 0, "打磨-71 点击 购置 段 底部消息 确认")
+	# 点击 施展 段 → 三开
+	btns[2].pressed.emit()
+	ui._refresh()
+	check(g.auto_cast == true and ui._auto_cast_btn.is_pressed() == true and ui._auto_sum_key == "1|1|1",
+		"打磨-71 点击 施展 段 三开 键 1|1|1 (实际 %s)" % ui._auto_sum_key)
+	# 再点 突破 段 → 关闭 (与上方按钮 再点 同 口径)
+	btns[0].pressed.emit()
+	ui._refresh()
+	check(g.auto_break == false and ui._auto_break_btn.is_pressed() == false and ui._auto_sum_key == "0|1|1",
+		"打磨-71 再点 突破 段 auto_break=false 键 0|1|1")
+	check(str(ui._msg_label.text).find("自动突破已关闭") >= 0, "打磨-71 关闭 底部消息 确认")
+	# 点击切换 无 资源/统计 副作用
+	check(g.stats == stats0 and g.stones == stones0,
+		"打磨-71 点击切换 无 统计/资源 副作用")
+	# 节流: 键 未变 _refresh 不重刷 (段文本/颜色 稳定)
+	var seg0: Label = ui._auto_sum_segs[0]
+	var t_before: String = str(seg0.text)
+	ui._refresh()
+	check(ui._auto_sum_key == "0|1|1" and str(seg0.text) == t_before, "打磨-71 键不变 节流 不重刷")
+	# 收尾: 三开关 全 关 恢复 (防污染)
+	btns[1].pressed.emit()
+	btns[2].pressed.emit()
+	ui._refresh()
+	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
+			and ui._auto_sum_key == "0|0|0", "打磨-71 收尾 三关 恢复 0|0|0 (实际 %s)" % ui._auto_sum_key)
 	await get_tree().process_frame
 
 
