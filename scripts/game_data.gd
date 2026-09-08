@@ -97,6 +97,10 @@ var _auto_buy_last_items := 0   # 打磨-68: 上轮 新购 法器 件数 (内存
 var _auto_buy_last_equip := 0   # 打磨-68: 上轮 新购 装备 件数 (内存态, 供 auto_buy_last_text)
 var _auto_buy_last_cost := 0.0  # 打磨-68: 上轮 花费 灵石 (内存态, 供 auto_buy_last_text)
 var _auto_buy_last_swap := 0    # 打磨-68: 上轮 最佳换装 槽位数 (内存态, 供 auto_buy_last_text)
+var auto_cast := false          # 打磨-69: 自动施展 (开=主动神通冷却完毕自动施展爆发, 存档持久化)
+var _auto_cast_seq := 0         # 打磨-69: 自动施展 变更事件计数 (每轮 实际施展 +1, 不持久化, UI 据此弹浮动)
+var _auto_cast_last_n := 0      # 打磨-69: 上轮 施展 神通 数 (内存态, 供 auto_cast_last_text)
+var _auto_cast_last_burst := 0.0  # 打磨-69: 上轮 爆发 总量 (内存态, 供 auto_cast_last_text)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备, 读档时 _load_stats 兜底)
 
 var _active_cd := {}        # 技能 id -> 剩余冷却秒
@@ -123,6 +127,10 @@ func _process(delta: float) -> void:
 	# 打磨-68: 自动购置 (开启时 灵石攒够 自动购入 法器/装备 并 最佳换装; _try_auto_buy 自门控于
 	# auto_buy, 灵石攒够才触发, 每帧至多一轮; 无浮动/闪烁 反馈 防 挂机刷屏)
 	_try_auto_buy()
+	# 打磨-69: 自动施展 (开启时 主动神通 冷却完毕 自动 施展 爆发; _try_auto_cast 自门控于
+	# auto_cast, 每帧至多一轮; 置于 _tick_active_cd 之前: 冷却归零 同帧 即自动施展,
+	# 施展后 各神通 进冷却, 全冷却中 0 施展 幂等 无热循环)
+	_try_auto_cast()
 	_stat_inc("play_sec", delta)  # 打磨-14: 累计在线时长
 	_tick_active_cd(delta)  # 神通冷却
 	# 成就检测 (节流 1 秒, 幂等; 灵石达标记类成就在挂机中也能触发)
@@ -1004,6 +1012,32 @@ func auto_buy_last_text() -> String:
 		return "自动最佳换装 %d 件" % _auto_buy_last_swap
 	return ""
 
+# 打磨-69: 自动施展 (挂机时 主动神通 冷却完毕 仍要 手动 逐个点 施展, 与 一键施展 口径 不齐;
+# GameData._process 每帧驱动 (置于 _tick_active_cd 之前, 冷却归零 同帧 即施展), 自门控于
+# auto_cast, 关闭时直接返回 故可直接调用测试; 本轮 自动 施展 所有 就绪 (无冷却) 的 已学
+# 主动神通 (复用 use_all_active 口径: 复用 use_active_skill 的 冷却/爆发/skill_use 埋点),
+# 施展后 各神通 进冷却, 下轮 全冷却中 0 施展 幂等, 无热循环; 每轮 有 施展 则 _auto_cast_seq+1
+# (UI 据此弹 绿色浮动, 与 打磨-45/60 一键施展 浮动 同口径 追加 爆发 总量); 0 施展 不增 事件
+# (UI 不弹 浮动, 口径 与 一键施展 0 变更 只走 底部消息 一致); 离线期间 不触发 (离线只结算收益))
+func _try_auto_cast() -> void:
+	if not auto_cast:
+		return
+	var r: Dictionary = use_all_active()
+	var n := int(r.get("count", 0))
+	var burst := float(r.get("burst", 0.0))
+	if n <= 0:
+		return
+	_auto_cast_seq += 1
+	_auto_cast_last_n = n
+	_auto_cast_last_burst = burst
+
+# 打磨-69: 自动施展 上一轮 变更 文案 (只读; seq<=0 [从未触发/读档重置] 返回 "")
+# 口径: "自动施展 N 个神通 (爆发+X 灵气/道行)" (飞升后 口径=道行, 与 打磨-60 一键施展 同格式)
+func auto_cast_last_text() -> String:
+	if _auto_cast_seq <= 0 or _auto_cast_last_n <= 0:
+		return ""
+	return "自动施展 %d 个神通 (爆发+%s %s)" % [_auto_cast_last_n, fmt(_auto_cast_last_burst), primary_res_name()]
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0
@@ -1293,6 +1327,7 @@ func save_game() -> void:
 		"stats": stats,
 		"auto_break": auto_break,  # 打磨-67: 自动突破开关 (旧档缺字段默认关)
 		"auto_buy": auto_buy,      # 打磨-68: 自动购置开关 (旧档缺字段默认关)
+		"auto_cast": auto_cast,    # 打磨-69: 自动施展开关 (旧档缺字段默认关)
 		"ts": int(Time.get_unix_time_from_system()),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -1322,6 +1357,7 @@ func load_game() -> void:
 	_load_stats(parsed.get("stats", {}))  # 打磨-14: 修行统计 (旧档缺字段默认 0)
 	auto_break = bool(parsed.get("auto_break", false))  # 打磨-67: 自动突破开关 (旧档缺字段默认关)
 	auto_buy = bool(parsed.get("auto_buy", false))      # 打磨-68: 自动购置开关 (旧档缺字段默认关)
+	auto_cast = bool(parsed.get("auto_cast", false))    # 打磨-69: 自动施展开关 (旧档缺字段默认关)
 	equipped = {}
 	var eq: Dictionary = parsed.get("equipped", {})
 	if typeof(eq) == TYPE_DICTIONARY:

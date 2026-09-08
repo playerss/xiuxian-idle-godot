@@ -98,6 +98,7 @@ func _ready() -> void:
 	_assert_offline_float()
 	await _assert_auto_break()
 	await _assert_auto_buy()
+	await _assert_auto_cast()
 	_finish()
 
 
@@ -2085,6 +2086,126 @@ func _assert_auto_buy() -> void:
 	g.last_break_result = 0
 	g.auto_buy = false
 	g.auto_break = false
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-69: 自动施展 — 开关按钮存在/tooltip/点击切换/开关态同步/0就绪不触发变更事件/
+# 就绪触发变更+_refresh 弹绿色浮动(文案=接口+爆发总量+可见)/冷却中0变更不再刷/开关切换无副作用;
+# 收尾恢复基准态 (含 自动系列 三开关 全 关)
+func _assert_auto_cast() -> void:
+	var g := GameData
+	var btn: Button = ui._auto_cast_btn
+	check(btn != null, "打磨-69 自动施展开关按钮存在")
+	if btn == null:
+		return
+	check(btn.toggle_mode, "打磨-69 开关按钮 toggle_mode")
+	check(btn.tooltip_text.find("自动 施展") >= 0 and btn.tooltip_text.find("存档") >= 0,
+		"打磨-69 tooltip 含 自动施展/存档 口径 (实际 %s)" % btn.tooltip_text)
+	check(btn.tooltip_text.find("绿色浮动") >= 0, "打磨-69 tooltip 含 绿色浮动 口径")
+	check(g.auto_cast == false and not btn.button_pressed and str(btn.text) == "自动施展: 关",
+		"打磨-69 初始 关 态 (文本/按压/存档值 一致)")
+	# 点击切换: 开 (底部消息 + 按钮态 + 存档值)
+	ui._on_auto_cast()
+	check(g.auto_cast == true, "打磨-69 点击后 auto_cast=true (实际 %s)" % str(g.auto_cast))
+	check(btn.button_pressed and str(btn.text) == "自动施展: 开", "打磨-69 点击后 按钮按压+文本 开")
+	check(str(ui._msg_label.text).find("自动施展已开启") >= 0, "打磨-69 开启 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# 点击切换: 关
+	ui._on_auto_cast()
+	check(g.auto_cast == false and not btn.button_pressed and str(btn.text) == "自动施展: 关", "打磨-69 再点 关 态")
+	check(str(ui._msg_label.text).find("自动施展已关闭") >= 0, "打磨-69 关闭 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# 外部改存档值: _refresh 同步按钮态 (读档恢复 场景)
+	g.auto_cast = true
+	ui._refresh()
+	check(btn.button_pressed and str(btn.text) == "自动施展: 开", "打磨-69 _refresh 同步 外部置 开 按钮态")
+	# 受控态: 2 个 境界0 主动神通 已学 (速率 1.0, 各 爆发 60, 冷却 90)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g._active_cd = {}
+	g._auto_cast_seq = 0
+	ui._auto_cast_msg_seq = 0
+	ui._auto_cast_float_count = 0
+	var act: Array = []
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(id), {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if int(s.get("unlock_realm", 99)) == 0 and int(s.get("unlock_layer", 99)) == 1:
+			act.append(str(id))
+		if act.size() == 2:
+			break
+	check(act.size() == 2, "打磨-69 受控态 2 神通 数据存在 (实际 %d)" % act.size())
+	g.learned.clear()
+	for id in act:
+		g.learned.append(str(id))
+	var fl: Label = ui._auto_cast_float_label
+	check(fl != null, "打磨-69 浮动 Label 节点存在")
+	# 0 就绪 (全冷却中): _try_auto_cast 0 变更, _refresh 不弹浮动
+	for id in act:
+		g._active_cd[id] = 90.0
+	var seq0: int = g._auto_cast_seq
+	var stats0: Dictionary = g.stats.duplicate(true)
+	g._try_auto_cast()
+	check(g._auto_cast_seq == seq0 and g.stats == stats0, "打磨-69 0就绪 0变更 不增 事件/统计 (seq=%d)" % g._auto_cast_seq)
+	ui._refresh()
+	check(ui._auto_cast_float_count == 0 and str(fl.text) == "", "打磨-69 0变更 不弹 浮动 (count=%d)" % ui._auto_cast_float_count)
+	# 就绪: 手动驱动 _try_auto_cast (2 神通 爆发 120 灵气) + _refresh 弹 绿色浮动 (文案=接口)
+	g._active_cd = {}
+	g._try_auto_cast()
+	check(g._auto_cast_seq == seq0 + 1, "打磨-69 就绪 触发 变更 事件 seq+1 (实际 %d)" % g._auto_cast_seq)
+	check(str(g.auto_cast_last_text()) == "自动施展 2 个神通 (爆发+120 灵气)",
+		"打磨-69 auto_cast_last_text 数量+爆发 (实际 %s)" % g.auto_cast_last_text())
+	check(absf(g.essence - 120.0) < 1e-6, "打磨-69 2 神通 爆发 120 灵气 (实际 %s)" % g.fmt(g.essence))
+	fl.text = "SENTINEL_69"
+	ui._refresh()
+	check(ui._auto_cast_float_count == 1, "打磨-69 _refresh 弹浮动 计数+1 (实际 %d)" % ui._auto_cast_float_count)
+	check(str(fl.text) == "✦ 自动施展 2 个神通 (爆发+120 灵气) ✦",
+		"打磨-69 浮动文案=接口 (实际 %s)" % str(fl.text))
+	check(fl.get_theme_color("font_color") == Color(0.5, 0.9, 0.5), "打磨-69 浮动 绿色")
+	check(fl.visible, "打磨-69 浮动 可见")
+	# 幂等: 冷却中 0 变更, _refresh 不再刷 (保持 上条 浮动 文案)
+	var fl_text: String = str(fl.text)
+	var seq1: int = g._auto_cast_seq
+	g._try_auto_cast()
+	check(g._auto_cast_seq == seq1, "打磨-69 冷却中 0变更 不增 事件 (seq=%d)" % g._auto_cast_seq)
+	ui._refresh()
+	check(ui._auto_cast_float_count == 1 and str(fl.text) == fl_text, "打磨-69 幂等 后 浮动 不变 (实际 %s)" % str(fl.text))
+	# 开关不消耗资源/不计 施展 统计 (开关动作 本身 无 副作用; 前置 置 关 保证 双击 后 仍 关)
+	g.auto_cast = false
+	var seq_sw: int = g._auto_cast_seq
+	var stats_sw: Dictionary = g.stats.duplicate(true)
+	var ess_sw: float = g.essence
+	ui._on_auto_cast()
+	ui._on_auto_cast()
+	check(g.auto_cast == false and g._auto_cast_seq == seq_sw and g.stats == stats_sw and absf(g.essence - ess_sw) < 1e-9,
+		"打磨-69 开关切换 无 资源/事件/统计 副作用")
+	# 收尾: 恢复基准态 (防污染) + 自动系列 三开关 全 关
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g.last_break_result = 0
+	g.auto_buy = false
+	g.auto_break = false
+	g.auto_cast = false
+	g._active_cd = {}
+	g.ready_events.clear()
 	ui._refresh()
 	await get_tree().process_frame
 

@@ -41,6 +41,13 @@ var _auto_break_on := false     # 打磨-67: 上帧开关状态缓存 (变化才
 var _auto_buy_btn: Button       # 打磨-68: 自动购置开关 (toggle, 存档持久化)
 var _auto_buy_on := false       # 打磨-68: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_buy_msg_seq := 0      # 打磨-68: 已提示过的 自动购置 变更事件序号 (避免重复提示; 启动=0 与 GameData 同态)
+var _auto_cast_btn: Button      # 打磨-69: 自动施展开关 (toggle, 存档持久化)
+var _auto_cast_on := false      # 打磨-69: 上帧开关状态缓存 (变化才刷按钮态)
+var _auto_cast_float_label: Label   # 打磨-69: 自动施展 浮动提示 (顶层, 居中, 绿色)
+var _auto_cast_float_tween: Tween
+var _auto_cast_msg_seq := 0     # 打磨-69: 已处理过的 自动施展 变更事件序号 (避免重复弹浮动; 启动=0 与 GameData 同态)
+var _auto_cast_float_count := 0  # 打磨-69: 自动施展 浮动提示次数 (自测断言用)
+var _auto_cast_last_text := ""   # 打磨-69: 最近一次自动施展 浮动文案 (自测断言用)
 var _shop_box: VBoxContainer
 var _shop_rows: Dictionary = {}
 var _items_buy_btn: Button          # 打磨-29: 法器 一键购买 (修行页法器区)
@@ -273,6 +280,17 @@ func _build_ui() -> void:
 	_offline_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_offline_float_label)
 
+	# 打磨-69: 自动施展 浮动提示 (居中绿色, 与 一键系列 浮动 同口径/同位, 位置错开由 _ready_float 系列 承担)
+	_auto_cast_float_label = _label("", 22, Color(0.5, 0.9, 0.5))
+	_auto_cast_float_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_auto_cast_float_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_auto_cast_float_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_auto_cast_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_auto_cast_float_label.position = Vector2(0, -26)
+	_auto_cast_float_label.modulate = Color(1, 1, 1, 0)
+	_auto_cast_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_auto_cast_float_label)
+
 
 func _make_page(title: String) -> Panel:
 	var p := Panel.new()
@@ -353,6 +371,12 @@ func _build_training_page(page: Panel) -> void:
 	_auto_buy_btn.pressed.connect(_on_auto_buy)
 	_auto_buy_btn.tooltip_text = "灵石攒够 自动购买 未拥有 法器/装备 (与 一键购置/一键购买 同口径: 价格升序连买 买得起 的, 槽位空时自动穿戴), 并自动 换上 各部位 最佳 拥有件 (一键最佳 口径)。\n每帧至多一轮, 灵石花到买不起为止 (购买后最便宜件恒买不起, 无热循环); 购入时底部消息提示 件数与花费 (无屏幕浮动, 避免挂机刷屏)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
 	left.add_child(_auto_buy_btn)
+	# 打磨-69: 自动施展开关 (主动神通 冷却完毕 自动 施展 爆发; 状态变化才刷按钮态)
+	_auto_cast_btn = _make_button("自动施展: 关")
+	_auto_cast_btn.toggle_mode = true
+	_auto_cast_btn.pressed.connect(_on_auto_cast)
+	_auto_cast_btn.tooltip_text = "已学 主动神通 冷却完毕 自动 施展 爆发 (与 一键施展 同口径: 一次释放所有 就绪 的 主动神通, 各神通 爆发=当前灵气速率 x 爆发秒数, 飞升后=道行; 施展后 各自 进冷却)。\n每帧至多一轮 (施展后 各神通 进冷却, 全冷却中 0 施展, 无热循环); 施展时屏幕中央绿色浮动 提示 数量与 爆发总量 (与 一键施展 浮动 同口径)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+	left.add_child(_auto_cast_btn)
 	left.add_child(_sep())
 	# 法器标题 + 打磨-29: 一键购买 (价格升序连买买得起的法器)
 	# 打磨-44: 法器区 包进透明 Panel, 收集进度"法器"点击直达时金边高亮 1.2s
@@ -1201,6 +1225,15 @@ func _refresh() -> void:
 		var ab_t: String = g.auto_buy_last_text()
 		if ab_t != "":
 			_show_msg(ab_t)
+	# 打磨-69: 自动施展开关 按钮态 (开关状态 变化才刷; 读档恢复/外部改 同步)
+	if g.auto_cast != _auto_cast_on:
+		_auto_cast_on = g.auto_cast
+		_auto_cast_btn.set_pressed_no_signal(g.auto_cast)
+		_auto_cast_btn.text = ("自动施展: 开" if g.auto_cast else "自动施展: 关")
+	# 打磨-69: 自动施展 变更事件 → 绿色浮动 (与 一键施展 浮动 同口径 数量+爆发总量, 0 施展 不增 事件 不弹)
+	if g._auto_cast_seq != _auto_cast_msg_seq:
+		_auto_cast_msg_seq = g._auto_cast_seq
+		_auto_cast_float(g.auto_cast_last_text())
 	# 打磨-32: 突破按钮"可突破"金边高亮 (资源攒够时引导点击, 状态变化才刷样式; 闪烁动画期间不干预)
 	var ready_now: bool = g.breakthrough_ready()
 	if ready_now != _break_ready:
@@ -1521,6 +1554,26 @@ func _offline_float() -> void:
 	_offline_float_tween = create_tween()
 	_offline_float_tween.tween_property(_offline_float_label, "position:y", -122.0, 1.8).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_offline_float_tween.parallel().tween_property(_offline_float_label, "modulate:a", 0.0, 1.8).set_delay(0.6)
+
+
+# 打磨-69: 自动施展 浮动 — 自动 施展 就绪 神通 时 屏幕中央 绿色浮动 "✦ 自动施展 N 个神通 (爆发+X 灵气/道行) ✦"
+# (与 打磨-45/60 一键施展 浮动 同口径: 绿色/居中/上浮淡出/数量+爆发总量; 位置 y=-26 与 一键系列 同位,
+# 同一时间 手动 一键 与 自动 施展 不并发 [自动开关 由 挂机 驱动, 手动 由 点击 驱动]); 文案 由
+# GameData.auto_cast_last_text() 提供 (seq<=0 空串 时 不弹); 计数 _auto_cast_float_count 与
+# GameData._auto_cast_seq 同步 (启动=0 同态), 0 施展 不增 事件 不弹 浮动
+func _auto_cast_float(text: String) -> void:
+	if text == "":
+		return
+	_auto_cast_float_count += 1
+	_auto_cast_last_text = text
+	_auto_cast_float_label.text = "✦ " + text + " ✦"
+	_auto_cast_float_label.position = Vector2(0, -26)
+	_auto_cast_float_label.modulate = Color(1, 1, 1, 1)
+	if _auto_cast_float_tween != null and _auto_cast_float_tween.is_valid():
+		_auto_cast_float_tween.kill()
+	_auto_cast_float_tween = create_tween()
+	_auto_cast_float_tween.tween_property(_auto_cast_float_label, "position:y", -64.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_auto_cast_float_tween.parallel().tween_property(_auto_cast_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
 
 
 func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
@@ -1918,6 +1971,16 @@ func _on_auto_buy() -> void:
 	_auto_buy_btn.set_pressed_no_signal(GameData.auto_buy)
 	_auto_buy_btn.text = ("自动购置: 开" if GameData.auto_buy else "自动购置: 关")
 	_show_msg("自动购置已开启, 灵石攒够将自动购买法器/装备 (可存档, 离线期间不触发)" if GameData.auto_buy else "自动购置已关闭, 恢复手动点击购买")
+
+
+# 打磨-69: 自动施展开关 — 点击切 开/关 (存档持久化, 由 GameData._process 驱动 主动神通 自动 施展);
+# 底部消息确认口径 (开关动作 本身 无 施展/统计 副作用, 实际 施展 由 _try_auto_cast 走 use_all_active 真实 埋点 路径)
+func _on_auto_cast() -> void:
+	GameData.auto_cast = not GameData.auto_cast
+	_auto_cast_on = GameData.auto_cast
+	_auto_cast_btn.set_pressed_no_signal(GameData.auto_cast)
+	_auto_cast_btn.text = ("自动施展: 开" if GameData.auto_cast else "自动施展: 关")
+	_show_msg("自动施展已开启, 主动神通冷却完毕将自动施展爆发 (可存档, 离线期间不触发)" if GameData.auto_cast else "自动施展已关闭, 恢复手动点击施展")
 
 
 func _on_buy(item_id: String) -> void:

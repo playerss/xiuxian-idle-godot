@@ -2695,7 +2695,133 @@ func _init() -> void:
 	g.auto_buy = true
 	g.load_game()
 	check(g.auto_buy == false, "打磨-68 旧档缺 auto_buy 默认 false")
-	# 收尾: 清空 拥有/穿戴 (防 后续 段/存档 污染) + 恢复 基准
+	# ---------- 打磨-69: 自动施展 (_try_auto_cast, 自门控于 auto_cast, 冷却完毕自动 施展 就绪 神通, 存档持久化) ----------
+	# 受控态: 清空 拥有/穿戴/已学 (基准: 无 功法/装备 加成, 灵气速率 = 1.0/s, 练气第1层), 冻结 _process 已生效
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g._active_cd = {}
+	check(g.auto_cast == false, "打磨-69 默认 auto_cast=false")
+	# 受控神通: 6 个 已学 主动神通 (境界0 可学, 各 爆发60s/冷却90s, 速率 1.0 -> 每发 爆发 60 灵气)
+	var act69: Array = []
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(id), {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if int(s.get("unlock_realm", 99)) == 0 and int(s.get("unlock_layer", 99)) == 1:
+			act69.append(str(id))
+		if act69.size() == 6:
+			break
+	check(act69.size() == 6, "打磨-69 受控态 6 个 境界0 主动神通 数据存在 (实际 %d)" % act69.size())
+	var learned69: Array = g.learned.duplicate()
+	# 开关关: _try_auto_cast 自门控 直接返回 (有就绪神通 也不施展)
+	g.learned.clear()
+	for id in act69:
+		g.learned.append(str(id))
+	g.auto_cast = false
+	var seq69: int = g._auto_cast_seq
+	var stats69: Dictionary = g.stats.duplicate(true)
+	g._try_auto_cast()
+	check(g._auto_cast_seq == seq69 and g.stats == stats69 and g.essence == 0.0,
+		"打磨-69 关 不施展 (essence=%s seq=%d)" % [g.fmt(g.essence), g._auto_cast_seq])
+	# 开关开: 6 神通 全就绪 -> 自动 施展 6 个 (复用 use_all_active 口径: 爆发 6x60=360 灵气, 各 进冷却 90s)
+	g.auto_cast = true
+	var rate69: float = g.qi_per_sec()
+	var exp_burst69: float = rate69 * 360.0
+	g._try_auto_cast()
+	check(float(g.stats.get("skill_use", 0.0)) == float(stats69.get("skill_use", 0.0)) + 6.0,
+		"打磨-69 开+就绪 skill_use+6 埋点")
+	check(absf(g.essence - exp_burst69) < 1e-6, "打磨-69 开+就绪 爆发 6x60 灵气 (实际 %s, 期望 %s)" % [g.fmt(g.essence), g.fmt(exp_burst69)])
+	check(g._auto_cast_seq == seq69 + 1, "打磨-69 一轮施展 _auto_cast_seq+1 (实际 %d)" % g._auto_cast_seq)
+	check(g.active_ready_count() == 0, "打磨-69 施展后 6 神通 全 进冷却 (就绪数=%d)" % g.active_ready_count())
+	# 冷却中: 幂等 0 施展 不增 事件 (全冷却中 无热循环)
+	var seq69b: int = g._auto_cast_seq
+	var stats69b: Dictionary = g.stats.duplicate(true)
+	g._try_auto_cast()
+	check(g._auto_cast_seq == seq69b and g.stats == stats69b, "打磨-69 冷却中 0施展 不增 事件/统计 (seq=%d)" % g._auto_cast_seq)
+	# 冷却 归零 (手动驱动 _tick_active_cd, 与 _process 同路径): 冷却完毕 同帧 自动 再施展
+	g._tick_active_cd(91.0)
+	g._try_auto_cast()
+	check(float(g.stats.get("skill_use", 0.0)) == float(stats69.get("skill_use", 0.0)) + 12.0,
+		"打磨-69 冷却完毕 自动 再施展 skill_use+12 (实际 %s)" % str(g.stats.get("skill_use", 0.0)))
+	check(g._auto_cast_seq == seq69 + 2, "打磨-69 第二轮 _auto_cast_seq+1 (实际 %d)" % g._auto_cast_seq)
+	# 文案: 只读接口 数量+爆发 总量 (fmt 口径, 未飞升=灵气; 0 施展 前 口径 保持 上轮 值)
+	check(g.auto_cast_last_text() == "自动施展 6 个神通 (爆发+%s 灵气)" % g.fmt(exp_burst69),
+		"打磨-69 auto_cast_last_text 数量+爆发 (实际 %s)" % g.auto_cast_last_text())
+	# 未学 主动神通: 0 就绪 0 施展 (清空 已学 后 开关开 也 不触发)
+	g.learned.clear()
+	g._active_cd = {}
+	var seq69c: int = g._auto_cast_seq
+	g._try_auto_cast()
+	check(g._auto_cast_seq == seq69c and g.auto_cast_last_text() != "", "打磨-69 未学神通 0施展 不增 事件 (文案保持 上轮)")
+	# 飞升后 口径: 爆发 入 道行 (道行阶段 初仙 x2, 速率 = 100000x2 = 200000/s, 爆发 = 200000x360)
+	g.learned.clear()
+	for id in act69:
+		g.learned.append(str(id))
+	g._active_cd = {}
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 0.0
+	g.essence = 0.0
+	var rate_asc: float = g.qi_per_sec()
+	var exp_burst_asc: float = rate_asc * 360.0
+	g._try_auto_cast()
+	check(absf(g.dao - exp_burst_asc) < 1e-3 and absf(g.essence) < 1e-9,
+		"打磨-69 飞升后 爆发 入 道行 (dao=%s 期望 %s)" % [g.fmt(g.dao), g.fmt(exp_burst_asc)])
+	check(g.auto_cast_last_text() == "自动施展 6 个神通 (爆发+%s 道行)" % g.fmt(exp_burst_asc),
+		"打磨-69 飞升后 文案 道行 口径 (实际 %s)" % g.auto_cast_last_text())
+	# _process 集成: 手动驱动一帧 (已冻结, 无并发) — 开关关 且 就绪 -> 不施展
+	# (飞升态 挂机 道行 累积 0.016s x 200000/s ≈ 3.2, 施展 爆发 7200 万 远大于 挂机 增量)
+	g.ready_events.clear()
+	g._active_cd = {}
+	g.auto_cast = false
+	var seq69d: int = g._auto_cast_seq
+	var dao69: float = g.dao
+	g._process(0.016)
+	var gain69d: float = g.dao - dao69
+	check(g._auto_cast_seq == seq69d and gain69d > 0.0 and gain69d < exp_burst_asc * 0.5,
+		"打磨-69 _process 关 就绪 不自动施展 (dao增量=%s 灵气, 爆发=%s)" % [g.fmt(gain69d * 100.0), g.fmt(exp_burst_asc)])
+	# _process 集成: 开关开 且 冷却中 -> 挂机 不施展 (冷却 tick 照常 推进, 两帧后 仍冷却 无爆发)
+	g.auto_cast = true
+	g.ready_events.clear()
+	for id in act69:
+		g._active_cd[id] = 45.0
+	var dao69b: float = g.dao
+	g._process(0.016)
+	g._process(0.016)
+	check(g._auto_cast_seq == seq69d and g.ready_events.is_empty(),
+		"打磨-69 _process 开 冷却中 不施展 无就绪事件 (seq=%d)" % g._auto_cast_seq)
+	check(absf(g.dao - dao69b - g.qi_per_sec() * 0.032) < 1e-2,
+		"打磨-69 _process 开 冷却中 仅 挂机 收益 无爆发 (dao增量=%s)" % g.fmt(g.dao - dao69b))
+	check(float(g._active_cd.get(act69[0], 0.0)) < 45.0, "打磨-69 _process 开 冷却 照常推进")
+	# 存档往返: auto_cast 保存/读取 一致
+	g.auto_cast = false
+	g.save_game()
+	g.auto_cast = true
+	g.load_game()
+	check(g.auto_cast == false, "打磨-69 存档 auto_cast=false 往返 (实际 %s)" % str(g.auto_cast))
+	g.auto_cast = true
+	g.save_game()
+	var sd69: Dictionary = _save_json()
+	check(bool(sd69.get("auto_cast", false)) == true, "打磨-69 存档含 auto_cast=true 字段 (实际 %s)" % str(sd69.get("auto_cast")))
+	g.load_game()
+	check(g.auto_cast == true, "打磨-69 读档恢复 auto_cast=true")
+	# 旧档兼容: 缺 auto_cast 字段 默认 false
+	var wf69 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	wf69.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 5.0, "stones": 7.0}))
+	wf69.close()
+	g.auto_cast = true
+	g.load_game()
+	check(g.auto_cast == false, "打磨-69 旧档缺 auto_cast 默认 false")
+	# 收尾: 清空 拥有/穿戴/已学 (防 后续 段/存档 污染) + 恢复 基准
 	g.owned.clear()
 	g.owned_eq.clear()
 	g.equipped.clear()
