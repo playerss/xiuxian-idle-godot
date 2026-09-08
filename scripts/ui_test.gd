@@ -125,6 +125,7 @@ func _ready() -> void:
 	await _assert_auto_badge_jump()
 	await _assert_onekey_badge()
 	await _assert_onekey_tip_detail()
+	await _assert_play_time_badge()
 	_finish()
 
 
@@ -2869,4 +2870,58 @@ func _assert_onekey_tip_detail() -> void:
 			and str(ui._onekey_btns[5].tooltip_text).find("各 部位 已 最佳") >= 0
 			and str(tips_f[0]) == str(tips_f[0]),
 			"打磨-76 收尾 基准 段 tooltip 恢复 干净 明细")
+	await get_tree().process_frame
+
+
+# 打磨-77: 顶栏 挂机时长 常显 — 顶栏 灵石 行 后 加 灰色小字 "⏳ X小时Y分" (stats.play_sec 分钟档 口径,
+# 复用 GameData.play_time_text; 0 时长 隐藏 避免 空文本 占位; 文本 变化 才刷 节流; 纯展示 无 副作用);
+# 断言 (手动驱动 确定性): 标签 节点 顶栏 同父/初始 0 时长 隐藏 文本空/注入 600s 显示 ⏳ 10分 可见+灰色/
+# 分钟档 节流 (同 分钟档 内 play_sec+10 不重写 文本)/跨档 4200s 显示 1小时10分/tooltip 口径/
+# 归 0 恢复 隐藏 文本空/刷新 无 资源/统计 副作用/收尾 0 时长 隐藏
+func _assert_play_time_badge() -> void:
+	var g := GameData
+	# 节点: 顶栏 子节点 (与 自动/一键 徽标 同父), 灰色
+	var pl: Label = ui._play_label
+	check(pl != null, "打磨-77 顶栏 挂机时长 标签 节点 存在")
+	check(pl.get_parent() == ui._auto_badge.get_parent(),
+			"打磨-77 标签 挂在 顶栏 (与 自动 徽标 同父; 实际 %s)" % str(pl.get_parent()))
+	check(pl.get_theme_color("font_color") == Color(0.6, 0.62, 0.68),
+			"打磨-77 标签 字色 灰色 (实际 %s)" % str(pl.get_theme_color("font_color")))
+	check(pl.tooltip_text.find("累计 挂机 时长") >= 0 and pl.tooltip_text.find("不含 离线") >= 0,
+			"打磨-77 标签 tooltip 含 口径 说明 (实际 %s)" % pl.tooltip_text.left(24))
+	# 初始: play_sec=0 (前序 收尾 干净 基准) → 隐藏 + 文本空
+	check(pl.visible == false and str(pl.text) == "",
+			"打磨-77 初始 0 时长 隐藏 文本空 (实际 visible=%s text=%s)" % [str(pl.visible), str(pl.text)])
+	# 注入 600s → "⏳ 10分" 可见
+	g.stats["play_sec"] = 600.0
+	ui._refresh()
+	check(pl.visible == true and str(pl.text) == "⏳ 10分",
+			"打磨-77 600s 显示 ⏳ 10分 可见 (实际 visible=%s text=%s)" % [str(pl.visible), str(pl.text)])
+	# 节流: 同 分钟档 内 刷新 文本 稳定, 无 资源/统计 副作用
+	var snap_pt: Dictionary = g.stats.duplicate(true)
+	ui._refresh()
+	check(str(pl.text) == "⏳ 10分" and g.stats == snap_pt,
+			"打磨-77 同 分钟档 节流 文本 稳定 无副作用")
+	# 跨档: 4200s = 1小时10分 刷新
+	g.stats["play_sec"] = 4200.0
+	ui._refresh()
+	check(str(pl.text) == "⏳ 1小时10分",
+			"打磨-77 跨档 4200s 显示 1小时10分 (实际 %s)" % str(pl.text))
+	# 610→620s 同 分钟档 (10分) 文本 不重写
+	g.stats["play_sec"] = 610.0
+	ui._refresh()
+	var t610: String = str(pl.text)
+	g.stats["play_sec"] = 620.0
+	ui._refresh()
+	check(str(pl.text) == t610 and str(pl.text) == "⏳ 10分",
+			"打磨-77 610→620s 同 分钟档 文本 不重写 (实际 %s)" % str(pl.text))
+	# 归 0 → 隐藏 文本空 恢复
+	g.stats["play_sec"] = 0.0
+	ui._refresh()
+	check(pl.visible == false and str(pl.text) == "",
+			"打磨-77 归 0 恢复 隐藏 文本空 (实际 visible=%s text=%s)" % [str(pl.visible), str(pl.text)])
+	# 收尾: 干净 基准 (play_sec 0 隐藏)
+	check(float(g.stats.get("play_sec", 0.0)) == 0.0,
+			"打磨-77 收尾 play_sec 恢复 0 (实际 %s)" % str(g.stats.get("play_sec")))
+	check(pl.visible == false, "打磨-77 收尾 0 时长 隐藏 稳定")
 	await get_tree().process_frame

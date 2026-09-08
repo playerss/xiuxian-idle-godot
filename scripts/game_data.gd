@@ -292,6 +292,14 @@ func stats_text() -> String:
 		int(stats.get("break_ok", 0.0)), int(stats.get("dao_ok", 0.0)),
 		int(stats.get("skill_use", 0.0)), int(stats.get("item_buy", 0.0)), int(stats.get("equip_buy", 0.0))]
 
+# 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
+# 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)
+func play_time_text() -> String:
+	var sec: float = float(stats.get("play_sec", 0.0))
+	if sec <= 0.0:
+		return ""
+	return "⏳ %s" % fmt_stats_time(sec)
+
 # 统计时长格式 (日/小时/分)
 func fmt_stats_time(sec: float) -> String:
 	var d := int(sec) / 86400

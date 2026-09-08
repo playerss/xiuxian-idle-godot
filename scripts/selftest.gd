@@ -3178,6 +3178,32 @@ func _init() -> void:
 			and str(tips76f[3]).begins_with("灵石 不足") and str(tips76f[4]).begins_with("灵石 不足")
 			and str(tips76f[5]) == "各 部位 已 最佳 (或 无 拥有 装备)",
 			"打磨-76 收尾 基准 施展/法器/装备/最佳 全 说明 文案")
+	# ---------- 打磨-77: 挂机时长 顶栏 常显 接口 (只读 play_time_text, 复用 stats.play_sec + fmt_stats_time 口径) ----------
+	g.stats["play_sec"] = 0.0
+	check(g.play_time_text() == "", "打磨-77 0 时长 空串 (UI 隐藏 标签, 实际 %s)" % str(g.play_time_text()))
+	g.stats["play_sec"] = 59.0
+	check(g.play_time_text() == "⏳ 不足1分", "打磨-77 59s 档=⏳ 不足1分 (实际 %s)" % str(g.play_time_text()))
+	g.stats["play_sec"] = 3600.0
+	check(g.play_time_text() == "⏳ 1小时0分", "打磨-77 3600s 档=⏳ 1小时0分 (实际 %s)" % str(g.play_time_text()))
+	g.stats["play_sec"] = 3661.0
+	check(g.play_time_text() == "⏳ 1小时1分", "打磨-77 3661s 档=⏳ 1小时1分 (实际 %s)" % str(g.play_time_text()))
+	g.stats["play_sec"] = 90061.0
+	check(g.play_time_text() == "⏳ 1天1小时", "打磨-77 天档=⏳ 1天1小时 (实际 %s)" % str(g.play_time_text()))
+	# 只读: 连读 恒定 + 接口 本身 不改 资源/统计 (快照 取 当前 play_sec=90061 基准)
+	var pt0: Dictionary = g.stats.duplicate(true)
+	var stones_pt: float = g.stones
+	check(g.play_time_text() == g.play_time_text(), "打磨-77 只读 连读 恒定")
+	check(g.stats == pt0 and g.stones == stones_pt, "打磨-77 只读 接口 无 资源/统计 副作用")
+	# 存读档 往返: 时长 随 stats 持久化 (断点续挂 累加不重置)
+	g.stats["play_sec"] = 7260.0
+	g.save_game()
+	g.stats["play_sec"] = 0.0
+	g.load_game()
+	check(absf(float(g.stats.get("play_sec", 0.0)) - 7260.0) < 1e-6, "打磨-77 play_sec 存读档 往返 (实际 %s)" % str(g.stats.get("play_sec")))
+	check(g.play_time_text() == "⏳ 2小时1分", "打磨-77 读档 恢复 后 文案=⏳ 2小时1分 (实际 %s)" % str(g.play_time_text()))
+	# 收尾: 恢复 干净 基准 (play_sec 0 → 空串 隐藏)
+	g.stats["play_sec"] = 0.0
+	check(g.play_time_text() == "", "打磨-77 收尾 0 时长 空串")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

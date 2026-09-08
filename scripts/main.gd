@@ -32,6 +32,8 @@ var _goal_label: Label         # 打磨-31: 下一目标提示 (修行页)
 var _goal_text := ""           # 下一目标文本缓存 (变化时才刷)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
 var _stats_text := ""          # 统计文本缓存 (变化时才刷)
+var _play_label: Label         # 打磨-77: 顶栏 挂机时长 常显 ("⏳ X小时Y分", 随 play_sec 分钟档 变化 才刷)
+var _play_text := ""           # 打磨-77: 挂机时长 文本缓存 (变化才刷, 空串=隐藏)
 var _progress_label: Label
 var _bar_bg: ColorRect
 var _bar_fill: ColorRect
@@ -236,6 +238,12 @@ func _build_ui() -> void:
 	top.add_child(_essence_label)
 	_stones_label = _label("灵石 0", 19, WHITEISH)
 	top.add_child(_stones_label)
+	# 打磨-77: 顶栏 挂机时长 常显 (灰色小字 "⏳ X小时Y分", 分钟档 变化 才刷;
+	# 0 时长 隐藏 避免 空文本 占位; 与 修行页 修行统计 时长 同 口径 stats.play_sec)
+	_play_label = _label("", 13, DIM)
+	_play_label.visible = false
+	_play_label.tooltip_text = "本次 存档 累计 挂机 时长 (在线 累计, 不含 离线; 存档 持久化, 断点续挂 累加不重置)。与 修行页 修行统计 的 时长 同 口径。"
+	top.add_child(_play_label)
 	# 打磨-73: 顶栏 自动系列 状态徽标 (金色圆角徽标 "自动 N/3": 任一开关开 显示, 全关 隐藏;
 	# tooltip 复用 auto_summary_text 三开关 口径 + 离线不触发 说明; 纯展示 无 存档/统计 副作用)
 	# 打磨-74: 徽标 升级 flat Button 可点击热区 (手型光标+悬停 淡底 金边, 复用 打磨-44/71 模式):
@@ -1364,6 +1372,12 @@ func _refresh() -> void:
 	if st_t != _stats_text:
 		_stats_text = st_t
 		_stats_label.text = st_t
+	# 打磨-77: 顶栏 挂机时长 常显 (分钟档 文本 变化 才刷; 0 时长 隐藏; 只读 无 副作用)
+	var pt_t: String = g.play_time_text()
+	if pt_t != _play_text:
+		_play_text = pt_t
+		_play_label.text = pt_t
+		_play_label.visible = pt_t != ""
 	_progress_label.text = ("道行进度  %d%%" if g.ascended else "突破进度  %d%%") % int(g.breakthrough_progress())
 	# 打磨-24: 突破/道行精进 ETA (每帧算一次, 文本变化才写)
 	var bet_t: String = g.breakthrough_eta_text()
