@@ -122,6 +122,7 @@ func _ready() -> void:
 	await _assert_auto_sum_jump()
 	_assert_auto_restore()
 	await _assert_auto_badge()
+	await _assert_auto_badge_jump()
 	_finish()
 
 
@@ -2245,9 +2246,12 @@ func _assert_auto_summary() -> void:
 	check(ui._auto_sum_prefix != null and str(ui._auto_sum_prefix.text) == "自动:",
 		"打磨-70 前缀标签 文本=自动: (实际 %s)" % str(ui._auto_sum_prefix.text))
 	check(ui._auto_sum_segs.size() == 3, "打磨-70 3 个 状态段标签 (实际 %d)" % ui._auto_sum_segs.size())
-	check(box.tooltip_text.find("自动突破") >= 0 and box.tooltip_text.find("自动购置") >= 0
-			and box.tooltip_text.find("自动施展") >= 0 and box.tooltip_text.find("离线期间不触发") >= 0,
-		"打磨-70 汇总行 tooltip 含 三开关 口径 (实际 %s)" % box.tooltip_text)
+	# 打磨-74: tooltip 由 汇总行 HBox 上移到 外壳 Panel (金边高亮 载体)
+	var panel70: Panel = ui._auto_sum_panel
+	check(panel70 != null, "打磨-70 汇总行 外壳 Panel 存在 (打磨-74 高亮载体)")
+	check(panel70.tooltip_text.find("自动突破") >= 0 and panel70.tooltip_text.find("自动购置") >= 0
+			and panel70.tooltip_text.find("自动施展") >= 0 and panel70.tooltip_text.find("离线期间不触发") >= 0,
+		"打磨-70 汇总行 tooltip 含 三开关 口径 (实际 %s)" % panel70.tooltip_text)
 	# 初始态: 三关 (打磨-69 收尾 已 全 关 + _refresh)
 	ui._refresh()
 	check(ui._auto_sum_key == "0|0|0", "打磨-70 初始 状态键 0|0|0 (实际 %s)" % ui._auto_sum_key)
@@ -2320,8 +2324,8 @@ func _assert_auto_sum_jump() -> void:
 			and str(btns[1].tooltip_text).find("点击切换 自动购置") >= 0
 			and str(btns[2].tooltip_text).find("点击切换 自动施展") >= 0,
 		"打磨-71 段热区 tooltip 含 点击切换 口径 (突破/购置/施展)")
-	check(str(ui._auto_sum_box.tooltip_text).find("各段可点击") >= 0,
-		"打磨-71 汇总行 tooltip 含 各段可点击 说明")
+	check(str(ui._auto_sum_panel.tooltip_text).find("各段可点击") >= 0,
+			"打磨-71 汇总行 tooltip 含 各段可点击 说明 (打磨-74 起 tooltip 挂在外壳 Panel)")
 	# 初始 三关 (打磨-70 收尾 全 关)
 	ui._refresh()
 	check(ui._auto_sum_key == "0|0|0", "打磨-71 初始 状态键 0|0|0 (实际 %s)" % ui._auto_sum_key)
@@ -2474,6 +2478,77 @@ func _assert_auto_badge() -> void:
 	check(g.stats == st73 and g.stones == stones73, "打磨-73 徽标 刷新 无 资源/统计 副作用")
 	# 收尾: 三关 全 关 隐藏 稳定 (防 污染)
 	check(ui._auto_badge.visible == false, "打磨-73 收尾 三关 隐藏")
+	await get_tree().process_frame
+
+
+# 打磨-74: 顶栏 自动 徽标 点击直达 — 徽标 升级 flat Button 热区 (手型光标+悬停 淡底 金边),
+# 点击=切 修行页 + 自动系列 汇总行 金边高亮 1.2s (复用 法器区 高亮 口径), 全关 隐藏 无热区 口径 不变;
+# 断言 (手动驱动 确定性): 徽标=flat Button+手型/悬停样式非空/汇总行 Panel 外壳 存在+初始无边框/
+# tooltip 点击口径/单开 点击 → 切 修行页(tab0)+汇总行 金边+底部消息/汇总行 tooltip 徽标直达口径/
+# 1.2s 后 高亮 自动恢复 边框0/重入 kill 旧 tween 不叠加/全关 隐藏 无热区 (visible=false 时 点击 不触发)/
+# 无 资源/统计 副作用 (纯导航)/收尾 修行页+无边框
+func _assert_auto_badge_jump() -> void:
+	var g := GameData
+	# 前置: 打磨-73 收尾 三关 全 关 (徽标 隐藏); 切 成就页 作为 点击 前 受控 tab
+	ui._tab.current_tab = 3
+	# 徽标 = flat Button 可点击热区 (手型光标, 非 toggle)
+	var badge: Button = ui._auto_badge
+	check(badge is Button, "打磨-74 徽标 节点 是 Button (升级 可点击)")
+	check(badge.flat == true, "打磨-74 徽标 flat (可点样式)")
+	check(badge.toggle_mode == false, "打磨-74 徽标 非 toggle (点击即触发)")
+	check(badge.mouse_default_cursor_shape == Control.CURSOR_POINTING_HAND,
+			"打磨-74 徽标 手型光标 提示可点")
+	check(badge.get_theme_stylebox("hover") != null
+			and badge.get_theme_stylebox("hover").border_width_left == 1,
+			"打磨-74 徽标 悬停 金边 样式 非空 (hover 边框宽=1)")
+	# 汇总行 Panel 外壳 存在 + 初始 无边框 (恢复态)
+	check(ui._auto_sum_panel != null and ui._auto_sum_panel is Panel, "打磨-74 汇总行 Panel 外壳 存在")
+	check(ui._auto_sum_box.get_parent() == ui._auto_sum_panel, "打磨-74 汇总行 HBox 挂在 Panel 下")
+	var sb0: StyleBoxFlat = ui._auto_sum_panel.get_theme_stylebox("panel")
+	check(sb0 != null and sb0.border_width_left == 0, "打磨-74 初始 汇总行 无边框 (边框宽=0)")
+	check(str(ui._auto_sum_panel.tooltip_text).find("顶栏 自动 N/3 徽标 点击也可直达本行") >= 0,
+			"打磨-74 汇总行 tooltip 含 徽标直达 口径 (实际 %s)" % str(ui._auto_sum_panel.tooltip_text).left(60))
+	# 副作用快照 (点击 不应改变)
+	var snap_essence := g.essence
+	var snap_stones := g.stones
+	var snap_stats := g.stats
+	# --- 单开 突破 → 徽标 显示 "自动 1/3" → 点击 → 切 修行页(tab0) + 汇总行 金边 ---
+	g.auto_break = true
+	ui._refresh()
+	check(ui._auto_badge.visible == true and str(ui._auto_badge.text) == "自动 1/3",
+			"打磨-74 单开 突破 徽标 显示 (实际 visible=%s 文本=%s)" % [str(ui._auto_badge.visible), str(ui._auto_badge.text)])
+	check(str(ui._auto_badge.tooltip_text).contains("点击: 直达 修行页·自动系列状态汇总行"),
+			"打磨-74 徽标 tooltip 追加 点击直达 口径 (实际 %s)" % str(ui._auto_badge.tooltip_text))
+	ui._on_auto_badge()
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 0, "打磨-74 点击 徽标 → 切 修行页 (tab=0) (实际 %d)" % ui._tab.current_tab)
+	var sb_hi: StyleBoxFlat = ui._auto_sum_panel.get_theme_stylebox("panel")
+	check(sb_hi != null and sb_hi.border_width_left == 2 and sb_hi.border_color == ui.GOLD,
+			"打磨-74 点击 徽标 → 汇总行 金边高亮 (边框宽=2 金)")
+	check(str(ui._msg_label.text).find("直达 修行页·自动系列状态汇总行") >= 0,
+			"打磨-74 点击 徽标 → 底部消息确认 (实际 %s)" % str(ui._msg_label.text))
+	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats,
+			"打磨-74 点击 徽标 无 资源/统计 副作用 (纯导航)")
+	# 重入: 高亮中 再点 徽标 kill 旧 tween 重开 (不报错 且 仍 高亮, 边框 口径 不变)
+	ui._on_auto_badge()
+	await get_tree().process_frame
+	var sb_hi2: StyleBoxFlat = ui._auto_sum_panel.get_theme_stylebox("panel")
+	check(sb_hi2 != null and sb_hi2.border_width_left == 2, "打磨-74 高亮中 重入 不叠加/不报错 (仍 金边)")
+	# 等待 tween 结束 (1.2s, 重入后 重新计时) 后 自动恢复 边框 0
+	await get_tree().create_timer(1.4).timeout
+	var sb_rest: StyleBoxFlat = ui._auto_sum_panel.get_theme_stylebox("panel")
+	check(sb_rest != null and sb_rest.border_width_left == 0, "打磨-74 汇总行 高亮 1.2s 后 自动恢复 (边框宽=0)")
+	# --- 全关 → 徽标 隐藏 (无热区); 隐藏态 处理器 直调 仍 导航+高亮 (口径 由 visible 门控, 直调 仅验证 无副作用) ---
+	g.auto_break = false
+	ui._refresh()
+	check(ui._auto_badge.visible == false and str(ui._auto_badge.text) == "",
+			"打磨-74 全关 徽标 隐藏 无热区 (visible=%s 文本=%s)" % [str(ui._auto_badge.visible), str(ui._auto_badge.text)])
+	# 收尾: 修行页 稳定, 无边框 (防 污染); tab 保持 0 (后续 无 依赖 成就页 的 测试)
+	check(ui._tab.current_tab == 0, "打磨-74 收尾 保持 修行页")
+	var sb_end: StyleBoxFlat = ui._auto_sum_panel.get_theme_stylebox("panel")
+	check(sb_end != null and sb_end.border_width_left == 0, "打磨-74 收尾 汇总行 无边框")
+	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats,
+			"打磨-74 收尾 无 资源/统计 副作用")
 	await get_tree().process_frame
 
 

@@ -49,6 +49,8 @@ var _auto_cast_msg_seq := 0     # 打磨-69: 已处理过的 自动施展 变更
 var _auto_cast_float_count := 0  # 打磨-69: 自动施展 浮动提示次数 (自测断言用)
 var _auto_cast_last_text := ""   # 打磨-69: 最近一次自动施展 浮动文案 (自测断言用)
 var _auto_sum_box: HBoxContainer  # 打磨-70: 自动系列 状态汇总行 (修行页左栏, 自动施展开关下)
+var _auto_sum_panel: Panel        # 打磨-74: 汇总行 透明 Panel 外壳 (顶栏 自动 徽标 点击直达 金边高亮)
+var _auto_sum_hi_tween: Tween     # 打磨-74: 汇总行高亮 tween (1.2s 自动恢复, 同 法器区 口径)
 var _auto_sum_prefix: Label       # 打磨-70: "自动:" 前缀标签 (灰)
 var _auto_sum_segs: Array = []    # 打磨-70: 3 个状态标签 (突破/购置/施展; 开=金 / 关=灰)
 var _auto_sum_btns: Array = []    # 打磨-71: 3 个段热区 flat Button (点击切对应自动开关, 与上方按钮同口径)
@@ -79,7 +81,7 @@ var _offline_float_count := 0      # 打磨-66: 离线浮动提示次数 (自测
 var _offline_last_text := ""       # 打磨-66: 最近一次离线浮动文案 (自测断言用)
 var _auto_restore_count := 0       # 打磨-72: 启动 自动系列 恢复 提示 次数 (自测断言用)
 var _auto_restore_last_text := ""  # 打磨-72: 最近一次 自动 恢复 提示 文案 (自测断言用)
-var _auto_badge: Label             # 打磨-73: 顶栏 自动系列 状态徽标 ("自动 N/3" 金色, 任一开关开 显示, 全关 隐藏)
+var _auto_badge: Button            # 打磨-73/74: 顶栏 自动系列 状态徽标 ("自动 N/3", 任一开关开 显示 全关 隐藏; flat Button 可点击热区=切修行页+汇总行金边高亮)
 var _auto_badge_n := -1            # 打磨-73: 已刷过的 开启开关数 缓存 (-1=未应用, 首帧必刷; 变化才刷)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
@@ -229,7 +231,15 @@ func _build_ui() -> void:
 	top.add_child(_stones_label)
 	# 打磨-73: 顶栏 自动系列 状态徽标 (金色圆角徽标 "自动 N/3": 任一开关开 显示, 全关 隐藏;
 	# tooltip 复用 auto_summary_text 三开关 口径 + 离线不触发 说明; 纯展示 无 存档/统计 副作用)
-	_auto_badge = _label("", 15, GOLD)
+	# 打磨-74: 徽标 升级 flat Button 可点击热区 (手型光标+悬停 淡底 金边, 复用 打磨-44/71 模式):
+	# 点击=切 修行页 + 自动系列 汇总行 金边高亮 1.2s (复用 法器区 高亮 口径); 全关 隐藏 口径 不变
+	_auto_badge = Button.new()
+	_auto_badge.flat = true
+	_auto_badge.toggle_mode = false
+	_auto_badge.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_auto_badge.text = ""
+	_auto_badge.add_theme_font_size_override("font_size", 15)
+	_auto_badge.add_theme_color_override("font_color", GOLD)
 	var ab_sb := StyleBoxFlat.new()
 	ab_sb.bg_color = Color(0.15, 0.13, 0.07)
 	ab_sb.set_border_width_all(1)
@@ -240,6 +250,13 @@ func _build_ui() -> void:
 	ab_sb.content_margin_top = 2.0
 	ab_sb.content_margin_bottom = 2.0
 	_auto_badge.add_theme_stylebox_override("normal", ab_sb)
+	var ab_sb_hover := ab_sb.duplicate() as StyleBoxFlat
+	ab_sb_hover.bg_color = Color(0.25, 0.22, 0.11)
+	ab_sb_hover.border_color = Color(1, 0.95, 0.7)
+	_auto_badge.add_theme_stylebox_override("hover", ab_sb_hover)
+	_auto_badge.add_theme_stylebox_override("pressed", ab_sb_hover)
+	_auto_badge.add_theme_stylebox_override("focus", ab_sb_hover)
+	_auto_badge.pressed.connect(_on_auto_badge)
 	_auto_badge.visible = false
 	top.add_child(_auto_badge)
 
@@ -420,8 +437,22 @@ func _build_training_page(page: Panel) -> void:
 	left.add_child(_auto_cast_btn)
 	# 打磨-70: 自动系列 状态汇总行 (三个开关 开启后 扫视 不知 哪些 已 生效;
 	# 一行摘要 "自动: 突破 ✓/✗ · 购置 ✓/✗ · 施展 ✓/✗", 开启 金 / 未开 灰, 状态 变化 才刷)
+	# 打磨-74: 汇总行 包进透明 Panel (顶栏 自动 徽标 点击直达 时 金边高亮 1.2s, 复用 法器区 口径)
+	_auto_sum_panel = Panel.new()
+	var asp_sb := StyleBoxFlat.new()
+	asp_sb.bg_color = Color(0, 0, 0, 0)
+	asp_sb.set_corner_radius_all(8)
+	_auto_sum_panel.add_theme_stylebox_override("panel", asp_sb)
+	_auto_sum_panel.tooltip_text = "挂机自动系列 状态汇总 (✓=开 ✗=关, 与上方三个 自动开关 同步; 各段可点击, 点击切换 对应 自动开关, 与上方按钮同口径+底部消息确认; 顶栏 自动 N/3 徽标 点击也可直达本行):\n· 自动突破 — 资源攒够 自动 尝试 突破/道行精进\n· 自动购置 — 灵石攒够 自动 购入 法器/装备 + 最佳换装\n· 自动施展 — 已学 主动神通 冷却完毕 自动 施展 爆发\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+	left.add_child(_auto_sum_panel)
 	_auto_sum_box = HBoxContainer.new()
+	_auto_sum_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_auto_sum_box.offset_left = 6
+	_auto_sum_box.offset_top = 3
+	_auto_sum_box.offset_right = -6
+	_auto_sum_box.offset_bottom = -3
 	_auto_sum_box.add_theme_constant_override("separation", 4)
+	_auto_sum_panel.add_child(_auto_sum_box)
 	_auto_sum_prefix = _label("自动:", 12, DIM)
 	_auto_sum_box.add_child(_auto_sum_prefix)
 	_auto_sum_segs = []
@@ -459,8 +490,6 @@ func _build_training_page(page: Panel) -> void:
 		_auto_sum_box.add_child(seg_btn)
 		_auto_sum_segs.append(seg_l)
 		_auto_sum_btns.append(seg_btn)
-	_auto_sum_box.tooltip_text = "挂机自动系列 状态汇总 (✓=开 ✗=关, 与上方三个 自动开关 同步; 各段可点击, 点击切换 对应 自动开关, 与上方按钮同口径+底部消息确认):\n· 自动突破 — 资源攒够 自动 尝试 突破/道行精进\n· 自动购置 — 灵石攒够 自动 购入 法器/装备 + 最佳换装\n· 自动施展 — 已学 主动神通 冷却完毕 自动 施展 爆发\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
-	left.add_child(_auto_sum_box)
 	left.add_child(_sep())
 	# 法器标题 + 打磨-29: 一键购买 (价格升序连买买得起的法器)
 	# 打磨-44: 法器区 包进透明 Panel, 收集进度"法器"点击直达时金边高亮 1.2s
@@ -1331,7 +1360,7 @@ func _refresh() -> void:
 		if bn > 0:
 			_auto_badge.visible = true
 			_auto_badge.text = "自动 %d/3" % bn
-			_auto_badge.tooltip_text = g.auto_summary_text() + "\n(离线期间不触发, 游戏运行时生效; 明细见 修行页 自动系列 状态汇总行)"
+			_auto_badge.tooltip_text = g.auto_summary_text() + "\n(离线期间不触发, 游戏运行时生效; 明细见 修行页 自动系列 状态汇总行)\n点击: 直达 修行页·自动系列状态汇总行 (金边高亮)"
 		else:
 			_auto_badge.visible = false
 			_auto_badge.text = ""
@@ -2161,6 +2190,40 @@ func _restore_items_panel() -> void:
 	sb.bg_color = Color(0, 0, 0, 0)
 	sb.set_corner_radius_all(8)
 	_items_panel.add_theme_stylebox_override("panel", sb)
+
+
+# 打磨-74: 顶栏 自动 徽标 点击直达 — 点击=切 修行页 + 自动系列 汇总行 金边高亮 1.2s
+# (复用 法器区 高亮 口径; 纯导航 无 存档/统计 副作用, 与 修行页 汇总行 热区 (打磨-71) 双向 可达)
+func _on_auto_badge() -> void:
+	_tab.current_tab = 0
+	_flash_auto_sum_panel()
+	_show_msg("直达 修行页·自动系列状态汇总行")
+
+
+# 打磨-74: 自动系列 汇总行 金边高亮 1.2s 后自动恢复 (tween 驱动, 重入时先 kill 旧 tween, 同 法器区 口径)
+func _flash_auto_sum_panel() -> void:
+	if _auto_sum_panel == null:
+		return
+	if _auto_sum_hi_tween != null and _auto_sum_hi_tween.is_valid():
+		_auto_sum_hi_tween.kill()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = GOLD
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	_auto_sum_panel.add_theme_stylebox_override("panel", sb)
+	_auto_sum_hi_tween = create_tween()
+	_auto_sum_hi_tween.tween_interval(1.2)
+	_auto_sum_hi_tween.tween_callback(_restore_auto_sum_panel)
+
+
+func _restore_auto_sum_panel() -> void:
+	if _auto_sum_panel == null:
+		return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.set_corner_radius_all(8)
+	_auto_sum_panel.add_theme_stylebox_override("panel", sb)
 
 
 # 打磨-11: 装备部位筛选 (显示/隐藏对应行)
