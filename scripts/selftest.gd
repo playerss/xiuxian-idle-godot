@@ -2881,6 +2881,47 @@ func _init() -> void:
 	g.stones = 0.0
 	g.auto_break = false
 	g.set_process(true)
+	# ---------- 打磨-72: 启动 自动系列 恢复 提示 (只读接口 auto_restore_text, 全关空串/单开/组合/三开 文案,
+	# 只读性+存档往返+读档后口径 与 汇总 同源, 收尾 三开关 全 关) ----------
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	check(g.auto_restore_text() == "", "打磨-72 三关 文案 空串 (实际 %s)" % g.auto_restore_text())
+	# 只读性: 连读多次 文案 恒定, 且 不改动 开关/资源/统计
+	var r72_snap: Dictionary = g.stats.duplicate(true)
+	var r72_stones: float = g.stones
+	var r72_txt0: String = g.auto_restore_text()
+	for _i72 in 3:
+		g.auto_restore_text()
+	check(g.auto_restore_text() == r72_txt0, "打磨-72 只读 连读 恒定")
+	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
+			and g.stats == r72_snap and g.stones == r72_stones, "打磨-72 只读 无 开关/资源/统计 副作用")
+	# 单开 文案 (固定序 突破>购置>施展)
+	g.auto_buy = true
+	check(g.auto_restore_text() == "已恢复 自动: 购置",
+		"打磨-72 仅购置 开 文案 (实际 %s)" % g.auto_restore_text())
+	g.auto_cast = true
+	check(g.auto_restore_text() == "已恢复 自动: 购置·施展",
+		"打磨-72 购置+施展 文案 (实际 %s)" % g.auto_restore_text())
+	g.auto_break = true
+	check(g.auto_restore_text() == "已恢复 自动: 突破·购置·施展",
+		"打磨-72 三开 文案 全开 (实际 %s)" % g.auto_restore_text())
+	# 关 突破 组合 (突破 关, 购置+施展 开, 与 打磨-70 收尾 同态)
+	g.auto_break = false
+	check(g.auto_restore_text() == "已恢复 自动: 购置·施展",
+		"打磨-72 关突破 后 购置+施展 文案 (实际 %s)" % g.auto_restore_text())
+	# 存档往返后 读档 恢复 开关, 文案 与 恢复态 一致 (与 打磨-70 读档 同口径)
+	g.save_game()
+	g.load_game()
+	check(g.auto_buy == true and g.auto_cast == true and g.auto_break == false,
+		"打磨-72 读档恢复 三开关 值")
+	check(g.auto_restore_text() == "已恢复 自动: 购置·施展",
+		"打磨-72 读档后 文案 与 恢复态 一致 (实际 %s)" % g.auto_restore_text())
+	# 收尾: 三开关 全 关 + 文案 空串 (防 污染 后续 段)
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	check(g.auto_restore_text() == "", "打磨-72 收尾 三关 空串")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

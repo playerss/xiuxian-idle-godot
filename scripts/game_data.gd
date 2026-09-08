@@ -1048,6 +1048,21 @@ func auto_summary_text() -> String:
 	return "自动: 突破 %s · 购置 %s · 施展 %s" % [
 		"✓" if auto_break else "✗", "✓" if auto_buy else "✗", "✓" if auto_cast else "✗"]
 
+# 打磨-72: 启动 恢复 自动系列 开关 提示 文案 (只读; 全关 返回 空串, 否则
+# "已恢复 自动: 突破·购置·施展" (仅 开启项, 固定序 突破>购置>施展, 全开 即 突破·购置·施展);
+# 供 main.gd _ready 启动提示 (底部消息 同位置, 仅 启动 一次, 离线消息 优先, 离线 与 自动 提示 不同时 显示)
+func auto_restore_text() -> String:
+	var parts: Array[String] = []
+	if auto_break:
+		parts.append("突破")
+	if auto_buy:
+		parts.append("购置")
+	if auto_cast:
+		parts.append("施展")
+	if parts.is_empty():
+		return ""
+	return "已恢复 自动: %s" % "·".join(parts)
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0

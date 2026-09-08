@@ -77,6 +77,8 @@ var _offline_float_label: Label    # 打磨-66: 离线收益 启动浮动提示 
 var _offline_float_tween: Tween
 var _offline_float_count := 0      # 打磨-66: 离线浮动提示次数 (自测断言用)
 var _offline_last_text := ""       # 打磨-66: 最近一次离线浮动文案 (自测断言用)
+var _auto_restore_count := 0       # 打磨-72: 启动 自动系列 恢复 提示 次数 (自测断言用)
+var _auto_restore_last_text := ""  # 打磨-72: 最近一次 自动 恢复 提示 文案 (自测断言用)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _stone_tip := ""              # 打磨-49: 顶栏灵石行 tooltip 缓存 (变化才刷, 速率/缺口随挂机变化)
@@ -167,8 +169,24 @@ func _ready() -> void:
 		_show_msg(GameData.offline_msg)
 		# 打磨-66: 离线收益 启动金色浮动 (底部消息仍保留, 两者并存; 不足1分钟/无档 不弹)
 		_offline_float()
+	# 打磨-72: 读档恢复的 自动系列 开关 启动提示 — 任一 开关 为 开 时 底部 消息
+	# "已恢复 自动: …" (文案 由 GameData.auto_restore_text() 提供, 全关 空串 不提示;
+	# 仅 启动 一次 纯 展示 无 副作用; 离线 消息 优先: offline_msg 非空 时 本 提示 让位)
+	_show_auto_restore_msg()
 	# 打磨-17: 启动时先取基线快照, 读档恢复的旧解锁不当作"新解锁"弹浮动
 	_ach_prev = GameData.ach_done.duplicate()
+
+
+# 打磨-72: 启动 自动系列 恢复 提示 (底部 消息 同 位置, 离线 消息 优先, 全关 不提示)
+func _show_auto_restore_msg() -> void:
+	if GameData.offline_msg != "":
+		return
+	var t: String = GameData.auto_restore_text()
+	if t == "":
+		return
+	_auto_restore_count += 1
+	_auto_restore_last_text = t
+	_show_msg(t)
 
 
 func _process(_delta: float) -> void:

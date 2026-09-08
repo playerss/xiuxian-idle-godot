@@ -7,6 +7,8 @@ extends Node
 ##          法器区金边高亮+自动恢复/无存档统计副作用/总计不切页)
 ## 打磨-71: 自动系列 汇总行 点击直达断言 (3 段热区 flat Button+手型光标/tooltip 口径/点击切
 ##          对应 自动开关 同 口径+底部消息+上方按钮同步按压态/节流/无 资源/统计 副作用)
+## 打磨-72: 启动 自动系列 恢复 提示断言 (_ready 三关 不提示 计数 0/手动驱动 单开+组合 底部消息
+##          文案=auto_restore_text+计数+1/离线消息 优先 让位/全关 不提示/无 资源/统计 副作用/收尾 恢复)
 ## 打磨-45: 一键系列统一浮动反馈断言 (变更>0 屏幕中央绿色浮动含数量/0 变更不弹/幂等再点不弹/
 ##          文案/计数/颜色/无 essence 副作用, 5 按钮逐一+重复点击)
 ## 打磨-46: 一键系列按钮 tooltip 统一口径断言 (5 按钮 3 行结构: 动作顺序/筛选叠加/计数口径 +
@@ -61,6 +63,13 @@ func _ready() -> void:
 	g0.auto_break = false
 	g0.auto_buy = false
 	g0.auto_cast = false
+	# 打磨-72: 防御性 重置 离线收益 文案/明细 (autoload 启动 load_game 读 旧档 时间戳,
+	# 距上轮 运行 >60 秒 时 已 结算 离线收益 置 offline_msg 非空; 残留 会 让 打磨-72
+	# 启动 自动恢复 提示 走 离线优先 分支 被抑制 — 重置 保证 干净 基准)
+	g0.offline_msg = ""
+	g0._offline_sec = 0.0
+	g0._offline_qi = 0.0
+	g0._offline_stone = 0.0
 	g0.learned.clear()
 	g0.owned.clear()
 	g0.owned_eq.clear()
@@ -108,6 +117,7 @@ func _ready() -> void:
 	await _assert_auto_cast()
 	await _assert_auto_summary()
 	await _assert_auto_sum_jump()
+	_assert_auto_restore()
 	_finish()
 
 
@@ -2352,6 +2362,59 @@ func _assert_auto_sum_jump() -> void:
 	ui._refresh()
 	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
 			and ui._auto_sum_key == "0|0|0", "打磨-71 收尾 三关 恢复 0|0|0 (实际 %s)" % ui._auto_sum_key)
+	await get_tree().process_frame
+
+
+# 打磨-72: 启动 自动系列 恢复 提示 — _ready 时 任一 自动 开关 为 开 则 底部 消息
+# "已恢复 自动: …" (文案=GameData.auto_restore_text, 全关 空串 不提示, 离线 消息 优先 让位).
+# "仅 启动 一次" 由 _ready 只调 一次 _show_auto_restore_msg 保证 (函数 本身 无 启动 门控,
+# 手动驱动 重放 会 再显示, 与 _show_msg/_offline_float 同 口径 可 重放).
+# 断言 (手动驱动 确定性, 不依赖 启动 时 真实 档态, 防 flake): _ready 三关 不提示 计数 0/
+# 单开+组合 底部消息 文案=接口+计数+1/离线消息 优先 让位/全关 不提示 计数不变/
+# 无 资源/统计 副作用/收尾 三关 恢复 计数 不变
+func _assert_auto_restore() -> void:
+	var g := GameData
+	# _ready 时 三开关 全关 (ui_test _ready 防御性 重置 + 打磨-71 收尾), 启动 未 触发 提示
+	check(ui._auto_restore_count == 0, "打磨-72 启动 三关 未 触发 提示 (实际 %d)" % ui._auto_restore_count)
+	check(str(ui._auto_restore_last_text) == "", "打磨-72 启动 三关 无 文案 (实际 %s)" % str(ui._auto_restore_last_text))
+	# 手动驱动: 单开 购置 -> 底部 消息 文案=接口 + 计数+1 (文案 由 GameData 接口 提供)
+	g.auto_buy = true
+	var exp72: String = g.auto_restore_text()
+	check(exp72 == "已恢复 自动: 购置", "打磨-72 接口 文案(仅购置) (实际 %s)" % exp72)
+	var stats72: Dictionary = g.stats.duplicate(true)
+	var stones72: float = g.stones
+	ui._show_auto_restore_msg()
+	check(ui._auto_restore_count == 1, "打磨-72 单开 提示 计数+1 (实际 %d)" % ui._auto_restore_count)
+	check(str(ui._auto_restore_last_text) == exp72, "打磨-72 单开 文案=接口 (实际 %s)" % str(ui._auto_restore_last_text))
+	check(str(ui._msg_label.text) == exp72, "打磨-72 单开 底部消息=文案 (实际 %s)" % str(ui._msg_label.text))
+	# 组合 开 (购置+施展) -> 文案 固定序 购置·施展
+	g.auto_cast = true
+	exp72 = g.auto_restore_text()
+	check(exp72 == "已恢复 自动: 购置·施展", "打磨-72 接口 文案(购置+施展) (实际 %s)" % exp72)
+	ui._show_auto_restore_msg()
+	check(ui._auto_restore_count == 2 and str(ui._auto_restore_last_text) == exp72
+			and str(ui._msg_label.text) == exp72, "打磨-72 组合 文案=接口 计数+1 (实际 %s / %d)" % [str(ui._msg_label.text), ui._auto_restore_count])
+	# 离线 消息 优先: offline_msg 非空 时 本 提示 让位 (早期 返回 不 _show_msg, 不覆盖 已有 文案, 计数 不变)
+	g.offline_msg = "离线 8小时, 收获 灵气 999, 灵石 888"
+	ui._show_auto_restore_msg()
+	check(ui._auto_restore_count == 2 and str(ui._msg_label.text) == "已恢复 自动: 购置·施展",
+			"打磨-72 离线消息 优先 让位 (计数不变, 不 覆盖 已有 底部 消息)")
+	g.offline_msg = ""
+	# 提示 触发 无 资源/统计 副作用 (纯 展示)
+	check(g.stats == stats72 and g.stones == stones72, "打磨-72 提示 无 资源/统计 副作用")
+	# 全关 不提示 计数不变 (auto_restore_text 空串)
+	g.auto_buy = false
+	g.auto_cast = false
+	check(g.auto_restore_text() == "", "打磨-72 全关 接口 空串")
+	ui._show_auto_restore_msg()
+	check(ui._auto_restore_count == 2, "打磨-72 全关 不提示 计数不变 (实际 %d)" % ui._auto_restore_count)
+	# 收尾: 三开关 全 关 (防 污染), 恢复 干净 基准 (offline_msg 已 复位 空)
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	ui._refresh()
+	check(ui._auto_restore_count == 2 and str(ui._auto_restore_last_text) == "已恢复 自动: 购置·施展",
+			"打磨-72 收尾 三关 恢复 计数/文案 稳定 (实际 %d / %s)" % [ui._auto_restore_count, str(ui._auto_restore_last_text)])
 	await get_tree().process_frame
 
 
