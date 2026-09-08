@@ -1322,6 +1322,148 @@ func onekey_summary_key(cat: String = "", tier: int = -1) -> String:
 	var v: Array = onekey_summary_vals(cat, tier)
 	return "%d|%d|%d|%d|%d|%d" % [int(v[0]), int(v[1]), int(v[2]), int(v[3]), int(v[4]), int(v[5])]
 
+# ---------- 打磨-76: 一键汇总徽标 段 悬浮 明细 (悬停 段 热区 展开 可执行项 列表) ----------
+# 只读: 返回 6 行 明细文本 [领悟, 神通, 施展, 法器, 装备, 最佳], 口径 与 onekey_summary_vals
+# 完全一致 (领悟/神通 受 cat/tier 筛选 叠加, 施展=就绪主动神通, 法器/装备=灵石 单件 买得起
+# 的 未拥有件, 最佳=可改进 槽位); 列表 截断 (领悟/神通/施展 前 6 行, 法器/装备/最佳 前 5 行),
+# 超出 附 "…N 项"; 可执行 0 = 说明 文案 (无 可学/无 就绪/灵石不足/已最佳)。供 顶栏 一键 徽标
+# 段 tooltip 追加 (UI 按 状态键 节流, 与 段 计数 同 刷新 时机), 无 状态/存档/统计 副作用。
+
+# 领悟/神通 段 明细 (active_only=false=领悟 / true=神通; 与 按钮 计数 同 口径: 未学+境界足够+筛选)
+func _ok_tip_learn(cat: String, tier: int, active_only: bool) -> String:
+	var n: int = active_learn_available_count(cat, tier) if active_only else learn_available_count(cat, tier)
+	var label: String = "神通" if active_only else "技能"
+	if n == 0:
+		return "当前境界 无 新 可学%s (未学 + 境界/层 足够, 与 一键%s 计数 同口径)" % [label, label]
+	var lines: Array = []
+	for id in skill_ids:
+		if learned.has(id):
+			continue
+		var s: Dictionary = skill_by_id.get(id, {})
+		if s.is_empty():
+			continue
+		if cat != "" and str(s["category"]) != cat:
+			continue
+		if tier >= 0 and int(s["tier"]) != tier:
+			continue
+		if active_only and str(s.get("type", "")) != "active":
+			continue
+		if not can_learn(id):
+			continue
+		lines.append("「%s」 %s·%s (%s 第%d层 以上)" % [str(s["name"]), str(s["tier_name"]),
+			str(s["category_name"]), REALMS[int(s["unlock_realm"])]["name"], int(s["unlock_layer"])])
+		if lines.size() >= 6:
+			break
+	var txt := "%d 个可学:" % n
+	for l in lines:
+		txt += "\n· " + str(l)
+	if n > lines.size():
+		txt += "\n…%d 项" % (n - lines.size())
+	return txt
+
+# 施展 段 明细 (已学+冷却完毕 的 主动神通; 每行 附 爆发 预览, 与 打磨-54 口径 一致)
+func _ok_tip_cast() -> String:
+	var n: int = active_ready_count()
+	if n == 0:
+		return "无 就绪 主动神通 (未领悟 或 冷却中)"
+	var rate: float = qi_per_sec()
+	var lines: Array = []
+	for id in skill_ids:
+		var s: Dictionary = skill_by_id.get(str(id), {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if not learned.has(str(id)) or not active_ready(str(id)):
+			continue
+		lines.append("「%s」 爆发 +%s %s" % [str(s["name"]), fmt(rate * float(s["value"])), primary_res_name()])
+		if lines.size() >= 6:
+			break
+	var txt := "%d 个就绪:" % n
+	for l in lines:
+		txt += "\n· " + str(l)
+	if n > lines.size():
+		txt += "\n…%d 项" % (n - lines.size())
+	return txt
+
+# 法器 段 明细 (灵石 单件 买得起 的 未拥有 法器, 价格升序 截断 5 行)
+func _ok_tip_item() -> String:
+	var order: Array = []
+	for it in ITEMS:
+		if not owned.has(str(it["id"])) and stones >= float(it["cost"]):
+			order.append(it)
+	order.sort_custom(_item_price_cmp)
+	var n: int = order.size()
+	if n == 0:
+		return "灵石 不足 购买 下一件, 或 法器 已 全 拥有"
+	var txt := "%d 件可购:" % n
+	for i in mini(n, 5):
+		txt += "\n· 「%s」 灵石 %s" % [str(order[i]["name"]), fmt(float(order[i]["cost"]))]
+	if n > 5:
+		txt += "\n…%d 项" % (n - 5)
+	return txt
+
+# 装备 段 明细 (灵石 单件 买得起 的 未拥有 装备, 价格升序 截断 5 行; 与 装备页 一键购买 按钮 同口径)
+func _ok_tip_equip() -> String:
+	var order: Array = []
+	for eid in equip_ids:
+		var e: Dictionary = equip_by_id.get(str(eid), {})
+		if e.is_empty():
+			continue
+		if not owned_eq.has(str(eid)) and stones >= float(e["cost"]):
+			order.append(e)
+	order.sort_custom(_equip_cost_cmp)
+	var n: int = order.size()
+	if n == 0:
+		return "灵石 不足 购买 下一件, 或 装备 已 全 拥有"
+	var txt := "%d 件可购:" % n
+	for i in mini(n, 5):
+		txt += "\n· 「%s」 %s·%s 灵石 %s" % [str(order[i]["name"]), str(order[i]["tier_name"]),
+			str(order[i]["slot_name"]), fmt(float(order[i]["cost"]))]
+	if n > 5:
+		txt += "\n…%d 项" % (n - 5)
+	return txt
+
+func _equip_cost_cmp(a: Dictionary, b: Dictionary) -> bool:
+	var ca: float = float(a["cost"])
+	var cb: float = float(b["cost"])
+	if ca != cb:
+		return ca < cb
+	return str(a["id"]) < str(b["id"])
+
+# 最佳 段 明细 (穿戴 非最佳 的 槽位; 每行 部位 + 建议 换 件名 + 当前 穿戴)
+func _ok_tip_best() -> String:
+	var n: int = equip_best_pending()
+	if n == 0:
+		return "各 部位 已 最佳 (或 无 拥有 装备)"
+	var txt := "%d 部位 可改进:" % n
+	var shown := 0
+	for slot in SLOTS:
+		if shown >= 5:
+			break
+		var bid: String = equip_best_id(slot)
+		if bid == "" or str(equipped.get(slot, "")) == bid:
+			continue
+		var e: Dictionary = equip_by_id.get(bid, {})
+		var cur: String = str(equipped.get(slot, ""))
+		var cur_name: String = "无"
+		if cur != "":
+			var ce: Dictionary = equip_by_id.get(cur, {})
+			if not ce.is_empty():
+				cur_name = str(ce.get("name", ""))
+		txt += "\n· %s: 换「%s」 (当前 %s)" % [str(SLOT_CN[slot]), str(e.get("name", "")), cur_name]
+		shown += 1
+	return txt
+
+# 六段 明细 [领悟, 神通, 施展, 法器, 装备, 最佳] (只读; cat/tier 同 onekey_summary_vals)
+func onekey_segment_tips(cat: String = "", tier: int = -1) -> Array:
+	var tips: Array = []
+	tips.append(_ok_tip_learn(cat, tier, false))
+	tips.append(_ok_tip_learn(cat, tier, true))
+	tips.append(_ok_tip_cast())
+	tips.append(_ok_tip_item())
+	tips.append(_ok_tip_equip())
+	tips.append(_ok_tip_best())
+	return tips
+
 # ================= 打磨-10: 道行 (飞升后目标) =================
 
 func dao_break_cost() -> float:

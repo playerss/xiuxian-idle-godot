@@ -2215,11 +2215,22 @@ func _apply_onekey_summary(cat: String = "", tier: int = -1) -> void:
 	var g := GameData
 	var names: Array = ["领悟", "神通", "施展", "法器", "装备", "最佳"]
 	var vals: Array = g.onekey_summary_vals(cat, tier)
+	# 打磨-76: 段 悬浮 明细 (悬停 展开 可执行项 列表; 与 段 计数 同 状态键 节流)
+	var tips: Array = g.onekey_segment_tips(cat, tier)
+	var ok_tips: Array = [
+		"一键领悟 — 批量学习 全部 未学+境界足够 的技能 (与技能页按钮 同口径, 受 类别/品质 筛选 叠加); 点击 直达 技能页 (重置 类别/品质 筛选)",
+		"一键神通 — 只学 筛选范围内 未学+境界足够 的 主动神通 (与技能页按钮 同口径); 点击 直达 技能页 (重置 类别/品质 筛选)",
+		"一键施展 — 一次释放 所有 已学+冷却完毕 的 主动神通 (与技能页按钮 同口径, 爆发=当前灵气速率 x 爆发秒数, 飞升后=道行); 点击 直接 执行 (无需切页)",
+		"一键购买 (法器) — 按 价格升序 连买 买得起 的 法器 (与修行页按钮 同口径); 点击 直达 修行页·法器区 (金边高亮)",
+		"一键购买 (装备) — 按 价格升序 连买 买得起 的 装备, 槽位空 自动穿戴 (与装备页按钮 同口径); 点击 直达 装备页 (重置 部位/品质 筛选)",
+		"一键最佳 — 各部位 换上 拥有的 主属性 最优 件 (与装备页按钮 同口径, 判定链 灵气+灵石 > 突破 > 离线); 点击 直达 装备页 (重置 部位/品质 筛选)",
+	]
 	for i in names.size():
 		var seg_l: Label = _onekey_segs[i]
 		var n: int = int(vals[i])
 		seg_l.text = names[i] + (" %d" % n if n > 0 else "")
 		seg_l.add_theme_color_override("font_color", GOLD if n > 0 else DIM)
+		_onekey_btns[i].tooltip_text = str(ok_tips[i]) + "\n段计数 = 当前 可执行数 (0=灰显, 与 各页 一键 按钮 计数 口径一致)\n\n" + str(tips[i])
 
 
 # 打磨-75: 顶栏 一键 汇总 段 点击 — 直达 对应页 (并重置 对应 筛选, 口径 同 打磨-44 收集直达)

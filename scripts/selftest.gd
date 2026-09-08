@@ -3044,6 +3044,140 @@ func _init() -> void:
 	# 收尾 = 全新开荒基准 (练气第1层, 无 资源/已学/已拥有): 领悟/神通 = 凡品 可学数 (数据 固定),
 	# 施展/法器/装备/最佳 = 0 (无 就绪 主动 / 无 灵石 / 无 拥有件); 断言 与 真实 基准 恒等 (防 污染)
 	check(g.onekey_summary_key() == "11|6|0|0|0|0", "打磨-75 收尾 全新基准 键=11|6|0|0|0|0 (实际 %s)" % g.onekey_summary_key())
+	# ---------- 打磨-76: 一键汇总徽标 段 悬浮 明细 (只读 六段 明细文本, 口径 与 onekey_summary_vals 一致) ----------
+	# 受控基准: 境界2 层1 / 灵石 5000 / 空 已学 已拥有 已穿戴 (与 打磨-75 基准 同)
+	g.realm_idx = 2
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 5000.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	var tips76: Array = g.onekey_segment_tips()
+	check(tips76.size() == 6, "打磨-76 明细 六段 齐全 (实际 %d)" % tips76.size())
+	# 领悟 段: 51 个可学 前 6 行 + …45 项 截断 (名称/品质/类别/解锁条件 齐全)
+	var tip_l: String = str(tips76[0])
+	check(tip_l.begins_with("51 个可学:"), "打磨-76 领悟 段 计数 前缀=51 个可学 (实际 %s)" % tip_l.left(20))
+	check(tip_l.count("\n· ") == 6, "打磨-76 领悟 段 截断 前 6 行 (实际 %d 行)" % tip_l.count("\n· "))
+	check(tip_l.ends_with("\n…45 项"), "打磨-76 领悟 段 截断 尾注 …45 项 (实际 %s)" % tip_l.right(12))
+	check(tip_l.find("· 「木剑法」 凡品·剑法 (练气 第1层 以上)") >= 0, "打磨-76 领悟 段 首行=木剑法 行内 品质/类别/解锁 (实际 %s)" % tip_l)
+	# 神通 段: 14 个可学 前 6 行 + …8 项 (明细 只 含 主动 可学, 与 按钮 计数 同口径)
+	var tip_a: String = str(tips76[1])
+	check(tip_a.begins_with("14 个可学:"), "打磨-76 神通 段 计数 前缀=14 个可学 (实际 %s)" % tip_a.left(20))
+	check(tip_a.ends_with("\n…8 项"), "打磨-76 神通 段 截断 尾注 …8 项 (实际 %s)" % tip_a.right(10))
+	var act_names: Array = []
+	for sid in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(sid), {})
+		if not s.is_empty() and str(s.get("type", "")) == "active" and g.can_learn(str(sid)):
+			act_names.append(str(s["name"]))
+	check(act_names.size() == 14, "打磨-76 受控 可学 主动神通=14 (实际 %d)" % act_names.size())
+	# 截断 只列 前 6 项 (skill_ids 数据序): 断言 前 6 个 可学主动神通 名称 依次 出现
+	var first6_ok: bool = true
+	for i in mini(6, act_names.size()):
+		if tip_a.find("· 「%s」" % act_names[i]) < 0:
+			first6_ok = false
+	check(first6_ok, "打磨-76 神通 段 明细 前 6 项 = 数据序 可学主动神通 (实际 %s)" % tip_a)
+	# 施展 段: 无 就绪 → 说明 文案
+	check(str(tips76[2]) == "无 就绪 主动神通 (未领悟 或 冷却中)", "打磨-76 施展 段 无就绪 说明 文案 (实际 %s)" % str(tips76[2]))
+	# 法器 段: 灵石 5000 单件 可购 木剑 100 + 玉符 1000 = 2 件 (价格升序)
+	var tip_i: String = str(tips76[3])
+	check(tip_i.begins_with("2 件可购:"), "打磨-76 法器 段 计数 前缀=2 件可购 (实际 %s)" % tip_i.left(20))
+	check(tip_i.find("· 「木剑」 灵石 100") >= 0 and tip_i.find("· 「玉符」 灵石 1000") >= 0,
+			"打磨-76 法器 段 明细 价格升序 含 名称/价格 (实际 %s)" % tip_i)
+	# 装备 段: 单件 买得起 60 件 前 5 行 + …55 项; 首行=最便宜 未拥有件 (100 灵石)
+	var tip_e: String = str(tips76[4])
+	check(tip_e.begins_with("60 件可购:"), "打磨-76 装备 段 计数 前缀=60 件可购 (实际 %s)" % tip_e.left(20))
+	check(tip_e.count("\n· ") == 5, "打磨-76 装备 段 截断 前 5 行 (实际 %d 行)" % tip_e.count("\n· "))
+	check(tip_e.ends_with("\n…55 项"), "打磨-76 装备 段 截断 尾注 …55 项 (实际 %s)" % tip_e.right(12))
+	check(tip_e.find("灵石 100") >= 0, "打磨-76 装备 段 首行 最便宜件 价格=100 (实际 %s)" % tip_e)
+	# 最佳 段: 无 拥有 装备 → 说明 文案
+	check(str(tips76[5]) == "各 部位 已 最佳 (或 无 拥有 装备)", "打磨-76 最佳 段 无拥有 说明 文案 (实际 %s)" % str(tips76[5]))
+	# 只读: 连读 恒定 无 资源/统计 副作用
+	var st76: Dictionary = g.stats.duplicate(true)
+	var stones76: float = g.stones
+	g.onekey_segment_tips()
+	check(str(g.onekey_segment_tips()[0]) == tip_l and g.stones == stones76 and g.stats == st76,
+			"打磨-76 只读 连读 恒定 无 资源/统计 副作用")
+	# 学 6 个 可学 主动神通 (tier0) → 施展 段 6 就绪 (每行 附 爆发 预览), 领悟/神通 段 计数 减少
+	var act_t0_76: Array = []
+	for sid in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(sid), {})
+		if not s.is_empty() and str(s.get("type", "")) == "active" and int(s["tier"]) == 0 and g.can_learn(str(sid)):
+			act_t0_76.append(str(sid))
+	check(act_t0_76.size() == 6, "打磨-76 受控 可学 主动神通(tier0)=6 (实际 %d)" % act_t0_76.size())
+	for sid in act_t0_76:
+		g.learned.append(str(sid))
+	var tips76b: Array = g.onekey_segment_tips()
+	var tip_cast: String = str(tips76b[2])
+	check(tip_cast.begins_with("6 个就绪:"), "打磨-76 学6神通 施展 段 前缀=6 个就绪 (实际 %s)" % tip_cast.left(14))
+	check(tip_cast.count("\n· ") == 6 and tip_cast.count("爆发 +") == 6,
+			"打磨-76 施展 段 明细 6 行 均 附 爆发 预览 (实际 %s)" % tip_cast)
+	check(str(tips76b[0]).begins_with("45 个可学:") and str(tips76b[1]).begins_with("8 个可学:"),
+			"打磨-76 学6神通后 领悟段=45 神通段=8 (实际 %s / %s)" % [str(tips76b[0]).left(14), str(tips76b[1]).left(14)])
+	# 筛选 叠加: cat=sword × tier0 → 领悟段 前缀 与 计数 接口 一致 (口径 同 按钮)
+	var tip_sw: Array = g.onekey_segment_tips("sword", 0)
+	var n_learn_sw: int = g.learn_available_count("sword", 0)
+	check(str(tip_sw[0]).begins_with("%d 个可学:" % n_learn_sw),
+			"打磨-76 sword×tier0 领悟段 前缀 与 计数 接口 一致 (接口=%d 实际 %s)" % [n_learn_sw, str(tip_sw[0]).left(14)])
+	var n_act_sw: int = g.active_learn_available_count("sword", 0)
+	if n_act_sw > 0:
+		check(str(tip_sw[1]).begins_with("%d 个可学:" % n_act_sw),
+				"打磨-76 sword×tier0 神通段 前缀 与 计数 接口 一致 (接口=%d 实际 %s)" % [n_act_sw, str(tip_sw[1]).left(14)])
+	else:
+		check(str(tip_sw[1]).begins_with("当前境界 无 新 可学神通"),
+				"打磨-76 sword×tier0 神通段=0 走 空 文案 (实际 %s)" % str(tip_sw[1]).left(14))
+	# 拥有 各部位 最便宜件 (5 件) 未 穿戴 → 最佳 段 5 部位 明细 (换 建议件名 + 当前 件名)
+	for slot in g.SLOTS:
+		var cheapest: Dictionary = {}
+		for eid in g.equip_ids:
+			var e: Dictionary = g.equip_by_id[eid]
+			if str(e["slot"]) != slot:
+				continue
+			if cheapest.is_empty() or float(e["cost"]) < float(cheapest["cost"]):
+				cheapest = e
+		g.owned_eq.append(str(cheapest["id"]))
+	var tip_best76: String = str(g.onekey_segment_tips()[5])
+	check(tip_best76.begins_with("5 部位 可改进:"), "打磨-76 拥有5件未穿 最佳 段 前缀=5 部位 可改进 (实际 %s)" % tip_best76.left(16))
+	check(tip_best76.count("\n· ") == 5 and tip_best76.find("当前 ") >= 0,
+			"打磨-76 最佳 段 5 行 含 换 建议 + 当前 件名 (实际 %s)" % tip_best76)
+	# 一键最佳 后 → 最佳 段 说明 文案 (幂等 已最佳)
+	g.equip_best()
+	check(str(g.onekey_segment_tips()[5]) == "各 部位 已 最佳 (或 无 拥有 装备)",
+			"打磨-76 一键最佳 后 最佳 段 说明 文案 (实际 %s)" % str(g.onekey_segment_tips()[5]))
+	# 灵石 归 0 → 法器/装备 段 说明 文案 (未拥有 恒 有, 走 灵石不足 分支)
+	g.stones = 0.0
+	var tips76z: Array = g.onekey_segment_tips()
+	check(str(tips76z[3]).begins_with("灵石 不足"), "打磨-76 灵石0 法器 段 说明 文案 (实际 %s)" % str(tips76z[3]))
+	check(str(tips76z[4]).begins_with("灵石 不足"), "打磨-76 灵石0 装备 段 说明 文案 (实际 %s)" % str(tips76z[4]))
+	# 收尾: 恢复 干净 基准 (防 污染 后续 段), 三开关 关
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g._active_cd.clear()
+	# 收尾 基准 明细: 领悟 11/神通 6 可学, 施展/法器/装备/最佳 全 说明 文案
+	var tips76f: Array = g.onekey_segment_tips()
+	check(str(tips76f[0]).begins_with("11 个可学:") and str(tips76f[1]).begins_with("6 个可学:"),
+			"打磨-76 收尾 基准 领悟11 神通6 (实际 %s / %s)" % [str(tips76f[0]).left(14), str(tips76f[1]).left(14)])
+	check(str(tips76f[2]) == "无 就绪 主动神通 (未领悟 或 冷却中)"
+			and str(tips76f[3]).begins_with("灵石 不足") and str(tips76f[4]).begins_with("灵石 不足")
+			and str(tips76f[5]) == "各 部位 已 最佳 (或 无 拥有 装备)",
+			"打磨-76 收尾 基准 施展/法器/装备/最佳 全 说明 文案")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
