@@ -300,6 +300,15 @@ func play_time_text() -> String:
 		return ""
 	return "⏳ %s" % fmt_stats_time(sec)
 
+# 打磨-78: 顶栏 主资源速率 只读 接口 (未飞升=灵气/秒, 飞升后=道行/秒; 与 修行页 灵气速率 同口径
+# = 境界基础 x 道行阶段 x 法器连乘 x 功法装备 1+Σ; 速率<=0 返回 空串 供 UI 隐藏 标签,
+# 只读 不 改 状态/存档/统计)
+func primary_rate_text() -> String:
+	var r: float = qi_per_sec()
+	if r <= 0.0:
+		return ""
+	return "+%s/秒" % fmt(r)
+
 # 统计时长格式 (日/小时/分)
 func fmt_stats_time(sec: float) -> String:
 	var d := int(sec) / 86400

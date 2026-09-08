@@ -3204,6 +3204,65 @@ func _init() -> void:
 	# 收尾: 恢复 干净 基准 (play_sec 0 → 空串 隐藏)
 	g.stats["play_sec"] = 0.0
 	check(g.play_time_text() == "", "打磨-77 收尾 0 时长 空串")
+	# ---------- 打磨-78: 顶栏 主资源速率 常显 接口 (只读 primary_rate_text, 与 修行页 灵气速率 同口径;
+	# 未飞升=灵气/秒, 飞升后=道行/秒; 期望值 全部 按 当前 qi_per_sec 动态 计算, 防 境界/功法 残留 干扰) ----------
+	var base_qps: float = g.qi_per_sec()
+	var st8_base: String = g.primary_rate_text()
+	check(st8_base == ("+%s/秒" % g.fmt(base_qps)),
+		"打磨-78 基准 文案=+当前速率/秒 (实际 %s, 速率 %s)" % [st8_base, str(base_qps)])
+	# 境界 变化 → 文案 同步 (QI_MULT 梯度 恒 >0, 恢复原 境界)
+	var r8_save: int = g.realm_idx
+	g.realm_idx = 2
+	var t8_r2: String = g.primary_rate_text()
+	check(t8_r2 == ("+%s/秒" % g.fmt(g.qi_per_sec())),
+		"打磨-78 境界2 文案 动态 恒等 (实际 %s)" % t8_r2)
+	g.realm_idx = r8_save
+	check(g.primary_rate_text() == st8_base, "打磨-78 恢复 境界 后 文案 复原")
+	# 功法 加成: 学 一个 qi_mult 被动 → 速率 与 文案 同 恒等 (学完 再学 同 id 幂等 防御)
+	var skill8: String = ""
+	for sid in g.skill_ids:
+		var sd: Dictionary = g.skill_by_id.get(sid, {})
+		if str(sd.get("effect", "")) == "qi_mult" and g.can_learn(sid):
+			skill8 = sid
+			break
+	check(skill8 != "", "打磨-78 存在 可学 qi_mult 被动 (实际 %s)" % skill8)
+	if skill8 != "":
+		g.learn_skill(skill8)
+		var qps_after: float = g.qi_per_sec()
+		check(qps_after > base_qps, "打磨-78 学 qi_mult 后 速率 上升 (实际 %s > %s)" % [str(qps_after), str(base_qps)])
+		check(g.primary_rate_text() == ("+%s/秒" % g.fmt(qps_after)),
+			"打磨-78 学功法 后 文案=+新速率/秒 (实际 %s)" % g.primary_rate_text())
+	# 法器 连乘: 买 一件法器 → 文案 与 qi_per_sec 恒等 (买不 重复 扣 灵石 二次; 恢复 灵石/owned)
+	var stone8_save: float = g.stones
+	var item8: String = "wooden_sword"
+	if not g.owned.has(item8):
+		g.stones = 1000.0
+		g.try_buy_item(item8)
+		check(g.owned.has(item8), "打磨-78 法器 购买 成功 (owned)")
+		check(g.primary_rate_text() == ("+%s/秒" % g.fmt(g.qi_per_sec())),
+			"打磨-78 买法器 后 文案 动态 恒等 (实际 %s)" % g.primary_rate_text())
+		g.owned.erase(item8)
+		g.stones = stone8_save
+		check(g.primary_rate_text() == st8_base, "打磨-78 恢复 法器 后 文案 复原")
+	# 飞升 后 口径 = 道行/秒 (速率 恒 同 公式, 仅 文案 口径 切换; 恢复 原 态)
+	var asc8_save: bool = g.ascended
+	var dao8_save: float = g.dao
+	var daoLv8_save: int = g.dao_level
+	g.ascended = true
+	g.dao_level = 1
+	check(g.primary_rate_text() == ("+%s/秒" % g.fmt(g.qi_per_sec())),
+		"打磨-78 飞升 后 文案=+道行速率/秒 恒等 (实际 %s)" % g.primary_rate_text())
+	g.ascended = asc8_save
+	g.dao_level = daoLv8_save
+	g.dao = dao8_save
+	check(g.primary_rate_text() == st8_base, "打磨-78 恢复 飞升 态 后 文案 复原")
+	# 只读: 连读 恒定 + 接口 本身 不改 资源/统计 (快照 对比)
+	var snap8: Dictionary = g.stats.duplicate(true)
+	var ess8: float = g.essence
+	var st8: float = g.stones
+	check(g.primary_rate_text() == g.primary_rate_text(), "打磨-78 只读 连读 恒定")
+	check(g.stats == snap8 and g.essence == ess8 and g.stones == st8,
+		"打磨-78 只读 接口 无 资源/统计 副作用")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
