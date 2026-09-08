@@ -2922,6 +2922,44 @@ func _init() -> void:
 	g.auto_buy = false
 	g.auto_cast = false
 	check(g.auto_restore_text() == "", "打磨-72 收尾 三关 空串")
+	# ---------- 打磨-73: 顶栏 自动系列 状态徽标 (只读接口 auto_on_count 开启数, 全关=0 单开=1 三开=3,
+	# 只读性+存档往返 计数 与 三开关 同源, 收尾 三开关 全 关) ----------
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	check(g.auto_on_count() == 0, "打磨-73 三关 开启数 0 (实际 %d)" % g.auto_on_count())
+	# 只读性: 连读多次 计数 恒定, 且 不改动 开关/资源/统计
+	var r73_stones: float = g.stones
+	var r73_txt: String = g.auto_restore_text()
+	for _i73 in 3:
+		g.auto_on_count()
+	check(g.auto_on_count() == 0 and g.auto_break == false and g.auto_buy == false
+			and g.auto_cast == false and g.stones == r73_stones
+			and g.auto_restore_text() == r73_txt, "打磨-73 只读 连读 恒定 无 开关/资源/统计 副作用")
+	# 单开 计数 1 (每档 各断言)
+	g.auto_buy = true
+	check(g.auto_on_count() == 1, "打磨-73 仅购置 开启数 1 (实际 %d)" % g.auto_on_count())
+	g.auto_buy = false
+	g.auto_cast = true
+	check(g.auto_on_count() == 1, "打磨-73 仅施展 开启数 1 (实际 %d)" % g.auto_on_count())
+	g.auto_cast = false
+	g.auto_break = true
+	check(g.auto_on_count() == 1, "打磨-73 仅突破 开启数 1 (实际 %d)" % g.auto_on_count())
+	# 组合 计数 (突破+施展=2, 三开=3)
+	g.auto_cast = true
+	check(g.auto_on_count() == 2, "打磨-73 突破+施展 开启数 2 (实际 %d)" % g.auto_on_count())
+	g.auto_buy = true
+	check(g.auto_on_count() == 3, "打磨-73 三开 开启数 3 (实际 %d)" % g.auto_on_count())
+	# 存档往返 后 计数 与 恢复态 一致 (与 打磨-72 读档 同口径: 三开 落盘 读回)
+	g.save_game()
+	g.load_game()
+	check(g.auto_on_count() == 3 and g.auto_break == true and g.auto_buy == true and g.auto_cast == true,
+		"打磨-73 读档恢复 计数 3 与 三开关 一致")
+	# 收尾: 三开关 全 关 (计数 0), 防 污染 后续 段
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	check(g.auto_on_count() == 0, "打磨-73 收尾 三关 计数 0")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

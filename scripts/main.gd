@@ -79,6 +79,8 @@ var _offline_float_count := 0      # 打磨-66: 离线浮动提示次数 (自测
 var _offline_last_text := ""       # 打磨-66: 最近一次离线浮动文案 (自测断言用)
 var _auto_restore_count := 0       # 打磨-72: 启动 自动系列 恢复 提示 次数 (自测断言用)
 var _auto_restore_last_text := ""  # 打磨-72: 最近一次 自动 恢复 提示 文案 (自测断言用)
+var _auto_badge: Label             # 打磨-73: 顶栏 自动系列 状态徽标 ("自动 N/3" 金色, 任一开关开 显示, 全关 隐藏)
+var _auto_badge_n := -1            # 打磨-73: 已刷过的 开启开关数 缓存 (-1=未应用, 首帧必刷; 变化才刷)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _stone_tip := ""              # 打磨-49: 顶栏灵石行 tooltip 缓存 (变化才刷, 速率/缺口随挂机变化)
@@ -225,6 +227,21 @@ func _build_ui() -> void:
 	top.add_child(_essence_label)
 	_stones_label = _label("灵石 0", 19, WHITEISH)
 	top.add_child(_stones_label)
+	# 打磨-73: 顶栏 自动系列 状态徽标 (金色圆角徽标 "自动 N/3": 任一开关开 显示, 全关 隐藏;
+	# tooltip 复用 auto_summary_text 三开关 口径 + 离线不触发 说明; 纯展示 无 存档/统计 副作用)
+	_auto_badge = _label("", 15, GOLD)
+	var ab_sb := StyleBoxFlat.new()
+	ab_sb.bg_color = Color(0.15, 0.13, 0.07)
+	ab_sb.set_border_width_all(1)
+	ab_sb.border_color = GOLD
+	ab_sb.set_corner_radius_all(4)
+	ab_sb.content_margin_left = 6.0
+	ab_sb.content_margin_right = 6.0
+	ab_sb.content_margin_top = 2.0
+	ab_sb.content_margin_bottom = 2.0
+	_auto_badge.add_theme_stylebox_override("normal", ab_sb)
+	_auto_badge.visible = false
+	top.add_child(_auto_badge)
 
 	# Tab
 	_tab = TabContainer.new()
@@ -1306,6 +1323,19 @@ func _refresh() -> void:
 	if ak != _auto_sum_key:
 		_auto_sum_key = ak
 		_apply_auto_summary()
+	# 打磨-73: 顶栏 自动系列 状态徽标 (任一开关开 显示 "自动 N/3" 金色, 全关 隐藏;
+	# 开启数 变化才刷, 读档恢复/外部改 同步; 纯展示 无 存档/统计 副作用)
+	var bn: int = g.auto_on_count()
+	if bn != _auto_badge_n:
+		_auto_badge_n = bn
+		if bn > 0:
+			_auto_badge.visible = true
+			_auto_badge.text = "自动 %d/3" % bn
+			_auto_badge.tooltip_text = g.auto_summary_text() + "\n(离线期间不触发, 游戏运行时生效; 明细见 修行页 自动系列 状态汇总行)"
+		else:
+			_auto_badge.visible = false
+			_auto_badge.text = ""
+			_auto_badge.tooltip_text = ""
 	# 打磨-32: 突破按钮"可突破"金边高亮 (资源攒够时引导点击, 状态变化才刷样式; 闪烁动画期间不干预)
 	var ready_now: bool = g.breakthrough_ready()
 	if ready_now != _break_ready:

@@ -1063,6 +1063,18 @@ func auto_restore_text() -> String:
 		return ""
 	return "已恢复 自动: %s" % "·".join(parts)
 
+# 打磨-73: 顶栏 自动系列 状态徽标 — 开启开关 数量 (只读; 0=全关 UI 隐藏徽标,
+# N>0 时 UI 显示 "自动 N/3" 金色徽标; 无 存档/统计 副作用)
+func auto_on_count() -> int:
+	var n := 0
+	if auto_break:
+		n += 1
+	if auto_buy:
+		n += 1
+	if auto_cast:
+		n += 1
+	return n
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0

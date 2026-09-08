@@ -9,6 +9,9 @@ extends Node
 ##          对应 自动开关 同 口径+底部消息+上方按钮同步按压态/节流/无 资源/统计 副作用)
 ## 打磨-72: 启动 自动系列 恢复 提示断言 (_ready 三关 不提示 计数 0/手动驱动 单开+组合 底部消息
 ##          文案=auto_restore_text+计数+1/离线消息 优先 让位/全关 不提示/无 资源/统计 副作用/收尾 恢复)
+## 打磨-73: 顶栏 自动系列 状态徽标断言 (金色徽标节点 顶栏子节点/全关 隐藏 文本空/单开 显示
+##          "自动 1/3"+tooltip 复用 auto_summary_text/两开 "2/3"/三开 "3/3"/全关 恢复 隐藏/
+##          节流 同态 不重写 文本/无 资源/统计 副作用/收尾 三关 隐藏)
 ## 打磨-45: 一键系列统一浮动反馈断言 (变更>0 屏幕中央绿色浮动含数量/0 变更不弹/幂等再点不弹/
 ##          文案/计数/颜色/无 essence 副作用, 5 按钮逐一+重复点击)
 ## 打磨-46: 一键系列按钮 tooltip 统一口径断言 (5 按钮 3 行结构: 动作顺序/筛选叠加/计数口径 +
@@ -118,6 +121,7 @@ func _ready() -> void:
 	await _assert_auto_summary()
 	await _assert_auto_sum_jump()
 	_assert_auto_restore()
+	await _assert_auto_badge()
 	_finish()
 
 
@@ -2415,6 +2419,61 @@ func _assert_auto_restore() -> void:
 	ui._refresh()
 	check(ui._auto_restore_count == 2 and str(ui._auto_restore_last_text) == "已恢复 自动: 购置·施展",
 			"打磨-72 收尾 三关 恢复 计数/文案 稳定 (实际 %d / %s)" % [ui._auto_restore_count, str(ui._auto_restore_last_text)])
+	await get_tree().process_frame
+
+
+# 打磨-73: 顶栏 自动系列 状态徽标 — 顶栏 最右 金色 "自动 N/3" 徽标 (任一开关开 显示, 全关 隐藏;
+# tooltip 复用 auto_summary_text 三开关 口径 + 离线不触发 说明; 开启数 变化才刷, 无 存档/统计 副作用)
+# 断言 (手动驱动 确定性): 徽标节点 顶栏子节点+金色样式/全关 隐藏 文本空/单开 "自动 1/3"+可见+
+# tooltip 含 三开关 状态行/两开 "自动 2/3"/三开 "自动 3/3"/同态 再 _refresh 文本 不变 节流/
+# 全关 恢复 隐藏 文本空 tooltip 清/无 资源/统计 副作用/收尾 三关 隐藏
+func _assert_auto_badge() -> void:
+	var g := GameData
+	# 徽标 节点: 顶栏子节点 (境界/主资源/灵石 之后), 金色字 + 金边样式
+	check(ui._auto_badge != null, "打磨-73 顶栏 自动 徽标 节点 存在")
+	check(ui._auto_badge.get_parent() == ui._realm_label.get_parent(),
+		"打磨-73 徽标 挂在 顶栏 容器 (与 境界标签 同父; 实际父节点 %s)" % str(ui._auto_badge.get_parent()))
+	check(ui._auto_badge.get_theme_color("font_color") == Color(0.98, 0.86, 0.5),
+		"打磨-73 徽标 字色 金色 (实际 %s)" % str(ui._auto_badge.get_theme_color("font_color")))
+	# 初始 (打磨-72 收尾 三关 全 关): 隐藏, 文本 空
+	check(ui._auto_badge.visible == false, "打磨-73 初始 三关 徽标 隐藏 (实际 visible=%s)" % str(ui._auto_badge.visible))
+	check(str(ui._auto_badge.text) == "", "打磨-73 初始 三关 徽标 文本 空 (实际 %s)" % str(ui._auto_badge.text))
+	# 单开 突破 -> "自动 1/3" 可见 + tooltip 复用 auto_summary_text 三开关 口径
+	g.auto_break = true
+	ui._refresh()
+	check(ui._auto_badge.visible == true, "打磨-73 单开 突破 徽标 显示 (实际 visible=%s)" % str(ui._auto_badge.visible))
+	check(str(ui._auto_badge.text) == "自动 1/3", "打磨-73 单开 文案=自动 1/3 (实际 %s)" % str(ui._auto_badge.text))
+	var tip73: String = str(ui._auto_badge.tooltip_text)
+	check(tip73.begins_with("自动: 突破 ✓ · 购置 ✗ · 施展 ✗") and tip73.contains("离线期间不触发"),
+		"打磨-73 单开 tooltip 复用 auto_summary_text+离线口径 (实际 %s)" % tip73)
+	# 两开 (突破+施展) -> "自动 2/3" (购置 关 口径 与 汇总行 同)
+	g.auto_cast = true
+	ui._refresh()
+	check(str(ui._auto_badge.text) == "自动 2/3", "打磨-73 两开 文案=自动 2/3 (实际 %s)" % str(ui._auto_badge.text))
+	check(str(ui._auto_badge.tooltip_text).begins_with("自动: 突破 ✓ · 购置 ✗ · 施展 ✓"),
+		"打磨-73 两开 tooltip 三开关 口径 (实际 %s)" % str(ui._auto_badge.tooltip_text))
+	# 三开 -> "自动 3/3"
+	g.auto_buy = true
+	ui._refresh()
+	check(str(ui._auto_badge.text) == "自动 3/3", "打磨-73 三开 文案=自动 3/3 (实际 %s)" % str(ui._auto_badge.text))
+	# 节流: 同态 再 _refresh, 文本/可见 不变 (开启数 未变 不重写)
+	var txt73: String = str(ui._auto_badge.text)
+	var st73: Dictionary = g.stats.duplicate(true)
+	var stones73: float = g.stones
+	ui._refresh()
+	check(str(ui._auto_badge.text) == txt73 and ui._auto_badge.visible == true,
+		"打磨-73 同态 节流 文本/可见 稳定")
+	# 全关 恢复 隐藏 + 文本空 + tooltip 清
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	ui._refresh()
+	check(ui._auto_badge.visible == false and str(ui._auto_badge.text) == ""
+			and str(ui._auto_badge.tooltip_text) == "", "打磨-73 全关 恢复 隐藏/文本空/tooltip 清")
+	# 徽标 刷新 无 资源/统计 副作用 (纯展示)
+	check(g.stats == st73 and g.stones == stones73, "打磨-73 徽标 刷新 无 资源/统计 副作用")
+	# 收尾: 三关 全 关 隐藏 稳定 (防 污染)
+	check(ui._auto_badge.visible == false, "打磨-73 收尾 三关 隐藏")
 	await get_tree().process_frame
 
 
