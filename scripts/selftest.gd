@@ -3614,6 +3614,65 @@ func _init() -> void:
 	check(g.offline_preview_tip() == g.offline_preview_tip(), "打磨-83 只读 连读 恒定")
 	check(g.stats == snap83 and g.stones == st83_s and g.essence == es83_e and g.realm_idx == rl83,
 		"打磨-83 只读 接口 无 资源/统计/境界 副作用")
+	# ---------- 打磨-84: 自动购置 按钮 tooltip 动态段 (auto_buy_next_tip 只读接口, 复用 打磨-49/12 口径) ----------
+	# 受控态: 清空 拥有/穿戴/已学, 境界0层1 (灵石速率 = 1.0/s, 基准 无 加成), _process 冻结 已生效
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.stones = 0.0
+	var t84: Dictionary = g.stone_next_target()
+	check(not t84.is_empty(), "打磨-84 基准 存在 下一件 未拥有件 (实际 %s)" % str(t84.get("id", "")))
+	var exp84 := ("当前 %s 灵石/秒" % g.fmt(g.stone_per_sec()))
+	check(g.auto_buy_next_tip() == exp84 + ("\n下一件 %s「%s」 还差 %s 灵石 " % [str(t84["kind"]), str(t84["name"]), g.fmt(float(t84["shortfall"]))]) + g.eta_text(float(t84["cost"])),
+		"打磨-84 基准 tooltip=动态 拼接 恒等 (实际 %s)" % g.auto_buy_next_tip())
+	check(g.auto_buy_next_tip().find("下一件") >= 0 and g.auto_buy_next_tip().find(str(t84["name"])) >= 0,
+		"打磨-84 基准 tooltip 含 下一件 + 目标件名 (实际 %s)" % g.auto_buy_next_tip().left(60))
+	check(g.auto_buy_next_tip().find("可购") >= 0, "打磨-84 基准 tooltip 含 ETA 档位 (实际 %s)" % g.auto_buy_next_tip().left(60))
+	# 灵石足够: 缺口<=0 分支 (可立即购入, 无 ETA)
+	g.stones = float(t84["cost"])
+	check(g.auto_buy_next_tip() == exp84 + ("\n下一件 %s「%s」 灵石已足够, 可立即购入" % [str(t84["kind"]), str(t84["name"])]),
+		"打磨-84 灵石足够 tooltip=可立即购入 (实际 %s)" % g.auto_buy_next_tip())
+	g.stones = 0.0
+	# 境界2: 灵石速率 变化 → tooltip 同步 (动态), 恢复 复原
+	var realm84: int = g.realm_idx
+	g.realm_idx = 2
+	var tip84_r2: String = g.auto_buy_next_tip()
+	g.realm_idx = 0
+	g.stones = 0.0
+	var tip84_r2b: String = g.auto_buy_next_tip()
+	check(tip84_r2b != tip84_r2, "打磨-84 境界2 灵石速率 变化 tooltip 动态 变化")
+	g.realm_idx = realm84
+	check(g.auto_buy_next_tip() == exp84 + ("\n下一件 %s「%s」 还差 %s 灵石 " % [str(t84["kind"]), str(t84["name"]), g.fmt(float(g.stone_next_target()["shortfall"]))]) + g.eta_text(float(g.stone_next_target()["cost"])),
+		"打磨-84 恢复 境界 后 tooltip 复原")
+	# 购入 下一件: 目标 切换 → tooltip 变化 (指向 次便宜 未拥有件)
+	var tip84_buy0: String = g.auto_buy_next_tip()
+	var t84b: Dictionary = g.stone_next_target()
+	g.stones = float(t84b["cost"]) + 1.0
+	if str(t84b["kind"]) == "法器":
+		g.try_buy_item(str(t84b["id"]))
+	else:
+		g.buy_equipment(str(t84b["id"]))
+	var t84c: Dictionary = g.stone_next_target()
+	check(not t84c.is_empty() and str(t84c["id"]) != str(t84b["id"]), "打磨-84 购入后 下一件 切换 (实际 %s)" % str(t84c.get("id", "")))
+	var tip84_buy1: String = g.auto_buy_next_tip()
+	check(tip84_buy1 != tip84_buy0 and tip84_buy1.find(str(t84b["name"])) < 0, "打磨-84 购入后 tooltip 不再 指向 旧目标 (实际 %s)" % tip84_buy1.left(60))
+	# 飞升: 灵石速率 不受 飞升 影响 (stone_per_sec 无 道行 连乘) → tooltip 口径 不变
+	var asc84: bool = g.ascended
+	g.ascended = true
+	check(g.auto_buy_next_tip() == tip84_buy1, "打磨-84 飞升 后 tooltip 口径 不变 (灵石 速率 不受 飞升 影响)")
+	g.ascended = asc84
+	# 只读: 连读 恒定 + 接口 本身 不改 资源/统计/境界
+	var snap84: Dictionary = g.stats.duplicate(true)
+	var st84: float = g.stones
+	var rl84: int = g.realm_idx
+	check(g.auto_buy_next_tip() == g.auto_buy_next_tip(), "打磨-84 只读 连读 恒定")
+	check(g.stats == snap84 and g.stones == st84 and g.realm_idx == rl84,
+		"打磨-84 只读 接口 无 资源/统计/境界 副作用")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

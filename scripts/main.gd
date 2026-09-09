@@ -54,6 +54,8 @@ var _auto_break_on := false     # 打磨-67: 上帧开关状态缓存 (变化才
 var _auto_buy_btn: Button       # 打磨-68: 自动购置开关 (toggle, 存档持久化)
 var _auto_buy_on := false       # 打磨-68: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_buy_msg_seq := 0      # 打磨-68: 已提示过的 自动购置 变更事件序号 (避免重复提示; 启动=0 与 GameData 同态)
+var _auto_buy_tip := ""        # 打磨-84: 自动购置按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-49 口径)
+var _auto_buy_tip_static := ""  # 打磨-84: 自动购置按钮 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼)
 var _auto_cast_btn: Button      # 打磨-69: 自动施展开关 (toggle, 存档持久化)
 var _auto_cast_on := false      # 打磨-69: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_cast_float_label: Label   # 打磨-69: 自动施展 浮动提示 (顶层, 居中, 绿色)
@@ -589,7 +591,13 @@ func _build_training_page(page: Panel) -> void:
 	_auto_buy_btn = _make_button("自动购置: 关")
 	_auto_buy_btn.toggle_mode = true
 	_auto_buy_btn.pressed.connect(_on_auto_buy)
-	_auto_buy_btn.tooltip_text = "灵石攒够 自动购买 未拥有 法器/装备 (与 一键购置/一键购买 同口径: 价格升序连买 买得起 的, 槽位空时自动穿戴), 并自动 换上 各部位 最佳 拥有件 (一键最佳 口径)。\n每帧至多一轮, 灵石花到买不起为止 (购买后最便宜件恒买不起, 无热循环); 购入时底部消息提示 件数与花费 (无屏幕浮动, 避免挂机刷屏)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+	# 打磨-84: tooltip = 静态口径 + 动态段 (下一件 可购 时间, 随 灵石/速率/已拥有 变化 由 _refresh 刷新);
+	# 静态 前缀 存 成员 供 重拼 (避免 split 截断 坑, 与 打磨-49 顶栏灵石行 tooltip 动态段 口径 同)
+	_auto_buy_tip_static = ("灵石攒够 自动购买 未拥有 法器/装备 (与 一键购置/一键购买 同口径: 价格升序连买 买得起 的, 槽位空时自动穿戴), 并自动 换上 各部位 最佳 拥有件 (一键最佳 口径)。\n"
+		+ "每帧至多一轮, 灵石花到买不起为止 (购买后最便宜件恒买不起, 无热循环); 购入时底部消息提示 件数与花费 (无屏幕浮动, 避免挂机刷屏)。\n"
+		+ "开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
+		+ "【下一件 可购 时间 (动态)】")
+	_auto_buy_btn.tooltip_text = _auto_buy_tip_static
 	break_box.add_child(_auto_buy_btn)
 	# 打磨-69: 自动施展开关 (主动神通 冷却完毕 自动 施展 爆发; 状态变化才刷按钮态)
 	_auto_cast_btn = _make_button("自动施展: 关")
@@ -1527,6 +1535,11 @@ func _refresh() -> void:
 		_auto_buy_on = g.auto_buy
 		_auto_buy_btn.set_pressed_no_signal(g.auto_buy)
 		_auto_buy_btn.text = ("自动购置: 开" if g.auto_buy else "自动购置: 关")
+	# 打磨-84: 自动购置按钮 tooltip 动态段 (下一件 可购 时间, 随 灵石/速率/已拥有 变化 才刷; 同 打磨-49 缓存口径)
+	var ab_tip: String = g.auto_buy_next_tip()
+	if ab_tip != _auto_buy_tip:
+		_auto_buy_tip = ab_tip
+		_auto_buy_btn.tooltip_text = _auto_buy_tip_static + ab_tip
 	# 打磨-68: 自动购置 变更事件 → 底部消息 (变更事件序号 变化 且 有文案 才提示一次, 无屏幕浮动)
 	if g._auto_buy_seq != _auto_buy_msg_seq:
 		_auto_buy_msg_seq = g._auto_buy_seq

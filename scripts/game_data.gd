@@ -1343,6 +1343,28 @@ func stone_next_target_inline() -> String:
 		return "距下一件 %s 还差 %s 灵石 (当前无灵石收入)" % [label, fmt(gap)]
 	return ("距下一件 %s 还差 %s 灵石 " % [label, fmt(gap)]) + eta_text(float(target["cost"]))
 
+# ---------- 打磨-84: 自动购置 按钮 tooltip 动态段 (下一件 可购时间, 复用 打磨-49/12 口径) ----------
+# 只读: 顶栏灵石行 tooltip (打磨-49 stone_next_target_tip) 与 底部消息 (打磨-47/48 _next_gap_text)
+# 已给 手动路径 下一件 ETA, 但 自动购置 开关按钮 tooltip 只有 静态 口径, 开启 自动 后 玩家 悬停
+# 开关 不知 下一件 还要 多久 才能 被 自动 购入; tooltip 追加 动态 段: 当前 灵石 速率 + 距 下一件
+# (跨 140 装备 + 10 法器 最便宜 未拥有件, 打磨-49 stone_next_target 口径) 缺口 与 可购 ETA
+# (复用 打磨-12 eta_seconds/eta_text; 全拥有 = 已集齐, 缺口<=0 = 可立即购入, 无 灵石 收入 省略 ETA)。
+# 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
+func auto_buy_next_tip() -> String:
+	var rate: float = stone_per_sec()
+	var head := "当前 %s 灵石/秒" % fmt(rate)
+	var target: Dictionary = stone_next_target()
+	if target.is_empty():
+		return head + "\n已集齐全部 装备与法器 (无需再攒灵石)"
+	var gap: float = float(target["shortfall"])
+	var label := "%s「%s」" % [str(target["kind"]), str(target["name"])]
+	if gap <= 0.0:
+		return head + "\n下一件 %s 灵石已足够, 可立即购入" % label
+	var t: float = eta_seconds(float(target["cost"]))
+	if t < 0.0:
+		return head + ("\n下一件 %s 还差 %s 灵石 (当前无灵石收入)" % [label, fmt(gap)])
+	return head + ("\n下一件 %s 还差 %s 灵石 %s" % [label, fmt(gap), eta_text(float(target["cost"]))])
+
 # ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 主动神通) ----------
 
 # 当前就绪 (无冷却) 的 已学主动神通 数 (供技能页"一键施展"按钮文案)

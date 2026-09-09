@@ -123,6 +123,7 @@ func _ready() -> void:
 	_assert_offline_float()
 	await _assert_auto_break()
 	await _assert_auto_buy()
+	await _assert_auto_buy_next_tip()
 	await _assert_auto_cast()
 	await _assert_auto_learn()
 	await _assert_auto_summary()
@@ -2123,6 +2124,75 @@ func _assert_auto_buy() -> void:
 	g.dao = 0.0
 	g.stones = 0.0
 	g.last_break_result = 0
+	g.auto_buy = false
+	g.auto_break = false
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-84: 自动购置按钮 tooltip 动态段 — 构建含 动态段 标记/_refresh 按 接口 刷新/灵石状态 动态/节流/购买后 目标 切换/无副作用
+func _assert_auto_buy_next_tip() -> void:
+	var g := GameData
+	var btn: Button = ui._auto_buy_btn
+	check(btn != null, "打磨-84 自动购置按钮存在")
+	if btn == null:
+		return
+	# 基准态 (前节 收尾: 清空 拥有/穿戴/已学, 境界0层1, 灵石 0, 速率 1.0/s)
+	var t84: Dictionary = g.stone_next_target()
+	check(not t84.is_empty(), "打磨-84 基准 存在 下一件 未拥有件 (实际 %s)" % str(t84.get("id", "")))
+	var expect84 := ("当前 %s 灵石/秒" % g.fmt(g.stone_per_sec())) + ("\n下一件 %s「%s」 还差 %s 灵石 " % [str(t84["kind"]), str(t84["name"]), g.fmt(float(t84["shortfall"]))]) + g.eta_text(float(t84["cost"]))
+	ui._refresh()
+	check(str(btn.tooltip_text) == str(ui._auto_buy_tip_static) + expect84, "打磨-84 基准 tooltip=静态前缀+动态段 恒等 (实际 %s)" % str(btn.tooltip_text).left(60))
+	check(str(btn.tooltip_text).find("【下一件 可购 时间 (动态)】") >= 0, "打磨-84 tooltip 含 动态段 标记")
+	check(str(btn.tooltip_text).find(str(t84["name"])) >= 0, "打磨-84 tooltip 动态段 含 目标件名 (实际 %s)" % str(btn.tooltip_text).left(80))
+	# 同态 节流: 再刷 不重写 (tooltip 稳定, 无 副作用)
+	var tip_before: String = str(btn.tooltip_text)
+	var snap_stats: Dictionary = g.stats.duplicate(true)
+	var snap_stones: float = g.stones
+	ui._refresh()
+	check(str(btn.tooltip_text) == tip_before, "打磨-84 同态 节流 tooltip 稳定")
+	check(g.stats == snap_stats and g.stones == snap_stones, "打磨-84 同态 刷 tooltip 无 资源/统计 副作用")
+	# 灵石 足够: 动态段 切换 可立即购入 分支 (无 ETA 档位)
+	g.stones = float(t84["cost"])
+	ui._refresh()
+	check(str(btn.tooltip_text).right(12) == "灵石已足够, 可立即购入", "打磨-84 灵石足够 动态段=可立即购入 无 ETA (实际 %s)" % str(btn.tooltip_text).right(12))
+	# 灵石 半档: 动态段 更新 缺口/ETA (随 灵石 变化 才刷)
+	g.stones = float(t84["cost"]) / 2.0
+	ui._refresh()
+	var t84b: Dictionary = g.stone_next_target()
+	check(str(btn.tooltip_text).find(g.fmt(float(t84b["shortfall"]))) >= 0,
+		"打磨-84 灵石 半档 动态段 缺口 同步 (实际 %s)" % str(btn.tooltip_text).left(80))
+	# 购买 下一件: 目标 切换, 动态段 指向 次便宜 未拥有件
+	g.stones = float(t84b["cost"]) + 1.0
+	if str(t84b["kind"]) == "法器":
+		g.try_buy_item(str(t84b["id"]))
+	else:
+		g.buy_equipment(str(t84b["id"]))
+	var t84c: Dictionary = g.stone_next_target()
+	ui._refresh()
+	check(not t84c.is_empty() and str(btn.tooltip_text).find(str(t84c["name"])) >= 0,
+		"打磨-84 购入后 动态段 切换 指向 次便宜 件 (实际 %s)" % str(btn.tooltip_text).left(80))
+	check(str(btn.tooltip_text).find(str(t84b["name"])) < 0, "打磨-84 购入后 旧目标 不再 出现")
+	# 全拥有: 动态段=已集齐 (买齐 140+10 件)
+	for id84 in g.equip_ids:
+		if not g.owned_eq.has(id84):
+			g.owned_eq.append(id84)
+	for it84 in g.ITEMS:
+		if not g.owned.has(str(it84["id"])):
+			g.owned.append(str(it84["id"]))
+	g.stones = 5.0
+	ui._refresh()
+	check(str(btn.tooltip_text).find("已集齐全部 装备与法器") >= 0, "打磨-84 全拥有 动态段=已集齐 (实际 %s)" % str(btn.tooltip_text).left(80))
+	# 收尾: 恢复 基准态 (防 污染 后续 断言)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.stones = 0.0
 	g.auto_buy = false
 	g.auto_break = false
 	ui._refresh()
