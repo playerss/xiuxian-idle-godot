@@ -138,3 +138,5 @@ func _setup_demo_state() -> void:
 	g.check_achievements()  # 自动解锁 6 个 (境界/首次/法器/技能/装备)
 	# 打磨-69: 自动施展 展示 开 态 (自动突破/购置 保持 关, 仅 施展 展示 开 态 按钮 金边)
 	g.auto_cast = true
+	# 打磨-80: 自动领悟 展示 开 态 (与 施展 同开, 顶栏 徽标 自动 2/4, 汇总行 两段 金)
+	g.auto_learn = true

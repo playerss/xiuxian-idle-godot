@@ -99,6 +99,9 @@ var _auto_buy_last_cost := 0.0  # 打磨-68: 上轮 花费 灵石 (内存态, �
 var _auto_buy_last_swap := 0    # 打磨-68: 上轮 最佳换装 槽位数 (内存态, 供 auto_buy_last_text)
 var auto_cast := false          # 打磨-69: 自动施展 (开=主动神通冷却完毕自动施展爆发, 存档持久化)
 var _auto_cast_seq := 0         # 打磨-69: 自动施展 变更事件计数 (每轮 实际施展 +1, 不持久化, UI 据此弹浮动)
+var auto_learn := false         # 打磨-80: 自动领悟 (开=境界提升后自动批量学习 可学 技能, 存档持久化)
+var _auto_learn_seq := 0        # 打磨-80: 自动领悟 变更事件计数 (每轮 实际学习 +1, 不持久化, UI 据此刷底部消息)
+var _auto_learn_last_n := 0     # 打磨-80: 上轮 学习 技能 数 (内存态, 供 auto_learn_last_text)
 var _auto_cast_last_n := 0      # 打磨-69: 上轮 施展 神通 数 (内存态, 供 auto_cast_last_text)
 var _auto_cast_last_burst := 0.0  # 打磨-69: 上轮 爆发 总量 (内存态, 供 auto_cast_last_text)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备, 读档时 _load_stats 兜底)
@@ -124,6 +127,10 @@ func _process(delta: float) -> void:
 	# 打磨-67: 自动突破 (开启时 资源攒够 自动尝试; _try_auto_break 自门控于 auto_break,
 	# 每帧至多一次, 突破后资源已低于 下一档 阈值, 无热循环)
 	_try_auto_break()
+	# 打磨-80: 自动领悟 (开启时 境界/层 变化 自动 批量学习 新可学 技能; 置于 _try_auto_break 之后:
+	# 同帧 突破升层/晋境界 后 立即学习 新解锁 技能; _try_auto_learn 自门控于 auto_learn,
+	# 学习后 可学数 归 0, 下帧 再试 0 变更 幂等, 无热循环)
+	_try_auto_learn()
 	# 打磨-68: 自动购置 (开启时 灵石攒够 自动购入 法器/装备 并 最佳换装; _try_auto_buy 自门控于
 	# auto_buy, 灵石攒够才触发, 每帧至多一轮; 无浮动/闪烁 反馈 防 挂机刷屏)
 	_try_auto_buy()
@@ -1064,19 +1071,48 @@ func auto_cast_last_text() -> String:
 		return ""
 	return "自动施展 %d 个神通 (爆发+%s %s)" % [_auto_cast_last_n, fmt(_auto_cast_last_burst), primary_res_name()]
 
-# 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1" = 突破|购置|施展, 1=开 0=关;
-# UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
-func auto_summary_key() -> String:
-	return "%d|%d|%d" % [1 if auto_break else 0, 1 if auto_buy else 0, 1 if auto_cast else 0]
+# 打磨-80: 自动领悟 (挂机时 境界/层 提升 解锁 新技能 仍要 手动 逐个点 领悟, 与 一键领悟 口径
+# 不齐; GameData._process 每帧驱动 (置于 _try_auto_break 之后: 同帧 突破 升层/晋境界 后 立即
+# 学习 新解锁 技能), 自门控于 auto_learn, 关闭时直接返回 故可直接调用测试; 本轮 批量学习
+# 全部 未学+境界足够 技能 (复用 learn_all_available("", -1) 全局口径: 无 类别/品质 筛选 叠加,
+# 与 一键领悟 按钮 全部类别·全部品质 口径 一致); 学习后 可学数 归 0, 下帧 再试 0 变更 幂等
+# (learn_all_available 只学 未学+可学 项), 无热循环; 学习 无 资源/灵石 消耗 (技能 领悟 免费,
+# 与 手动 领悟 口径 一致), 无 统计 新 埋点 (skill_learn 由 成就/收集 侧 消费 learned 数组);
+# 变更 文案 auto_learn_last_text() 供 UI 底部 消息 提示 (无屏幕浮动 防 挂机刷屏, 与 自动购置 同口径))
+func _try_auto_learn() -> void:
+	if not auto_learn:
+		return
+	var r: Dictionary = learn_all_available("", -1)
+	var n := int(r.get("count", 0))
+	if n <= 0:
+		return
+	_auto_learn_seq += 1
+	_auto_learn_last_n = n
 
-# 打磨-70: 自动系列 状态汇总 文案 (只读; ✓=开 ✗=关, 口径 与 三个 开关 按钮 一致)
+# 打磨-80: 自动领悟 上一轮 变更 文案 (只读; seq<=0 [从未触发/读档重置] 返回 "")
+# 口径: "自动领悟 N 个技能" (与 一键领悟 浮动 文案 同 数量 口径, 无 资源 消耗 说明)
+func auto_learn_last_text() -> String:
+	if _auto_learn_seq <= 0 or _auto_learn_last_n <= 0:
+		return ""
+	return "自动领悟 %d 个技能" % _auto_learn_last_n
+
+# 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1|1" = 突破|购置|施展|领悟, 1=开 0=关;
+# 打磨-80 起 4 开关: 第 4 段=自动领悟; UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
+func auto_summary_key() -> String:
+	return "%d|%d|%d|%d" % [
+		1 if auto_break else 0, 1 if auto_buy else 0,
+		1 if auto_cast else 0, 1 if auto_learn else 0]
+
+# 打磨-70: 自动系列 状态汇总 文案 (只读; ✓=开 ✗=关, 口径 与 四个 开关 按钮 一致;
+# 打磨-80 起 4 段: 突破·购置·施展·领悟)
 func auto_summary_text() -> String:
-	return "自动: 突破 %s · 购置 %s · 施展 %s" % [
-		"✓" if auto_break else "✗", "✓" if auto_buy else "✗", "✓" if auto_cast else "✗"]
+	return "自动: 突破 %s · 购置 %s · 施展 %s · 领悟 %s" % [
+		"✓" if auto_break else "✗", "✓" if auto_buy else "✗",
+		"✓" if auto_cast else "✗", "✓" if auto_learn else "✗"]
 
 # 打磨-72: 启动 恢复 自动系列 开关 提示 文案 (只读; 全关 返回 空串, 否则
-# "已恢复 自动: 突破·购置·施展" (仅 开启项, 固定序 突破>购置>施展, 全开 即 突破·购置·施展);
-# 供 main.gd _ready 启动提示 (底部消息 同位置, 仅 启动 一次, 离线消息 优先, 离线 与 自动 提示 不同时 显示)
+# "已恢复 自动: 突破·购置·施展·领悟" (仅 开启项, 固定序 突破>购置>施展>领悟, 全开 即 突破·购置·施展·领悟);
+# 供 main.gd _ready 启动提示 (底部消息 同位置, 仅 启动 一次, 离线消息 优先, 离线 与 自动 提示 不同时 显示))
 func auto_restore_text() -> String:
 	var parts: Array[String] = []
 	if auto_break:
@@ -1085,12 +1121,14 @@ func auto_restore_text() -> String:
 		parts.append("购置")
 	if auto_cast:
 		parts.append("施展")
+	if auto_learn:
+		parts.append("领悟")
 	if parts.is_empty():
 		return ""
 	return "已恢复 自动: %s" % "·".join(parts)
 
 # 打磨-73: 顶栏 自动系列 状态徽标 — 开启开关 数量 (只读; 0=全关 UI 隐藏徽标,
-# N>0 时 UI 显示 "自动 N/3" 金色徽标; 无 存档/统计 副作用)
+# N>0 时 UI 显示 "自动 N/4" 金色徽标 (打磨-80 起 4 开关); 无 存档/统计 副作用)
 func auto_on_count() -> int:
 	var n := 0
 	if auto_break:
@@ -1098,6 +1136,8 @@ func auto_on_count() -> int:
 	if auto_buy:
 		n += 1
 	if auto_cast:
+		n += 1
+	if auto_learn:
 		n += 1
 	return n
 
@@ -1561,6 +1601,7 @@ func save_game() -> void:
 		"auto_break": auto_break,  # 打磨-67: 自动突破开关 (旧档缺字段默认关)
 		"auto_buy": auto_buy,      # 打磨-68: 自动购置开关 (旧档缺字段默认关)
 		"auto_cast": auto_cast,    # 打磨-69: 自动施展开关 (旧档缺字段默认关)
+		"auto_learn": auto_learn,  # 打磨-80: 自动领悟开关 (旧档缺字段默认关)
 		"ts": int(Time.get_unix_time_from_system()),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -1591,6 +1632,7 @@ func load_game() -> void:
 	auto_break = bool(parsed.get("auto_break", false))  # 打磨-67: 自动突破开关 (旧档缺字段默认关)
 	auto_buy = bool(parsed.get("auto_buy", false))      # 打磨-68: 自动购置开关 (旧档缺字段默认关)
 	auto_cast = bool(parsed.get("auto_cast", false))    # 打磨-69: 自动施展开关 (旧档缺字段默认关)
+	auto_learn = bool(parsed.get("auto_learn", false))  # 打磨-80: 自动领悟开关 (旧档缺字段默认关)
 	equipped = {}
 	var eq: Dictionary = parsed.get("equipped", {})
 	if typeof(eq) == TYPE_DICTIONARY:

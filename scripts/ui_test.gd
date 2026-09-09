@@ -61,11 +61,12 @@ func _ready() -> void:
 	g0.dao = 0.0
 	g0.dao_level = 0
 	g0.ascended = false
-	# 防御性重置 自动系列 三开关 (autoload 启动时 已从 档 load 进内存, 旧档 可能 残留 true;
-	# 不清会导致 打磨-69/70/71 初始态 错位 级联失败 — 每轮 强制 干净 基准)
+	# 防御性重置 自动系列 四开关 (autoload 启动时 已从 档 load 进内存, 旧档 可能 残留 true;
+	# 不清会导致 打磨-69/70/71/80 初始态 错位 级联失败 — 每轮 强制 干净 基准)
 	g0.auto_break = false
 	g0.auto_buy = false
 	g0.auto_cast = false
+	g0.auto_learn = false
 	# 打磨-72: 防御性 重置 离线收益 文案/明细 (autoload 启动 load_game 读 旧档 时间戳,
 	# 距上轮 运行 >60 秒 时 已 结算 离线收益 置 offline_msg 非空; 残留 会 让 打磨-72
 	# 启动 自动恢复 提示 走 离线优先 分支 被抑制 — 重置 保证 干净 基准)
@@ -118,6 +119,7 @@ func _ready() -> void:
 	await _assert_auto_break()
 	await _assert_auto_buy()
 	await _assert_auto_cast()
+	await _assert_auto_learn()
 	await _assert_auto_summary()
 	await _assert_auto_sum_jump()
 	_assert_auto_restore()
@@ -2239,9 +2241,123 @@ func _assert_auto_cast() -> void:
 	await get_tree().process_frame
 
 
-# 打磨-70: 自动系列 状态汇总 — 汇总行存在 (前缀+3 段标签)/tooltip 口径/三关 初始 全灰 ✗/
-# 开关切换 (按钮点击+外部置) 后 _refresh 同步 文本/颜色 (开=金 关=灰)/节流 (键不变不重刷)/
-# 无 存档/统计 副作用; 收尾 三开关 全 关 + 汇总 恢复 三关 态
+# 打磨-80: 自动领悟 — 自动领悟开关按钮 (境界/层 提升 解锁 新技能 自动 批量 领悟)/
+# tooltip 口径/初始 关 态/点击 开 (底部消息+按钮态)/再点 关/外部改 _refresh 同步/
+# 受控态 手动驱动 _try_auto_learn (学习 可学数+seq+文案)/_refresh 出 底部消息/
+# 幂等 0 变更 不再刷/开关切换 无 资源/事件/统计 副作用/收尾 基准 恢复
+func _assert_auto_learn() -> void:
+	var g := GameData
+	var btn: Button = ui._auto_learn_btn
+	check(btn != null, "打磨-80 自动领悟开关按钮存在")
+	if btn == null:
+		return
+	check(btn.toggle_mode, "打磨-80 开关按钮 toggle_mode")
+	check(btn.tooltip_text.find("自动 批量 领悟") >= 0 and btn.tooltip_text.find("存档") >= 0,
+		"打磨-80 tooltip 含 自动领悟/存档 口径 (实际 %s)" % btn.tooltip_text)
+	check(btn.tooltip_text.find("免费") >= 0, "打磨-80 tooltip 含 免费 无 消耗 口径")
+	check(g.auto_learn == false and not btn.button_pressed and str(btn.text) == "自动领悟: 关",
+		"打磨-80 初始 关 态 (文本/按压/存档值 一致)")
+	# 点击切换: 开 (底部消息 + 按钮态 + 存档值)
+	ui._on_auto_learn()
+	check(g.auto_learn == true, "打磨-80 点击后 auto_learn=true (实际 %s)" % str(g.auto_learn))
+	check(btn.button_pressed and str(btn.text) == "自动领悟: 开", "打磨-80 点击后 按钮按压+文本 开")
+	check(str(ui._msg_label.text).find("自动领悟已开启") >= 0, "打磨-80 开启 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# 点击切换: 关
+	ui._on_auto_learn()
+	check(g.auto_learn == false and not btn.button_pressed and str(btn.text) == "自动领悟: 关", "打磨-80 再点 关 态")
+	check(str(ui._msg_label.text).find("自动领悟已关闭") >= 0, "打磨-80 关闭 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	# 外部改存档值: _refresh 同步按钮态 (读档恢复 场景)
+	g.auto_learn = true
+	ui._refresh()
+	check(btn.button_pressed and str(btn.text) == "自动领悟: 开", "打磨-80 _refresh 同步 外部置 开 按钮态")
+	# 受控态: 境界0 层1 空已学 (可学 11 个, 数据 固定 种子); 冻结 自动领悟 事件 手动驱动
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g._active_cd = {}
+	g._auto_learn_seq = 0
+	ui._auto_learn_msg_seq = 0
+	# 可学 数 按 数据 动态 计算 (境界0 层1)
+	var n_learn80: int = 0
+	for sid in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(sid), {})
+		if s.is_empty():
+			continue
+		if (int(s.get("unlock_realm", 99)) < 0) or (int(s.get("unlock_realm", 99)) == 0 and int(s.get("unlock_layer", 99)) <= 1):
+			n_learn80 += 1
+	check(n_learn80 == 11, "打磨-80 受控态 可学数=11 (境界0 层1, 实际 %d)" % n_learn80)
+	# 0 变更 初始 (未 驱动 _try): _refresh 不刷 底部消息
+	var msg_before: String = str(ui._msg_label.text)
+	ui._refresh()
+	check(g._auto_learn_seq == 0, "打磨-80 初始 _try 未驱动 seq=0")
+	# 手动驱动 _try_auto_learn (学习 11 个) + _refresh 出 底部消息 (文案=接口)
+	g._try_auto_learn()
+	check(g.learned.size() == n_learn80, "打磨-80 学习 可学数 11 (实际 %d)" % g.learned.size())
+	check(g._auto_learn_seq == 1, "打磨-80 触发 变更 事件 seq+1 (实际 %d)" % g._auto_learn_seq)
+	check(str(g.auto_learn_last_text()) == "自动领悟 %d 个技能" % n_learn80,
+		"打磨-80 auto_learn_last_text 数量 (实际 %s)" % g.auto_learn_last_text())
+	ui._refresh()
+	check(str(ui._msg_label.text).find("自动领悟 %d 个技能" % n_learn80) >= 0,
+		"打磨-80 _refresh 出 底部消息 (实际 %s)" % str(ui._msg_label.text))
+	check(ui._auto_learn_msg_seq == 1, "打磨-80 _refresh 消费 事件 seq 同步 (实际 %d)" % ui._auto_learn_msg_seq)
+	# 幂等: 学完 0 变更, _refresh 不再 刷 底部消息 (保持 上条 文案)
+	var seq_idem: int = g._auto_learn_seq
+	var msg_idem: String = str(ui._msg_label.text)
+	g._try_auto_learn()
+	check(g._auto_learn_seq == seq_idem, "打磨-80 学完 再试 0 变更 不增 事件 (seq=%d)" % g._auto_learn_seq)
+	ui._refresh()
+	check(str(ui._msg_label.text) == msg_idem, "打磨-80 幂等 后 底部消息 不变 (实际 %s)" % str(ui._msg_label.text))
+	# 升层: 境界0 层2 解锁 5 个 新技能, 自动 领悟 (变更 事件+文案 更新)
+	g.layer = 2
+	g._try_auto_learn()
+	check(g.learned.size() == n_learn80 + 5, "打磨-80 升层 后 新增 5 (实际 %d)" % g.learned.size())
+	check(g._auto_learn_seq == 2, "打磨-80 升层 触发 变更 事件 seq=2 (实际 %d)" % g._auto_learn_seq)
+	check(str(g.auto_learn_last_text()) == "自动领悟 5 个技能",
+		"打磨-80 升层 后 文案 更新 (实际 %s)" % g.auto_learn_last_text())
+	ui._refresh()
+	check(str(ui._msg_label.text).find("自动领悟 5 个技能") >= 0, "打磨-80 升层 _refresh 出新 文案 (实际 %s)" % str(ui._msg_label.text))
+	# 开关切换 无 资源/事件/统计 副作用 (开关动作 本身 无 学习 副作用)
+	var stats_sw: Dictionary = g.stats.duplicate(true)
+	var ess_sw: float = g.essence
+	var stones_sw: float = g.stones
+	ui._on_auto_learn()
+	check(g.auto_learn == false and str(btn.text) == "自动领悟: 关", "打磨-80 开关切换 关 态")
+	check(g.stats == stats_sw and absf(g.essence - ess_sw) < 1e-9 and g.stones == stones_sw,
+		"打磨-80 开关切换 无 资源/统计 副作用")
+	# 收尾: 恢复基准态 (防污染) + 自动系列 四开关 全 关
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g.last_break_result = 0
+	g.auto_buy = false
+	g.auto_break = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g._active_cd = {}
+	g.ready_events.clear()
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-70: 自动系列 状态汇总 — 汇总行存在 (前缀+4 段标签, 打磨-80 起 4 开关)/tooltip 口径/
+# 四关 初始 全灰 ✗/开关切换 (按钮点击+外部置) 后 _refresh 同步 文本/颜色 (开=金 关=灰)/
+# 节流 (键不变不重刷)/无 存档/统计 副作用; 收尾 四开关 全 关 + 汇总 恢复 四关 态
 func _assert_auto_summary() -> void:
 	var g := GameData
 	var box: HBoxContainer = ui._auto_sum_box
@@ -2250,28 +2366,32 @@ func _assert_auto_summary() -> void:
 		return
 	check(ui._auto_sum_prefix != null and str(ui._auto_sum_prefix.text) == "自动:",
 		"打磨-70 前缀标签 文本=自动: (实际 %s)" % str(ui._auto_sum_prefix.text))
-	check(ui._auto_sum_segs.size() == 3, "打磨-70 3 个 状态段标签 (实际 %d)" % ui._auto_sum_segs.size())
+	check(ui._auto_sum_segs.size() == 4, "打磨-70 4 个 状态段标签 (打磨-80) (实际 %d)" % ui._auto_sum_segs.size())
 	# 打磨-74: tooltip 由 汇总行 HBox 上移到 外壳 Panel (金边高亮 载体)
 	var panel70: Panel = ui._auto_sum_panel
 	check(panel70 != null, "打磨-70 汇总行 外壳 Panel 存在 (打磨-74 高亮载体)")
 	check(panel70.tooltip_text.find("自动突破") >= 0 and panel70.tooltip_text.find("自动购置") >= 0
-			and panel70.tooltip_text.find("自动施展") >= 0 and panel70.tooltip_text.find("离线期间不触发") >= 0,
-		"打磨-70 汇总行 tooltip 含 三开关 口径 (实际 %s)" % panel70.tooltip_text)
-	# 初始态: 三关 (打磨-69 收尾 已 全 关 + _refresh)
+			and panel70.tooltip_text.find("自动施展") >= 0 and panel70.tooltip_text.find("自动领悟") >= 0
+			and panel70.tooltip_text.find("离线期间不触发") >= 0,
+		"打磨-70 汇总行 tooltip 含 四开关 口径 (实际 %s)" % panel70.tooltip_text)
+	# 初始态: 四关 (打磨-69 收尾 已 全 关 + _refresh)
 	ui._refresh()
-	check(ui._auto_sum_key == "0|0|0", "打磨-70 初始 状态键 0|0|0 (实际 %s)" % ui._auto_sum_key)
+	check(ui._auto_sum_key == "0|0|0|0", "打磨-70 初始 状态键 0|0|0|0 (实际 %s)" % ui._auto_sum_key)
 	var seg0: Label = ui._auto_sum_segs[0]
 	var seg1: Label = ui._auto_sum_segs[1]
 	var seg2: Label = ui._auto_sum_segs[2]
-	check(str(seg0.text) == "突破 ✗" and str(seg1.text) == "购置 ✗" and str(seg2.text) == "施展 ✗",
-		"打磨-70 三关 段文本 全 ✗ (实际 %s/%s/%s)" % [str(seg0.text), str(seg1.text), str(seg2.text)])
+	var seg3: Label = ui._auto_sum_segs[3]
+	check(str(seg0.text) == "突破 ✗" and str(seg1.text) == "购置 ✗" and str(seg2.text) == "施展 ✗"
+			and str(seg3.text) == "领悟 ✗",
+		"打磨-70 四关 段文本 全 ✗ (实际 %s/%s/%s/%s)" % [str(seg0.text), str(seg1.text), str(seg2.text), str(seg3.text)])
 	check(seg0.get_theme_color("font_color") == ui.DIM and seg1.get_theme_color("font_color") == ui.DIM
-			and seg2.get_theme_color("font_color") == ui.DIM, "打磨-70 三关 段颜色 全灰")
+			and seg2.get_theme_color("font_color") == ui.DIM and seg3.get_theme_color("font_color") == ui.DIM,
+		"打磨-70 四关 段颜色 全灰")
 	# 点击 自动突破 开关 → _refresh 同步 (突破 段 转金 ✓)
 	ui._on_auto_break()
 	ui._refresh()
 	check(g.auto_break == true, "打磨-70 点击后 auto_break=true (实际 %s)" % str(g.auto_break))
-	check(ui._auto_sum_key == "1|0|0", "打磨-70 键 1|0|0 (实际 %s)" % ui._auto_sum_key)
+	check(ui._auto_sum_key == "1|0|0|0", "打磨-70 键 1|0|0|0 (实际 %s)" % ui._auto_sum_key)
 	check(str(seg0.text) == "突破 ✓" and seg0.get_theme_color("font_color") == ui.GOLD,
 		"打磨-70 突破 段 金 ✓ (实际 %s)" % str(seg0.text))
 	check(str(seg1.text) == "购置 ✗" and seg1.get_theme_color("font_color") == ui.DIM,
@@ -2280,60 +2400,68 @@ func _assert_auto_summary() -> void:
 	g.auto_buy = true
 	var key_before: String = ui._auto_sum_key
 	ui._refresh()
-	check(ui._auto_sum_key == "1|1|0" and key_before == "1|0|0", "打磨-70 外部置 购置 键 1|1|0 (实际 %s)" % ui._auto_sum_key)
+	check(ui._auto_sum_key == "1|1|0|0" and key_before == "1|0|0|0", "打磨-70 外部置 购置 键 1|1|0|0 (实际 %s)" % ui._auto_sum_key)
 	check(str(seg1.text) == "购置 ✓" and seg1.get_theme_color("font_color") == ui.GOLD,
 		"打磨-70 购置 段 金 ✓ (实际 %s)" % str(seg1.text))
 	check(str(seg0.text) == "突破 ✓" and seg0.get_theme_color("font_color") == ui.GOLD, "打磨-70 突破 段 保持 金")
 	# 节流: 状态键 未变 时 _refresh 不重刷 (缓存键 保持, 段文本/颜色 稳定)
 	ui._refresh()
-	check(ui._auto_sum_key == "1|1|0" and str(seg1.text) == "购置 ✓", "打磨-70 键不变 节流 不重刷")
+	check(ui._auto_sum_key == "1|1|0|0" and str(seg1.text) == "购置 ✓", "打磨-70 键不变 节流 不重刷")
 	# 点击 自动施展 开关 → 三开 (施展 段 转金)
 	ui._on_auto_cast()
 	ui._refresh()
-	check(ui._auto_sum_key == "1|1|1" and str(seg2.text) == "施展 ✓"
+	check(ui._auto_sum_key == "1|1|1|0" and str(seg2.text) == "施展 ✓"
 			and seg2.get_theme_color("font_color") == ui.GOLD, "打磨-70 三开 施展 段 金 ✓ (实际 %s)" % ui._auto_sum_key)
+	# 外部置 领悟 开 → 四开 (领悟 段 转金, 打磨-80)
+	g.auto_learn = true
+	ui._refresh()
+	check(ui._auto_sum_key == "1|1|1|1" and str(seg3.text) == "领悟 ✓"
+			and seg3.get_theme_color("font_color") == ui.GOLD, "打磨-70 四开 领悟 段 金 ✓ (实际 %s)" % ui._auto_sum_key)
 	# 开关切换 无 存档/统计 副作用 (汇总行 纯展示)
 	var stats_sum: Dictionary = g.stats.duplicate(true)
 	var stones_sum: float = g.stones
 	var seq_sum: int = g._auto_cast_seq
 	ui._on_auto_buy()
 	ui._refresh()
-	check(g.auto_buy == false and ui._auto_sum_key == "1|0|1"
+	check(g.auto_buy == false and ui._auto_sum_key == "1|0|1|1"
 			and g.stats == stats_sum and g.stones == stones_sum and g._auto_cast_seq == seq_sum,
 		"打磨-70 开关切换 无 统计/资源/事件 副作用 (键=%s)" % ui._auto_sum_key)
-	# 收尾: 三开关 全 关, 汇总 恢复 三关 态 (防污染)
+	# 收尾: 四开关 全 关, 汇总 恢复 四关 态 (防污染)
 	ui._on_auto_break()
 	ui._on_auto_cast()
+	ui._on_auto_learn()
 	ui._refresh()
-	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
-			and ui._auto_sum_key == "0|0|0"
-			and str(seg0.text) == "突破 ✗" and str(seg1.text) == "购置 ✗" and str(seg2.text) == "施展 ✗",
-		"打磨-70 收尾 三关 汇总 恢复 全 ✗")
+	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false and g.auto_learn == false
+			and ui._auto_sum_key == "0|0|0|0"
+			and str(seg0.text) == "突破 ✗" and str(seg1.text) == "购置 ✗" and str(seg2.text) == "施展 ✗"
+			and str(seg3.text) == "领悟 ✗",
+		"打磨-70 收尾 四关 汇总 恢复 全 ✗")
 	await get_tree().process_frame
 
 
-# 打磨-71: 自动系列 汇总行 点击直达 — 3 段热区 flat Button (手型光标+悬停金边)/tooltip 口径/
-# 点击=切 对应 自动开关 (与上方按钮 同 口径: 状态+上方按钮按压态+底部消息确认)/再点=关闭/
-# 节流 (键不变不重刷)/无 资源/统计 副作用; 收尾 三开关 全 关 恢复 0|0|0
+# 打磨-71: 自动系列 汇总行 点击直达 — 4 段热区 flat Button (手型光标+悬停金边, 打磨-80 起 4 段)/
+# tooltip 口径/点击=切 对应 自动开关 (与上方按钮 同 口径: 状态+上方按钮按压态+底部消息确认)/
+# 再点=关闭/节流 (键不变不重刷)/无 资源/统计 副作用; 收尾 四开关 全 关 恢复 0|0|0|0
 func _assert_auto_sum_jump() -> void:
 	var g := GameData
 	var btns: Array = ui._auto_sum_btns
-	check(btns.size() == 3, "打磨-71 3 个 段热区 按钮 (实际 %d)" % btns.size())
-	if btns.size() < 3:
+	check(btns.size() == 4, "打磨-71 4 个 段热区 按钮 (打磨-80) (实际 %d)" % btns.size())
+	if btns.size() < 4:
 		return
-	for i in 3:
+	for i in 4:
 		var b: Button = btns[i]
 		check(b.flat == true and b.mouse_default_cursor_shape == Control.CURSOR_POINTING_HAND,
 			"打磨-71 段%d 热区 flat+手型光标 (flat=%s cursor=%d)" % [i, str(b.flat), b.mouse_default_cursor_shape])
 	check(str(btns[0].tooltip_text).find("点击切换 自动突破") >= 0
 			and str(btns[1].tooltip_text).find("点击切换 自动购置") >= 0
-			and str(btns[2].tooltip_text).find("点击切换 自动施展") >= 0,
-		"打磨-71 段热区 tooltip 含 点击切换 口径 (突破/购置/施展)")
+			and str(btns[2].tooltip_text).find("点击切换 自动施展") >= 0
+			and str(btns[3].tooltip_text).find("点击切换 自动领悟") >= 0,
+		"打磨-71 段热区 tooltip 含 点击切换 口径 (突破/购置/施展/领悟)")
 	check(str(ui._auto_sum_panel.tooltip_text).find("各段可点击") >= 0,
 			"打磨-71 汇总行 tooltip 含 各段可点击 说明 (打磨-74 起 tooltip 挂在外壳 Panel)")
-	# 初始 三关 (打磨-70 收尾 全 关)
+	# 初始 四关 (打磨-70 收尾 全 关)
 	ui._refresh()
-	check(ui._auto_sum_key == "0|0|0", "打磨-71 初始 状态键 0|0|0 (实际 %s)" % ui._auto_sum_key)
+	check(ui._auto_sum_key == "0|0|0|0", "打磨-71 初始 状态键 0|0|0|0 (实际 %s)" % ui._auto_sum_key)
 	# 点击 突破 段 → 自动突破 开 (与上方按钮 同 口径: 状态+按压态+底部消息)
 	var stats0: Dictionary = g.stats.duplicate(true)
 	var stones0: float = g.stones
@@ -2341,25 +2469,31 @@ func _assert_auto_sum_jump() -> void:
 	ui._refresh()
 	check(g.auto_break == true and ui._auto_break_btn.is_pressed() == true,
 		"打磨-71 点击 突破 段 auto_break=true+上方按钮 按压态")
-	check(ui._auto_sum_key == "1|0|0", "打磨-71 点击后 键 1|0|0 (实际 %s)" % ui._auto_sum_key)
+	check(ui._auto_sum_key == "1|0|0|0", "打磨-71 点击后 键 1|0|0|0 (实际 %s)" % ui._auto_sum_key)
 	check(str(ui._msg_label.text).find("自动突破已开启") >= 0,
 		"打磨-71 点击 突破 段 底部消息 确认 (实际 %s)" % str(ui._msg_label.text))
 	# 点击 购置 段 → 自动购置 开
 	btns[1].pressed.emit()
 	ui._refresh()
 	check(g.auto_buy == true and ui._auto_buy_btn.is_pressed() == true
-			and ui._auto_sum_key == "1|1|0", "打磨-71 点击 购置 段 auto_buy=true 键 1|1|0 (实际 %s)" % ui._auto_sum_key)
+			and ui._auto_sum_key == "1|1|0|0", "打磨-71 点击 购置 段 auto_buy=true 键 1|1|0|0 (实际 %s)" % ui._auto_sum_key)
 	check(str(ui._msg_label.text).find("自动购置已开启") >= 0, "打磨-71 点击 购置 段 底部消息 确认")
 	# 点击 施展 段 → 三开
 	btns[2].pressed.emit()
 	ui._refresh()
-	check(g.auto_cast == true and ui._auto_cast_btn.is_pressed() == true and ui._auto_sum_key == "1|1|1",
-		"打磨-71 点击 施展 段 三开 键 1|1|1 (实际 %s)" % ui._auto_sum_key)
+	check(g.auto_cast == true and ui._auto_cast_btn.is_pressed() == true and ui._auto_sum_key == "1|1|1|0",
+		"打磨-71 点击 施展 段 三开 键 1|1|1|0 (实际 %s)" % ui._auto_sum_key)
+	# 点击 领悟 段 → 四开 (打磨-80)
+	btns[3].pressed.emit()
+	ui._refresh()
+	check(g.auto_learn == true and ui._auto_learn_btn.is_pressed() == true and ui._auto_sum_key == "1|1|1|1",
+		"打磨-71 点击 领悟 段 四开 键 1|1|1|1 (实际 %s)" % ui._auto_sum_key)
+	check(str(ui._msg_label.text).find("自动领悟已开启") >= 0, "打磨-71 点击 领悟 段 底部消息 确认")
 	# 再点 突破 段 → 关闭 (与上方按钮 再点 同 口径)
 	btns[0].pressed.emit()
 	ui._refresh()
-	check(g.auto_break == false and ui._auto_break_btn.is_pressed() == false and ui._auto_sum_key == "0|1|1",
-		"打磨-71 再点 突破 段 auto_break=false 键 0|1|1")
+	check(g.auto_break == false and ui._auto_break_btn.is_pressed() == false and ui._auto_sum_key == "0|1|1|1",
+		"打磨-71 再点 突破 段 auto_break=false 键 0|1|1|1")
 	check(str(ui._msg_label.text).find("自动突破已关闭") >= 0, "打磨-71 关闭 底部消息 确认")
 	# 点击切换 无 资源/统计 副作用
 	check(g.stats == stats0 and g.stones == stones0,
@@ -2368,13 +2502,14 @@ func _assert_auto_sum_jump() -> void:
 	var seg0: Label = ui._auto_sum_segs[0]
 	var t_before: String = str(seg0.text)
 	ui._refresh()
-	check(ui._auto_sum_key == "0|1|1" and str(seg0.text) == t_before, "打磨-71 键不变 节流 不重刷")
-	# 收尾: 三开关 全 关 恢复 (防污染)
+	check(ui._auto_sum_key == "0|1|1|1" and str(seg0.text) == t_before, "打磨-71 键不变 节流 不重刷")
+	# 收尾: 四开关 全 关 恢复 (防污染)
 	btns[1].pressed.emit()
 	btns[2].pressed.emit()
+	btns[3].pressed.emit()
 	ui._refresh()
-	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
-			and ui._auto_sum_key == "0|0|0", "打磨-71 收尾 三关 恢复 0|0|0 (实际 %s)" % ui._auto_sum_key)
+	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false and g.auto_learn == false
+			and ui._auto_sum_key == "0|0|0|0", "打磨-71 收尾 四关 恢复 0|0|0|0 (实际 %s)" % ui._auto_sum_key)
 	await get_tree().process_frame
 
 
@@ -2400,17 +2535,27 @@ func _assert_auto_restore() -> void:
 	check(ui._auto_restore_count == 1, "打磨-72 单开 提示 计数+1 (实际 %d)" % ui._auto_restore_count)
 	check(str(ui._auto_restore_last_text) == exp72, "打磨-72 单开 文案=接口 (实际 %s)" % str(ui._auto_restore_last_text))
 	check(str(ui._msg_label.text) == exp72, "打磨-72 单开 底部消息=文案 (实际 %s)" % str(ui._msg_label.text))
+	# 单开 领悟 -> 文案 固定序 含 领悟 (打磨-80)
+	g.auto_buy = false
+	g.auto_learn = true
+	exp72 = g.auto_restore_text()
+	check(exp72 == "已恢复 自动: 领悟", "打磨-72 接口 文案(仅领悟, 打磨-80) (实际 %s)" % exp72)
+	ui._show_auto_restore_msg()
+	check(ui._auto_restore_count == 2 and str(ui._auto_restore_last_text) == exp72
+			and str(ui._msg_label.text) == exp72, "打磨-72 单开 领悟 文案=接口 计数+1 (实际 %s / %d)" % [str(ui._msg_label.text), ui._auto_restore_count])
 	# 组合 开 (购置+施展) -> 文案 固定序 购置·施展
+	g.auto_learn = false
+	g.auto_buy = true
 	g.auto_cast = true
 	exp72 = g.auto_restore_text()
 	check(exp72 == "已恢复 自动: 购置·施展", "打磨-72 接口 文案(购置+施展) (实际 %s)" % exp72)
 	ui._show_auto_restore_msg()
-	check(ui._auto_restore_count == 2 and str(ui._auto_restore_last_text) == exp72
+	check(ui._auto_restore_count == 3 and str(ui._auto_restore_last_text) == exp72
 			and str(ui._msg_label.text) == exp72, "打磨-72 组合 文案=接口 计数+1 (实际 %s / %d)" % [str(ui._msg_label.text), ui._auto_restore_count])
 	# 离线 消息 优先: offline_msg 非空 时 本 提示 让位 (早期 返回 不 _show_msg, 不覆盖 已有 文案, 计数 不变)
 	g.offline_msg = "离线 8小时, 收获 灵气 999, 灵石 888"
 	ui._show_auto_restore_msg()
-	check(ui._auto_restore_count == 2 and str(ui._msg_label.text) == "已恢复 自动: 购置·施展",
+	check(ui._auto_restore_count == 3 and str(ui._msg_label.text) == "已恢复 自动: 购置·施展",
 			"打磨-72 离线消息 优先 让位 (计数不变, 不 覆盖 已有 底部 消息)")
 	g.offline_msg = ""
 	# 提示 触发 无 资源/统计 副作用 (纯 展示)
@@ -2418,24 +2563,26 @@ func _assert_auto_restore() -> void:
 	# 全关 不提示 计数不变 (auto_restore_text 空串)
 	g.auto_buy = false
 	g.auto_cast = false
+	g.auto_learn = false
 	check(g.auto_restore_text() == "", "打磨-72 全关 接口 空串")
 	ui._show_auto_restore_msg()
-	check(ui._auto_restore_count == 2, "打磨-72 全关 不提示 计数不变 (实际 %d)" % ui._auto_restore_count)
-	# 收尾: 三开关 全 关 (防 污染), 恢复 干净 基准 (offline_msg 已 复位 空)
+	check(ui._auto_restore_count == 3, "打磨-72 全关 不提示 计数不变 (实际 %d)" % ui._auto_restore_count)
+	# 收尾: 四开关 全 关 (防 污染), 恢复 干净 基准 (offline_msg 已 复位 空)
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
+	g.auto_learn = false
 	ui._refresh()
-	check(ui._auto_restore_count == 2 and str(ui._auto_restore_last_text) == "已恢复 自动: 购置·施展",
-			"打磨-72 收尾 三关 恢复 计数/文案 稳定 (实际 %d / %s)" % [ui._auto_restore_count, str(ui._auto_restore_last_text)])
+	check(ui._auto_restore_count == 3 and str(ui._auto_restore_last_text) == "已恢复 自动: 购置·施展",
+			"打磨-72 收尾 四关 恢复 计数/文案 稳定 (实际 %d / %s)" % [ui._auto_restore_count, str(ui._auto_restore_last_text)])
 	await get_tree().process_frame
 
 
-# 打磨-73: 顶栏 自动系列 状态徽标 — 顶栏 最右 金色 "自动 N/3" 徽标 (任一开关开 显示, 全关 隐藏;
-# tooltip 复用 auto_summary_text 三开关 口径 + 离线不触发 说明; 开启数 变化才刷, 无 存档/统计 副作用)
-# 断言 (手动驱动 确定性): 徽标节点 顶栏子节点+金色样式/全关 隐藏 文本空/单开 "自动 1/3"+可见+
-# tooltip 含 三开关 状态行/两开 "自动 2/3"/三开 "自动 3/3"/同态 再 _refresh 文本 不变 节流/
-# 全关 恢复 隐藏 文本空 tooltip 清/无 资源/统计 副作用/收尾 三关 隐藏
+# 打磨-73: 顶栏 自动系列 状态徽标 — 顶栏 最右 金色 "自动 N/4" 徽标 (任一开关开 显示, 全关 隐藏;
+# tooltip 复用 auto_summary_text 四开关 口径 (打磨-80 起 4 开关) + 离线不触发 说明; 开启数 变化才刷, 无 存档/统计 副作用)
+# 断言 (手动驱动 确定性): 徽标节点 顶栏子节点+金色样式/全关 隐藏 文本空/单开 "自动 1/4"+可见+
+# tooltip 含 四开关 状态行/两开 "自动 2/4"/三开 "自动 3/4"/四开 "自动 4/4"/同态 再 _refresh 文本 不变 节流/
+# 全关 恢复 隐藏 文本空 tooltip 清/无 资源/统计 副作用/收尾 四关 隐藏
 func _assert_auto_badge() -> void:
 	var g := GameData
 	# 徽标 节点: 顶栏子节点 (境界/主资源/灵石 之后), 金色字 + 金边样式
@@ -2447,24 +2594,30 @@ func _assert_auto_badge() -> void:
 	# 初始 (打磨-72 收尾 三关 全 关): 隐藏, 文本 空
 	check(ui._auto_badge.visible == false, "打磨-73 初始 三关 徽标 隐藏 (实际 visible=%s)" % str(ui._auto_badge.visible))
 	check(str(ui._auto_badge.text) == "", "打磨-73 初始 三关 徽标 文本 空 (实际 %s)" % str(ui._auto_badge.text))
-	# 单开 突破 -> "自动 1/3" 可见 + tooltip 复用 auto_summary_text 三开关 口径
+	# 单开 突破 -> "自动 1/4" 可见 + tooltip 复用 auto_summary_text 四开关 口径
 	g.auto_break = true
 	ui._refresh()
 	check(ui._auto_badge.visible == true, "打磨-73 单开 突破 徽标 显示 (实际 visible=%s)" % str(ui._auto_badge.visible))
-	check(str(ui._auto_badge.text) == "自动 1/3", "打磨-73 单开 文案=自动 1/3 (实际 %s)" % str(ui._auto_badge.text))
+	check(str(ui._auto_badge.text) == "自动 1/4", "打磨-73 单开 文案=自动 1/4 (实际 %s)" % str(ui._auto_badge.text))
 	var tip73: String = str(ui._auto_badge.tooltip_text)
-	check(tip73.begins_with("自动: 突破 ✓ · 购置 ✗ · 施展 ✗") and tip73.contains("离线期间不触发"),
+	check(tip73.begins_with("自动: 突破 ✓ · 购置 ✗ · 施展 ✗ · 领悟 ✗") and tip73.contains("离线期间不触发"),
 		"打磨-73 单开 tooltip 复用 auto_summary_text+离线口径 (实际 %s)" % tip73)
-	# 两开 (突破+施展) -> "自动 2/3" (购置 关 口径 与 汇总行 同)
+	# 两开 (突破+施展) -> "自动 2/4" (购置 关 口径 与 汇总行 同)
 	g.auto_cast = true
 	ui._refresh()
-	check(str(ui._auto_badge.text) == "自动 2/3", "打磨-73 两开 文案=自动 2/3 (实际 %s)" % str(ui._auto_badge.text))
-	check(str(ui._auto_badge.tooltip_text).begins_with("自动: 突破 ✓ · 购置 ✗ · 施展 ✓"),
-		"打磨-73 两开 tooltip 三开关 口径 (实际 %s)" % str(ui._auto_badge.tooltip_text))
-	# 三开 -> "自动 3/3"
+	check(str(ui._auto_badge.text) == "自动 2/4", "打磨-73 两开 文案=自动 2/4 (实际 %s)" % str(ui._auto_badge.text))
+	check(str(ui._auto_badge.tooltip_text).begins_with("自动: 突破 ✓ · 购置 ✗ · 施展 ✓ · 领悟 ✗"),
+		"打磨-73 两开 tooltip 四开关 口径 (实际 %s)" % str(ui._auto_badge.tooltip_text))
+	# 三开 -> "自动 3/4"
 	g.auto_buy = true
 	ui._refresh()
-	check(str(ui._auto_badge.text) == "自动 3/3", "打磨-73 三开 文案=自动 3/3 (实际 %s)" % str(ui._auto_badge.text))
+	check(str(ui._auto_badge.text) == "自动 3/4", "打磨-73 三开 文案=自动 3/4 (实际 %s)" % str(ui._auto_badge.text))
+	# 四开 -> "自动 4/4" (打磨-80)
+	g.auto_learn = true
+	ui._refresh()
+	check(str(ui._auto_badge.text) == "自动 4/4", "打磨-73 四开 文案=自动 4/4 (实际 %s)" % str(ui._auto_badge.text))
+	check(str(ui._auto_badge.tooltip_text).begins_with("自动: 突破 ✓ · 购置 ✓ · 施展 ✓ · 领悟 ✓"),
+		"打磨-73 四开 tooltip 全开 口径 (实际 %s)" % str(ui._auto_badge.tooltip_text))
 	# 节流: 同态 再 _refresh, 文本/可见 不变 (开启数 未变 不重写)
 	var txt73: String = str(ui._auto_badge.text)
 	var st73: Dictionary = g.stats.duplicate(true)
@@ -2476,13 +2629,14 @@ func _assert_auto_badge() -> void:
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
+	g.auto_learn = false
 	ui._refresh()
 	check(ui._auto_badge.visible == false and str(ui._auto_badge.text) == ""
 			and str(ui._auto_badge.tooltip_text) == "", "打磨-73 全关 恢复 隐藏/文本空/tooltip 清")
 	# 徽标 刷新 无 资源/统计 副作用 (纯展示)
 	check(g.stats == st73 and g.stones == stones73, "打磨-73 徽标 刷新 无 资源/统计 副作用")
-	# 收尾: 三关 全 关 隐藏 稳定 (防 污染)
-	check(ui._auto_badge.visible == false, "打磨-73 收尾 三关 隐藏")
+	# 收尾: 四关 全 关 隐藏 稳定 (防 污染)
+	check(ui._auto_badge.visible == false, "打磨-73 收尾 四关 隐藏")
 	await get_tree().process_frame
 
 
@@ -2511,16 +2665,16 @@ func _assert_auto_badge_jump() -> void:
 	check(ui._auto_sum_box.get_parent() == ui._auto_sum_panel, "打磨-74 汇总行 HBox 挂在 Panel 下")
 	var sb0: StyleBoxFlat = ui._auto_sum_panel.get_theme_stylebox("panel")
 	check(sb0 != null and sb0.border_width_left == 0, "打磨-74 初始 汇总行 无边框 (边框宽=0)")
-	check(str(ui._auto_sum_panel.tooltip_text).find("顶栏 自动 N/3 徽标 点击也可直达本行") >= 0,
+	check(str(ui._auto_sum_panel.tooltip_text).find("顶栏 自动 N/4 徽标 点击也可直达本行") >= 0,
 			"打磨-74 汇总行 tooltip 含 徽标直达 口径 (实际 %s)" % str(ui._auto_sum_panel.tooltip_text).left(60))
 	# 副作用快照 (点击 不应改变)
 	var snap_essence := g.essence
 	var snap_stones := g.stones
 	var snap_stats := g.stats
-	# --- 单开 突破 → 徽标 显示 "自动 1/3" → 点击 → 切 修行页(tab0) + 汇总行 金边 ---
+	# --- 单开 突破 → 徽标 显示 "自动 1/4" → 点击 → 切 修行页(tab0) + 汇总行 金边 ---
 	g.auto_break = true
 	ui._refresh()
-	check(ui._auto_badge.visible == true and str(ui._auto_badge.text) == "自动 1/3",
+	check(ui._auto_badge.visible == true and str(ui._auto_badge.text) == "自动 1/4",
 			"打磨-74 单开 突破 徽标 显示 (实际 visible=%s 文本=%s)" % [str(ui._auto_badge.visible), str(ui._auto_badge.text)])
 	check(str(ui._auto_badge.tooltip_text).contains("点击: 直达 修行页·自动系列状态汇总行"),
 			"打磨-74 徽标 tooltip 追加 点击直达 口径 (实际 %s)" % str(ui._auto_badge.tooltip_text))

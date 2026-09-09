@@ -2821,14 +2821,143 @@ func _init() -> void:
 	g.auto_cast = true
 	g.load_game()
 	check(g.auto_cast == false, "打磨-69 旧档缺 auto_cast 默认 false")
-	# ---------- 打磨-70: 自动系列 状态汇总 (只读接口 auto_summary_key/auto_summary_text, 纯展示无副作用) ----------
-	# 基准态 (三开关全关): 状态键 0|0|0, 文案 全 ✗
+	# ---------- 打磨-80: 自动领悟 (_try_auto_learn, 自门控于 auto_learn, 境界/层 提升 后 自动 批量
+	# 领悟 未学+可学 技能, 复用 learn_all_available 全局口径; 变更 文案 auto_learn_last_text,
+	# 存档持久化 旧档缺 默认关; 无 资源/灵石 消耗 [领悟 免费], 无 统计 新 埋点) ----------
+	# 冻结 _process 防 挂机 累积 干扰 (同 打磨-67/69 口径)
+	g.set_process(false)
+	# 基准: 境界0 层1, 清空 已学/资源, 关 自动领悟
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	g.auto_learn = false
+	check(g.auto_learn == false, "打磨-80 默认 auto_learn=false")
+	# 开关关: _try_auto_learn 自门控 直接返回 (境界足够 也不学习)
+	var n_learnable_base: int = g.learn_available_count("", -1)
+	check(n_learnable_base > 0, "打磨-80 受控 可学技能数>0 (实际 %d)" % n_learnable_base)
+	var seq80a: int = g._auto_learn_seq
+	var learned80a: Array = g.learned.duplicate()
+	g._try_auto_learn()
+	check(g._auto_learn_seq == seq80a and g.learned == learned80a,
+		"打磨-80 开关关 _try 不学习 (seq=%d 已学不变)" % g._auto_learn_seq)
+	check(g.auto_learn_last_text() == "", "打磨-80 开关关 文案 空串")
+	# 开关开: 境界足够 自动 批量 领悟 全部 未学+可学 技能 (全局口径)
+	g.auto_learn = true
+	g._try_auto_learn()
+	check(g.learned.size() == n_learnable_base, "打磨-80 开 学习 可学数 (实际 %d 期望 %d)" % [g.learned.size(), n_learnable_base])
+	check(g._auto_learn_seq == seq80a + 1, "打磨-80 开 变更 事件+1 (实际 %d)" % g._auto_learn_seq)
+	check(g.auto_learn_last_text() == "自动领悟 %d 个技能" % n_learnable_base,
+		"打磨-80 文案 数量 (实际 %s)" % g.auto_learn_last_text())
+	# 学习 免费: 资源/灵石 无 消耗 (领悟 无 成本)
+	check(g.essence == 0.0 and g.stones == 0.0, "打磨-80 学习 无 资源/灵石 消耗")
+	# 幂等: 学完 再 试 0 变更 (可学数 归 0)
+	var seq80b: int = g._auto_learn_seq
+	g._try_auto_learn()
+	check(g._auto_learn_seq == seq80b, "打磨-80 学完 再试 0 变更 不增 事件")
+	# 境界提升: 升 境界/层 后 新解锁 技能 自动 领悟 (模拟 突破 后 境界 提升)
+	var n_locked_t1: int = 0
+	for sid in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(sid), {})
+		if not s.is_empty() and not g.learned.has(str(sid)) and int(s.get("unlock_realm", 0)) == 1 and int(s.get("unlock_layer", 1)) <= g.layer:
+			n_locked_t1 += 1
+	g.layer = g.layer + 1  # 升 层 (境界0 内)
+	g._try_auto_learn()
+	var new_learned80: int = g.learned.size() - n_learnable_base
+	check(new_learned80 >= 0 and g._auto_learn_seq == seq80b + (1 if new_learned80 > 0 else 0),
+		"打磨-80 升层后 新解锁 技能 自动 领悟 (新增 %d)" % new_learned80)
+	# 文案 随 上轮 更新
+	if new_learned80 > 0:
+		check(g.auto_learn_last_text() == "自动领悟 %d 个技能" % new_learned80,
+			"打磨-80 升层 后 文案 更新 (实际 %s)" % g.auto_learn_last_text())
+	# 全学完: 学 全部 可学 (境界 拉满) 后 0 变更
+	g.realm_idx = 0
+	g.layer = 1
+	g.learned.clear()
+	g.auto_learn = true
+	# 学 当前 境界 可学 (境界0 层1 基准)
+	g._try_auto_learn()
+	var after_r0: int = g.learned.size()
+	# 拉满 境界 到 顶层 再 试 (全部 技能 可学) — 直接 学 全部
+	g.realm_idx = g.REALMS.size() - 1
+	g.layer = (g.REALMS[g.realm_idx]["layers"] as int)
+	g._try_auto_learn()
+	check(g.learned.size() >= after_r0 and g.learned.size() == g.skill_ids.size(),
+		"打磨-80 全学完 已学=全部技能 (实际 %d 期望 %d)" % [g.learned.size(), g.skill_ids.size()])
+	var seq80c: int = g._auto_learn_seq
+	g._try_auto_learn()
+	check(g._auto_learn_seq == seq80c, "打磨-80 全学完 再试 0 变更 (幂等)")
+	# _process 集成: 手动驱动一帧 (已冻结, 无并发) — 开关关 且 可学 -> 不学习
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.learned.clear()
+	g.auto_learn = false
+	var seq80d: int = g._auto_learn_seq
+	var learned80d: Array = g.learned.duplicate()
+	g._process(0.016)
+	check(g._auto_learn_seq == seq80d and g.learned == learned80d,
+		"打磨-80 _process 关 不自动学习 (seq=%d 已学不变)" % g._auto_learn_seq)
+	# _process 集成: 开关开 且 可学 -> 自动 学习 (冻结 状态, 手动 驱动 一帧)
+	g.auto_learn = true
+	g._process(0.016)
+	check(g._auto_learn_seq == seq80d + 1 and g.learned.size() > 0,
+		"打磨-80 _process 开 可学 自动 学习 (seq=%d 已学=%d)" % [g._auto_learn_seq, g.learned.size()])
+	# 存档往返: auto_learn 保存/读取 一致 (先 false 存, 置 true 读 -> 仍 false; 再 true 存 -> 读 true)
+	g.auto_learn = false
+	g.save_game()
+	g.auto_learn = true
+	g.load_game()
+	check(g.auto_learn == false, "打磨-80 存档 auto_learn=false 往返 (实际 %s)" % str(g.auto_learn))
+	g.auto_learn = true
+	g.save_game()
+	var sd80: Dictionary = _save_json()
+	check(bool(sd80.get("auto_learn", false)) == true, "打磨-80 存档含 auto_learn=true 字段 (实际 %s)" % str(sd80.get("auto_learn")))
+	g.load_game()
+	check(g.auto_learn == true, "打磨-80 读档恢复 auto_learn=true")
+	# 旧档兼容: 缺 auto_learn 字段 默认 false
+	var wf80 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	wf80.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 5.0, "stones": 7.0}))
+	wf80.close()
+	g.auto_learn = true
+	g.load_game()
+	check(g.auto_learn == false, "打磨-80 旧档缺 auto_learn 默认 false")
+	# 收尾: 恢复 干净 基准 (防 污染 后续 段 打磨-70/72/73/75)
+	g.auto_learn = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.last_break_result = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	g.ready_events.clear()
+	g.set_process(true)
+	# ---------- 打磨-70: 自动系列 状态汇总 (只读接口 auto_summary_key/auto_summary_text, 纯展示无副作用;
+	# 打磨-80 起 4 开关: 键 4 段 突破|购置|施展|领悟) ----------
+	# 基准态 (四开关全关): 状态键 0|0|0|0, 文案 全 ✗
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
-	check(g.auto_summary_key() == "0|0|0", "打磨-70 三关 状态键 0|0|0 (实际 %s)" % g.auto_summary_key())
-	check(g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✗ · 施展 ✗",
-		"打磨-70 三关 文案 (实际 %s)" % g.auto_summary_text())
+	g.auto_learn = false
+	check(g.auto_summary_key() == "0|0|0|0", "打磨-70 四关 状态键 0|0|0|0 (实际 %s)" % g.auto_summary_key())
+	check(g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✗ · 施展 ✗ · 领悟 ✗",
+		"打磨-70 四关 文案 (实际 %s)" % g.auto_summary_text())
 	# 只读性: 连读多次 键/文案 恒定, 且 不改动 开关/资源/统计
 	var sum_snap: Dictionary = g.stats.duplicate(true)
 	var stones_sum: float = g.stones
@@ -2838,32 +2967,38 @@ func _init() -> void:
 		g.auto_summary_key()
 		g.auto_summary_text()
 	check(g.auto_summary_key() == key_sum0 and g.auto_summary_text() == txt_sum0, "打磨-70 只读 连读 恒定")
-	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
+	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false and g.auto_learn == false
 			and g.stats == sum_snap and g.stones == stones_sum, "打磨-70 只读 无 开关/资源/统计 副作用")
 	# 状态切换: 单开/组合开 键与文案 恒等 (与 开关 一一对应)
 	g.auto_break = true
-	check(g.auto_summary_key() == "1|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✗ · 施展 ✗",
+	check(g.auto_summary_key() == "1|0|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✗ · 施展 ✗ · 领悟 ✗",
 		"打磨-70 仅突破 开 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
 	g.auto_buy = true
-	check(g.auto_summary_key() == "1|1|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✗",
+	check(g.auto_summary_key() == "1|1|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✗ · 领悟 ✗",
 		"打磨-70 突破+购置 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
 	g.auto_cast = true
-	check(g.auto_summary_key() == "1|1|1" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✓",
+	check(g.auto_summary_key() == "1|1|1|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✓ · 领悟 ✗",
 		"打磨-70 三开 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
-	# 关回 单开 组合 (购置+施展 开, 突破 关)
+	# 四开 (领悟 开, 打磨-80)
+	g.auto_learn = true
+	check(g.auto_summary_key() == "1|1|1|1" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✓ · 领悟 ✓",
+		"打磨-70 四开 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
+	# 关回 单开 组合 (购置+施展 开, 突破/领悟 关)
 	g.auto_break = false
-	check(g.auto_summary_key() == "0|1|1" and g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✓ · 施展 ✓",
+	g.auto_learn = false
+	check(g.auto_summary_key() == "0|1|1|0" and g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✓ · 施展 ✓ · 领悟 ✗",
 		"打磨-70 购置+施展 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
 	# 存档往返后 状态 与 键 一致 (读档 恢复 开关, 汇总 口径 同源)
 	g.save_game()
 	g.auto_break = true
 	g.load_game()
-	check(g.auto_summary_key() == "0|1|1", "打磨-70 读档恢复 后 键 与 存档 一致 (实际 %s)" % g.auto_summary_key())
-	check(g.auto_break == false and g.auto_buy == true and g.auto_cast == true, "打磨-70 读档恢复 三开关 值")
-	# 收尾: 三开关 全 关 (防 污染 后续 段)
+	check(g.auto_summary_key() == "0|1|1|0", "打磨-70 读档恢复 后 键 与 存档 一致 (实际 %s)" % g.auto_summary_key())
+	check(g.auto_break == false and g.auto_buy == true and g.auto_cast == true and g.auto_learn == false, "打磨-70 读档恢复 四开关 值")
+	# 收尾: 四开关 全 关 (防 污染 后续 段)
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
+	g.auto_learn = false
 	# 收尾: 清空 拥有/穿戴/已学 (防 后续 段/存档 污染) + 恢复 基准
 	g.owned.clear()
 	g.owned_eq.clear()
@@ -2881,12 +3016,13 @@ func _init() -> void:
 	g.stones = 0.0
 	g.auto_break = false
 	g.set_process(true)
-	# ---------- 打磨-72: 启动 自动系列 恢复 提示 (只读接口 auto_restore_text, 全关空串/单开/组合/三开 文案,
-	# 只读性+存档往返+读档后口径 与 汇总 同源, 收尾 三开关 全 关) ----------
+	# ---------- 打磨-72: 启动 自动系列 恢复 提示 (只读接口 auto_restore_text, 全关空串/单开/组合/四开 文案,
+	# 只读性+存档往返+读档后口径 与 汇总 同源, 收尾 四开关 全 关; 打磨-80 起 固定序 突破>购置>施展>领悟) ----------
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
-	check(g.auto_restore_text() == "", "打磨-72 三关 文案 空串 (实际 %s)" % g.auto_restore_text())
+	g.auto_learn = false
+	check(g.auto_restore_text() == "", "打磨-72 四关 文案 空串 (实际 %s)" % g.auto_restore_text())
 	# 只读性: 连读多次 文案 恒定, 且 不改动 开关/资源/统计
 	var r72_snap: Dictionary = g.stats.duplicate(true)
 	var r72_stones: float = g.stones
@@ -2894,47 +3030,59 @@ func _init() -> void:
 	for _i72 in 3:
 		g.auto_restore_text()
 	check(g.auto_restore_text() == r72_txt0, "打磨-72 只读 连读 恒定")
-	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false
+	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false and g.auto_learn == false
 			and g.stats == r72_snap and g.stones == r72_stones, "打磨-72 只读 无 开关/资源/统计 副作用")
-	# 单开 文案 (固定序 突破>购置>施展)
+	# 单开 文案 (固定序 突破>购置>施展>领悟)
 	g.auto_buy = true
 	check(g.auto_restore_text() == "已恢复 自动: 购置",
 		"打磨-72 仅购置 开 文案 (实际 %s)" % g.auto_restore_text())
 	g.auto_cast = true
 	check(g.auto_restore_text() == "已恢复 自动: 购置·施展",
 		"打磨-72 购置+施展 文案 (实际 %s)" % g.auto_restore_text())
+	# 仅 领悟 单开 (打磨-80)
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = true
+	check(g.auto_restore_text() == "已恢复 自动: 领悟",
+		"打磨-72 仅领悟 开 文案 (打磨-80, 实际 %s)" % g.auto_restore_text())
+	# 四开 全开 (打磨-80)
+	g.auto_buy = true
+	g.auto_cast = true
 	g.auto_break = true
-	check(g.auto_restore_text() == "已恢复 自动: 突破·购置·施展",
-		"打磨-72 三开 文案 全开 (实际 %s)" % g.auto_restore_text())
-	# 关 突破 组合 (突破 关, 购置+施展 开, 与 打磨-70 收尾 同态)
+	check(g.auto_restore_text() == "已恢复 自动: 突破·购置·施展·领悟",
+		"打磨-72 四开 文案 全开 (实际 %s)" % g.auto_restore_text())
+	# 关 突破 组合 (突破/领悟 关, 购置+施展 开)
 	g.auto_break = false
+	g.auto_learn = false
 	check(g.auto_restore_text() == "已恢复 自动: 购置·施展",
 		"打磨-72 关突破 后 购置+施展 文案 (实际 %s)" % g.auto_restore_text())
 	# 存档往返后 读档 恢复 开关, 文案 与 恢复态 一致 (与 打磨-70 读档 同口径)
 	g.save_game()
 	g.load_game()
-	check(g.auto_buy == true and g.auto_cast == true and g.auto_break == false,
-		"打磨-72 读档恢复 三开关 值")
+	check(g.auto_buy == true and g.auto_cast == true and g.auto_break == false and g.auto_learn == false,
+		"打磨-72 读档恢复 四开关 值")
 	check(g.auto_restore_text() == "已恢复 自动: 购置·施展",
 		"打磨-72 读档后 文案 与 恢复态 一致 (实际 %s)" % g.auto_restore_text())
-	# 收尾: 三开关 全 关 + 文案 空串 (防 污染 后续 段)
+	# 收尾: 四开关 全 关 + 文案 空串 (防 污染 后续 段)
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
-	check(g.auto_restore_text() == "", "打磨-72 收尾 三关 空串")
-	# ---------- 打磨-73: 顶栏 自动系列 状态徽标 (只读接口 auto_on_count 开启数, 全关=0 单开=1 三开=3,
-	# 只读性+存档往返 计数 与 三开关 同源, 收尾 三开关 全 关) ----------
+	g.auto_learn = false
+	check(g.auto_restore_text() == "", "打磨-72 收尾 四关 空串")
+	# ---------- 打磨-73: 顶栏 自动系列 状态徽标 (只读接口 auto_on_count 开启数, 全关=0 单开=1 四开=4,
+	# 只读性+存档往返 计数 与 四开关 同源, 收尾 四开关 全 关; 打磨-80 起 4 开关) ----------
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
-	check(g.auto_on_count() == 0, "打磨-73 三关 开启数 0 (实际 %d)" % g.auto_on_count())
+	g.auto_learn = false
+	check(g.auto_on_count() == 0, "打磨-73 四关 开启数 0 (实际 %d)" % g.auto_on_count())
 	# 只读性: 连读多次 计数 恒定, 且 不改动 开关/资源/统计
 	var r73_stones: float = g.stones
 	var r73_txt: String = g.auto_restore_text()
 	for _i73 in 3:
 		g.auto_on_count()
 	check(g.auto_on_count() == 0 and g.auto_break == false and g.auto_buy == false
-			and g.auto_cast == false and g.stones == r73_stones
+			and g.auto_cast == false and g.auto_learn == false and g.stones == r73_stones
 			and g.auto_restore_text() == r73_txt, "打磨-73 只读 连读 恒定 无 开关/资源/统计 副作用")
 	# 单开 计数 1 (每档 各断言)
 	g.auto_buy = true
@@ -2945,21 +3093,30 @@ func _init() -> void:
 	g.auto_cast = false
 	g.auto_break = true
 	check(g.auto_on_count() == 1, "打磨-73 仅突破 开启数 1 (实际 %d)" % g.auto_on_count())
-	# 组合 计数 (突破+施展=2, 三开=3)
+	g.auto_break = false
+	g.auto_learn = true
+	check(g.auto_on_count() == 1, "打磨-73 仅领悟 开启数 1 (打磨-80, 实际 %d)" % g.auto_on_count())
+	g.auto_learn = false
+	# 组合 计数 (突破+施展=2, 三开=3, 四开=4)
 	g.auto_cast = true
+	g.auto_break = true
 	check(g.auto_on_count() == 2, "打磨-73 突破+施展 开启数 2 (实际 %d)" % g.auto_on_count())
 	g.auto_buy = true
 	check(g.auto_on_count() == 3, "打磨-73 三开 开启数 3 (实际 %d)" % g.auto_on_count())
-	# 存档往返 后 计数 与 恢复态 一致 (与 打磨-72 读档 同口径: 三开 落盘 读回)
+	g.auto_learn = true
+	check(g.auto_on_count() == 4, "打磨-73 四开 开启数 4 (打磨-80, 实际 %d)" % g.auto_on_count())
+	# 存档往返 后 计数 与 恢复态 一致 (与 打磨-72 读档 同口径: 四开 落盘 读回)
 	g.save_game()
 	g.load_game()
-	check(g.auto_on_count() == 3 and g.auto_break == true and g.auto_buy == true and g.auto_cast == true,
-		"打磨-73 读档恢复 计数 3 与 三开关 一致")
-	# 收尾: 三开关 全 关 (计数 0), 防 污染 后续 段
+	check(g.auto_on_count() == 4 and g.auto_break == true and g.auto_buy == true and g.auto_cast == true
+			and g.auto_learn == true,
+		"打磨-73 读档恢复 计数 4 与 四开关 一致")
+	# 收尾: 四开关 全 关 (计数 0), 防 污染 后续 段
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
-	check(g.auto_on_count() == 0, "打磨-73 收尾 三关 计数 0")
+	g.auto_learn = false
+	check(g.auto_on_count() == 0, "打磨-73 收尾 四关 计数 0")
 	# ---------- 打磨-75: 一键系列 顶栏 状态汇总 (六项 可执行数, 只读 无副作用) ----------
 	# 受控基准: 境界2 层1 / 灵石 5000 / 空 已学 已拥有 已穿戴 (数据 固定 种子, 期望值 按 数据 锚定)
 	g.realm_idx = 2
