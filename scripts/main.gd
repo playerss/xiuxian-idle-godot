@@ -36,6 +36,8 @@ var _play_label: Label         # 打磨-77: 顶栏 挂机时长 常显 ("⏳ X�
 var _play_text := ""           # 打磨-77: 挂机时长 文本缓存 (变化才刷, 空串=隐藏)
 var _rate_label: Label         # 打磨-78: 顶栏 主资源速率 常显 ("+X/秒", 未飞升=灵气 飞升后=道行, 文本变化 才刷)
 var _rate_text := ""           # 打磨-78: 主资源速率 文本缓存 (变化才刷, 空串=隐藏)
+var _sr_label: Label           # 打磨-79: 顶栏 灵石速率 常显 ("+X/秒", 与 修行页 灵石速率 行 同口径, 文本变化 才刷)
+var _sr_text := ""             # 打磨-79: 灵石速率 文本缓存 (变化才刷, 空串=隐藏)
 var _progress_label: Label
 var _bar_bg: ColorRect
 var _bar_fill: ColorRect
@@ -252,6 +254,13 @@ func _build_ui() -> void:
 	_rate_label.visible = false
 	_rate_label.tooltip_text = "当前 主资源 收入 速率 (与 主资源行 同 口径: 未飞升=灵气/秒, 飞升后=道行/秒)。\n构成 = 境界基础 倍率 x 道行阶段 倍率 x 法器 连乘 x 功法装备 (1+Σ 被动/装备加成), 与 修行页 灵气速率 同 口径; 纯展示, 无 存档/统计 副作用。"
 	top.add_child(_rate_label)
+	# 打磨-79: 顶栏 灵石速率 常显 (灰色小字 "+X/秒", 灵石行 后: 与 修行页 灵石速率 行 同 口径
+	# = 基础 x 境界倍率 x (1 + 灵石/全面 被动 + 装备加成); 速率<=0 隐藏 避免 空文本 占位;
+	# 文本 变化 才刷 节流, 纯展示 无 副作用)
+	_sr_label = _label("", 13, DIM)
+	_sr_label.visible = false
+	_sr_label.tooltip_text = "当前 灵石 收入 速率 (与 灵石行 同 口径, 未飞升/飞升 恒 灵石)。\n构成 = 基础 x 境界倍率 x (1 + 灵石/全面 被动 + 装备加成), 与 修行页 灵石速率 行 同 口径; 法器 连乘 仅 影响 主资源 速率, 不影响 灵石; 纯展示, 无 存档/统计 副作用。"
+	top.add_child(_sr_label)
 	# 打磨-73: 顶栏 自动系列 状态徽标 (金色圆角徽标 "自动 N/3": 任一开关开 显示, 全关 隐藏;
 	# tooltip 复用 auto_summary_text 三开关 口径 + 离线不触发 说明; 纯展示 无 存档/统计 副作用)
 	# 打磨-74: 徽标 升级 flat Button 可点击热区 (手型光标+悬停 淡底 金边, 复用 打磨-44/71 模式):
@@ -1392,6 +1401,12 @@ func _refresh() -> void:
 		_rate_text = rt_t
 		_rate_label.text = rt_t
 		_rate_label.visible = rt_t != ""
+	# 打磨-79: 顶栏 灵石速率 常显 (与 修行页 灵石速率 行 同 口径, 文本 变化 才刷; 速率<=0 隐藏)
+	var sr_t: String = g.stone_rate_text()
+	if sr_t != _sr_text:
+		_sr_text = sr_t
+		_sr_label.text = sr_t
+		_sr_label.visible = sr_t != ""
 	_progress_label.text = ("道行进度  %d%%" if g.ascended else "突破进度  %d%%") % int(g.breakthrough_progress())
 	# 打磨-24: 突破/道行精进 ETA (每帧算一次, 文本变化才写)
 	var bet_t: String = g.breakthrough_eta_text()

@@ -127,6 +127,7 @@ func _ready() -> void:
 	await _assert_onekey_tip_detail()
 	await _assert_play_time_badge()
 	_assert_primary_rate_badge()
+	_assert_stone_rate_badge()
 	_finish()
 
 
@@ -2982,3 +2983,60 @@ func _assert_primary_rate_badge() -> void:
 	# 收尾: 可见 + 文本=接口
 	check(rl.visible == true and str(rl.text) == g.primary_rate_text(),
 		"打磨-78 收尾 可见 文本=接口 稳定")
+
+
+# 打磨-79: 顶栏 灵石速率 常显 — 顶栏 灵石行 后 加 灰色小字 "+X/秒" (与 修行页 灵石速率 行 同口径
+# = 基础 x 境界倍率 x (1+灵石/全面被动+装备加成); 法器连乘 不影响 灵石; 速率<=0 隐藏;
+# 文本 变化 才刷 节流; 纯展示 无 副作用);
+# 断言 (手动驱动 确定性): 标签 节点 顶栏 同父/灰色/tooltip 口径/初始 可见+文本=接口 (灵石速率恒>0)/
+# 同态 节流 稳定 无副作用/境界 变化 文本 同步 (动态 恒等)/飞升 后 口径 不变 动态 恒等/恢复 复原/
+# 收尾 文本=接口 可见
+func _assert_stone_rate_badge() -> void:
+	var g := GameData
+	# 节点: 顶栏 子节点 (与 挂机时长 标签 同父), 灰色 13px
+	var sl: Label = ui._sr_label
+	check(sl != null, "打磨-79 顶栏 灵石速率 标签 节点 存在")
+	check(sl.get_parent() == ui._play_label.get_parent(),
+		"打磨-79 标签 挂在 顶栏 (与 挂机时长 标签 同父; 实际 %s)" % str(sl.get_parent()))
+	check(sl.get_theme_color("font_color") == Color(0.6, 0.62, 0.68),
+		"打磨-79 标签 字色 灰色 (实际 %s)" % str(sl.get_theme_color("font_color")))
+	check(sl.tooltip_text.find("灵石 收入 速率") >= 0 and sl.tooltip_text.find("修行页 灵石速率 行 同 口径") >= 0,
+		"打磨-79 标签 tooltip 含 口径 说明 (实际 %s)" % sl.tooltip_text.left(20))
+	# 初始: 灵石速率 恒 >0 (境界倍率>=1) → 可见 + 文本=接口 (动态 恒等, 防 前序 残留 干扰)
+	var t0: String = g.stone_rate_text()
+	check(t0 != "", "打磨-79 基准 灵石速率>0 接口 非空 (实际 %s)" % t0)
+	check(sl.visible == true and str(sl.text) == t0,
+		"打磨-79 初始 可见 文本=接口 (实际 visible=%s text=%s)" % [str(sl.visible), str(sl.text)])
+	# 节流: 同态 刷新 文本 稳定, 无 资源/统计 副作用
+	var snap_s: Dictionary = g.stats.duplicate(true)
+	var ess_s: float = g.essence
+	var st_s: float = g.stones
+	ui._refresh()
+	check(str(sl.text) == t0 and g.stats == snap_s and g.essence == ess_s and g.stones == st_s,
+		"打磨-79 同态 节流 文本 稳定 无副作用")
+	# 境界 变化 → 文本 同步 (灵石 速率 含 境界倍率, 动态 恒等; 恢复原 境界)
+	var realm_s: int = g.realm_idx
+	g.realm_idx = 2
+	ui._refresh()
+	var t_r2: String = g.stone_rate_text()
+	check(str(sl.text) == t_r2 and t_r2 != t0,
+		"打磨-79 境界2 文本 同步 (实际 %s, 期望 %s)" % [str(sl.text), t_r2])
+	g.realm_idx = realm_s
+	ui._refresh()
+	check(str(sl.text) == t0, "打磨-79 恢复 境界 后 文本 复原 (实际 %s)" % str(sl.text))
+	# 飞升 后 口径 不变 (灵石 恒 为 灵石, 同 公式 动态 恒等; 恢复 原 态)
+	var asc_s: bool = g.ascended
+	var daoLv_s: int = g.dao_level
+	g.ascended = true
+	g.dao_level = 1
+	ui._refresh()
+	var t_asc: String = g.stone_rate_text()
+	check(str(sl.text) == t_asc,
+		"打磨-79 飞升 后 文本=接口 口径 不变 (实际 %s, 期望 %s)" % [str(sl.text), t_asc])
+	g.ascended = asc_s
+	g.dao_level = daoLv_s
+	ui._refresh()
+	check(str(sl.text) == t0, "打磨-79 恢复 飞升 态 后 文本 复原 (实际 %s)" % str(sl.text))
+	# 收尾: 可见 + 文本=接口
+	check(sl.visible == true and str(sl.text) == g.stone_rate_text(),
+		"打磨-79 收尾 可见 文本=接口 稳定")

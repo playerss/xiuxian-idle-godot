@@ -3263,6 +3263,75 @@ func _init() -> void:
 	check(g.primary_rate_text() == g.primary_rate_text(), "打磨-78 只读 连读 恒定")
 	check(g.stats == snap8 and g.essence == ess8 and g.stones == st8,
 		"打磨-78 只读 接口 无 资源/统计 副作用")
+	# ---------- 打磨-79: 顶栏 灵石速率 常显 接口 (只读 stone_rate_text, 与 修行页 灵石速率 行 同口径;
+	# 期望值 全部 按 当前 stone_per_sec 动态 计算, 防 境界/功法 残留 干扰; 收尾 前 已 重置 基准 态) ----------
+	var base_sps: float = g.stone_per_sec()
+	var s79_base: String = g.stone_rate_text()
+	check(s79_base == ("+%s/秒" % g.fmt(base_sps)),
+		"打磨-79 基准 文案=+当前灵石速率/秒 (实际 %s, 速率 %s)" % [s79_base, str(base_sps)])
+	# 境界 变化 → 文案 同步 (灵石 速率 含 境界倍率, 动态 恒等; 恢复原 境界)
+	var r79_save: int = g.realm_idx
+	g.realm_idx = 2
+	var t79_r2: String = g.stone_rate_text()
+	check(t79_r2 == ("+%s/秒" % g.fmt(g.stone_per_sec())) and t79_r2 != s79_base,
+		"打磨-79 境界2 文案 动态 恒等 (实际 %s)" % t79_r2)
+	g.realm_idx = r79_save
+	check(g.stone_rate_text() == s79_base, "打磨-79 恢复 境界 后 文案 复原")
+	# 功法 加成: 学 一个 stone_mult 被动 → 速率 与 文案 同 恒等 (realm0/层1 可学 恒 存在)
+	var skill79: String = ""
+	for sid in g.skill_ids:
+		var sd: Dictionary = g.skill_by_id.get(sid, {})
+		if str(sd.get("effect", "")) == "stone_mult" and g.can_learn(sid):
+			skill79 = sid
+			break
+	check(skill79 != "", "打磨-79 存在 可学 stone_mult 被动 (实际 %s)" % skill79)
+	if skill79 != "":
+		g.learn_skill(skill79)
+		var sps_after: float = g.stone_per_sec()
+		check(sps_after > base_sps, "打磨-79 学 stone_mult 后 灵石速率 上升 (实际 %s > %s)" % [str(sps_after), str(base_sps)])
+		check(g.stone_rate_text() == ("+%s/秒" % g.fmt(sps_after)),
+			"打磨-79 学功法 后 文案=+新灵石速率/秒 (实际 %s)" % g.stone_rate_text())
+		g.learned.erase(skill79)
+		check(g.stone_rate_text() == s79_base, "打磨-79 清除 功法 后 文案 复原")
+	# 装备 加成: 穿戴 一件 stone_mult 装备 → 文案 恒等 (灵石 买得起 最便宜 凡品 武器; 恢复 原 态)
+	var stone79_save: float = g.stones
+	var eq79: String = "weapon_0_0"
+	if not g.owned_eq.has(eq79):
+		g.stones = 1000.0
+		g.buy_equipment(eq79)
+		check(g.owned_eq.has(eq79), "打磨-79 装备 购买 成功 (owned_eq)")
+		check(g.stone_rate_text() == ("+%s/秒" % g.fmt(g.stone_per_sec())),
+			"打磨-79 穿戴装备 后 文案 动态 恒等 (实际 %s)" % g.stone_rate_text())
+		g.equipped.clear()
+		g.owned_eq.erase(eq79)
+		g.stones = stone79_save
+		check(g.stone_rate_text() == s79_base, "打磨-79 恢复 装备 后 文案 复原")
+	# 法器 连乘 不 影响 灵石: 买 一件法器 → 主资源 速率 变 但 灵石速率 文案 不变
+	var item79: String = "wooden_sword"
+	if not g.owned.has(item79):
+		var qps79_before: float = g.qi_per_sec()
+		g.stones = 1000.0
+		g.try_buy_item(item79)
+		check(g.owned.has(item79), "打磨-79 法器 购买 成功 (owned)")
+		check(g.qi_per_sec() > qps79_before, "打磨-79 买法器 后 主资源 速率 上升 (实际 %s > %s)" % [str(g.qi_per_sec()), str(qps79_before)])
+		check(g.stone_rate_text() == s79_base, "打磨-79 买法器 后 灵石速率 文案 不变 (实际 %s)" % g.stone_rate_text())
+		g.owned.erase(item79)
+		g.stones = stone79_save
+		check(g.stone_rate_text() == s79_base, "打磨-79 恢复 法器 后 文案 复原")
+	# 飞升 后 口径 不变 (灵石 恒 为 灵石, 文案 仍 同 公式; 恢复 原 态)
+	var asc79_save: bool = g.ascended
+	g.ascended = true
+	check(g.stone_rate_text() == ("+%s/秒" % g.fmt(g.stone_per_sec())),
+		"打磨-79 飞升 后 文案=+灵石速率/秒 恒等 (实际 %s)" % g.stone_rate_text())
+	g.ascended = asc79_save
+	check(g.stone_rate_text() == s79_base, "打磨-79 恢复 飞升 态 后 文案 复原")
+	# 只读: 连读 恒定 + 接口 本身 不改 资源/统计 (快照 对比)
+	var snap79: Dictionary = g.stats.duplicate(true)
+	var ess79: float = g.essence
+	var st79: float = g.stones
+	check(g.stone_rate_text() == g.stone_rate_text(), "打磨-79 只读 连读 恒定")
+	check(g.stats == snap79 and g.essence == ess79 and g.stones == st79,
+		"打磨-79 只读 接口 无 资源/统计 副作用")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

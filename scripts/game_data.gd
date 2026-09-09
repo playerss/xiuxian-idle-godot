@@ -309,6 +309,15 @@ func primary_rate_text() -> String:
 		return ""
 	return "+%s/秒" % fmt(r)
 
+# 打磨-79: 顶栏 灵石速率 只读 接口 (与 修行页 灵石速率 行 同 口径
+# = 基础1 x 境界倍率 x (1 + 灵石/全面 被动 + 装备加成); 法器连乘 不影响 灵石;
+# 速率<=0 返回 空串 供 UI 隐藏 标签, 只读 不 改 状态/存档/统计)
+func stone_rate_text() -> String:
+	var r: float = stone_per_sec()
+	if r <= 0.0:
+		return ""
+	return "+%s/秒" % fmt(r)
+
 # 统计时长格式 (日/小时/分)
 func fmt_stats_time(sec: float) -> String:
 	var d := int(sec) / 86400
