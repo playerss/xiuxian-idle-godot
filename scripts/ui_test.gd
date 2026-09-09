@@ -124,6 +124,7 @@ func _ready() -> void:
 	await _assert_auto_break()
 	await _assert_auto_buy()
 	await _assert_auto_buy_next_tip()
+	await _assert_auto_break_next_tip()
 	await _assert_auto_cast()
 	await _assert_auto_learn()
 	await _assert_auto_summary()
@@ -2192,6 +2193,69 @@ func _assert_auto_buy_next_tip() -> void:
 	g.layer = 1
 	g.ascended = false
 	g.dao_level = 0
+	g.stones = 0.0
+	g.auto_buy = false
+	g.auto_break = false
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-85: 自动突破按钮 tooltip 动态段 — 构建含 动态段 标记/_refresh 按 接口 刷新/资源状态 动态/节流/飞升口径/道祖圆满/无副作用
+func _assert_auto_break_next_tip() -> void:
+	var g := GameData
+	var btn: Button = ui._auto_break_btn
+	check(btn != null, "打磨-85 自动突破按钮存在")
+	if btn == null:
+		return
+	# 基准态 (前节 收尾: 清空 拥有/穿戴/已学, 境界0层1, 灵石 0; 主资源 取 当前 实际态)
+	var exp85 := g.auto_break_next_tip()
+	check(exp85.find("当前") >= 0 and exp85.find("灵气/秒") >= 0, "打磨-85 基准 动态段 含 主资源 速率 (实际 %s)" % exp85.left(40))
+	check(exp85.find("突破至") >= 0, "打磨-85 基准 动态段 含 下一目标 (实际 %s)" % exp85.left(40))
+	ui._refresh()
+	check(str(btn.tooltip_text) == str(ui._auto_break_tip_static) + exp85, "打磨-85 基准 tooltip=静态前缀+动态段 恒等 (实际 %s)" % str(btn.tooltip_text).left(60))
+	check(str(btn.tooltip_text).find("【下次 自动突破 耗时 (动态)】") >= 0, "打磨-85 tooltip 含 动态段 标记")
+	# 同态 节流: 再刷 不重写 (tooltip 稳定, 无 副作用)
+	var tip_before: String = str(btn.tooltip_text)
+	var snap_stats: Dictionary = g.stats.duplicate(true)
+	var snap_stones: float = g.stones
+	ui._refresh()
+	check(str(btn.tooltip_text) == tip_before, "打磨-85 同态 节流 tooltip 稳定")
+	check(g.stats == snap_stats and g.stones == snap_stones, "打磨-85 同态 刷 tooltip 无 资源/统计 副作用")
+	# 灵气 足够: 动态段 切换 可立即突破 分支 (无 ETA)
+	var cost85: float = g.breakthrough_cost()
+	g.essence = cost85
+	ui._refresh()
+	check(str(btn.tooltip_text).find("灵气 已足够, 可立即突破") >= 0, "打磨-85 灵气足够 动态段=可立即突破 无 ETA (实际 %s)" % str(btn.tooltip_text).right(20))
+	# 灵气 半档: 动态段 更新 缺口/ETA (随 主资源 变化 才刷)
+	g.essence = cost85 / 2.0
+	ui._refresh()
+	check(str(btn.tooltip_text).find(g.fmt(cost85 - g.essence)) >= 0,
+		"打磨-85 灵气 半档 动态段 缺口 同步 (实际 %s)" % str(btn.tooltip_text).left(80))
+	# 层顶: 目标 切换 跨境界 (练气 第 N 层 -> 筑基 第 1 层)
+	var maxl85: int = g.REALMS[0]["layers"]
+	g.layer = maxl85
+	ui._refresh()
+	check(str(btn.tooltip_text).find("筑基 第 1 层") >= 0, "打磨-85 层顶 动态段 指向 跨境界 (实际 %s)" % str(btn.tooltip_text).left(80))
+	g.layer = 1
+	ui._refresh()
+	# 飞升: 主资源 口径 切 道行 (目标=道行精进至 下一阶段)
+	g.ascended = true
+	g.dao = 0.0
+	g.dao_level = 0
+	ui._refresh()
+	check(str(btn.tooltip_text).find("道行/秒") >= 0, "打磨-85 飞升 动态段 主资源=道行 (实际 %s)" % str(btn.tooltip_text).left(80))
+	check(str(btn.tooltip_text).find("道行精进至 %s" % g.IMMORTAL_REALMS[1]) >= 0, "打磨-85 飞升 动态段 目标=下一阶段 (实际 %s)" % str(btn.tooltip_text).left(80))
+	# 道祖 封顶: 圆满 文案
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	ui._refresh()
+	check(str(btn.tooltip_text).find("已至道祖 · 道法自然 ♪ (圆满, 不再精进)") >= 0, "打磨-85 道祖 封顶 圆满 文案 (实际 %s)" % str(btn.tooltip_text).left(80))
+	# 收尾: 恢复 基准态 (防 污染 后续 断言)
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
 	g.stones = 0.0
 	g.auto_buy = false
 	g.auto_break = false

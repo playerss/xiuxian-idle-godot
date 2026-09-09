@@ -3673,6 +3673,68 @@ func _init() -> void:
 	check(g.auto_buy_next_tip() == g.auto_buy_next_tip(), "打磨-84 只读 连读 恒定")
 	check(g.stats == snap84 and g.stones == st84 and g.realm_idx == rl84,
 		"打磨-84 只读 接口 无 资源/统计/境界 副作用")
+	# ---------- 打磨-85: 自动突破 按钮 tooltip 动态段 (auto_break_next_tip 只读接口, 复用 打磨-24/31 口径) ----------
+	# 受控态: 境界0层1 (突破消耗 10 灵气), 灵石 0 不影响 主资源, _process 冻结 已生效
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	var es85: float = g.essence
+	g.essence = 0.0
+	var cost85: float = g.breakthrough_cost()
+	var exp85head := "当前 %s 灵气/秒" % g.fmt(g.qi_per_sec())
+	var exp85 := exp85head + ("\n突破至 %s 还差 %s 灵气 %s" % [g.next_realm_display(), g.fmt(cost85 - g.essence), g.breakthrough_eta_text()])
+	check(g.auto_break_next_tip() == exp85, "打磨-85 基准 tooltip=动态 拼接 恒等 (实际 %s)" % g.auto_break_next_tip())
+	check(g.auto_break_next_tip().find("突破至") >= 0 and g.auto_break_next_tip().find("灵气/秒") >= 0,
+		"打磨-85 基准 tooltip 含 下一目标 + 主资源 速率 (实际 %s)" % g.auto_break_next_tip().left(60))
+	# 灵石 不影响 主资源 口径 (灵石 变化 tooltip 恒等)
+	g.stones = 1234.0
+	check(g.auto_break_next_tip() == exp85, "打磨-85 灵石 变化 不影响 主资源 动态段 (实际 %s)" % g.auto_break_next_tip().left(60))
+	g.stones = 0.0
+	# 灵气 足够: 缺口<=0 分支 (可立即突破, 无 ETA)
+	g.essence = cost85
+	check(g.auto_break_next_tip() == exp85head + "\n灵气 已足够, 可立即突破",
+		"打磨-85 灵气 足够 tooltip=可立即突破 (实际 %s)" % g.auto_break_next_tip())
+	g.essence = 0.0
+	# 境界2: 突破消耗 90 (境界 倍率) → tooltip 同步 (动态), 恢复 复原
+	g.realm_idx = 2
+	var tip85_r2: String = g.auto_break_next_tip()
+	g.realm_idx = 0
+	check(g.auto_break_next_tip() == exp85, "打磨-85 境界2 消耗/ETA 变化 恢复 后 tooltip 复原")
+	check(tip85_r2 != exp85, "打磨-85 境界2 动态段 变化 (实际 %s)" % tip85_r2.left(60))
+	# 层顶: 目标 切换 跨境界 (练气 第 N 层 -> 筑基 第 1 层)
+	var maxl85: int = g.REALMS[0]["layers"]
+	g.layer = maxl85
+	var tip85_top: String = g.auto_break_next_tip()
+	g.layer = 1
+	check(g.auto_break_next_tip() == exp85, "打磨-85 层顶 目标 切换 恢复 后 复原")
+	check(tip85_top.find(str(g.REALMS[1]["name"])) >= 0, "打磨-85 层顶 目标=跨境界 %s (实际 %s)" % [str(g.REALMS[1]["name"]), tip85_top.left(60)])
+	# 飞升: 主资源 口径 切 道行 (速率 x immortal_mult, 目标=道行精进至 下一阶段)
+	var asc85: bool = g.ascended
+	g.ascended = true
+	var dcost85: float = g.dao_break_cost()
+	g.dao = 0.0
+	var exp85d := "当前 %s 道行/秒" % g.fmt(g.qi_per_sec())
+	var exp85d_full := exp85d + ("\n道行精进至 %s 还差 %s 道行 %s" % [g.IMMORTAL_REALMS[1], g.fmt(dcost85 - g.dao), g.breakthrough_eta_text()])
+	check(g.auto_break_next_tip() == exp85d_full, "打磨-85 飞升 道行 口径 恒等 (实际 %s)" % g.auto_break_next_tip().left(80))
+	g.ascended = asc85
+	# 道祖 封顶: 圆满 文案 (不再 精进)
+	g.ascended = true
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	check(g.auto_break_next_tip() == ("当前 %s 道行/秒" % g.fmt(g.qi_per_sec())) + "\n已至道祖 · 道法自然 ♪ (圆满, 不再精进)",
+		"打磨-85 道祖 封顶 圆满 文案 (实际 %s)" % g.auto_break_next_tip().left(60))
+	g.ascended = asc85
+	g.dao_level = 0
+	# 只读: 连读 恒定 + 接口 本身 不改 资源/统计/境界
+	var snap85: Dictionary = g.stats.duplicate(true)
+	var st85: float = g.stones
+	var es85b: float = g.essence
+	var rl85: int = g.realm_idx
+	check(g.auto_break_next_tip() == g.auto_break_next_tip(), "打磨-85 只读 连读 恒定")
+	check(g.stats == snap85 and g.stones == st85 and g.essence == es85b and g.realm_idx == rl85 and g.ascended == false,
+		"打磨-85 只读 接口 无 资源/统计/境界 副作用")
+	# 收尾: 恢复 基准态 (防 污染 后续 断言)
+	g.essence = es85
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

@@ -1365,6 +1365,29 @@ func auto_buy_next_tip() -> String:
 		return head + ("\n下一件 %s 还差 %s 灵石 (当前无灵石收入)" % [label, fmt(gap)])
 	return head + ("\n下一件 %s 还差 %s 灵石 %s" % [label, fmt(gap), eta_text(float(target["cost"]))])
 
+# ---------- 打磨-85: 自动突破 按钮 tooltip 动态段 (下次 自动突破 耗时预估, 复用 打磨-24 ETA 口径) ----------
+# 只读: 打磨-84 已给 自动购置 开关 tooltip 补 下一件 可购 动态段, 但 自动突破 开关 悬停 只有 静态 口径,
+# 开启 后 玩家 悬停 不知 资源 还要 攒多久 才 够 下一次 自动 突破/道行精进; tooltip 追加 动态 段:
+# 当前 主资源 速率 + 距 下一目标 (未飞升=突破至 下一层/境界/飞升, 飞升后=道行精进至 下一阶段,
+# 与 打磨-31 下一目标 行 同口径) 缺口 与 ETA (复用 打磨-24 breakthrough_eta_seconds/breakthrough_eta_text;
+# 资源已足够 = 可立即突破, 无 主资源 收入 = 标注 当前无收入, 道祖封顶 = 圆满 不再 精进)。
+# 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
+func auto_break_next_tip() -> String:
+	var res_name: String = primary_res_name()
+	var head := "当前 %s %s/秒" % [fmt(qi_per_sec()), res_name]
+	if ascended and dao_level >= IMMORTAL_REALMS.size() - 1:
+		return head + "\n已至道祖 · 道法自然 ♪ (圆满, 不再精进)"
+	var need: float = dao_break_cost() if ascended else breakthrough_cost()
+	var cur: float = dao if ascended else essence
+	if cur >= need:
+		return head + ("\n%s 已足够, 可立即突破" % res_name)
+	var gap: float = need - cur
+	var goal: String = "道行精进至 %s" % IMMORTAL_REALMS[dao_level + 1] if ascended else "突破至 %s" % next_realm_display()
+	var t: float = breakthrough_eta_seconds()
+	if t < 0.0:
+		return head + ("\n%s 还差 %s %s (当前无收入)" % [goal, fmt(gap), res_name])
+	return head + ("\n%s 还差 %s %s %s" % [goal, fmt(gap), res_name, breakthrough_eta_text()])
+
 # ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 主动神通) ----------
 
 # 当前就绪 (无冷却) 的 已学主动神通 数 (供技能页"一键施展"按钮文案)

@@ -51,6 +51,8 @@ var _bar_fill: ColorRect
 var _break_btn: Button
 var _auto_break_btn: Button     # 打磨-67: 自动突破开关 (toggle, 存档持久化)
 var _auto_break_on := false     # 打磨-67: 上帧开关状态缓存 (变化才刷按钮态)
+var _auto_break_tip := ""        # 打磨-85: 自动突破按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84 口径)
+var _auto_break_tip_static := "" # 打磨-85: 自动突破按钮 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼)
 var _auto_buy_btn: Button       # 打磨-68: 自动购置开关 (toggle, 存档持久化)
 var _auto_buy_on := false       # 打磨-68: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_buy_msg_seq := 0      # 打磨-68: 已提示过的 自动购置 变更事件序号 (避免重复提示; 启动=0 与 GameData 同态)
@@ -585,7 +587,13 @@ func _build_training_page(page: Panel) -> void:
 	_auto_break_btn = _make_button("自动突破: 关")
 	_auto_break_btn.toggle_mode = true
 	_auto_break_btn.pressed.connect(_on_auto_break)
-	_auto_break_btn.tooltip_text = "资源攒够 突破/道行精进 消耗时 自动尝试, 无需手动点按钮 (挂机时生效; 离线期间不触发, 离线只结算收益, 重新进入游戏后生效)。\n成功弹绿色浮动 / 飞升弹金色浮动 / 失败弹红色浮动 (与手动按钮同口径, 浮动文案追加 自动 标注), 每帧至多尝试一次, 失败不重烧 (资源攒够才再试)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 道祖封顶 恒不触发。"
+	# 打磨-85: tooltip = 静态口径 + 动态段 (下次 自动突破 耗时预估, 随 主资源/速率/境界 变化 由 _refresh 刷新);
+	# 静态 前缀 存 成员 供 重拼 (避免 split 截断 坑, 与 打磨-84 自动购置 tooltip 动态段 口径 同)
+	_auto_break_tip_static = ("资源攒够 突破/道行精进 消耗时 自动尝试, 无需手动点按钮 (挂机时生效; 离线期间不触发, 离线只结算收益, 重新进入游戏后生效)。\n"
+		+ "成功弹绿色浮动 / 飞升弹金色浮动 / 失败弹红色浮动 (与手动按钮同口径, 浮动文案追加 自动 标注), 每帧至多尝试一次, 失败不重烧 (资源攒够才再试)。\n"
+		+ "开关 存档 持久化, 默认 关 (手动玩家不受影响); 道祖封顶 恒不触发。\n\n"
+		+ "【下次 自动突破 耗时 (动态)】")
+	_auto_break_btn.tooltip_text = _auto_break_tip_static
 	break_box.add_child(_auto_break_btn)
 	# 打磨-68: 自动购置开关 (灵石攒够 自动购买 法器/装备 + 自动最佳换装; 状态变化才刷按钮态)
 	_auto_buy_btn = _make_button("自动购置: 关")
@@ -1530,6 +1538,11 @@ func _refresh() -> void:
 		_auto_break_on = g.auto_break
 		_auto_break_btn.set_pressed_no_signal(g.auto_break)
 		_auto_break_btn.text = ("自动突破: 开" if g.auto_break else "自动突破: 关")
+	# 打磨-85: 自动突破按钮 tooltip 动态段 (下次 自动突破 耗时预估, 随 主资源/速率/境界 变化 才刷; 同 打磨-84 缓存口径)
+	var abk_tip: String = g.auto_break_next_tip()
+	if abk_tip != _auto_break_tip:
+		_auto_break_tip = abk_tip
+		_auto_break_btn.tooltip_text = _auto_break_tip_static + abk_tip
 	# 打磨-68: 自动购置开关 按钮态 (开关状态 变化才刷; 读档恢复/外部改 同步)
 	if g.auto_buy != _auto_buy_on:
 		_auto_buy_on = g.auto_buy
