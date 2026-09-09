@@ -3489,6 +3489,65 @@ func _init() -> void:
 	check(g.stone_rate_text() == g.stone_rate_text(), "打磨-79 只读 连读 恒定")
 	check(g.stats == snap79 and g.essence == ess79 and g.stones == st79,
 		"打磨-79 只读 接口 无 资源/统计 副作用")
+	# ---------- 打磨-81: 下一目标进度比例 接口 (只读 next_goal_ratio, 与 next_goal_text 同目标口径;
+	# 期望值 全部 按 当前 资源/消耗 动态 计算, 防 前序 残留 干扰; 收尾 前 已 重置 基准 态) ----------
+	var ess81: float = g.essence
+	var dao81: float = g.dao
+	var asc81: bool = g.ascended
+	# 基准: 未飞升 ratio = 灵气/突破消耗 (动态 恒等, 防 境界 残留 干扰)
+	var cost81: float = g.breakthrough_cost()
+	check(absf(g.next_goal_ratio() - ess81 / cost81) < 1e-9,
+		"打磨-81 基准 ratio=灵气/突破消耗 (实际 %s, 期望 %s)" % [str(g.next_goal_ratio()), str(ess81 / cost81)])
+	# 资源 上升 → ratio 单调 上升 (同 消耗 动态 恒等; 恢复 原 灵气)
+	var e81: float = ess81 + 5.0
+	g.essence = e81
+	check(g.next_goal_ratio() > (ess81 / cost81) and absf(g.next_goal_ratio() - e81 / cost81) < 1e-9,
+		"打磨-81 灵气上升 ratio 上升 动态 恒等 (实际 %s)" % str(g.next_goal_ratio()))
+	# 资源>=消耗 → 封顶 1.0 (与 突破 ready 口径 一致; 恢复 原 灵气)
+	g.essence = cost81 + 1.0
+	check(g.next_goal_ratio() == 1.0, "打磨-81 资源够 封顶=1.0 (实际 %s)" % str(g.next_goal_ratio()))
+	# 境界 变化 消耗 变 → ratio 同步 (动态 恒等; 恢复 原 境界)
+	var r81: int = g.realm_idx
+	g.essence = ess81
+	g.realm_idx = 2
+	var cost81_r2: float = g.breakthrough_cost()
+	check(absf(g.next_goal_ratio() - ess81 / cost81_r2) < 1e-9 and cost81_r2 != cost81,
+		"打磨-81 境界2 消耗变 ratio 同步 动态 恒等 (实际 %s)" % str(g.next_goal_ratio()))
+	g.realm_idx = r81
+	g.essence = ess81
+	check(absf(g.next_goal_ratio() - ess81 / cost81) < 1e-9, "打磨-81 恢复 境界 后 ratio 复原")
+	# 跨境界 口径: 当前境界 顶层 下一目标=下一境界 第 1 层 (消耗 跳升 动态 恒等; 恢复 原 境界)
+	var max81: int = g.REALMS[r81]["layers"] as int
+	g.layer = max81
+	var cost81_next: float = g.breakthrough_cost()
+	check(absf(g.next_goal_ratio() - ess81 / cost81_next) < 1e-9 and cost81_next > cost81,
+		"打磨-81 顶层 跨境界 消耗 口径 动态 恒等 (实际 %s)" % str(g.next_goal_ratio()))
+	g.layer = 1
+	check(absf(g.next_goal_ratio() - ess81 / cost81) < 1e-9, "打磨-81 恢复 层数 后 ratio 复原")
+	# 飞升 口径 = 道行/精进消耗 (道祖 封顶 恒 1.0; 恢复 原 飞升 态)
+	var daoLv81: int = g.dao_level
+	g.ascended = true
+	var dc81: float = g.dao_break_cost()
+	check(absf(g.next_goal_ratio() - dao81 / dc81) < 1e-9,
+		"打磨-81 飞升 ratio=道行/精进消耗 (实际 %s)" % str(g.next_goal_ratio()))
+	g.dao = dc81 * 0.5
+	check(g.next_goal_ratio() == 0.5, "打磨-81 飞升 半消耗 ratio=0.5 (实际 %s)" % str(g.next_goal_ratio()))
+	g.dao = dc81 + 1.0
+	check(g.next_goal_ratio() == 1.0, "打磨-81 飞升 道行够 封顶=1.0 (实际 %s)" % str(g.next_goal_ratio()))
+	g.dao = dc81 * 2.0
+	check(g.next_goal_ratio() == 1.0, "打磨-81 飞升 道行溢出 钳制 1.0 (实际 %s)" % str(g.next_goal_ratio()))
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	check(g.next_goal_ratio() == 1.0, "打磨-81 道祖 封顶 ratio=1.0 (实际 %s)" % str(g.next_goal_ratio()))
+	g.ascended = asc81
+	g.dao_level = daoLv81
+	g.dao = dao81
+	check(absf(g.next_goal_ratio() - ess81 / cost81) < 1e-9, "打磨-81 恢复 飞升 态 后 ratio 复原")
+	# 只读: 连读 恒定 + 接口 本身 不改 资源/统计 (快照 对比)
+	var snap81: Dictionary = g.stats.duplicate(true)
+	var st81_s: float = g.stones
+	check(g.next_goal_ratio() == g.next_goal_ratio(), "打磨-81 只读 连读 恒定")
+	check(g.stats == snap81 and g.essence == ess81 and g.stones == st81_s,
+		"打磨-81 只读 接口 无 资源/统计 副作用")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

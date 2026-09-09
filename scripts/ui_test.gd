@@ -130,6 +130,7 @@ func _ready() -> void:
 	await _assert_play_time_badge()
 	_assert_primary_rate_badge()
 	_assert_stone_rate_badge()
+	await _assert_goalbar()
 	_finish()
 
 
@@ -3194,3 +3195,108 @@ func _assert_stone_rate_badge() -> void:
 	# 收尾: 可见 + 文本=接口
 	check(sl.visible == true and str(sl.text) == g.stone_rate_text(),
 		"打磨-79 收尾 可见 文本=接口 稳定")
+
+
+# 打磨-81: 顶栏 下一目标 渐变进度条 — 顶栏 下 5px 全宽 青色 填充 (next_goal_ratio 0..1,
+# 与 修行页 下一目标 行 同 口径; 2% 量化档+布局宽 变化 才写 fill, 挂机 恒定 无 每帧 重绘;
+# tooltip 动态 含 比例; 飞升 后 口径 切换 道行精进; 道祖 封顶 满条; 纯 展示 无 副作用);
+# 断言 (手动驱动 确定性): 节点/父链/高度/颜色/tooltip 口径/初始 0% 空 填充/同态 节流 稳定/
+# 灵气 半程 50% 填充 同步/同态 再刷 fill 不变 节流/攒满 100% 满 填充/境界2 消耗变 比例 同步/
+# 飞升 口径 切换 道行精进 动态 恒等/道祖 封顶 满条/恢复 复原 收尾 0% 稳定 无 资源/统计 副作用
+func _assert_goalbar() -> void:
+	var g := GameData
+	var bg: ColorRect = ui._goalbar_bg
+	var fill: ColorRect = ui._goalbar_fill
+	check(bg != null and fill != null, "打磨-81 顶栏 下一目标 进度条 节点 存在")
+	check(fill.get_parent() == bg, "打磨-81 填充 挂在 背景 下 (实际 %s)" % str(fill.get_parent()))
+	var root_bg: Node = bg.get_parent()
+	check(root_bg.get_children().find(bg) >= 0 and root_bg.get_child(root_bg.get_children().find(bg) + 1) == ui._tab,
+		"打磨-81 进度条 紧随 顶栏 (root 内 顶栏 下一位; 实际 %s)" % str(root_bg))
+	check(bg.custom_minimum_size.y >= 5.0, "打磨-81 进度条 高度>=5px (实际 %s)" % str(bg.custom_minimum_size.y))
+	check(fill.color == Color(0.62, 0.9, 0.95, 0.9),
+		"打磨-81 填充 青色 (实际 %s)" % str(fill.color))
+	check(str(bg.tooltip_text).find("下一目标") >= 0 and str(bg.tooltip_text).find("无 存档/统计 副作用") >= 0,
+		"打磨-81 tooltip 口径 (静态/动态 均含 下一目标+副作用 说明; 实际 %s)" % bg.tooltip_text.left(24))
+	# 等 布局落定 (宽度 0 -> 实际 宽, headless 高负载时 1 帧可能不够, 上限 20 帧; 与 打磨-58 同款加固)
+	for _i81 in 20:
+		if bg.size.x > 0.0:
+			break
+		await get_tree().process_frame
+	check(bg.size.x > 0.0, "打磨-81 进度条 布局宽>0 (实际 %s)" % str(bg.size.x))
+	var w: float = bg.size.x
+	# 受控基准: 前序 测试 可能 残留 灵气, 显式 置 0 再 驱动 (初始 0 灵气 → ratio 0 → 0 填充)
+	var ess81s: float = g.essence
+	g.essence = 0.0
+	ui._refresh()
+	var t0: String = g.next_goal_text()
+	check(int(fill.size.x) == 0, "打磨-81 初始 0 灵气 空 填充 (实际 %s)" % str(fill.size.x))
+	check(str(bg.tooltip_text).find("下一目标  0%") >= 0 and str(bg.tooltip_text).find(t0) >= 0,
+		"打磨-81 初始 tooltip=下一目标 0%%|下一目标文本 (实际 %s)" % bg.tooltip_text)
+	check(str(bg.tooltip_text).find("与 修行页 下一目标 行 同 口径") >= 0
+		and str(bg.tooltip_text).find("无 存档/统计 副作用") >= 0,
+		"打磨-81 动态 tooltip 含 口径 说明 (实际 %s)" % bg.tooltip_text.left(24))
+	# 节流: 同态 再刷 fill/tooltip 稳定, 无 资源/统计 副作用
+	var snap81u: Dictionary = g.stats.duplicate(true)
+	var ess81u: float = g.essence
+	var st81u: float = g.stones
+	ui._refresh()
+	check(int(fill.size.x) == 0 and g.stats == snap81u and g.essence == ess81u and g.stones == st81u,
+		"打磨-81 同态 节流 fill/tooltip 稳定 无副作用")
+	# 灵气 半程 → ratio 0.5 → 50% 档 填充 + tooltip 50% 同步
+	var cost81u: float = g.breakthrough_cost()
+	g.essence = cost81u * 0.5
+	ui._refresh()
+	var w2: float = bg.size.x
+	check(absf(fill.size.x - w2 * 0.5) < 1.0, "打磨-81 半程 50%% 档 填充 (实际 %s, 期望 ~%s)" % [str(fill.size.x), str(w2 * 0.5)])
+	check(str(bg.tooltip_text).find("下一目标  50%") >= 0,
+		"打磨-81 半程 tooltip=50%% (实际 %s)" % bg.tooltip_text)
+	# 同态 再刷 不 重写 fill (2% 量化档 未跨档, 缓存键 未变)
+	var f81_before: float = fill.size.x
+	ui._refresh()
+	check(fill.size.x == f81_before, "打磨-81 同态 再刷 fill 不 重写 (节流) (实际 %s)" % str(fill.size.x))
+	# 攒满 → 100% 满 填充 (与 突破 ready 口径 一致)
+	g.essence = cost81u
+	ui._refresh()
+	var w3: float = bg.size.x
+	check(fill.size.x == w3, "打磨-81 攒满 100%% 满 填充 (实际 %s, 宽 %s)" % [str(fill.size.x), str(w3)])
+	check(str(bg.tooltip_text).find("下一目标  100%") >= 0 and str(bg.tooltip_text).find("点击突破") >= 0,
+		"打磨-81 攒满 tooltip=100%%|已攒够 (实际 %s)" % bg.tooltip_text)
+	# 境界 变化 → 消耗 变 比例 同步 (半程 基准 按 新境界 消耗 重算, 动态 恒等; 恢复原 境界)
+	var realm81u: int = g.realm_idx
+	g.realm_idx = 2
+	g.essence = g.breakthrough_cost() * 0.5
+	ui._refresh()
+	var t_r2: String = g.next_goal_text()
+	check(str(bg.tooltip_text).find(t_r2) >= 0,
+		"打磨-81 境界2 消耗变 tooltip 同步 (实际 %s)" % bg.tooltip_text)
+	check(str(bg.tooltip_text).find("下一目标  50%") >= 0,
+		"打磨-81 境界2 半程 仍 50%% 档 (实际 %s)" % bg.tooltip_text)
+	g.realm_idx = realm81u
+	ui._refresh()
+	# 飞升 口径 切换: tooltip 前缀=道行精进 + 道行 比例 动态 恒等 (道祖 封顶 满条; 恢复原 态)
+	var asc81u: bool = g.ascended
+	var dao81u: float = g.dao
+	var daoLv81u: int = g.dao_level
+	g.ascended = true
+	g.dao = g.dao_break_cost() * 0.25
+	ui._refresh()
+	check(str(bg.tooltip_text).find("道行精进  25%") >= 0,
+		"打磨-81 飞升 tooltip=道行精进 25%% (实际 %s)" % bg.tooltip_text)
+	# 填充 按 2% 量化档 (25% → ceil 档 13/50=26%), 容差 覆盖 1 档 量化 误差
+	check(fill.size.x >= bg.size.x * 0.24 and fill.size.x <= bg.size.x * 0.28,
+		"打磨-81 飞升 25%% 档 填充 (实际 %s, 宽 %s)" % [str(fill.size.x), str(bg.size.x)])
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	ui._refresh()
+	check(fill.size.x == bg.size.x and str(bg.tooltip_text).find("道行精进  100%") >= 0,
+		"打磨-81 道祖 封顶 满条 (实际 fill=%s 宽=%s tooltip=%s)" % [str(fill.size.x), str(bg.size.x), bg.tooltip_text.left(24)])
+	g.ascended = asc81u
+	g.dao_level = daoLv81u
+	g.dao = dao81u
+	g.essence = 0.0
+	ui._refresh()
+	# 收尾: 0% 空 填充 稳定 + 无 资源/统计 副作用
+	var snap81e: Dictionary = g.stats.duplicate(true)
+	check(int(fill.size.x) == 0 and g.stats == snap81e,
+		"打磨-81 收尾 恢复 0% 空 填充 稳定 无副作用")
+	g.essence = ess81s  # 恢复 前序 残留 灵气 (不影响 _finish, 防 后续 轮 启动态 漂移)
+

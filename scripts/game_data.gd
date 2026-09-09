@@ -1904,6 +1904,17 @@ func next_realm_display() -> String:
 		return "%s 第 1 层" % [REALMS[realm_idx + 1]["name"] as String]
 	return "飞升真仙"
 
+# ---------- 打磨-81: 下一目标进度比例 (顶栏渐变进度条) ----------
+
+# 当前 下一目标 的主资源进度 0..1 (与 next_goal_text 同目标口径: 未飞升=下一层/下一境界
+# 突破消耗, 飞升后=道行精进 消耗, 资源>=消耗 恒 1.0; 道祖封顶 恒 1.0). 只读无副作用.
+func next_goal_ratio() -> float:
+	if ascended:
+		if dao_level >= IMMORTAL_REALMS.size() - 1:
+			return 1.0
+		return clampf(dao / dao_break_cost(), 0.0, 1.0)
+	return clampf(essence / breakthrough_cost(), 0.0, 1.0)
+
 # ---------- 打磨-32: 突破按钮"可突破"状态 (资源攒够时 UI 金边高亮引导点击) ----------
 
 # 当前是否已可点击突破/精进 (资源 >= 突破消耗且未封顶; 封顶恒 false, 按钮保持禁用)

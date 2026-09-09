@@ -38,6 +38,10 @@ var _rate_label: Label         # 打磨-78: 顶栏 主资源速率 常显 ("+X/�
 var _rate_text := ""           # 打磨-78: 主资源速率 文本缓存 (变化才刷, 空串=隐藏)
 var _sr_label: Label           # 打磨-79: 顶栏 灵石速率 常显 ("+X/秒", 与 修行页 灵石速率 行 同口径, 文本变化 才刷)
 var _sr_text := ""             # 打磨-79: 灵石速率 文本缓存 (变化才刷, 空串=隐藏)
+var _goalbar_bg: ColorRect     # 打磨-81: 顶栏 下一目标 渐变进度条 背景 (5px, 全宽)
+var _goalbar_fill: ColorRect   # 打磨-81: 进度条 填充 (青色 渐变, 按 next_goal_ratio 0..1)
+var _goalbar_cache_key := ""   # 打磨-81: 进度条 缓存键 "宽|2%量化档" (变化才写 fill, 防 每帧 重绘)
+var _goalbar_tip := ""         # 打磨-81: 进度条 tooltip 缓存 (与 下一目标 行 同 节流 路径)
 var _progress_label: Label
 var _bar_bg: ColorRect
 var _bar_fill: ColorRect
@@ -361,6 +365,19 @@ func _build_ui() -> void:
 		_onekey_btns.append(seg_btn)
 	_onekey_badge.tooltip_text = "一键系列 状态汇总 (可执行=金 / 0=灰, 与 各页 一键 按钮 计数 同口径): 领悟/神通=当前 类别·品质 筛选内 可学技能·可学神通数, 施展=就绪 主动神通 数, 法器/装备=当前灵石 单件买得起 的 未拥有件 数, 最佳=可改进 槽位数。\n各段可点击: 领悟/神通→技能页, 法器→修行页·法器区, 装备/最佳→装备页 (均重置对应筛选), 施展→直接 执行 一键施展。\n纯 导航/执行 操作, 不产生 额外 存档 副作用 (执行 各批量操作 自身 口径 不变)。"
 	top.add_child(_onekey_badge)
+	# 打磨-81: 顶栏 下一目标 渐变进度条 (5px 全宽, 顶栏 下: 按 next_goal_ratio 0..1 青色 填充;
+	# 未飞升=下一层/下一境界 突破资源 进度, 飞升后=道行精进 进度, 道祖封顶=满条;
+	# 填充 2% 量化档+布局宽 变化 才写 (挂机 恒定 无 每帧 重绘), tooltip 动态 含 比例)
+	_goalbar_bg = ColorRect.new()
+	_goalbar_bg.color = Color(0.18, 0.19, 0.25)
+	_goalbar_bg.custom_minimum_size = Vector2(0, 5)
+	_goalbar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_goalbar_bg.tooltip_text = "下一目标 进度 (与 修行页 下一目标 行 同 口径: 当前 主资源 / 突破消耗, 攒满即 可 点击 突破; 跨境界/飞升 后 目标 自动 切换, 道祖 封顶 恒 满条; 纯展示, 无 存档/统计 副作用)"
+	root.add_child(_goalbar_bg)
+	_goalbar_fill = ColorRect.new()
+	_goalbar_fill.color = Color(0.62, 0.9, 0.95, 0.9)
+	_goalbar_fill.position = Vector2.ZERO
+	_goalbar_bg.add_child(_goalbar_fill)
 
 	# Tab
 	_tab = TabContainer.new()
@@ -1417,6 +1434,9 @@ func _refresh() -> void:
 		_sr_text = sr_t
 		_sr_label.text = sr_t
 		_sr_label.visible = sr_t != ""
+	# 打磨-81: 顶栏 下一目标 渐变进度条 (按 next_goal_ratio 0..1 填充; 2% 量化档+布局宽 变化 才写;
+	# tooltip 动态 含 比例 文本变化 才刷; 挂机 恒定 无 每帧 重绘)
+	_refresh_goalbar()
 	_progress_label.text = ("道行进度  %d%%" if g.ascended else "突破进度  %d%%") % int(g.breakthrough_progress())
 	# 打磨-24: 突破/道行精进 ETA (每帧算一次, 文本变化才写)
 	var bet_t: String = g.breakthrough_eta_text()
@@ -1942,6 +1962,25 @@ func _ach_bar_refresh(id: Variant) -> void:
 	var pct40: int = int(round(cl40 * 100.0))
 	(r40["row"] as Node).tooltip_text = "成就「%s」\n条件: %s\n进度: %d%%" % [
 		str(a40.get("name", "")), str(a40.get("desc", "")), pct40]
+
+
+# 打磨-81: 顶栏 下一目标 渐变进度条 刷新 (按 next_goal_ratio 0..1 填充; 2% 量化档+布局宽
+# 变化 才写 fill, 防 每帧 重绘; tooltip 动态 含 比例 文本变化 才刷; 挂机 恒定 无 副作用)
+func _refresh_goalbar() -> void:
+	var g := GameData
+	var rv: float = g.next_goal_ratio()
+	var q: int = int(ceil(clampf(rv, 0.0, 1.0) * 50.0))
+	var key := "%d|%d" % [int(_goalbar_bg.size.x), q]
+	if key != _goalbar_cache_key:
+		_goalbar_cache_key = key
+		_goalbar_fill.size = Vector2(_goalbar_bg.size.x * float(q) / 50.0, _goalbar_bg.size.y)
+	var pct: int = int(round(rv * 100.0))
+	var tip: String = ("下一目标  %d%%  |  %s" if not g.ascended else "道行精进  %d%%  |  %s") % [
+		pct, g.next_goal_text()]
+	tip += "\n(与 修行页 下一目标 行 同 口径: 当前 主资源 / 突破消耗, 攒满 即 可 点击 突破/修炼; 纯展示, 无 存档/统计 副作用)"
+	if tip != _goalbar_tip:
+		_goalbar_tip = tip
+		_goalbar_bg.tooltip_text = tip
 
 
 # 打磨-39: 成就页按解锁状态排序 (已解锁在前, 未解锁按进度降序; 排序键变化才重排, 避免每帧 17 行重排)
