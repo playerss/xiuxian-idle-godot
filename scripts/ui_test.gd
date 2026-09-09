@@ -22,6 +22,11 @@ extends Node
 ##          就绪 合并一行/按钮同步恢复 施展/tick/drain 无 资源/统计 副作用/无重复触发)
 ## 打磨-47: 一键购买 (装备/法器) 结果反馈断言 (变更>0 底部消息追加 共花灵石+距下一件缺口/
 ##          全拥有 0 变更 不追加/tooltip 说明 结果反馈 口径)
+## 打磨-79: 顶栏灵石速率常显断言
+## 打磨-81: 顶栏下一目标渐变进度条断言
+## 打磨-82: 顶栏下一目标进度条点击直达断言 (升级 flat Button 可点击热区 手型光标/悬停金边/
+##          tooltip 点击口径/突破区 Panel 外壳+初始无边框/点击切 tab0+金边高亮+底部消息/
+##          重入不叠加/1.2s 自动恢复/无 资源/统计 副作用/收尾 无边框)
 ## 运行: timeout 30 ~/bin/godot --headless --path . res://scenes/ui_test.tscn
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
@@ -131,6 +136,7 @@ func _ready() -> void:
 	_assert_primary_rate_badge()
 	_assert_stone_rate_badge()
 	await _assert_goalbar()
+	await _assert_goalbar_jump()
 	_finish()
 
 
@@ -3205,7 +3211,7 @@ func _assert_stone_rate_badge() -> void:
 # 飞升 口径 切换 道行精进 动态 恒等/道祖 封顶 满条/恢复 复原 收尾 0% 稳定 无 资源/统计 副作用
 func _assert_goalbar() -> void:
 	var g := GameData
-	var bg: ColorRect = ui._goalbar_bg
+	var bg: Node = ui._goalbar_bg
 	var fill: ColorRect = ui._goalbar_fill
 	check(bg != null and fill != null, "打磨-81 顶栏 下一目标 进度条 节点 存在")
 	check(fill.get_parent() == bg, "打磨-81 填充 挂在 背景 下 (实际 %s)" % str(fill.get_parent()))
@@ -3299,4 +3305,70 @@ func _assert_goalbar() -> void:
 	check(int(fill.size.x) == 0 and g.stats == snap81e,
 		"打磨-81 收尾 恢复 0% 空 填充 稳定 无副作用")
 	g.essence = ess81s  # 恢复 前序 残留 灵气 (不影响 _finish, 防 后续 轮 启动态 漂移)
+
+
+# 打磨-82: 顶栏 下一目标 进度条 点击直达 — 进度条 升级 flat Button 可点击热区 (手型光标+悬停 金边),
+# 点击=切 修行页 + 突破区 Panel 外壳 金边高亮 1.2s (复用 法器区/汇总行 口径), 纯导航 无 存档/统计 副作用;
+# 断言 (手动驱动 确定性): 热区=flat Button+手型+非 toggle/悬停金边 样式/tooltip 点击口径/
+# 突破区 Panel 外壳 存在+初始 无边框/点击 切 修行页(tab0)+突破区 金边+底部消息/
+# 重入 kill 旧 tween 不叠加/1.2s 后 高亮 自动恢复 边框0/无 资源/统计 副作用 (纯导航)/收尾 无边框
+func _assert_goalbar_jump() -> void:
+	var g := GameData
+	var bg: Node = ui._goalbar_bg
+	# 热区 = flat Button 可点击 (手型光标, 非 toggle)
+	check(bg is Button and (bg as Button).flat == true,
+		"打磨-82 进度条 节点 是 flat Button (升级 可点击热区)")
+	check((bg as Button).mouse_default_cursor_shape == Control.CURSOR_POINTING_HAND,
+		"打磨-82 进度条 手型光标 提示可点")
+	check((bg as Button).toggle_mode == false, "打磨-82 进度条 非 toggle (点击即触发)")
+	check(bg.get_theme_stylebox("hover") != null
+			and (bg.get_theme_stylebox("hover") as StyleBoxFlat).border_width_left == 1,
+		"打磨-82 进度条 悬停 金边 样式 非空 (hover 边框宽=1)")
+	check(str(bg.tooltip_text).find("点击: 直达 修行页·突破区") >= 0,
+		"打磨-82 进度条 tooltip 含 点击直达 口径 (实际 %s)" % str(bg.tooltip_text).left(40))
+	# 突破区 Panel 外壳 存在 + 初始 无边框 (恢复态)
+	check(ui._break_panel != null and ui._break_panel is Panel, "打磨-82 突破区 Panel 外壳 存在")
+	check(ui._bar_bg.get_parent() != null and ui._break_panel.get_child(0) != null,
+		"打磨-82 突破区 Panel 有 子布局 (实际 %d 子)" % ui._break_panel.get_child_count())
+	var sb0: StyleBoxFlat = ui._break_panel.get_theme_stylebox("panel")
+	check(sb0 != null and sb0.border_width_left == 0, "打磨-82 初始 突破区 无边框 (边框宽=0)")
+	# 副作用快照 (点击 不应改变)
+	var snap_essence := g.essence
+	var snap_stones := g.stones
+	var snap_stats := g.stats
+	var snap_realm := g.realm_idx
+	var snap_break_ok := int(g.stats.get("break_ok", 0.0))
+	# 切 成就页 作为 点击 前 受控 tab
+	ui._tab.current_tab = 3
+	# 点击 → 切 修行页(tab0) + 突破区 金边高亮 + 底部消息
+	ui._on_goalbar()
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 0, "打磨-82 点击 进度条 → 切 修行页 (tab=0) (实际 %d)" % ui._tab.current_tab)
+	var sb_hi: StyleBoxFlat = ui._break_panel.get_theme_stylebox("panel")
+	check(sb_hi != null and sb_hi.border_width_left == 2 and sb_hi.border_color == ui.GOLD,
+		"打磨-82 点击 进度条 → 突破区 金边高亮 (边框宽=2 金)")
+	check(str(ui._msg_label.text).find("直达 修行页·突破区") >= 0,
+		"打磨-82 点击 进度条 → 底部消息确认 (实际 %s)" % str(ui._msg_label.text))
+	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats
+			and g.realm_idx == snap_realm,
+		"打磨-82 点击 进度条 无 资源/境界 副作用 (纯导航)")
+	# 重入: 高亮中 再点 进度条 kill 旧 tween 重开 (不报错 且 仍 高亮, 边框 口径 不变)
+	ui._on_goalbar()
+	await get_tree().process_frame
+	var sb_hi2: StyleBoxFlat = ui._break_panel.get_theme_stylebox("panel")
+	check(sb_hi2 != null and sb_hi2.border_width_left == 2, "打磨-82 高亮中 重入 不叠加/不报错 (仍 金边)")
+	# 等待 tween 结束 (1.2s, 重入后 重新计时) 后 自动恢复 边框 0
+	await get_tree().create_timer(1.4).timeout
+	var sb_rest: StyleBoxFlat = ui._break_panel.get_theme_stylebox("panel")
+	check(sb_rest != null and sb_rest.border_width_left == 0,
+		"打磨-82 突破区 高亮 1.2s 后 自动恢复 (边框宽=0)")
+	# 收尾: 修行页 稳定, 无边框 (防 污染); 突破按钮 未 误触发 (realm 未变 + break_ok 未增)
+	check(ui._tab.current_tab == 0, "打磨-82 收尾 保持 修行页")
+	var sb_end: StyleBoxFlat = ui._break_panel.get_theme_stylebox("panel")
+	check(sb_end != null and sb_end.border_width_left == 0, "打磨-82 收尾 突破区 无边框")
+	check(g.realm_idx == snap_realm and int(g.stats.get("break_ok", 0.0)) == snap_break_ok,
+		"打磨-82 收尾 无 境界/突破 误触发")
+	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats,
+		"打磨-82 收尾 无 资源/统计 副作用")
+	await get_tree().process_frame
 

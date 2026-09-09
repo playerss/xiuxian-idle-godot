@@ -38,10 +38,12 @@ var _rate_label: Label         # 打磨-78: 顶栏 主资源速率 常显 ("+X/�
 var _rate_text := ""           # 打磨-78: 主资源速率 文本缓存 (变化才刷, 空串=隐藏)
 var _sr_label: Label           # 打磨-79: 顶栏 灵石速率 常显 ("+X/秒", 与 修行页 灵石速率 行 同口径, 文本变化 才刷)
 var _sr_text := ""             # 打磨-79: 灵石速率 文本缓存 (变化才刷, 空串=隐藏)
-var _goalbar_bg: ColorRect     # 打磨-81: 顶栏 下一目标 渐变进度条 背景 (5px, 全宽)
+var _goalbar_bg: Button        # 打磨-81/82: 顶栏 下一目标 渐变进度条 背景 (5px, 全宽; 打磨-82 起 升级 flat Button 可点击热区)
 var _goalbar_fill: ColorRect   # 打磨-81: 进度条 填充 (青色 渐变, 按 next_goal_ratio 0..1)
 var _goalbar_cache_key := ""   # 打磨-81: 进度条 缓存键 "宽|2%量化档" (变化才写 fill, 防 每帧 重绘)
 var _goalbar_tip := ""         # 打磨-81: 进度条 tooltip 缓存 (与 下一目标 行 同 节流 路径)
+var _break_panel: Panel        # 打磨-82: 突破区 透明 Panel 外壳 (顶栏 进度条 点击直达 时 金边高亮 1.2s, 复用 法器区/汇总行 口径)
+var _break_hi_tween: Tween     # 打磨-82: 突破区 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
 var _progress_label: Label
 var _bar_bg: ColorRect
 var _bar_fill: ColorRect
@@ -368,15 +370,33 @@ func _build_ui() -> void:
 	# 打磨-81: 顶栏 下一目标 渐变进度条 (5px 全宽, 顶栏 下: 按 next_goal_ratio 0..1 青色 填充;
 	# 未飞升=下一层/下一境界 突破资源 进度, 飞升后=道行精进 进度, 道祖封顶=满条;
 	# 填充 2% 量化档+布局宽 变化 才写 (挂机 恒定 无 每帧 重绘), tooltip 动态 含 比例)
-	_goalbar_bg = ColorRect.new()
-	_goalbar_bg.color = Color(0.18, 0.19, 0.25)
+	# 打磨-82: 进度条 升级 flat Button 可点击热区 (手型光标+悬停 淡底 金边, 复用 打磨-73/74 徽标 模式):
+	# 点击=切 修行页 + 突破区 (进度条/ETA/成功率/下一目标/突破按钮/自动系列) 金边高亮 1.2s (复用 法器区 高亮 口径);
+	# 纯导航 无 存档/统计 副作用; 背景/填充 视觉 口径 不变 (flat Button 自绘 透明底 + 填充 ColorRect 子节点)
+	_goalbar_bg = Button.new()
+	_goalbar_bg.flat = true
+	_goalbar_bg.toggle_mode = false
+	_goalbar_bg.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_goalbar_bg.tooltip_text = "下一目标 进度 (与 修行页 下一目标 行 同 口径: 当前 主资源 / 突破消耗, 攒满即 可 点击 突破; 跨境界/飞升 后 目标 自动 切换, 道祖 封顶 恒 满条; 纯展示, 无 存档/统计 副作用)\n点击: 直达 修行页·突破区 (金边高亮)"
+	var gb_sb := StyleBoxFlat.new()
+	gb_sb.bg_color = Color(0.18, 0.19, 0.25, 0.0)
+	gb_sb.set_border_width_all(0)
+	_goalbar_bg.add_theme_stylebox_override("normal", gb_sb)
+	var gb_hv := StyleBoxFlat.new()
+	gb_hv.bg_color = Color(0.98, 0.86, 0.5, 0.12)
+	gb_hv.set_border_width_all(1)
+	gb_hv.border_color = Color(0.98, 0.86, 0.5)
+	_goalbar_bg.add_theme_stylebox_override("hover", gb_hv)
+	_goalbar_bg.add_theme_stylebox_override("pressed", gb_hv.duplicate())
+	_goalbar_bg.add_theme_stylebox_override("focus", gb_sb.duplicate())
+	_goalbar_bg.pressed.connect(_on_goalbar)
 	_goalbar_bg.custom_minimum_size = Vector2(0, 5)
 	_goalbar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_goalbar_bg.tooltip_text = "下一目标 进度 (与 修行页 下一目标 行 同 口径: 当前 主资源 / 突破消耗, 攒满即 可 点击 突破; 跨境界/飞升 后 目标 自动 切换, 道祖 封顶 恒 满条; 纯展示, 无 存档/统计 副作用)"
 	root.add_child(_goalbar_bg)
 	_goalbar_fill = ColorRect.new()
 	_goalbar_fill.color = Color(0.62, 0.9, 0.95, 0.9)
 	_goalbar_fill.position = Vector2.ZERO
+	_goalbar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_goalbar_bg.add_child(_goalbar_fill)
 
 	# Tab
@@ -517,49 +537,71 @@ func _build_training_page(page: Panel) -> void:
 	_break_eta_label.tooltip_text = "按当前灵气(道行)速率估算攒够突破资源所需时间。挂机/神通/境界提升都会改变该时间, 攒够后自动消失。"
 	# 打磨-36: 主突破/道行精进成功率 (与浮动提示/按钮口径对齐; 道祖封顶圆满)
 	_chance_label = _label("", 13, DIM)
-	left.add_child(_chance_label)
 	# 打磨-37: 成功率行 tooltip 动态展示构成 (境界基础/功法/装备/钳制, 数值变化才刷)
 	_chance_label.tooltip_text = GameData.primary_break_chance_tip()
+	# 打磨-82: 突破区 透明 Panel 外壳 (顶栏 下一目标 进度条 点击直达 时 金边高亮 1.2s,
+	# 复用 法器区/自动汇总行 口径: 高亮载体 透明 Panel + 金边 2px + 1.2s 自动恢复)
+	_break_panel = Panel.new()
+	var bp_sb := StyleBoxFlat.new()
+	bp_sb.bg_color = Color(0, 0, 0, 0)
+	bp_sb.set_corner_radius_all(8)
+	_break_panel.add_theme_stylebox_override("panel", bp_sb)
+	_break_panel.tooltip_text = "突破区 (进度/ETA/成功率/下一目标/突破按钮/自动系列 开关)。顶栏 下一目标 进度条 点击 可 直达 本区 (金边高亮 1.2s)。"
+	left.add_child(_break_panel)
+	# 突破区 横排 (成功率 + 进度区 VBox + 突破按钮 + 4 自动开关; 视觉 顺序/间距 与原 竖排 一致)
+	var break_box := HBoxContainer.new()
+	break_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	break_box.offset_left = 2
+	break_box.offset_top = 2
+	break_box.offset_right = -2
+	break_box.offset_bottom = -2
+	break_box.add_theme_constant_override("separation", 8)
+	_break_panel.add_child(break_box)
+	break_box.add_child(_chance_label)
+	var break_col := VBoxContainer.new()
+	break_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	break_col.add_theme_constant_override("separation", 8)
+	break_box.add_child(break_col)
 	# 打磨-31: 下一目标提示 (玩家下一步该做什么: 目标名+缺口+预计时间)
 	_goal_label = _label("", 14, GOLD)
-	left.add_child(_goal_label)
+	break_col.add_child(_goal_label)
 	_goal_label.tooltip_text = "当前最优先的下一步: 攒够突破资源即点击突破; 飞升后改为道行精进。"
 	_bar_bg = ColorRect.new()
 	_bar_bg.color = Color(0.18, 0.19, 0.25)
 	_bar_bg.custom_minimum_size = Vector2(0, 14)
 	_bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.add_child(_bar_bg)
+	break_col.add_child(_bar_bg)
 	_bar_fill = ColorRect.new()
 	_bar_fill.color = CYAN
 	_bar_fill.position = Vector2.ZERO
 	_bar_bg.add_child(_bar_fill)
 	_break_btn = _make_button("尝试突破")
 	_break_btn.pressed.connect(_on_break)
-	left.add_child(_break_btn)
+	break_box.add_child(_break_btn)
 	# 打磨-67: 自动突破开关 (资源攒够自动尝试 突破/道行精进; 状态变化才刷按钮态)
 	_auto_break_btn = _make_button("自动突破: 关")
 	_auto_break_btn.toggle_mode = true
 	_auto_break_btn.pressed.connect(_on_auto_break)
 	_auto_break_btn.tooltip_text = "资源攒够 突破/道行精进 消耗时 自动尝试, 无需手动点按钮 (挂机时生效; 离线期间不触发, 离线只结算收益, 重新进入游戏后生效)。\n成功弹绿色浮动 / 飞升弹金色浮动 / 失败弹红色浮动 (与手动按钮同口径, 浮动文案追加 自动 标注), 每帧至多尝试一次, 失败不重烧 (资源攒够才再试)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 道祖封顶 恒不触发。"
-	left.add_child(_auto_break_btn)
+	break_box.add_child(_auto_break_btn)
 	# 打磨-68: 自动购置开关 (灵石攒够 自动购买 法器/装备 + 自动最佳换装; 状态变化才刷按钮态)
 	_auto_buy_btn = _make_button("自动购置: 关")
 	_auto_buy_btn.toggle_mode = true
 	_auto_buy_btn.pressed.connect(_on_auto_buy)
 	_auto_buy_btn.tooltip_text = "灵石攒够 自动购买 未拥有 法器/装备 (与 一键购置/一键购买 同口径: 价格升序连买 买得起 的, 槽位空时自动穿戴), 并自动 换上 各部位 最佳 拥有件 (一键最佳 口径)。\n每帧至多一轮, 灵石花到买不起为止 (购买后最便宜件恒买不起, 无热循环); 购入时底部消息提示 件数与花费 (无屏幕浮动, 避免挂机刷屏)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
-	left.add_child(_auto_buy_btn)
+	break_box.add_child(_auto_buy_btn)
 	# 打磨-69: 自动施展开关 (主动神通 冷却完毕 自动 施展 爆发; 状态变化才刷按钮态)
 	_auto_cast_btn = _make_button("自动施展: 关")
 	_auto_cast_btn.toggle_mode = true
 	_auto_cast_btn.pressed.connect(_on_auto_cast)
 	_auto_cast_btn.tooltip_text = "已学 主动神通 冷却完毕 自动 施展 爆发 (与 一键施展 同口径: 一次释放所有 就绪 的 主动神通, 各神通 爆发=当前灵气速率 x 爆发秒数, 飞升后=道行; 施展后 各自 进冷却)。\n每帧至多一轮 (施展后 各神通 进冷却, 全冷却中 0 施展, 无热循环); 施展时屏幕中央绿色浮动 提示 数量与 爆发总量 (与 一键施展 浮动 同口径)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
-	left.add_child(_auto_cast_btn)
+	break_box.add_child(_auto_cast_btn)
 	# 打磨-80: 自动领悟开关 (境界/层 提升 解锁 新技能 自动 批量 领悟; 状态变化才刷按钮态)
 	_auto_learn_btn = _make_button("自动领悟: 关")
 	_auto_learn_btn.toggle_mode = true
 	_auto_learn_btn.pressed.connect(_on_auto_learn)
 	_auto_learn_btn.tooltip_text = "境界/层 提升 解锁 新技能 时 自动 批量 领悟 全部 未学+境界足够 技能 (与 一键领悟 按钮 全局口径 一致: 无 类别/品质 筛选 叠加; 学习 免费 无 资源 消耗, 与 手动 领悟 口径 一致)。\n每帧至多一轮 (置于 自动突破 之后: 同帧 突破 升层/晋境界 后 立即 学习 新解锁 技能; 学习后 可学数 归 0, 下帧 再试 0 变更 幂等, 无热循环); 学习时底部消息提示 数量 (无屏幕浮动, 避免挂机刷屏)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
-	left.add_child(_auto_learn_btn)
+	break_box.add_child(_auto_learn_btn)
 	# 打磨-70: 自动系列 状态汇总行 (三个开关 开启后 扫视 不知 哪些 已 生效;
 	# 一行摘要 "自动: 突破 ✓/✗ · 购置 ✓/✗ · 施展 ✓/✗", 开启 金 / 未开 灰, 状态 变化 才刷)
 	# 打磨-74: 汇总行 包进透明 Panel (顶栏 自动 徽标 点击直达 时 金边高亮 1.2s, 复用 法器区 口径)
@@ -1978,6 +2020,7 @@ func _refresh_goalbar() -> void:
 	var tip: String = ("下一目标  %d%%  |  %s" if not g.ascended else "道行精进  %d%%  |  %s") % [
 		pct, g.next_goal_text()]
 	tip += "\n(与 修行页 下一目标 行 同 口径: 当前 主资源 / 突破消耗, 攒满 即 可 点击 突破/修炼; 纯展示, 无 存档/统计 副作用)"
+	tip += "\n点击: 直达 修行页·突破区 (金边高亮)"
 	if tip != _goalbar_tip:
 		_goalbar_tip = tip
 		_goalbar_bg.tooltip_text = tip
@@ -2478,6 +2521,41 @@ func _restore_auto_sum_panel() -> void:
 	sb.bg_color = Color(0, 0, 0, 0)
 	sb.set_corner_radius_all(8)
 	_auto_sum_panel.add_theme_stylebox_override("panel", sb)
+
+
+# 打磨-82: 顶栏 下一目标 进度条 点击直达 — 点击=切 修行页 + 突破区 (进度/ETA/成功率/
+# 下一目标/突破按钮/自动系列) 金边高亮 1.2s (复用 法器区 高亮 口径); 纯导航 无 存档/统计 副作用,
+# 与 顶栏 自动 徽标 点击直达 (打磨-74) / 收集进度 点击直达 (打磨-44) 同 模式
+func _on_goalbar() -> void:
+	_tab.current_tab = 0
+	_flash_break_panel()
+	_show_msg("直达 修行页·突破区 (进度/ETA/成功率/下一目标/突破按钮)")
+
+
+# 打磨-82: 突破区 金边高亮 1.2s 后自动恢复 (tween 驱动, 重入时先 kill 旧 tween, 同 法器区 口径)
+func _flash_break_panel() -> void:
+	if _break_panel == null:
+		return
+	if _break_hi_tween != null and _break_hi_tween.is_valid():
+		_break_hi_tween.kill()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = GOLD
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	_break_panel.add_theme_stylebox_override("panel", sb)
+	_break_hi_tween = create_tween()
+	_break_hi_tween.tween_interval(1.2)
+	_break_hi_tween.tween_callback(_restore_break_panel)
+
+
+func _restore_break_panel() -> void:
+	if _break_panel == null:
+		return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.set_corner_radius_all(8)
+	_break_panel.add_theme_stylebox_override("panel", sb)
 
 
 # 打磨-11: 装备部位筛选 (显示/隐藏对应行)
