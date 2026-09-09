@@ -3863,6 +3863,78 @@ func _init() -> void:
 	check(g.learned.size() == 120, "打磨-86 全 技能 学完 (实际 %d)" % g.learned.size())
 	check(g.auto_learn_next_tip() == "已集齐 全部技能 (无需再领悟)",
 		"打磨-86 全学 已集齐 文案 (实际 %s)" % g.auto_learn_next_tip())
+	# ---------- 打磨-87: 顶栏主资源行 悬停 下一目标 动态 tooltip (primary_next_target_tip 只读接口) ----------
+	# 受控态: 清空 拥有/穿戴/已学 (功法/装备 加成归零, 速率/成功率 基准确定), 境界0层1, 资源 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g._active_cd = {}
+	# 基准: 未飞升 = "当前 X 灵气/秒 / 突破至 <下一层> 还差 N 灵气 (ETA) · 突破成功率 85%" (动态 恒等)
+	var rate87: float = g.qi_per_sec()
+	var need87: float = g.breakthrough_cost()
+	var goal87 := "突破至 %s" % g.next_realm_display()
+	var gap87: float = need87 - g.essence
+	var ch87 := int(round(g.primary_break_chance() * 100.0))
+	var exp87 := "当前 %s 灵气/秒\n%s 还差 %s 灵气 (%s) · 突破成功率 %d%%" % [
+		g.fmt(rate87), goal87, g.fmt(gap87), g.breakthrough_eta_text(), ch87]
+	check(g.primary_next_target_tip() == exp87, "打磨-87 基准 未飞升 tooltip 动态 恒等 (实际 %s)" % g.primary_next_target_tip())
+	check(ch87 == 85, "打磨-87 基准 成功率=85%% (境界0, 实际 %d)" % ch87)
+	check(g.primary_next_target_tip().find("还差") >= 0 and g.primary_next_target_tip().find("突破成功率") >= 0,
+		"打磨-87 基准 含 缺口+成功率 (实际 %s)" % g.primary_next_target_tip().left(40))
+	# 资源 攒够 → "已攒够, 点击突破" (无 还差/ETA/成功率)
+	g.essence = need87
+	check(g.primary_next_target_tip().find("灵气已攒够, 点击突破!") >= 0,
+		"打磨-87 资源够 文案 (实际 %s)" % g.primary_next_target_tip().left(40))
+	check(g.primary_next_target_tip().find("还差") < 0 and g.primary_next_target_tip().find("成功率") < 0,
+		"打磨-87 资源够 无 缺口/成功率 (实际 %s)" % g.primary_next_target_tip().left(40))
+	g.essence = 0.0
+	# 境界2 → 成功率 77% + 目标/消耗 同步 (动态 恒等)
+	g.realm_idx = 2
+	var rate87b: float = g.qi_per_sec()
+	var need87b: float = g.breakthrough_cost()
+	var goal87b := "突破至 %s" % g.next_realm_display()
+	var gap87b: float = need87b - g.essence
+	var ch87b := int(round(g.primary_break_chance() * 100.0))
+	var exp87b := "当前 %s 灵气/秒\n%s 还差 %s 灵气 (%s) · 突破成功率 %d%%" % [
+		g.fmt(rate87b), goal87b, g.fmt(gap87b), g.breakthrough_eta_text(), ch87b]
+	check(g.primary_next_target_tip() == exp87b, "打磨-87 境界2 tooltip 动态 恒等 (实际 %s)" % g.primary_next_target_tip().left(50))
+	check(ch87b == 77, "打磨-87 境界2 成功率=77%% (实际 %d)" % ch87b)
+	g.realm_idx = 0
+	# 飞升 → 道行 口径 (道行/秒, 道行精进至 少仙, 道行精进成功率 90%)
+	g.ascended = true
+	g.dao_level = 0
+	var rate87c: float = g.qi_per_sec()
+	var need87c: float = g.dao_break_cost()
+	var goal87c := "道行精进至 %s" % g.IMMORTAL_REALMS[1]
+	var gap87c: float = need87c - g.dao
+	var ch87c := int(round(g.primary_break_chance() * 100.0))
+	var exp87c := "当前 %s 道行/秒\n%s 还差 %s 道行 (%s) · 道行精进成功率 %d%%" % [
+		g.fmt(rate87c), goal87c, g.fmt(gap87c), g.breakthrough_eta_text(), ch87c]
+	check(g.primary_next_target_tip() == exp87c, "打磨-87 飞升 道行 口径 恒等 (实际 %s)" % g.primary_next_target_tip().left(50))
+	check(ch87c == 90, "打磨-87 飞升 成功率=90%% (阶段0, 实际 %d)" % ch87c)
+	# 道祖 封顶 → 圆满 文案 (无 下一目标/还差)
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	var cap87: String = g.primary_next_target_tip()
+	check(cap87.find("已至道祖 · 道法自然 ♪ (无 下一目标)") >= 0,
+		"打磨-87 道祖 封顶 文案 (实际 %s)" % cap87.left(40))
+	check(cap87.find("还差") < 0 and cap87.find("成功率") < 0, "打磨-87 道祖 无 缺口/成功率")
+	# 恢复 未飞升 基准 态 + 只读 连读 恒定 + 无 资源/统计 副作用
+	g.ascended = false
+	g.dao_level = 0
+	var snap87: Dictionary = g.stats.duplicate(true)
+	var st87: float = g.stones
+	check(g.primary_next_target_tip() == g.primary_next_target_tip(), "打磨-87 只读 连读 恒定")
+	check(g.primary_next_target_tip() == exp87, "打磨-87 恢复 基准 后 tooltip 复原")
+	check(g.stats == snap87 and g.essence == 0.0 and g.stones == st87,
+		"打磨-87 只读 接口 无 资源/统计 副作用")
 	# 收尾: 清空 已学/冷却, 基准 态 恢复 (防 污染)
 	g.learned.clear()
 	g._active_cd = {}

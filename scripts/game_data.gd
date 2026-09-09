@@ -1905,12 +1905,48 @@ func primary_break_chance() -> float:
 		return 1.0
 	return dao_break_chance()
 
-# 主突破成功率文本 (修行页展示; 道祖封顶 = 圆满文案)
+# 主突破成功率文本 (修行页展示; 道祖封顶圆满)
 func primary_break_chance_text() -> String:
 	if ascended and dao_level >= IMMORTAL_REALMS.size() - 1:
 		return "已至道祖 · 道法自然 ♪"
 	var pct := int(round(primary_break_chance() * 100.0))
 	return ("道行精进成功率 %d%%" if ascended else "突破成功率 %d%%") % pct
+
+# ---------- 打磨-87: 顶栏主资源行 悬停 下一目标 动态 tooltip ----------
+# 口径 (与 顶栏灵石行 tooltip 打磨-49 镜像, 但 主资源 侧; 复用 打磨-24/31/36/37 只读接口):
+# 未飞升 = "下一目标  突破至 X 第 Y 层:  当前 X 灵气/秒 · 还差 N 灵气 (突破还需 T) · 突破成功率 P%";
+# 飞升后 = 道行精进 口径 (当前 道行/秒 · 还差 N 道行 (道行精进还需 T) · 道行精进成功率 P%);
+# 资源已足够 = "已攒够, 点击突破/修炼" (无 ETA/成功率); 道祖 封顶 = 圆满 文案 (无 下一目标);
+# 无 主资源 收入 = 省略 ETA 标注 "当前无主资源收入".
+# 纯 文本 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
+func primary_next_target_tip() -> String:
+	var res_name := "道行" if ascended else "灵气"
+	var rate := qi_per_sec()
+	var rate_head := "当前 %s %s/秒" % [fmt(rate), res_name]
+	if ascended and dao_level >= IMMORTAL_REALMS.size() - 1:
+		return rate_head + "\n已至道祖 · 道法自然 ♪ (无 下一目标)"
+	var need: float = dao_break_cost() if ascended else breakthrough_cost()
+	var cur: float = dao if ascended else essence
+	var goal: String
+	if ascended:
+		goal = "道行精进至 %s" % IMMORTAL_REALMS[dao_level + 1]
+	else:
+		goal = "突破至 %s" % next_realm_display()
+	var gap := need - cur
+	if gap <= 0.0:
+		if ascended:
+			return rate_head + ("\n%s %s已攒够, 点击修炼!" % [goal, res_name])
+		return rate_head + ("\n%s 灵气已攒够, 点击突破!" % goal)
+	var eta: String = breakthrough_eta_text()
+	if breakthrough_eta_seconds() < 0.0:
+		eta = "(当前无主资源收入)"
+	var pct := int(round(primary_break_chance() * 100.0))
+	var chance: String
+	if ascended:
+		chance = "道行精进成功率 %d%%" % pct
+	else:
+		chance = "突破成功率 %d%%" % pct
+	return "%s\n%s 还差 %s %s (%s) · %s" % [rate_head, goal, fmt(gap), res_name, eta, chance]
 
 # ---------- 打磨-37: 成功率构成 tooltip (成功率行的 +N% 来自哪) ----------
 

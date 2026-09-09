@@ -139,6 +139,7 @@ func _ready() -> void:
 	await _assert_play_time_tip()
 	_assert_primary_rate_badge()
 	_assert_stone_rate_badge()
+	_assert_primary_next_tip()
 	await _assert_goalbar()
 	await _assert_goalbar_jump()
 	_finish()
@@ -3576,6 +3577,82 @@ func _assert_stone_rate_badge() -> void:
 	# 收尾: 可见 + 文本=接口
 	check(sl.visible == true and str(sl.text) == g.stone_rate_text(),
 		"打磨-79 收尾 可见 文本=接口 稳定")
+
+
+# 打磨-87: 顶栏 主资源行 悬停 下一目标 动态 tooltip — 顶栏 主资源行 (灵气/道行) 悬停 即知
+# 下一目标 进度 (当前速率/缺口/ETA/成功率), 不 切 修行页; 与 顶栏灵石行 tooltip 打磨-49 同 模式,
+# 口径=primary_next_target_tip (复用 打磨-24/31/36 只读接口, 随 境界/资源/功法装备/飞升 变化 才刷;
+# 纯 展示 无 存档/统计 副作用);
+# 断言 (手动驱动 确定性): tooltip=接口/基准 含 速率+缺口+ETA+成功率/同态 节流 稳定 无副作用/
+# 境界2 同步 (动态 恒等)/灵气 攒够 切 已攒够 文案/飞升 口径 切 道行/恢复 复原 收尾 文本=接口
+func _assert_primary_next_tip() -> void:
+	var g := GameData
+	var el: Label = ui._essence_label
+	# 节点: 顶栏 主资源行 (与 灵石行 同父), 金色 19px
+	check(el != null, "打磨-87 顶栏 主资源行 节点 存在")
+	check(el.get_parent() == ui._stones_label.get_parent(),
+		"打磨-87 标签 挂在 顶栏 (与 灵石行 同父; 实际 %s)" % str(el.get_parent()))
+	# 初始: tooltip=接口 (动态 恒等, 防 前序 残留 干扰)
+	var t0: String = g.primary_next_target_tip()
+	check(str(el.tooltip_text) == t0, "打磨-87 初始 tooltip=接口 (实际 %s, 期望 %s)" % [str(el.tooltip_text).left(40), t0.left(40)])
+	check(t0.find("当前") >= 0 and t0.find("灵气/秒") >= 0,
+		"打磨-87 基准 tooltip 含 当前 速率 灵气/秒 (实际 %s)" % t0.left(30))
+	check(t0.find("还差") >= 0 and t0.find("突破成功率") >= 0 and t0.find("突破还需") >= 0,
+		"打磨-87 基准 tooltip 含 缺口+成功率+ETA (实际 %s)" % t0.left(60))
+	# 节流: 同态 再刷 两帧, tooltip 稳定 + 缓存 不变 + 无 资源/统计 副作用
+	var cache0: String = str(ui._primary_tip)
+	var snap87: Dictionary = g.stats.duplicate(true)
+	var ess87: float = g.essence
+	var st87: float = g.stones
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(el.tooltip_text) == t0 and str(ui._primary_tip) == cache0,
+		"打磨-87 同态 再刷 缓存 不变 (节流 生效)")
+	check(g.stats == snap87 and g.essence == ess87 and g.stones == st87,
+		"打磨-87 同态 节流 无 资源/统计 副作用")
+	# 境界 变化 → tooltip 同步 (成功率/消耗/速率 变, 动态 恒等; 恢复原 境界)
+	var realm87: int = g.realm_idx
+	g.realm_idx = 2
+	ui._refresh()
+	var t_r2: String = g.primary_next_target_tip()
+	check(str(el.tooltip_text) == t_r2 and t_r2 != t0,
+		"打磨-87 境界2 tooltip 同步 (实际 %s, 期望 %s)" % [str(el.tooltip_text).left(40), t_r2.left(40)])
+	check(t_r2.find("突破成功率 77%") >= 0, "打磨-87 境界2 成功率=77%% (实际 %s)" % t_r2.left(60))
+	g.realm_idx = realm87
+	ui._refresh()
+	check(str(el.tooltip_text) == t0, "打磨-87 恢复 境界 后 tooltip 复原 (实际 %s)" % str(el.tooltip_text).left(40))
+	# 灵气 攒够 → 切 已攒够 文案 (无 还差/成功率), 再刷 后 恢复 基准 文案
+	var need87: float = g.breakthrough_cost()
+	g.essence = need87
+	ui._refresh()
+	var t_full: String = str(el.tooltip_text)
+	check(t_full != t0 and t_full.find("灵气已攒够, 点击突破!") >= 0,
+		"打磨-87 资源够 tooltip 切 已攒够 文案 (实际 %s)" % t_full.left(40))
+	check(t_full.find("还差") < 0 and t_full.find("成功率") < 0,
+		"打磨-87 资源够 tooltip 无 缺口/成功率 (实际 %s)" % t_full.left(40))
+	g.essence = 0.0
+	ui._refresh()
+	check(str(el.tooltip_text) == t0, "打磨-87 灵气 归 0 后 tooltip 复原 基准")
+	# 飞升 后 口径 = 道行 (道行/秒, 道行精进至/道行精进成功率, 动态 恒等; 恢复原 态)
+	var asc87: bool = g.ascended
+	var daoLv87: int = g.dao_level
+	g.ascended = true
+	g.dao_level = 0
+	ui._refresh()
+	var t_asc: String = g.primary_next_target_tip()
+	check(str(el.tooltip_text) == t_asc,
+		"打磨-87 飞升 后 tooltip=接口 道行 口径 (实际 %s, 期望 %s)" % [str(el.tooltip_text).left(40), t_asc.left(40)])
+	check(t_asc.find("道行/秒") >= 0 and t_asc.find("道行精进成功率") >= 0,
+		"打磨-87 飞升 tooltip 含 道行 口径 (实际 %s)" % t_asc.left(60))
+	g.ascended = asc87
+	g.dao_level = daoLv87
+	ui._refresh()
+	check(str(el.tooltip_text) == t0, "打磨-87 恢复 飞升 态 后 tooltip 复原 (实际 %s)" % str(el.tooltip_text).left(40))
+	# 收尾: tooltip=接口 稳定
+	check(str(el.tooltip_text) == g.primary_next_target_tip(),
+		"打磨-87 收尾 tooltip=接口 稳定")
 
 
 # 打磨-81: 顶栏 下一目标 渐变进度条 — 顶栏 下 5px 全宽 青色 填充 (next_goal_ratio 0..1,

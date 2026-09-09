@@ -117,6 +117,7 @@ var _onekey_key := ""              # 已刷过的 状态键 (onekey_summary_key,
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _stone_tip := ""              # 打磨-49: 顶栏灵石行 tooltip 缓存 (变化才刷, 速率/缺口随挂机变化)
+var _primary_tip := ""            # 打磨-87: 顶栏主资源行 tooltip 缓存 (变化才刷, 与灵石行同口径)
 var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
 var _btn_sb_gold: StyleBoxFlat    # 打磨-32: 突破按钮"可突破"金边高亮样式
 var _break_ready := false         # 打磨-32: 上帧可突破状态缓存 (变化才刷样式)
@@ -257,6 +258,9 @@ func _build_ui() -> void:
 	_realm_label = _label("", 19, CYAN)
 	top.add_child(_realm_label)
 	_essence_label = _label("灵气 0", 19, GOLD)
+	# 打磨-87: 顶栏 主资源行 悬停 下一目标 动态 tooltip (构建时 取 初始值, _refresh 变化才刷;
+	# 与 顶栏灵石行 tooltip 打磨-49 同 模式, 口径=primary_next_target_tip)
+	_essence_label.tooltip_text = GameData.primary_next_target_tip()
 	top.add_child(_essence_label)
 	_stones_label = _label("灵石 0", 19, WHITEISH)
 	top.add_child(_stones_label)
@@ -1468,6 +1472,12 @@ func _refresh() -> void:
 		_realm_label.tooltip_text = tip
 	_essence_label.text = g.primary_res_text()  # 打磨-19: 顶栏主资源 (未飞升=灵气 / 飞升后=道行)
 	_stones_label.text = "灵石 %s" % g.fmt(g.stones)
+	# 打磨-87: 顶栏主资源行 悬停 下一目标 动态 tooltip (速率/缺口/ETA/成功率 随 境界/资源/功法装备 变化才刷;
+	# 与 灵石行 tooltip 打磨-49 同 节流 口径; 纯展示 无 存档/统计 副作用)
+	var pnt: String = g.primary_next_target_tip()
+	if pnt != _primary_tip:
+		_primary_tip = pnt
+		_essence_label.tooltip_text = pnt
 	# 打磨-49: 顶栏灵石行 tooltip = 当前灵石速率 + 距下一件 (最便宜未拥有) 缺口与 ETA (变化才刷)
 	var stone_tip: String = g.stone_next_target_tip()
 	if stone_tip != _stone_tip:
