@@ -3735,6 +3735,145 @@ func _init() -> void:
 		"打磨-85 只读 接口 无 资源/统计/境界 副作用")
 	# 收尾: 恢复 基准态 (防 污染 后续 断言)
 	g.essence = es85
+	# ---------- 打磨-86: 自动施展/自动领悟 按钮 tooltip 动态段 (auto_cast_next_tip/auto_learn_next_tip 只读接口) ----------
+	# 受控态: 清空 拥有/穿戴/已学, 境界0层1 (可学 11), 资源 0, _process 冻结 已生效
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g._active_cd = {}
+	# --- auto_cast_next_tip: 未学 主动神通 说明 文案 ---
+	check(g.auto_cast_next_tip() == "未学 任何 主动神通 (先 领悟 神通 后 自动 施展 生效)",
+		"打磨-86 未学 神通 说明 文案 (实际 %s)" % g.auto_cast_next_tip())
+	# 境界0 主动神通 数据序 前 2 (铁剑典/铁风经, 各 爆发 60 秒 冷却 90)
+	var act86: Array = []
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(id), {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if int(s.get("unlock_realm", 99)) == 0 and int(s.get("unlock_layer", 99)) == 1:
+			act86.append(str(id))
+		if act86.size() == 2:
+			break
+	check(act86.size() == 2, "打磨-86 境界0 主动神通 数据存在 (实际 %d)" % act86.size())
+	for id in act86:
+		g.learned.append(str(id))
+	var rate86: float = g.qi_per_sec()
+	# 2 就绪: 爆发 2 x 速率 x 60 (无功法/法器 加成, 恒等), 全就绪 说明
+	var exp86a := "就绪 2/2 个, 爆发+%s 灵气 | 全部就绪" % g.fmt(rate86 * 120.0)
+	check(g.auto_cast_next_tip() == exp86a, "打磨-86 2 就绪 tooltip=爆发+全就绪 恒等 (实际 %s)" % g.auto_cast_next_tip())
+	# 1 冷却中: 最短冷却 名称+档位 (fmt_time 口径)
+	g._active_cd[str(act86[1])] = 45.0
+	var exp86b := "就绪 1/2 个, 爆发+%s 灵气 | 最短冷却 「%s」 约 %s" % [g.fmt(rate86 * 60.0), str(g.skill_by_id[str(act86[1])]["name"]), g.fmt_time(45.0)]
+	check(g.auto_cast_next_tip() == exp86b, "打磨-86 1 冷却 tooltip=爆发+最短冷却 恒等 (实际 %s)" % g.auto_cast_next_tip())
+	# 全 冷却中: 就绪 0 无 爆发段, 最短冷却=较短 一件
+	g._active_cd[str(act86[0])] = 30.0
+	var exp86c := "就绪 0/2 个 | 最短冷却 「%s」 约 %s" % [str(g.skill_by_id[str(act86[0])]["name"]), g.fmt_time(30.0)]
+	check(g.auto_cast_next_tip() == exp86c, "打磨-86 全冷却 tooltip=就绪0+最短冷却 (实际 %s)" % g.auto_cast_next_tip())
+	# 冷却 推进 后 文案 同步 (动态): 45→30 最短 切换 回 act1 (45s)
+	g._active_cd = {}
+	g._active_cd[str(act86[1])] = 45.0
+	check(g.auto_cast_next_tip() == exp86b, "打磨-86 冷却 恢复 后 tooltip 复原 (动态)")
+	g._active_cd = {}
+	# 境界2: 速率 x4 → 爆发段 同步 (动态)
+	g.realm_idx = 2
+	var rate86_r2: float = g.qi_per_sec()
+	var exp86_r2 := "就绪 2/2 个, 爆发+%s 灵气 | 全部就绪" % g.fmt(rate86_r2 * 120.0)
+	check(g.auto_cast_next_tip() == exp86_r2, "打磨-86 境界2 爆发段 速率 同步 (动态) (实际 %s)" % g.auto_cast_next_tip().left(60))
+	g.realm_idx = 0
+	check(g.auto_cast_next_tip() == exp86a, "打磨-86 恢复 境界 后 tooltip 复原")
+	# 飞升: 爆发 口径 切 道行
+	var asc86: bool = g.ascended
+	var dao86: float = g.dao
+	g.ascended = true
+	var exp86d := "就绪 2/2 个, 爆发+%s 道行 | 全部就绪" % g.fmt(g.qi_per_sec() * 120.0)
+	check(g.auto_cast_next_tip() == exp86d, "打磨-86 飞升 爆发口径=道行 (实际 %s)" % g.auto_cast_next_tip().left(60))
+	g.ascended = asc86
+	g.dao = dao86
+	check(g.auto_cast_next_tip() == exp86a, "打磨-86 恢复 飞升 态 后 tooltip 复原")
+	# 只读: 连读 恒定 + 接口 本身 不改 资源/统计/境界/冷却/已学
+	var snap86: Dictionary = g.stats.duplicate(true)
+	var st86: float = g.stones
+	var es86: float = g.essence
+	var rl86: int = g.realm_idx
+	var cd86: Dictionary = g._active_cd.duplicate(true)
+	var lr86: Array = []
+	for x in g.learned:
+		lr86.append(x)
+	check(g.auto_cast_next_tip() == g.auto_cast_next_tip() and g.auto_learn_next_tip() == g.auto_learn_next_tip(),
+		"打磨-86 只读 连读 恒定")
+	check(g.stats == snap86 and g.stones == st86 and g.essence == es86 and g.realm_idx == rl86
+			and g._active_cd == cd86 and g.learned == lr86,
+		"打磨-86 只读 接口 无 资源/统计/境界/冷却/已学 副作用")
+	# --- auto_learn_next_tip: 基准 可学 11 (境界0层1, 数据 固定; 施展小段 已学 2 神通, 重置 保证 基准 独立) ---
+	g.learned.clear()
+	g._active_cd = {}
+	g.realm_idx = 0
+	g.layer = 1
+	var n86: int = g.learn_available_count()
+	check(n86 == 11, "打磨-86 基准 可学数=11 (实际 %d)" % n86)
+	check(g.auto_learn_next_tip() == "当前 可学 %d 个 (开启时 立即 批量 领悟)" % n86,
+		"打磨-86 基准 tooltip=可学数 恒等 (实际 %s)" % g.auto_learn_next_tip())
+	# 学 2 个 → 可学 9 (动态) — 只读接口 测试 直接 改 learned 态 (不 走 _try 自门控 开关)
+	g.learn_skill(str(act86[0]))
+	g.learn_skill(str(act86[1]))
+	check(g.auto_learn_next_tip() == "当前 可学 9 个 (开启时 立即 批量 领悟)",
+		"打磨-86 学 2 后 可学 9 (动态) (实际 %s)" % g.auto_learn_next_tip())
+	# 全部 学完 (境界0 层1 可学 11) → 下一 门槛 指向 数据序 首个 未学+境界不足 技能 (动态 计算 指针)
+	while g.learn_available_count() > 0:
+		g.learn_all_available("", -1)
+	var nxt86: String = ""
+	for sid in g.skill_ids:
+		if not g.learned.has(str(sid)) and not g.can_learn(str(sid)):
+			nxt86 = str(sid)
+			break
+	check(nxt86 != "", "打磨-86 基准 存在 未学+境界不足 技能 (实际 %s)" % nxt86)
+	var ns86: Dictionary = g.skill_by_id[nxt86]
+	var exp86e := "无可学技能 | 下一个 「%s」 还需 %s 第%d层" % [str(ns86["name"]), str(g.REALMS[int(ns86["unlock_realm"])]["name"]), int(ns86["unlock_layer"])]
+	check(g.auto_learn_next_tip() == exp86e, "打磨-86 学完 下一门槛 指向 数据序 首个 (实际 %s)" % g.auto_learn_next_tip())
+	# 升层: 境界0 层2 → (0,2) 解锁 学完, 门槛 指向 动态 切换 (回 层1 复原)
+	g.layer = 2
+	while g.learn_available_count() > 0:
+		g.learn_all_available("", -1)
+	var nxt86b: String = ""
+	for sid in g.skill_ids:
+		if not g.learned.has(str(sid)) and not g.can_learn(str(sid)):
+			nxt86b = str(sid)
+			break
+	var ns86b: Dictionary = g.skill_by_id[nxt86b]
+	var exp86f := "无可学技能 | 下一个 「%s」 还需 %s 第%d层" % [str(ns86b["name"]), str(g.REALMS[int(ns86b["unlock_realm"])]["name"]), int(ns86b["unlock_layer"])]
+	check(nxt86b != nxt86, "打磨-86 升层 后 门槛 目标 切换 (实际 %s -> %s)" % [nxt86, nxt86b])
+	check(g.auto_learn_next_tip() == exp86f, "打磨-86 升层 门槛 指向 动态 切换 (实际 %s)" % g.auto_learn_next_tip())
+	g.layer = 1
+	# 层2 技能 已学 (learned 只增不减), 回 层1 后 可学 仍 0, 门槛 指向 不变 (动态 与 当前态 一致)
+	check(g.learn_available_count() == 0, "打磨-86 回 层1 后 可学 仍 0 (learned 只增不减)")
+	check(g.auto_learn_next_tip() == exp86f, "打磨-86 回 层1 后 门槛 指向 恒定 (实际 %s)" % g.auto_learn_next_tip().left(60))
+	# 全 120 学完 → 已集齐 文案 (拉满 境界 9 使 全部 门槛 可学)
+	g.layer = 1
+	g.realm_idx = 9
+	while g.learn_available_count() > 0:
+		g.learn_all_available("", -1)
+	check(g.learned.size() == 120, "打磨-86 全 技能 学完 (实际 %d)" % g.learned.size())
+	check(g.auto_learn_next_tip() == "已集齐 全部技能 (无需再领悟)",
+		"打磨-86 全学 已集齐 文案 (实际 %s)" % g.auto_learn_next_tip())
+	# 收尾: 清空 已学/冷却, 基准 态 恢复 (防 污染)
+	g.learned.clear()
+	g._active_cd = {}
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g.ready_events.clear()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

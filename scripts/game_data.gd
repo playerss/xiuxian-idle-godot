@@ -1388,6 +1388,69 @@ func auto_break_next_tip() -> String:
 		return head + ("\n%s 还差 %s %s (当前无收入)" % [goal, fmt(gap), res_name])
 	return head + ("\n%s 还差 %s %s %s" % [goal, fmt(gap), res_name, breakthrough_eta_text()])
 
+# ---------- 打磨-86: 自动施展 按钮 tooltip 动态段 (就绪数/爆发总量/最短冷却, 复用 打磨-54 爆发口径) ----------
+# 只读: 打磨-84/85 已给 自动购置/自动突破 开关 tooltip 补 动态段, 但 自动施展 开关 悬停 只有 静态 口径,
+# 开启 后 玩家 悬停 不知 已学神通 就绪多少/冷却 还要 多久/爆发 多少; tooltip 追加 动态 段:
+# 就绪 已学主动神通 数 + 本批 爆发 总量 (就绪数 x 各自 当前速率x爆发秒数, 与 打磨-54/60/69 同口径,
+# 飞升后=道行) + 冷却中 最短 剩余 与 名称 (fmt_time 档位)。未学 主动神通 时 说明 文案; 无 就绪 时
+# 只 给 冷却 ETA; 就绪 0 且 无 冷却 说明 全就绪 可 自动 施展。
+# 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
+func auto_cast_next_tip() -> String:
+	var learned_n := 0
+	var ready_n := 0
+	var burst := 0.0
+	var next_name := ""
+	var next_rem := 1e18
+	for id in skill_ids:
+		var s: Dictionary = skill_by_id.get(str(id), {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if not learned.has(str(id)):
+			continue
+		learned_n += 1
+		var rem: float = _active_cd.get(str(id), 0.0)
+		if rem <= 0.0:
+			ready_n += 1
+			burst += qi_per_sec() * float(s["value"])
+		elif rem < next_rem:
+			next_rem = rem
+			next_name = str(s["name"])
+	if learned_n == 0:
+		return "未学 任何 主动神通 (先 领悟 神通 后 自动 施展 生效)"
+	var out := "就绪 %d/%d 个" % [ready_n, learned_n]
+	if ready_n > 0:
+		out += ", 爆发+%s %s" % [fmt(burst), primary_res_name()]
+	if ready_n < learned_n:
+		out += " | 最短冷却 「%s」 约 %s" % [next_name, fmt_time(next_rem)]
+	else:
+		out += " | 全部就绪"
+	return out
+
+# ---------- 打磨-86: 自动领悟 按钮 tooltip 动态段 (当前 可学数/下一个 解锁 门槛, 复用 can_learn 口径) ----------
+# 只读: 自动领悟 无 资源 消耗 (学习免费), 无 攒资源 ETA; 动态段 给 当前 全局 可学 数 (与 一键领悟
+# 全部类别/全部品质 口径一致) + 下一个 未学 技能的 解锁 门槛 (数据序 首个 未学+境界不足,
+# "还需 X 第 Y 层")。无 未学 技能 = 已集齐 说明 文案。
+# 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
+func auto_learn_next_tip() -> String:
+	var n := learn_available_count()
+	if n > 0:
+		return "当前 可学 %d 个 (开启时 立即 批量 领悟)" % n
+	var nxt := ""
+	for id in skill_ids:
+		if learned.has(str(id)):
+			continue
+		var s: Dictionary = skill_by_id.get(str(id), {})
+		if s.is_empty():
+			continue
+		if not can_learn(str(id)):
+			nxt = str(id)
+			break
+	if nxt == "":
+		return "已集齐 全部技能 (无需再领悟)"
+	var s2: Dictionary = skill_by_id[nxt]
+	var r: Dictionary = REALMS[int(s2["unlock_realm"])]
+	return "无可学技能 | 下一个 「%s」 还需 %s 第%d层" % [str(s2["name"]), str(r["name"]), int(s2["unlock_layer"])]
+
 # ---------- 打磨-30: 主动神通 一键施展 (批量释放所有 就绪 主动神通) ----------
 
 # 当前就绪 (无冷却) 的 已学主动神通 数 (供技能页"一键施展"按钮文案)

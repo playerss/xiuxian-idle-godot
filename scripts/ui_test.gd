@@ -127,6 +127,7 @@ func _ready() -> void:
 	await _assert_auto_break_next_tip()
 	await _assert_auto_cast()
 	await _assert_auto_learn()
+	await _assert_auto_next_tips()
 	await _assert_auto_summary()
 	await _assert_auto_sum_jump()
 	_assert_auto_restore()
@@ -2475,6 +2476,163 @@ func _assert_auto_learn() -> void:
 	check(g.stats == stats_sw and absf(g.essence - ess_sw) < 1e-9 and g.stones == stones_sw,
 		"打磨-80 开关切换 无 资源/统计 副作用")
 	# 收尾: 恢复基准态 (防污染) + 自动系列 四开关 全 关
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g.last_break_result = 0
+	g.auto_buy = false
+	g.auto_break = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g._active_cd = {}
+	g.ready_events.clear()
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-86: 自动施展/自动领悟 按钮 tooltip 动态段 — 构建含 静态前缀+动态段 标记/_refresh 按 接口 刷新/
+# 状态 动态 (就绪/冷却/可学/境界 切换)/节流 无副作用/飞升 道行 口径/收尾 基准 恢复
+func _assert_auto_next_tips() -> void:
+	var g := GameData
+	# ============ 自动施展 按钮 (auto_cast_next_tip) ============
+	var cb: Button = ui._auto_cast_btn
+	check(cb != null, "打磨-86 自动施展按钮存在")
+	if cb == null:
+		return
+	# 受控态: 清空 拥有/穿戴/已学, 境界0层1, 资源 0 (同 打磨-69 受控态 口径)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.dao = 0.0
+	g.stones = 0.0
+	g._active_cd = {}
+	# 未学 主动神通: 静态前缀 + 未学 说明 文案
+	var cast_tip0: String = g.auto_cast_next_tip()
+	check(cast_tip0 == "未学 任何 主动神通 (先 领悟 神通 后 自动 施展 生效)",
+		"打磨-86 施展 未学 说明 文案 (实际 %s)" % cast_tip0)
+	check(str(ui._auto_cast_tip_static).find("【神通 就绪/爆发/冷却 (动态)】") >= 0,
+		"打磨-86 施展 tooltip 静态 动态段 标记")
+	ui._refresh()
+	check(str(cb.tooltip_text) == str(ui._auto_cast_tip_static) + cast_tip0,
+		"打磨-86 施展 tooltip=静态前缀+动态段 恒等 (实际 %s)" % str(cb.tooltip_text).left(60))
+	# 境界0 主动神通 数据序 前 2 (各 爆发 60 秒 冷却 90)
+	var act: Array = []
+	for id in g.skill_ids:
+		var s: Dictionary = g.skill_by_id.get(str(id), {})
+		if s.is_empty() or str(s.get("type", "")) != "active":
+			continue
+		if int(s.get("unlock_realm", 99)) == 0 and int(s.get("unlock_layer", 99)) == 1:
+			act.append(str(id))
+		if act.size() == 2:
+			break
+	check(act.size() == 2, "打磨-86 境界0 主动神通 数据存在 (实际 %d)" % act.size())
+	for id in act:
+		g.learned.append(str(id))
+	ui._refresh()
+	var rate: float = g.qi_per_sec()
+	var cast_tip1: String = g.auto_cast_next_tip()
+	check(cast_tip1 == ("就绪 2/2 个, 爆发+%s 灵气 | 全部就绪" % g.fmt(rate * 120.0)),
+		"打磨-86 施展 2 就绪 爆发+全就绪 (实际 %s)" % cast_tip1)
+	check(str(cb.tooltip_text) == str(ui._auto_cast_tip_static) + cast_tip1,
+		"打磨-86 施展 _refresh 刷新 动态段 (就绪态)")
+	# 1 冷却中: 就绪 1/2 + 最短冷却 档位
+	g._active_cd[str(act[1])] = 45.0
+	var cast_tip2: String = g.auto_cast_next_tip()
+	ui._refresh()
+	check(str(cb.tooltip_text) == str(ui._auto_cast_tip_static) + cast_tip2,
+		"打磨-86 施展 1 冷却 动态段 刷新 (实际 %s)" % cast_tip2.left(60))
+	check(cast_tip2.find("就绪 1/2") >= 0 and cast_tip2.find(str(g.skill_by_id[str(act[1])]["name"])) >= 0,
+		"打磨-86 施展 冷却段 含 名称+档位 (实际 %s)" % cast_tip2)
+	# 节流: 同态 _refresh 不重写 tooltip (缓存命中) + 无 资源/统计 副作用
+	var t2: String = str(cb.tooltip_text)
+	var stats0: Dictionary = g.stats.duplicate(true)
+	var ess0: float = g.essence
+	ui._refresh()
+	check(str(cb.tooltip_text) == t2, "打磨-86 施展 同态 节流 tooltip 稳定")
+	check(g.stats == stats0 and absf(g.essence - ess0) < 1e-9, "打磨-86 施展 刷 tooltip 无 资源/统计 副作用")
+	# 冷却 清零: 回 全就绪 (动态)
+	g._active_cd = {}
+	ui._refresh()
+	check(str(cb.tooltip_text) == str(ui._auto_cast_tip_static) + g.auto_cast_next_tip(),
+		"打磨-86 施展 冷却 清零 回 全就绪 (动态)")
+	# 飞升: 爆发 口径 切 道行
+	g.ascended = true
+	var cast_tip3: String = g.auto_cast_next_tip()
+	ui._refresh()
+	check(cast_tip3.find("道行") >= 0 and cast_tip3.find("灵气") < 0,
+		"打磨-86 施展 飞升 爆发口径=道行 (实际 %s)" % cast_tip3)
+	check(str(cb.tooltip_text) == str(ui._auto_cast_tip_static) + cast_tip3,
+		"打磨-86 施展 飞升 动态段 刷新")
+	g.ascended = false
+	ui._refresh()
+	check(str(cb.tooltip_text) == str(ui._auto_cast_tip_static) + g.auto_cast_next_tip(),
+		"打磨-86 施展 恢复 飞升 态 后 复原")
+	# ============ 自动领悟 按钮 (auto_learn_next_tip) ============
+	var lb: Button = ui._auto_learn_btn
+	check(lb != null, "打磨-86 自动领悟按钮存在")
+	# 受控态: 清空 已学 (施展小段 已学 2 神通, 重置 保证 基准 独立), 境界0层1
+	g.learned.clear()
+	g._active_cd = {}
+	g.realm_idx = 0
+	g.layer = 1
+	var n_learn: int = g.learn_available_count()
+	check(n_learn == 11, "打磨-86 基准 可学数=11 (实际 %d)" % n_learn)
+	var learn_tip0: String = g.auto_learn_next_tip()
+	check(learn_tip0 == ("当前 可学 %d 个 (开启时 立即 批量 领悟)" % n_learn),
+		"打磨-86 领悟 基准 可学数 (实际 %s)" % learn_tip0)
+	check(str(ui._auto_learn_tip_static).find("【当前 可学/下一 门槛 (动态)】") >= 0,
+		"打磨-86 领悟 tooltip 静态 动态段 标记")
+	ui._refresh()
+	check(str(lb.tooltip_text) == str(ui._auto_learn_tip_static) + learn_tip0,
+		"打磨-86 领悟 tooltip=静态前缀+动态段 恒等 (实际 %s)" % str(lb.tooltip_text).left(60))
+	# 升层: 可学数 动态 变化 (境界0 层2 解锁 5 个)
+	g.layer = 2
+	var n_learn2: int = g.learn_available_count()
+	check(n_learn2 > n_learn, "打磨-86 升层 可学数 上升 (实际 %d > %d)" % [n_learn2, n_learn])
+	var learn_tip1: String = g.auto_learn_next_tip()
+	ui._refresh()
+	check(learn_tip1 == ("当前 可学 %d 个 (开启时 立即 批量 领悟)" % n_learn2),
+		"打磨-86 领悟 升层 可学数 动态 刷新 (实际 %s)" % learn_tip1)
+	check(str(lb.tooltip_text) == str(ui._auto_learn_tip_static) + learn_tip1,
+		"打磨-86 领悟 _refresh 刷新 动态段 (升层)")
+	# 学完 (境界0 层2 可学) → 下一 门槛 指向 (数据序 首个 未学+境界不足 动态 指针)
+	# 只读接口 测试 直接 改 learned 态 (learn_all_available, 不 走 _try 自门控 开关)
+	g.learn_all_available("", -1)
+	check(g.learn_available_count() == 0, "打磨-86 层2 学完 可学归0 (实际 %d)" % g.learn_available_count())
+	var nxt: String = ""
+	for sid in g.skill_ids:
+		if not g.learned.has(str(sid)) and not g.can_learn(str(sid)):
+			nxt = str(sid)
+			break
+	var ns: Dictionary = g.skill_by_id[nxt]
+	var learn_tip2: String = "无可学技能 | 下一个 「%s」 还需 %s 第%d层" % [str(ns["name"]), str(g.REALMS[int(ns["unlock_realm"])]["name"]), int(ns["unlock_layer"])]
+	check(g.auto_learn_next_tip() == learn_tip2,
+		"打磨-86 领悟 学完 下一门槛 指向 (实际 %s)" % g.auto_learn_next_tip())
+	ui._refresh()
+	check(str(lb.tooltip_text) == str(ui._auto_learn_tip_static) + learn_tip2,
+		"打磨-86 领悟 学完 门槛 动态段 刷新")
+	# 节流: 同态 _refresh 不重写 tooltip + 无 资源/统计 副作用
+	var t_l2: String = str(lb.tooltip_text)
+	var stats1: Dictionary = g.stats.duplicate(true)
+	var ess1: float = g.essence
+	ui._refresh()
+	check(str(lb.tooltip_text) == t_l2, "打磨-86 领悟 同态 节流 tooltip 稳定")
+	check(g.stats == stats1 and absf(g.essence - ess1) < 1e-9, "打磨-86 领悟 刷 tooltip 无 资源/统计 副作用")
+	# 收尾: 恢复基准态 (防污染) + 四开关 全 关
 	g.learned.clear()
 	g.owned.clear()
 	g.owned_eq.clear()

@@ -63,11 +63,15 @@ var _auto_cast_on := false      # 打磨-69: 上帧开关状态缓存 (变化才
 var _auto_cast_float_label: Label   # 打磨-69: 自动施展 浮动提示 (顶层, 居中, 绿色)
 var _auto_cast_float_tween: Tween
 var _auto_cast_msg_seq := 0     # 打磨-69: 已处理过的 自动施展 变更事件序号 (避免重复弹浮动; 启动=0 与 GameData 同态)
+var _auto_cast_tip := ""        # 打磨-86: 自动施展按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84/85 口径)
+var _auto_cast_tip_static := "" # 打磨-86: 自动施展按钮 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼)
 var _auto_cast_float_count := 0  # 打磨-69: 自动施展 浮动提示次数 (自测断言用)
 var _auto_cast_last_text := ""   # 打磨-69: 最近一次自动施展 浮动文案 (自测断言用)
 var _auto_learn_btn: Button      # 打磨-80: 自动领悟开关 (toggle, 存档持久化)
 var _auto_learn_on := false      # 打磨-80: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_learn_msg_seq := 0     # 打磨-80: 已处理过的 自动领悟 变更事件序号 (避免重复刷底部消息; 启动=0 与 GameData 同态)
+var _auto_learn_tip := ""        # 打磨-86: 自动领悟按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84/85 口径)
+var _auto_learn_tip_static := "" # 打磨-86: 自动领悟按钮 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼)
 var _auto_sum_box: HBoxContainer  # 打磨-70: 自动系列 状态汇总行 (修行页左栏, 自动施展开关下)
 var _auto_sum_panel: Panel        # 打磨-74: 汇总行 透明 Panel 外壳 (顶栏 自动 徽标 点击直达 金边高亮)
 var _auto_sum_hi_tween: Tween     # 打磨-74: 汇总行高亮 tween (1.2s 自动恢复, 同 法器区 口径)
@@ -611,13 +615,25 @@ func _build_training_page(page: Panel) -> void:
 	_auto_cast_btn = _make_button("自动施展: 关")
 	_auto_cast_btn.toggle_mode = true
 	_auto_cast_btn.pressed.connect(_on_auto_cast)
-	_auto_cast_btn.tooltip_text = "已学 主动神通 冷却完毕 自动 施展 爆发 (与 一键施展 同口径: 一次释放所有 就绪 的 主动神通, 各神通 爆发=当前灵气速率 x 爆发秒数, 飞升后=道行; 施展后 各自 进冷却)。\n每帧至多一轮 (施展后 各神通 进冷却, 全冷却中 0 施展, 无热循环); 施展时屏幕中央绿色浮动 提示 数量与 爆发总量 (与 一键施展 浮动 同口径)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+	# 打磨-86: tooltip = 静态口径 + 动态段 (就绪数/爆发总量/最短冷却, 随 已学/冷却/速率 变化 由 _refresh 刷新);
+	# 静态 前缀 存 成员 供 重拼 (避免 split 截断 坑, 与 打磨-84/85 动态段 口径 同)
+	_auto_cast_tip_static = ("已学 主动神通 冷却完毕 自动 施展 爆发 (与 一键施展 同口径: 一次释放所有 就绪 的 主动神通, 各神通 爆发=当前灵气速率 x 爆发秒数, 飞升后=道行; 施展后 各自 进冷却)。\n"
+		+ "每帧至多一轮 (施展后 各神通 进冷却, 全冷却中 0 施展, 无热循环); 施展时屏幕中央绿色浮动 提示 数量与 爆发总量 (与 一键施展 浮动 同口径)。\n"
+		+ "开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
+		+ "【神通 就绪/爆发/冷却 (动态)】")
+	_auto_cast_btn.tooltip_text = _auto_cast_tip_static
 	break_box.add_child(_auto_cast_btn)
 	# 打磨-80: 自动领悟开关 (境界/层 提升 解锁 新技能 自动 批量 领悟; 状态变化才刷按钮态)
 	_auto_learn_btn = _make_button("自动领悟: 关")
 	_auto_learn_btn.toggle_mode = true
 	_auto_learn_btn.pressed.connect(_on_auto_learn)
-	_auto_learn_btn.tooltip_text = "境界/层 提升 解锁 新技能 时 自动 批量 领悟 全部 未学+境界足够 技能 (与 一键领悟 按钮 全局口径 一致: 无 类别/品质 筛选 叠加; 学习 免费 无 资源 消耗, 与 手动 领悟 口径 一致)。\n每帧至多一轮 (置于 自动突破 之后: 同帧 突破 升层/晋境界 后 立即 学习 新解锁 技能; 学习后 可学数 归 0, 下帧 再试 0 变更 幂等, 无热循环); 学习时底部消息提示 数量 (无屏幕浮动, 避免挂机刷屏)。\n开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+	# 打磨-86: tooltip = 静态口径 + 动态段 (当前 可学数/下一个 解锁 门槛, 随 已学/境界 变化 由 _refresh 刷新);
+	# 静态 前缀 存 成员 供 重拼 (避免 split 截断 坑, 与 打磨-84/85 动态段 口径 同)
+	_auto_learn_tip_static = ("境界/层 提升 解锁 新技能 时 自动 批量 领悟 全部 未学+境界足够 技能 (与 一键领悟 按钮 全局口径 一致: 无 类别/品质 筛选 叠加; 学习 免费 无 资源 消耗, 与 手动 领悟 口径 一致)。\n"
+		+ "每帧至多一轮 (置于 自动突破 之后: 同帧 突破 升层/晋境界 后 立即 学习 新解锁 技能; 学习后 可学数 归 0, 下帧 再试 0 变更 幂等, 无热循环); 学习时底部消息提示 数量 (无屏幕浮动, 避免挂机刷屏)。\n"
+		+ "开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
+		+ "【当前 可学/下一 门槛 (动态)】")
+	_auto_learn_btn.tooltip_text = _auto_learn_tip_static
 	break_box.add_child(_auto_learn_btn)
 	# 打磨-70: 自动系列 状态汇总行 (三个开关 开启后 扫视 不知 哪些 已 生效;
 	# 一行摘要 "自动: 突破 ✓/✗ · 购置 ✓/✗ · 施展 ✓/✗", 开启 金 / 未开 灰, 状态 变化 才刷)
@@ -1564,6 +1580,11 @@ func _refresh() -> void:
 		_auto_cast_on = g.auto_cast
 		_auto_cast_btn.set_pressed_no_signal(g.auto_cast)
 		_auto_cast_btn.text = ("自动施展: 开" if g.auto_cast else "自动施展: 关")
+	# 打磨-86: 自动施展按钮 tooltip 动态段 (就绪数/爆发总量/最短冷却, 随 已学/冷却/速率 变化 才刷; 同 打磨-84/85 缓存口径)
+	var ac_tip: String = g.auto_cast_next_tip()
+	if ac_tip != _auto_cast_tip:
+		_auto_cast_tip = ac_tip
+		_auto_cast_btn.tooltip_text = _auto_cast_tip_static + ac_tip
 	# 打磨-69: 自动施展 变更事件 → 绿色浮动 (与 一键施展 浮动 同口径 数量+爆发总量, 0 施展 不增 事件 不弹)
 	if g._auto_cast_seq != _auto_cast_msg_seq:
 		_auto_cast_msg_seq = g._auto_cast_seq
@@ -1573,6 +1594,11 @@ func _refresh() -> void:
 		_auto_learn_on = g.auto_learn
 		_auto_learn_btn.set_pressed_no_signal(g.auto_learn)
 		_auto_learn_btn.text = ("自动领悟: 开" if g.auto_learn else "自动领悟: 关")
+	# 打磨-86: 自动领悟按钮 tooltip 动态段 (当前 可学数/下一个 解锁 门槛, 随 已学/境界 变化 才刷; 同 打磨-84/85 缓存口径)
+	var al_tip: String = g.auto_learn_next_tip()
+	if al_tip != _auto_learn_tip:
+		_auto_learn_tip = al_tip
+		_auto_learn_btn.tooltip_text = _auto_learn_tip_static + al_tip
 	# 打磨-80: 自动领悟 变更事件 → 底部消息 (变更事件序号 变化 且 有文案 才提示一次, 无屏幕浮动)
 	if g._auto_learn_seq != _auto_learn_msg_seq:
 		_auto_learn_msg_seq = g._auto_learn_seq
