@@ -3548,6 +3548,72 @@ func _init() -> void:
 	check(g.next_goal_ratio() == g.next_goal_ratio(), "打磨-81 只读 连读 恒定")
 	check(g.stats == snap81 and g.essence == ess81 and g.stones == st81_s,
 		"打磨-81 只读 接口 无 资源/统计 副作用")
+	# ---------- 打磨-83: 顶栏 挂机时长 悬停 离线收益 预估 tooltip (只读 offline_preview_tip,
+	# 复用 offline_gain/offline_rate 口径; 随 速率/功法装备/飞升 动态; 纯 文本 无 副作用) ----------
+	var tip83_base: String = g.offline_preview_tip()
+	check(tip83_base.find("离线收益 预估") >= 0 and tip83_base.find("灵气") >= 0,
+		"打磨-83 基准 tooltip 含 离线收益 预估 + 主资源 灵气 (实际 %s)" % tip83_base.left(30))
+	check(tip83_base.find("离线 1 小时") >= 0 and tip83_base.find("离线 4 小时") >= 0
+			and tip83_base.find("离线 8 小时") >= 0 and tip83_base.find("上限") >= 0,
+		"打磨-83 三档 1h/4h/8h + 上限 齐全")
+	# 1h 数值 恒等: 与 offline_gain(3600) 一致 (未飞升 基准)
+	var h1b: Dictionary = g.offline_gain(3600.0)
+	check(tip83_base.find(g.fmt(float(h1b["qi"]))) >= 0
+			and tip83_base.find(g.fmt(float(h1b["stone"]))) >= 0,
+		"打磨-83 1h 数值=offline_gain(3600) 动态 恒等")
+	# 境界提升 速率 变化 → tooltip 数值 同步 (动态 恒等)
+	var realm83: int = g.realm_idx
+	g.realm_idx = 2
+	var tip83_r2: String = g.offline_preview_tip()
+	check(tip83_r2 != tip83_base, "打磨-83 境界2 tooltip 数值 变化 (动态)")
+	g.realm_idx = realm83
+	check(g.offline_preview_tip() == tip83_base, "打磨-83 恢复 境界 后 tooltip 复原")
+	# 学 offline_rate 功法 → 效率% 上升 (动态 恒等; 境界临时拉到 3 使 realm<=2 的
+	# offline_rate 被动 可学, 学后恢复 境界+清除 技能)
+	var skill83 := ""
+	for sid in g.skill_ids:
+		var sk: Dictionary = g.skill_by_id[sid]
+		if str(sk.get("type", "")) == "passive" and str(sk.get("effect", "")) == "offline_rate":
+			skill83 = sid
+			break
+	check(skill83 != "", "打磨-83 存在 offline_rate 被动 (实际 %s)" % skill83)
+	if skill83 != "":
+		g.learned.erase(skill83)  # 确保 基准 未含 本技能 (防 上轮 残留)
+		var rate83_before: float = g.offline_rate()
+		var realm83b: int = g.realm_idx
+		g.realm_idx = 3  # 拉高境界 使 offline_rate 被动 可学
+		g.learn_skill(skill83)
+		check(g.learned.has(skill83), "打磨-83 境界足够时 offline_rate 功法 学习 成功")
+		var tip83_rate: String = g.offline_preview_tip()
+		check(g.offline_rate() > rate83_before, "打磨-83 学 offline_rate 后 效率 上升 (实际 %s > %s)" % [str(g.offline_rate()), str(rate83_before)])
+		# tooltip 含 新 效率% (基础 X%) 且 数值 段 随之 变化
+		check(tip83_rate.find("基础 %d%%" % int(g.offline_rate() * 100.0)) >= 0,
+			"打磨-83 tooltip 含 新 效率%% (实际 %s)" % tip83_rate.left(40))
+		check(tip83_rate != tip83_base, "打磨-83 学功法 后 tooltip 与 基准 不同 (动态)")
+		g.learned.erase(skill83)
+		g.realm_idx = realm83b
+		check(g.offline_preview_tip() == tip83_base, "打磨-83 清除 功法+恢复 境界 后 tooltip 复原")
+	# 飞升 后 主资源 口径 = 道行
+	var asc83: bool = g.ascended
+	var dao83: float = g.dao
+	var daoLv83: int = g.dao_level
+	g.ascended = true
+	g.dao_level = 0
+	var tip83_asc: String = g.offline_preview_tip()
+	check(tip83_asc.find("道行") >= 0 and tip83_asc.find("灵气") < 0,
+		"打磨-83 飞升 后 tooltip 主资源=道行 (实际 %s)" % tip83_asc.left(30))
+	g.ascended = asc83
+	g.dao = dao83
+	g.dao_level = daoLv83
+	check(g.offline_preview_tip() == tip83_base, "打磨-83 恢复 飞升 态 后 tooltip 复原")
+	# 只读: 连读 恒定 + 接口 本身 不改 资源/统计/境界 (快照 对比)
+	var snap83: Dictionary = g.stats.duplicate(true)
+	var st83_s: float = g.stones
+	var es83_e: float = g.essence
+	var rl83: int = g.realm_idx
+	check(g.offline_preview_tip() == g.offline_preview_tip(), "打磨-83 只读 连读 恒定")
+	check(g.stats == snap83 and g.stones == st83_s and g.essence == es83_e and g.realm_idx == rl83,
+		"打磨-83 只读 接口 无 资源/统计/境界 副作用")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

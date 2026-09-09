@@ -325,6 +325,24 @@ func stone_rate_text() -> String:
 		return ""
 	return "+%s/秒" % fmt(r)
 
+# 打磨-83: 顶栏 挂机时长 悬停 离线收益 预估 tooltip (只读, 复用 offline_gain/offline_rate 口径;
+# 玩家 悬停 顶栏 ⏳ 挂机时长 即知 离线 X 小时 可攒 多少 主资源/灵石, 不 切 修行页;
+# 口径: 基础 效率 50% + 功法/装备 加成, 上限 8 小时, 飞升后 主资源=道行; 纯 文本 无 副作用)
+func offline_preview_tip() -> String:
+	var r: float = offline_rate()
+	var res_name: String = "道行" if ascended else "灵气"
+	var h1 := offline_gain(3600.0)
+	var h4 := offline_gain(4.0 * 3600.0)
+	var h8 := offline_gain(8.0 * 3600.0)
+	return ("离线收益 预估 (%s, 基础 %0.0f%% + 功法/装备 加成, 上限 8 小时):\n"
+		+ "· 离线 1 小时 ≈ %s · 灵石 %s\n"
+		+ "· 离线 4 小时 ≈ %s · 灵石 %s\n"
+		+ "· 离线 8 小时 (上限) ≈ %s · 灵石 %s") % [
+		res_name, r * 100.0,
+		fmt(float(h1["qi"])), fmt(float(h1["stone"])),
+		fmt(float(h4["qi"])), fmt(float(h4["stone"])),
+		fmt(float(h8["qi"])), fmt(float(h8["stone"]))]
+
 # 统计时长格式 (日/小时/分)
 func fmt_stats_time(sec: float) -> String:
 	var d := int(sec) / 86400

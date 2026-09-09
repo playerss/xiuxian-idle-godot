@@ -133,6 +133,7 @@ func _ready() -> void:
 	await _assert_onekey_badge()
 	await _assert_onekey_tip_detail()
 	await _assert_play_time_badge()
+	await _assert_play_time_tip()
 	_assert_primary_rate_badge()
 	_assert_stone_rate_badge()
 	await _assert_goalbar()
@@ -3050,8 +3051,9 @@ func _assert_play_time_badge() -> void:
 			"打磨-77 标签 挂在 顶栏 (与 自动 徽标 同父; 实际 %s)" % str(pl.get_parent()))
 	check(pl.get_theme_color("font_color") == Color(0.6, 0.62, 0.68),
 			"打磨-77 标签 字色 灰色 (实际 %s)" % str(pl.get_theme_color("font_color")))
-	check(pl.tooltip_text.find("累计 挂机 时长") >= 0 and pl.tooltip_text.find("不含 离线") >= 0,
-			"打磨-77 标签 tooltip 含 口径 说明 (实际 %s)" % pl.tooltip_text.left(24))
+	# 打磨-83: tooltip 首帧 被 _refresh 替换为 离线收益 预估 (含 口径 说明 的 静态 文案 已 让位 动态 段)
+	check(pl.tooltip_text.find("离线收益 预估") >= 0,
+			"打磨-77 标签 tooltip 为 离线收益 预估 (打磨-83 动态 段; 实际 %s)" % pl.tooltip_text.left(24))
 	# 初始: play_sec=0 (前序 收尾 干净 基准) → 隐藏 + 文本空
 	check(pl.visible == false and str(pl.text) == "",
 			"打磨-77 初始 0 时长 隐藏 文本空 (实际 visible=%s text=%s)" % [str(pl.visible), str(pl.text)])
@@ -3086,7 +3088,88 @@ func _assert_play_time_badge() -> void:
 	# 收尾: 干净 基准 (play_sec 0 隐藏)
 	check(float(g.stats.get("play_sec", 0.0)) == 0.0,
 		"打磨-77 收尾 play_sec 恢复 0 (实际 %s)" % str(g.stats.get("play_sec")))
+	# 收尾: 干净 基准 (play_sec 0 隐藏)
+	check(float(g.stats.get("play_sec", 0.0)) == 0.0,
+			"打磨-77 收尾 play_sec 恢复 0 (实际 %s)" % str(g.stats.get("play_sec")))
 	check(pl.visible == false, "打磨-77 收尾 0 时长 隐藏 稳定")
+	await get_tree().process_frame
+
+
+# 打磨-83: 顶栏 挂机时长 悬停 离线收益 预估 tooltip — 挂机时长 标签 tooltip 由 静态 口径 说明 升级为
+# 动态 离线 收益 预估 (复用 GameData.offline_preview_tip: 1h/4h/8h 三档 主资源/灵石 + 效率% + 上限 8h,
+# 随 速率/功法装备/飞升 变化 才刷; 纯 展示 无 副作用);
+# 断言 (手动驱动 确定性): tooltip 初始 含 口径 说明 + 离线收益 预估 段 + 三档/上限/效率%/主资源 灵气/
+# 同态 节流 无 资源/统计 副作用/境界 变化 tooltip 同步 动态 恒等/学 offline_rate 功法 效率% 变化/
+# 飞升 后 主资源=道行/恢复 复原/收尾 复原
+func _assert_play_time_tip() -> void:
+	var g := GameData
+	var pl: Label = ui._play_label
+	# tooltip 初始 (前序 收尾 干净 基准 未飞升): _refresh 已 替换 为 离线收益 预估 段
+	check(pl.tooltip_text.find("离线收益 预估") >= 0 and pl.tooltip_text.find("离线 1 小时") >= 0
+			and pl.tooltip_text.find("离线 4 小时") >= 0 and pl.tooltip_text.find("离线 8 小时") >= 0,
+			"打磨-83 tooltip 含 离线收益 预估 三档 1h/4h/8h")
+	check(pl.tooltip_text.find("上限") >= 0 and pl.tooltip_text.find("基础") >= 0,
+			"打磨-83 tooltip 含 上限 8 小时 + 基础 效率%%")
+	check(pl.tooltip_text.find("灵气") >= 0 and pl.tooltip_text.find("道行") < 0,
+			"打磨-83 未飞升 主资源 口径=灵气 (实际 %s)" % pl.tooltip_text.left(30))
+	# 同态 节流: 刷新 无 资源/统计/境界 副作用 (tooltip 稳定)
+	var snap_t: Dictionary = g.stats.duplicate(true)
+	var ess_t: float = g.essence
+	var st_t: float = g.stones
+	var realm_t: int = g.realm_idx
+	var tip_base: String = str(pl.tooltip_text)
+	ui._refresh()
+	check(str(pl.tooltip_text) == tip_base and g.stats == snap_t
+			and g.essence == ess_t and g.stones == st_t and g.realm_idx == realm_t,
+			"打磨-83 同态 节流 tooltip 稳定 无 资源/统计 副作用")
+	# 境界 变化 → tooltip 数值 同步 (动态 恒等, 恢复原 境界)
+	var realm_save: int = g.realm_idx
+	g.realm_idx = 2
+	ui._refresh()
+	check(str(pl.tooltip_text) != tip_base, "打磨-83 境界2 tooltip 数值 变化 (动态)")
+	g.realm_idx = realm_save
+	ui._refresh()
+	check(str(pl.tooltip_text) == tip_base, "打磨-83 恢复 境界 后 tooltip 复原 (实际 %s)" % pl.tooltip_text.left(30))
+	# 学 offline_rate 功法 → 效率% 上升 → tooltip 变化 (境界临时拉到 3 使 可学, 学后 恢复+清除)
+	var off_skill := ""
+	for sid in g.skill_ids:
+		var sk: Dictionary = g.skill_by_id[sid]
+		if str(sk.get("type", "")) == "passive" and str(sk.get("effect", "")) == "offline_rate":
+			off_skill = sid
+			break
+	check(off_skill != "", "打磨-83 存在 offline_rate 被动 (实际 %s)" % off_skill)
+	if off_skill != "":
+		g.learned.erase(off_skill)
+		var rate_before: float = g.offline_rate()
+		var realm_b: int = g.realm_idx
+		g.realm_idx = 3
+		g.learn_skill(off_skill)
+		check(g.learned.has(off_skill) and g.offline_rate() > rate_before,
+				"打磨-83 学 offline_rate 后 效率 上升 (实际 %s > %s)" % [str(g.offline_rate()), str(rate_before)])
+		ui._refresh()
+		var tip_rate: String = str(pl.tooltip_text)
+		check(tip_rate.find("基础 %d%%" % int(g.offline_rate() * 100.0)) >= 0,
+				"打磨-83 tooltip 含 新 效率%% (实际 %s)" % tip_rate.left(40))
+		check(tip_rate != tip_base, "打磨-83 学功法 后 tooltip 变化")
+		g.learned.erase(off_skill)
+		g.realm_idx = realm_b
+		ui._refresh()
+		check(str(pl.tooltip_text) == tip_base, "打磨-83 清除 功法+恢复 境界 后 tooltip 复原")
+	# 飞升 后 主资源 口径 = 道行 (恢复 原 飞升 态)
+	var asc_save: bool = g.ascended
+	var daoLv_save: int = g.dao_level
+	g.ascended = true
+	g.dao_level = 1
+	ui._refresh()
+	var tip_asc: String = str(pl.tooltip_text)
+	check(tip_asc.find("道行") >= 0 and tip_asc.find("灵气") < 0,
+			"打磨-83 飞升 后 tooltip 主资源=道行 (实际 %s)" % tip_asc.left(30))
+	g.ascended = asc_save
+	g.dao_level = daoLv_save
+	ui._refresh()
+	check(str(pl.tooltip_text) == tip_base, "打磨-83 恢复 飞升 态 后 tooltip 复原")
+	# 收尾: 干净 基准
+	check(g.ascended == false and g.realm_idx == realm_t, "打磨-83 收尾 状态 复原")
 	await get_tree().process_frame
 
 

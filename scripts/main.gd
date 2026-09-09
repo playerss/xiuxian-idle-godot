@@ -34,6 +34,7 @@ var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
 var _stats_text := ""          # 统计文本缓存 (变化时才刷)
 var _play_label: Label         # 打磨-77: 顶栏 挂机时长 常显 ("⏳ X小时Y分", 随 play_sec 分钟档 变化 才刷)
 var _play_text := ""           # 打磨-77: 挂机时长 文本缓存 (变化才刷, 空串=隐藏)
+var _play_tip := ""            # 打磨-83: 挂机时长 悬停 离线收益 预估 tooltip 缓存 (变化才刷)
 var _rate_label: Label         # 打磨-78: 顶栏 主资源速率 常显 ("+X/秒", 未飞升=灵气 飞升后=道行, 文本变化 才刷)
 var _rate_text := ""           # 打磨-78: 主资源速率 文本缓存 (变化才刷, 空串=隐藏)
 var _sr_label: Label           # 打磨-79: 顶栏 灵石速率 常显 ("+X/秒", 与 修行页 灵石速率 行 同口径, 文本变化 才刷)
@@ -255,7 +256,7 @@ func _build_ui() -> void:
 	# 0 时长 隐藏 避免 空文本 占位; 与 修行页 修行统计 时长 同 口径 stats.play_sec)
 	_play_label = _label("", 13, DIM)
 	_play_label.visible = false
-	_play_label.tooltip_text = "本次 存档 累计 挂机 时长 (在线 累计, 不含 离线; 存档 持久化, 断点续挂 累加不重置)。与 修行页 修行统计 的 时长 同 口径。"
+	_play_label.tooltip_text = "本次 存档 累计 挂机 时长 (在线 累计, 不含 离线; 存档 持久化, 断点续挂 累加不重置)。与 修行页 修行统计 的 时长 同 口径。\n悬停 查看 离线 收益 预估 (随 速率/功法/装备/飞升 动态 刷新)"
 	top.add_child(_play_label)
 	# 打磨-78: 顶栏 主资源速率 常显 (灰色小字 "+X/秒", 主资源行 后: 未飞升=灵气/秒, 飞升后=道行/秒,
 	# 与 修行页 灵气速率 同 口径; 速率<=0 隐藏 避免 空文本 占位; 文本 变化 才刷 节流, 纯展示 无 副作用)
@@ -1464,6 +1465,11 @@ func _refresh() -> void:
 		_play_text = pt_t
 		_play_label.text = pt_t
 		_play_label.visible = pt_t != ""
+	# 打磨-83: 挂机时长 悬停 离线收益 预估 tooltip (随 速率/功法装备/飞升 变化 才刷; 只读 无 副作用)
+	var pt_tip: String = g.offline_preview_tip()
+	if pt_tip != _play_tip:
+		_play_tip = pt_tip
+		_play_label.tooltip_text = pt_tip
 	# 打磨-78: 顶栏 主资源速率 常显 (未飞升=灵气/秒 飞升后=道行/秒, 文本 变化 才刷; 速率<=0 隐藏)
 	var rt_t: String = g.primary_rate_text()
 	if rt_t != _rate_text:
