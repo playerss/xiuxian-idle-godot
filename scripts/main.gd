@@ -109,8 +109,14 @@ var _offline_float_count := 0      # 打磨-66: 离线浮动提示次数 (自测
 var _offline_last_text := ""       # 打磨-66: 最近一次离线浮动文案 (自测断言用)
 var _auto_restore_count := 0       # 打磨-72: 启动 自动系列 恢复 提示 次数 (自测断言用)
 var _auto_restore_last_text := ""  # 打磨-72: 最近一次 自动 恢复 提示 文案 (自测断言用)
-var _auto_badge: Button            # 打磨-73/74: 顶栏 自动系列 状态徽标 ("自动 N/3", 任一开关开 显示 全关 隐藏; flat Button 可点击热区=切修行页+汇总行金边高亮)
+var _auto_badge: Button            # 打磨-73/74: 顶栏 自动系列 状态徽标 ("自动 N/4", 任一开关开 显示 全关 隐藏; flat Button 可点击热区=切修行页+汇总行金边高亮)
 var _auto_badge_n := -1            # 打磨-73: 已刷过的 开启开关数 缓存 (-1=未应用, 首帧必刷; 变化才刷)
+var _auto_badge_sb: StyleBoxFlat   # 打磨-90: 自动 徽标 normal 样式 (供 一键挂机 徽标 同风格 复用)
+var _auto_badge_sb_hover: StyleBoxFlat  # 打磨-90: 自动 徽标 hover 样式 (供 一键挂机 徽标 复用)
+var _idle_badge: Button            # 打磨-90: 顶栏 一键挂机 状态徽标 ("挂机", 4 自动开关 全开 才 显示, 部分开/全关 隐藏; flat Button 可点击热区=切修行页+一键挂机按钮金边高亮)
+var _idle_badge_on := false        # 打磨-90: 已刷过的 全开 态 缓存 (变化才刷 显隐; 与 按钮 全开态 同口径 auto_all_on)
+var _idle_btn_hi_tween: Tween      # 打磨-90: 一键挂机按钮 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
+var _idle_btn_sb_rest: StyleBoxFlat  # 打磨-90: 一键挂机按钮 构建时 normal 样式缓存 (高亮后 恢复 用)
 # 打磨-75: 一键系列 顶栏 状态汇总 徽标 (六项 可执行数 一览 "一键 N·施N·法N·装N·神N·佳N";
 # 各段 flat Button 热区 点击 直达 对应页/执行 对应批量操作, 复用 打磨-44/71/74 直达模式)
 var _onekey_badge: Button          # 顶栏 一键系列 汇总徽标 (HBox: 前缀 Label + 6 段 flat Button)
@@ -298,25 +304,44 @@ func _build_ui() -> void:
 	_auto_badge.text = ""
 	_auto_badge.add_theme_font_size_override("font_size", 15)
 	_auto_badge.add_theme_color_override("font_color", GOLD)
-	var ab_sb := StyleBoxFlat.new()
-	ab_sb.bg_color = Color(0.15, 0.13, 0.07)
-	ab_sb.set_border_width_all(1)
-	ab_sb.border_color = GOLD
-	ab_sb.set_corner_radius_all(4)
-	ab_sb.content_margin_left = 6.0
-	ab_sb.content_margin_right = 6.0
-	ab_sb.content_margin_top = 2.0
-	ab_sb.content_margin_bottom = 2.0
-	_auto_badge.add_theme_stylebox_override("normal", ab_sb)
-	var ab_sb_hover := ab_sb.duplicate() as StyleBoxFlat
-	ab_sb_hover.bg_color = Color(0.25, 0.22, 0.11)
-	ab_sb_hover.border_color = Color(1, 0.95, 0.7)
-	_auto_badge.add_theme_stylebox_override("hover", ab_sb_hover)
-	_auto_badge.add_theme_stylebox_override("pressed", ab_sb_hover)
-	_auto_badge.add_theme_stylebox_override("focus", ab_sb_hover)
+	_auto_badge_sb = StyleBoxFlat.new()
+	_auto_badge_sb.bg_color = Color(0.15, 0.13, 0.07)
+	_auto_badge_sb.set_border_width_all(1)
+	_auto_badge_sb.border_color = GOLD
+	_auto_badge_sb.set_corner_radius_all(4)
+	_auto_badge_sb.content_margin_left = 6.0
+	_auto_badge_sb.content_margin_right = 6.0
+	_auto_badge_sb.content_margin_top = 2.0
+	_auto_badge_sb.content_margin_bottom = 2.0
+	_auto_badge.add_theme_stylebox_override("normal", _auto_badge_sb)
+	_auto_badge_sb_hover = _auto_badge_sb.duplicate() as StyleBoxFlat
+	_auto_badge_sb_hover.bg_color = Color(0.25, 0.22, 0.11)
+	_auto_badge_sb_hover.border_color = Color(1, 0.95, 0.7)
+	_auto_badge.add_theme_stylebox_override("hover", _auto_badge_sb_hover)
+	_auto_badge.add_theme_stylebox_override("pressed", _auto_badge_sb_hover)
+	_auto_badge.add_theme_stylebox_override("focus", _auto_badge_sb_hover)
 	_auto_badge.pressed.connect(_on_auto_badge)
 	_auto_badge.visible = false
 	top.add_child(_auto_badge)
+	# 打磨-90: 顶栏 一键挂机 状态徽标 (金色圆角 "挂机", 4 自动开关 全开 才 显示, 部分开/全关 隐藏;
+	# 与 打磨-73 "自动 N/4" 徽标 同风格 同位置 (紧随其后), 区别: 本 徽标 只 表达 "一键挂机 已全开"
+	# 终态 (挂机全程自动 无需手动), 部分开 不显示 (用 自动 N/4 表达 进度);
+	# 升级 flat Button 可点击热区 (手型光标+悬停 淡底 金边, 复用 打磨-73/74 模式):
+	# 点击=切 修行页 + 一键挂机 按钮 金边高亮 1.2s (复用 法器区 高亮 口径); 纯导航 无 存档/统计 副作用)
+	_idle_badge = Button.new()
+	_idle_badge.flat = true
+	_idle_badge.toggle_mode = false
+	_idle_badge.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_idle_badge.text = ""
+	_idle_badge.add_theme_font_size_override("font_size", 15)
+	_idle_badge.add_theme_color_override("font_color", GOLD)
+	_idle_badge.add_theme_stylebox_override("normal", _auto_badge_sb.duplicate())
+	_idle_badge.add_theme_stylebox_override("hover", _auto_badge_sb_hover.duplicate())
+	_idle_badge.add_theme_stylebox_override("pressed", _auto_badge_sb_hover.duplicate())
+	_idle_badge.add_theme_stylebox_override("focus", _auto_badge_sb_hover.duplicate())
+	_idle_badge.pressed.connect(_on_idle_badge)
+	_idle_badge.visible = false
+	top.add_child(_idle_badge)
 	# 打磨-75: 顶栏 一键系列 状态汇总 徽标 (六项 可执行数 一览; 各段 可点击 热区:
 	# 领悟/神通/法器/装备/最佳 = 直达对应页 并重置 筛选 (口径 同 打磨-44 收集直达),
 	# 施展 = 直接 执行 一键施展 (核心批量 点击 反馈, 与 各页 一键 按钮 完全 同口径);
@@ -658,6 +683,11 @@ func _build_training_page(page: Panel) -> void:
 		+ "各开关 独立 存档 持久化 (各自 auto_* 字段), 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
 		+ "【各开关 动态 状态 (动态)】")
 	_auto_idle_btn.tooltip_text = _auto_idle_tip_static
+	# 打磨-90: focus 透明化 (顶栏 挂机 徽标 点击直达 时 按钮 获焦 会 叠加 焦点 边框, 干扰 金边高亮 展示)
+	var _idle_focus := StyleBoxFlat.new()
+	_idle_focus.bg_color = Color(0, 0, 0, 0)
+	_auto_idle_btn.add_theme_stylebox_override("focus", _idle_focus)
+	_idle_btn_sb_rest = _auto_idle_btn.get_theme_stylebox("normal")
 	break_box.add_child(_auto_idle_btn)
 	# 打磨-70: 自动系列 状态汇总行 (三个开关 开启后 扫视 不知 哪些 已 生效;
 	# 一行摘要 "自动: 突破 ✓/✗ · 购置 ✓/✗ · 施展 ✓/✗", 开启 金 / 未开 灰, 状态 变化 才刷)
@@ -1653,6 +1683,22 @@ func _refresh() -> void:
 			_auto_badge.visible = false
 			_auto_badge.text = ""
 			_auto_badge.tooltip_text = ""
+	# 打磨-90: 顶栏 一键挂机 状态徽标 (4 自动开关 全开 才 显示 "挂机", 部分开/全关 隐藏;
+	# 全开 态 变化才刷 显隐 (auto_all_on 与 按钮 全开态 同口径, 读档恢复/外部改 同步);
+	# 纯展示 无 存档/统计 副作用)
+	var ib_on: bool = g.auto_all_on()
+	if ib_on != _idle_badge_on:
+		_idle_badge_on = ib_on
+		if ib_on:
+			_idle_badge.visible = true
+			_idle_badge.text = "挂机"
+			_idle_badge.tooltip_text = ("一键挂机 已全开 (自动突破 + 自动购置 + 自动施展 + 自动领悟 全部自动, 挂机全程无需手动点击)。"
+				+ "\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+				+ "\n点击: 直达 修行页·一键挂机按钮 (金边高亮)")
+		else:
+			_idle_badge.visible = false
+			_idle_badge.text = ""
+			_idle_badge.tooltip_text = ""
 	# 打磨-88: 一键挂机 按钮 态 (全开 态 变化才刷; 读档恢复/外部 单开关 改 同步;
 	# 按压=全开, 文本 全开/全关; 纯展示 无 存档/统计 副作用)
 	var idle_on: bool = g.auto_all_on()
@@ -2653,6 +2699,47 @@ func _restore_auto_sum_panel() -> void:
 	sb.bg_color = Color(0, 0, 0, 0)
 	sb.set_corner_radius_all(8)
 	_auto_sum_panel.add_theme_stylebox_override("panel", sb)
+
+
+# 打磨-90: 顶栏 挂机 徽标 点击直达 — 点击=切 修行页 + 一键挂机 按钮 金边高亮 1.2s
+# (复用 法器区/突破区 高亮 口径: 按钮 normal 换 金边 样式, 1.2s 自动恢复 构建时 缓存 默认样式;
+# 重入 kill 旧 tween; 纯导航 无 存档/统计 副作用, 与 修行页 一键挂机 按钮 双向 可达)
+func _on_idle_badge() -> void:
+	_tab.current_tab = 0
+	_flash_idle_btn()
+	_show_msg("直达 修行页·一键挂机按钮 (一键 全开/全关 自动系列)")
+
+
+# 打磨-90: 一键挂机 按钮 金边高亮 1.2s 后自动恢复 (tween 驱动, 重入 先 kill 旧 tween, 同 法器区 口径;
+# 高亮=按钮 normal 换 金边 2px 样式, 恢复=构建时 缓存 默认 normal 样式 _idle_btn_sb_rest)
+func _flash_idle_btn() -> void:
+	if _auto_idle_btn == null:
+		return
+	if _idle_btn_hi_tween != null and _idle_btn_hi_tween.is_valid():
+		_idle_btn_hi_tween.kill()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.3, 0.24, 0.1)
+	sb.border_color = GOLD
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 12.0
+	sb.content_margin_right = 12.0
+	sb.content_margin_top = 8.0
+	sb.content_margin_bottom = 8.0
+	_auto_idle_btn.add_theme_stylebox_override("normal", sb)
+	_auto_idle_btn.add_theme_stylebox_override("hover", sb.duplicate())
+	_auto_idle_btn.add_theme_stylebox_override("pressed", sb.duplicate())
+	_idle_btn_hi_tween = create_tween()
+	_idle_btn_hi_tween.tween_interval(1.2)
+	_idle_btn_hi_tween.tween_callback(_restore_idle_btn)
+
+
+func _restore_idle_btn() -> void:
+	if _auto_idle_btn == null:
+		return
+	_auto_idle_btn.add_theme_stylebox_override("normal", _idle_btn_sb_rest)
+	_auto_idle_btn.add_theme_stylebox_override("hover", _idle_btn_sb_rest.duplicate())
+	_auto_idle_btn.add_theme_stylebox_override("pressed", _idle_btn_sb_rest.duplicate())
 
 
 # 打磨-82: 顶栏 下一目标 进度条 点击直达 — 点击=切 修行页 + 突破区 (进度/ETA/成功率/

@@ -129,6 +129,7 @@ func _ready() -> void:
 	await _assert_auto_learn()
 	await _assert_auto_next_tips()
 	await _assert_auto_idle()
+	await _assert_idle_badge()
 	await _assert_auto_summary()
 	await _assert_auto_sum_jump()
 	_assert_auto_restore()
@@ -2799,6 +2800,105 @@ func _assert_auto_idle() -> void:
 	g._active_cd = {}
 	g.ready_events.clear()
 	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-90: 顶栏 一键挂机 状态徽标 — 金色圆角 "挂机" (4 自动开关 全开 才 显示, 部分开/全关 隐藏,
+# 与 打磨-73 "自动 N/4" 同父/同风格 但 只表达 全开 终态); flat Button 可点击热区 (手型光标+悬停金边):
+# 点击=切 修行页 + 一键挂机 按钮 金边高亮 1.2s (复用 法器区 高亮 口径); 纯导航 无 存档/统计 副作用.
+# 断言 (手动驱动 确定性): 徽标节点 顶栏同父/flat Button+手型/悬停金边/tooltip 全开口径/
+# 初始 全关 隐藏 文本空/部分开 3/4 隐藏 (与 自动 3/4 并存)/全开 显示 "挂机"+tooltip/
+# 全开 节流 同态 稳定/点击 → 切 修行页(tab0)+一键挂机按钮 金边高亮(border宽=2 金)+底部消息/
+# 重入 kill 旧 tween 不叠加/1.2s 后 高亮 自动恢复 边框0/全关 隐藏 无热区/无 资源/统计/开关 副作用/收尾 隐藏.
+func _assert_idle_badge() -> void:
+	var g := GameData
+	# 前置: _assert_auto_idle 收尾 四关 全 关; 切 成就页 作为 点击 前 受控 tab
+	ui._tab.current_tab = 3
+	# 徽标 节点: 顶栏 子节点 (与 自动 徽标 同父), flat Button + 手型光标 + 金色字
+	var badge: Button = ui._idle_badge
+	check(badge != null, "打磨-90 顶栏 挂机 徽标 节点 存在")
+	if badge == null:
+		return
+	check(badge is Button and badge.flat == true and badge.toggle_mode == false,
+			"打磨-90 徽标 flat 非toggle Button (可点热区)")
+	check(badge.get_parent() == ui._auto_badge.get_parent(),
+			"打磨-90 徽标 挂在 顶栏 (与 自动 徽标 同父; 实际 %s)" % str(badge.get_parent()))
+	check(badge.mouse_default_cursor_shape == Control.CURSOR_POINTING_HAND,
+			"打磨-90 徽标 手型光标 提示可点")
+	check(badge.get_theme_color("font_color") == ui.GOLD,
+			"打磨-90 徽标 字色 金色 (实际 %s)" % str(badge.get_theme_color("font_color")))
+	check(badge.get_theme_stylebox("hover") != null
+			and badge.get_theme_stylebox("hover").border_width_left == 1,
+			"打磨-90 徽标 悬停 金边 样式 非空 (hover 边框宽=1)")
+	# 初始 全关 态: 隐藏, 文本空, tooltip 空
+	check(badge.visible == false and str(badge.text) == "" and str(badge.tooltip_text) == "",
+			"打磨-90 初始 全关 徽标 隐藏/文本空/tooltip 空 (visible=%s 文本=%s)" % [str(badge.visible), str(badge.text)])
+	# 部分开 3/4: 挂机 徽标 隐藏 (但 自动 N/4 徽标 显示 3/4 表达 进度)
+	g.auto_break = true
+	g.auto_buy = true
+	g.auto_cast = true
+	g.auto_learn = false
+	ui._refresh()
+	check(badge.visible == false, "打磨-90 部分开(3/4) 挂机 徽标 隐藏 (visible=%s)" % str(badge.visible))
+	check(str(ui._auto_badge.text) == "自动 3/4",
+			"打磨-90 部分开(3/4) 自动 徽标 仍 显示 3/4 (实际 %s)" % str(ui._auto_badge.text))
+	# 全开: 挂机 徽标 显示 "挂机" + tooltip 全开 口径 + 自动 徽标 4/4 并存
+	g.auto_learn = true
+	ui._refresh()
+	check(badge.visible == true, "打磨-90 全开 挂机 徽标 显示 (visible=%s)" % str(badge.visible))
+	check(str(badge.text) == "挂机", "打磨-90 全开 文案=挂机 (实际 %s)" % str(badge.text))
+	var ib_tip: String = str(badge.tooltip_text)
+	check(ib_tip.find("一键挂机 已全开") >= 0 and ib_tip.find("离线期间不触发") >= 0,
+			"打磨-90 全开 tooltip 含 全开/离线 口径 (实际 %s)" % ib_tip.left(40))
+	check(ib_tip.find("直达 修行页·一键挂机按钮") >= 0,
+			"打磨-90 全开 tooltip 含 点击直达 口径")
+	check(str(ui._auto_badge.text) == "自动 4/4",
+			"打磨-90 全开 自动 徽标 4/4 并存 (实际 %s)" % str(ui._auto_badge.text))
+	# 节流: 全开 同态 再 _refresh, 文本/可见 稳定 无副作用
+	var snap90: Dictionary = g.stats.duplicate(true)
+	var st90: float = g.stones
+	ui._refresh()
+	check(badge.visible == true and str(badge.text) == "挂机",
+			"打磨-90 全开 同态 节流 文本/可见 稳定")
+	# 副作用快照 (点击 不应改变 资源/统计/开关)
+	var snap90b: Dictionary = g.stats.duplicate(true)
+	var st90b: float = g.stones
+	var key90: String = g.auto_summary_key()
+	# 点击 → 切 修行页(tab0) + 一键挂机按钮 金边高亮 + 底部消息
+	var rest_sb: StyleBoxFlat = ui._auto_idle_btn.get_theme_stylebox("normal")
+	var rest_border: int = rest_sb.border_width_left if rest_sb != null else -1
+	ui._on_idle_badge()
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 0, "打磨-90 点击 徽标 → 切 修行页 (tab=0) (实际 %d)" % ui._tab.current_tab)
+	var hi_sb: StyleBoxFlat = ui._auto_idle_btn.get_theme_stylebox("normal")
+	check(hi_sb != null and hi_sb.border_width_left == 2 and hi_sb.border_color == ui.GOLD,
+			"打磨-90 点击 徽标 → 一键挂机按钮 金边高亮 (边框宽=2 金)")
+	check(str(ui._msg_label.text).find("直达 修行页·一键挂机按钮") >= 0,
+			"打磨-90 点击 徽标 → 底部消息确认 (实际 %s)" % str(ui._msg_label.text).left(40))
+	# 点击 不 误触 一键挂机 开关 (开关/资源/统计 不变, 纯导航)
+	check(g.auto_summary_key() == key90, "打磨-90 点击 徽标 不 误触 一键挂机 开关 (仍 全开 %s)" % g.auto_summary_key())
+	check(g.stones == st90b and g.stats == snap90b, "打磨-90 点击 徽标 无 资源/统计 副作用 (纯导航)")
+	# 重入: 高亮中 再点 徽标 kill 旧 tween 重开 (不报错 且 仍 金边)
+	ui._on_idle_badge()
+	await get_tree().process_frame
+	var hi_sb2: StyleBoxFlat = ui._auto_idle_btn.get_theme_stylebox("normal")
+	check(hi_sb2 != null and hi_sb2.border_width_left == 2, "打磨-90 高亮中 重入 不叠加/不报错 (仍 金边)")
+	# 等待 tween 结束 (1.2s, 重入后 重新计时) 后 自动恢复 边框 0 (回到 构建时 默认 normal)
+	await get_tree().create_timer(1.4).timeout
+	var rest_sb2: StyleBoxFlat = ui._auto_idle_btn.get_theme_stylebox("normal")
+	check(rest_sb2 != null and rest_sb2.border_width_left == rest_border,
+			"打磨-90 一键挂机按钮 高亮 1.2s 后 自动恢复 (边框宽=%d)" % rest_sb2.border_width_left)
+	# 全关 恢复 隐藏 (挂机 徽标 无热区); 自动 徽标 亦 隐藏
+	g.set_auto_all(false)
+	ui._refresh()
+	check(badge.visible == false and str(badge.text) == "" and str(badge.tooltip_text) == "",
+			"打磨-90 全关 挂机 徽标 恢复 隐藏/文本空/tooltip 空 (visible=%s)" % str(badge.visible))
+	check(ui._auto_badge.visible == false, "打磨-90 全关 自动 徽标 亦 隐藏 (无热区)")
+	# 收尾: 修行页 稳定, 一键挂机按钮 无边框 (防 污染); 无 资源/统计 副作用
+	check(ui._tab.current_tab == 0, "打磨-90 收尾 保持 修行页")
+	var rest_sb3: StyleBoxFlat = ui._auto_idle_btn.get_theme_stylebox("normal")
+	check(rest_sb3 != null and rest_sb3.border_width_left == rest_border, "打磨-90 收尾 一键挂机按钮 无边框")
+	check(g.stones == st90b and g.stats == snap90b, "打磨-90 收尾 无 资源/统计 副作用")
 	await get_tree().process_frame
 
 
