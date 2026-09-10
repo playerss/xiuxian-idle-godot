@@ -144,6 +144,7 @@ func _ready() -> void:
 	_assert_primary_next_tip()
 	await _assert_goalbar()
 	await _assert_goalbar_jump()
+	await _assert_ach_nofilter()
 	_finish()
 
 
@@ -4069,4 +4070,147 @@ func _assert_goalbar_jump() -> void:
 	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats,
 		"打磨-82 收尾 无 资源/统计 副作用")
 	await get_tree().process_frame
+
+
+# 打磨-91: 成就页 "只看未解锁" 筛选 — 与 打磨-38 技能页 只看可学 同模式: 只显示 未解锁 行
+# (已解锁行 暂时隐藏, 排序口径不变), 按钮文案按 当前 未解锁数 计 (x N / 显示全部 / 已无未解锁)。
+# 断言 (手动驱动 确定性): 按钮节点/toggle/tooltip 口径/初始 关态 文案 x17/同态 节流 无副作用/
+# 开 后 已解锁行 全隐藏 未解锁行 全可见 (受控态 5 解锁)/解锁 新增 同步 计数+行恢复可见/
+# 全解锁 文案 已无未解锁/关 后 全部 恢复可见/收尾 干净 基准 (防 污染 后续)
+func _assert_ach_nofilter() -> void:
+	var g := GameData
+	ui._tab.current_tab = 3
+	var btn: Button = ui._ach_nofilter_btn
+	check(btn != null, "打磨-91 成就页 只看未解锁 按钮 节点 存在")
+	check(btn is Button and btn.toggle_mode == true, "打磨-91 按钮 是 toggle 开关")
+	check(str(btn.tooltip_text).find("只显示 未解锁 的成就") >= 0
+			and str(btn.tooltip_text).find("再点 恢复全部") >= 0,
+			"打磨-91 按钮 tooltip 含 口径 说明 (实际 %s)" % str(btn.tooltip_text).left(30))
+	# 受控基准: 干净档态 (与 _assert_initial 同基准, 防 前序 测试 残留)
+	g.ach_done.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	ui._refresh()
+	await get_tree().process_frame
+	# 初始 关态: 文案 只看未解锁 x17 (17 全未解锁), 全行可见
+	check(str(btn.button_pressed) == "false", "打磨-91 初始 关态 (实际 %s)" % str(btn.button_pressed))
+	check(str(btn.text) == "只看未解锁 x%d" % g.ach_ids.size(),
+			"打磨-91 初始 文案 只看未解锁 x17 (实际 %s)" % str(btn.text))
+	var all_vis := true
+	for id in g.ach_ids:
+		if not (ui._ach_rows[id]["row"] as Node).visible:
+			all_vis = false
+	check(all_vis, "打磨-91 关态 全部 17 行 可见")
+	# 同态 节流: 再 _refresh 文案/行 稳定, 无 资源/统计 副作用
+	var snap_ess: float = g.essence
+	var snap_sto: float = g.stones
+	var snap_stats: Dictionary = g.stats
+	var txt0: String = str(btn.text)
+	ui._refresh()
+	check(str(btn.text) == txt0 and g.essence == snap_ess and g.stones == snap_sto
+			and g.stats == snap_stats, "打磨-91 同态 节流 文案 稳定 无副作用")
+	# 受控 解锁 5 成就 (与 _mutate_state 同口径: 境界2+5万灵石+2技能+2装备+1法器)
+	g.realm_idx = 2
+	g.stones = 50000.0
+	g.learned.append("sword_0_0")
+	g.learned.append("sword_0_1")
+	g.owned_eq.append("weapon_0_0")
+	g.owned_eq.append("robe_0_0")
+	g.owned.append("wooden_sword")
+	g.check_achievements()
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(btn.text) == "只看未解锁 x%d" % (g.ach_ids.size() - g.ach_done.size()),
+			"打磨-91 解锁 5 后 文案 计数 同步 x12 (实际 %s, done=%d)" % [str(btn.text), g.ach_done.size()])
+	# 开启: 外部 置 按压态 模拟 点击 (口径 同 打磨-71 外部置 开关), _refresh 同步 文案+行 可见性
+	btn.button_pressed = true
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(btn.text) == "显示全部", "打磨-91 开启 后 文案 显示全部 (实际 %s)" % str(btn.text))
+	var done_ok := true
+	var undone_ok := true
+	for id in g.ach_ids:
+		var row: Node = ui._ach_rows[id]["row"]
+		if g.ach_done.has(id) and row.visible:
+			done_ok = false
+		if not g.ach_done.has(id) and not row.visible:
+			undone_ok = false
+	check(done_ok, "打磨-91 开启 后 已解锁行 全隐藏")
+	check(undone_ok, "打磨-91 开启 后 未解锁行 全可见")
+	# 排序口径 不变: 筛选 只 隐藏 不 重排 — _ach_states 排序键 仍 已解锁在前
+	# (box 内 首个 可见 行 必为 未解锁 段 首行, 因 已解锁段 全 隐藏)
+	var first_vis_id := ""
+	for ch in ui._ach_box.get_children():
+		if (ch as Node).visible:
+			for id in g.ach_ids:
+				if ui._ach_rows[id]["row"] == ch:
+					first_vis_id = str(id)
+					break
+			break
+	check(first_vis_id != "" and not g.ach_done.has(first_vis_id),
+			"打磨-91 开启 后 box 首个 可见行 = 未解锁行 (排序口径 不变; 实际 %s)" % first_vis_id)
+	# 开启 中 再 解锁 1 个 (直接 append 确定性, 口径 与 _mutate_state 一致): 计数 同步 + 该行 隐藏
+	if not g.ach_done.has("realm_huashen"):
+		g.ach_done.append("realm_huashen")
+		ui._refresh()
+		await get_tree().process_frame
+		check(str(btn.text) == "显示全部", "打磨-91 开启 中 解锁 新 1 个 文案 仍 显示全部 (实际 %s)" % str(btn.text))
+		check((ui._ach_rows["realm_huashen"]["row"] as Node).visible == false,
+				"打磨-91 开启 中 新解锁行 保持 隐藏 (口径 一致)")
+	# 关: 外部 置 关态, _refresh 同步 全部 恢复可见
+	btn.button_pressed = false
+	ui._refresh()
+	await get_tree().process_frame
+	var vis2 := true
+	for id in g.ach_ids:
+		if not (ui._ach_rows[id]["row"] as Node).visible:
+			vis2 = false
+	check(vis2, "打磨-91 关闭 后 全部 行 恢复可见")
+	check(str(btn.text) == "只看未解锁 x%d" % (g.ach_ids.size() - g.ach_done.size()),
+			"打磨-91 关闭 后 文案 计数 (实际 %s)" % str(btn.text))
+	# 全解锁 态: 文案 已无未解锁 + 开 后 全隐藏 (无可见行)
+	g.ach_done.clear()
+	for id in g.ach_ids:
+		g.ach_done.append(id)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(btn.text) == "已无未解锁", "打磨-91 全解锁 文案 已无未解锁 (实际 %s)" % str(btn.text))
+	btn.button_pressed = true
+	ui._refresh()
+	await get_tree().process_frame
+	var all_hid := true
+	for id in g.ach_ids:
+		if (ui._ach_rows[id]["row"] as Node).visible:
+			all_hid = false
+	check(all_hid, "打磨-91 全解锁 开 后 全部 行 隐藏")
+	check(str(btn.text) == "显示全部", "打磨-91 全解锁 开 后 文案 显示全部 (实际 %s)" % str(btn.text))
+	# 收尾: 干净 基准 + 关态 (本测试 为 最后一段, 直接 清档 到 全新 基准, 防 残留)
+	g.ach_done.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	btn.button_pressed = false
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(btn.text) == "只看未解锁 x%d" % g.ach_ids.size(),
+			"打磨-91 收尾 干净 基准 文案 x17 (实际 %s)" % str(btn.text))
+	check(g.essence == 0.0 and g.stones == 0.0 and g.stats == snap_stats,
+			"打磨-91 收尾 无 资源/统计 副作用")
 

@@ -175,6 +175,9 @@ var _ach_rows: Dictionary = {}      # 成就 id -> {row, name_l, desc_l, prog_l}
 var _ach_count_label: Label
 var _ach_hl_seq := 0               # 成就解锁总数缓存 (变化时才刷样式)
 var _ach_states: Array = []           # 打磨-39: 上帧成就排序键快照 (变化才重排)
+var _ach_nofilter_btn: Button         # 打磨-91: 成就页"只看未解锁"开关
+var _ach_nofilter_on := false         # 打磨-91: "只看未解锁"当前开关状态
+var _ach_nofilter_key := ""           # 打磨-91: 按钮文案 缓存键 "未解锁数|开关态" (变化才刷)
 var _ach_bar_q: Dictionary = {}       # 打磨-40: 成就进度条量化缓存 id -> "宽|档" (宽/档变化才刷, 防每帧重绘)
 var _collect_box: Control         # 打磨-42: 成就页顶栏 收集进度一览 (5 条 mini 进度条, FlowContainer 换行)
 var _collect_wrap: FlowContainer  # 打磨-43: 收集进度一览容器 (与 _collect_box 同一节点, 宽度不足时逐条换行不截断)
@@ -1364,6 +1367,13 @@ func _build_ach_page(page: Panel) -> void:
 	head.add_child(_ach_count_label)
 	var hint := _label("达成条件即自动解锁, 悬停条目可查看详情", 13, DIM)
 	head.add_child(hint)
+	# 打磨-91: "只看未解锁"开关 (与 打磨-38 技能页 只看可学 同模式: 只显示未解锁行, 已解锁行隐藏;
+	# 排序口径不变, 按钮文案按 当前 未解锁数 计)
+	_ach_nofilter_btn = _make_button("只看未解锁")
+	_ach_nofilter_btn.toggle_mode = true
+	_ach_nofilter_btn.pressed.connect(_on_ach_nofilter)
+	_ach_nofilter_btn.tooltip_text = "只显示 未解锁 的成就 (已解锁行 暂时隐藏, 再点 恢复全部); 排序口径不变 (未解锁段 按进度降序), 解锁状态变化 按钮计数 同步。"
+	head.add_child(_ach_nofilter_btn)
 	# 打磨-28→42→43: 收集进度一览 (技能/装备/法器/成就 全局收集目标; 5 条 mini 进度条横排, 满=金/未满=青)
 	var head_sp := Control.new()
 	head_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1909,6 +1919,8 @@ func _refresh() -> void:
 		_ach_bar_refresh(id)
 	# 打磨-39: 成就页按解锁状态排序 (排序键变化才重排; 解锁/进度变化触发)
 	_resort_ach()
+	# 打磨-91: "只看未解锁" 筛选 (按钮文案 未解锁数 变化才刷; 行 显示/隐藏 随 开关/解锁态; 幂等无副作用)
+	_apply_ach_nofilter()
 	# 打磨-28→42: 收集进度一览 (4 条 mini 进度条; 每帧调用但 文本/布局宽 变化才写, 防每帧重绘)
 	_collect_text = g.collect_summary_text()
 	_refresh_collect()
@@ -2182,6 +2194,33 @@ func _resort_ach() -> void:
 	for idx in order.size():
 		var row: Node = _ach_rows[order[idx]]["row"]
 		_ach_box.move_child(row, _ach_box.get_child_count() - 1)
+
+
+# 打磨-91: 成就页 "只看未解锁" 开关 — 与 打磨-38 技能页 只看可学 同模式:
+# 开启后 只显示 未解锁 行 (已解锁行 暂时隐藏), 排序口径不变; 按钮文案按 当前 未解锁数 计
+# (与 各页 一键 按钮 计数口径 统一: 显示 可执行/目标 数), 解锁数 变化 才 刷 文案 (节流)。
+# 本处理器 只 切状态 + 底部消息 (纯开关, 无 资源/统计 副作用); 按钮文案/行 可见性 由
+# _refresh 的 _apply_ach_nofilter 统一同步 (每帧 幂等, 避免 手动驱动 路径 与 _refresh
+# 双写 造成 文案 状态 错位).
+func _on_ach_nofilter() -> void:
+	_ach_nofilter_on = _ach_nofilter_btn.button_pressed
+	_show_msg("成就页: " + ("只看未解锁 (已解锁行 暂时隐藏)" if _ach_nofilter_on else "显示全部成就"))
+
+
+# 打磨-91: 应用 只看未解锁 (按钮文案 按 未解锁数|开关态 键 变化 才刷 + 行 显示/隐藏 随
+# 开关/解锁态; 每帧调用 幂等; 外部 直接 置 button_pressed 也 经本路径 同步 文案)
+func _apply_ach_nofilter() -> void:
+	var g := GameData
+	var undone: int = g.ach_ids.size() - g.ach_done.size()
+	var key := "%d|%d" % [undone, int(_ach_nofilter_on)]
+	if key != _ach_nofilter_key:
+		_ach_nofilter_key = key
+		_ach_nofilter_btn.text = (
+			"显示全部" if _ach_nofilter_on
+			else (("只看未解锁 x%d" % undone) if undone > 0 else "已无未解锁"))
+	for id in _ach_rows:
+		var row: Node = _ach_rows[id]["row"]
+		row.visible = not (_ach_nofilter_on and g.ach_done.has(id))
 
 
 # 打磨-12: 刷新法器/装备行的购买 ETA (买不起才显示预计时间, 买得起隐藏)
