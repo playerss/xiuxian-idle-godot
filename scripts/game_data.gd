@@ -1159,6 +1159,21 @@ func auto_on_count() -> int:
 		n += 1
 	return n
 
+# 打磨-88: 自动系列 一键挂机 — 是否 全部 开启 (只读; 4 开关 全 true 才 返回 true, 部分开 返回 false;
+# 供 一键挂机 按钮 判断 文案/点击方向: 未全开=点击 全开, 全开=点击 全关; 无 存档/统计 副作用)
+func auto_all_on() -> bool:
+	return auto_break and auto_buy and auto_cast and auto_learn
+
+# 打磨-88: 自动系列 一键 全开/全关 (供 一键挂机 按钮 直接 置 4 开关 [突破/购置/施展/领悟];
+# 各开关 口径/持久化 不变 (各自 auto_* 存档字段, 离线期间不触发, 道祖封顶 自动突破 恒不触发);
+# 开关 动作 本身 无 资源/统计 副作用, 实际 行为 由 各 _try_auto_* 走 真实 埋点 路径;
+# 部分开 时 点击 一键挂机 = 补齐 至 全开 (而非 仅关 已开的), 与 "挂机 全程 自动" 目标一致)
+func set_auto_all(on: bool) -> void:
+	auto_break = on
+	auto_buy = on
+	auto_cast = on
+	auto_learn = on
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0

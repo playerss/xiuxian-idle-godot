@@ -68,6 +68,8 @@ var _auto_cast_tip_static := "" # 打磨-86: 自动施展按钮 tooltip 静态 �
 var _auto_cast_float_count := 0  # 打磨-69: 自动施展 浮动提示次数 (自测断言用)
 var _auto_cast_last_text := ""   # 打磨-69: 最近一次自动施展 浮动文案 (自测断言用)
 var _auto_learn_btn: Button      # 打磨-80: 自动领悟开关 (toggle, 存档持久化)
+var _auto_idle_btn: Button       # 打磨-88: 一键挂机 (一键 全开/全关 自动系列 4 开关, toggle)
+var _auto_idle_on := false       # 打磨-88: 上帧 全开 状态缓存 (变化才刷 按钮态)
 var _auto_learn_on := false      # 打磨-80: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_learn_msg_seq := 0     # 打磨-80: 已处理过的 自动领悟 变更事件序号 (避免重复刷底部消息; 启动=0 与 GameData 同态)
 var _auto_learn_tip := ""        # 打磨-86: 自动领悟按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84/85 口径)
@@ -639,6 +641,17 @@ func _build_training_page(page: Panel) -> void:
 		+ "【当前 可学/下一 门槛 (动态)】")
 	_auto_learn_btn.tooltip_text = _auto_learn_tip_static
 	break_box.add_child(_auto_learn_btn)
+	# 打磨-88: 一键挂机 按钮 (一键 全开/全关 自动系列 4 开关 [突破/购置/施展/领悟];
+	# toggle 反映 全开 态: 全开="一键挂机: 全开" 按压, 未全开/部分开="一键挂机: 全关" 未按压;
+	# 点击 方向: 未全开 → 全开 (补齐 至 全开, 含 部分开 场景), 全开 → 全关;
+	# 各开关 口径/存档/反馈 不变 [复用 各 _on_auto_* 文案 底部消息 合并 提示]; 纯 开关 动作 无 资源/统计 副作用)
+	_auto_idle_btn = _make_button("一键挂机: 全关")
+	_auto_idle_btn.toggle_mode = true
+	_auto_idle_btn.pressed.connect(_on_auto_idle)
+	_auto_idle_btn.tooltip_text = ("一键 开启/关闭 全部 自动系列 开关 (自动突破 + 自动购置 + 自动施展 + 自动领悟), 挂机 全程 自动 无需 手动 点击。\n"
+		+ "当前 未全开 (含 部分开) 时 点击 = 补齐 至 全开; 全开 时 点击 = 全部 关闭。各 开关 单独 开/关 与 上方 4 个 自动开关 按钮 同口径。\n"
+		+ "各开关 独立 存档 持久化 (各自 auto_* 字段), 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。")
+	break_box.add_child(_auto_idle_btn)
 	# 打磨-70: 自动系列 状态汇总行 (三个开关 开启后 扫视 不知 哪些 已 生效;
 	# 一行摘要 "自动: 突破 ✓/✗ · 购置 ✓/✗ · 施展 ✓/✗", 开启 金 / 未开 灰, 状态 变化 才刷)
 	# 打磨-74: 汇总行 包进透明 Panel (顶栏 自动 徽标 点击直达 时 金边高亮 1.2s, 复用 法器区 口径)
@@ -1633,6 +1646,13 @@ func _refresh() -> void:
 			_auto_badge.visible = false
 			_auto_badge.text = ""
 			_auto_badge.tooltip_text = ""
+	# 打磨-88: 一键挂机 按钮 态 (全开 态 变化才刷; 读档恢复/外部 单开关 改 同步;
+	# 按压=全开, 文本 全开/全关; 纯展示 无 存档/统计 副作用)
+	var idle_on: bool = g.auto_all_on()
+	if idle_on != _auto_idle_on:
+		_auto_idle_on = idle_on
+		_auto_idle_btn.set_pressed_no_signal(idle_on)
+		_auto_idle_btn.text = ("一键挂机: 全开" if idle_on else "一键挂机: 全关")
 	# 打磨-75: 顶栏 一键系列 状态汇总 (6 段 可执行数, 与 各页 一键 按钮 计数 同口径 —
 	# 领悟/神通 段 复用 技能页 当前 类别/品质 筛选 (打磨-27 计数口径统一), 其余 全局 口径;
 	# 状态键 变化才刷 文本/颜色 — 领悟/神通 随 境界/筛选/已学, 施展 随 冷却/已学,
@@ -2419,6 +2439,37 @@ func _on_auto_learn() -> void:
 	_auto_learn_btn.set_pressed_no_signal(GameData.auto_learn)
 	_auto_learn_btn.text = ("自动领悟: 开" if GameData.auto_learn else "自动领悟: 关")
 	_show_msg("自动领悟已开启, 境界提升解锁新技能将自动批量领悟 (可存档, 离线期间不触发)" if GameData.auto_learn else "自动领悟已关闭, 恢复手动点击领悟")
+
+
+# 打磨-88: 一键挂机 — 点击 一键 全开/全关 自动系列 4 开关 (突破/购置/施展/领悟);
+# 点击 方向: 未全开 (含 部分开) → 全开 (补齐 至 全开), 全开 → 全关;
+# 各开关 口径/存档/反馈 不变 (复用 各 _on_auto_* 文案 底部消息 合并 提示), 纯 开关 动作 无 资源/统计 副作用
+func _on_auto_idle() -> void:
+	var g := GameData
+	var target: bool = not g.auto_all_on()
+	g.set_auto_all(target)
+	# 同步 各单开关 按钮 按压态/文本 (口径 与 各 _on_auto_* 一致)
+	_auto_break_on = g.auto_break
+	_auto_break_btn.set_pressed_no_signal(g.auto_break)
+	_auto_break_btn.text = ("自动突破: 开" if g.auto_break else "自动突破: 关")
+	_auto_buy_on = g.auto_buy
+	_auto_buy_btn.set_pressed_no_signal(g.auto_buy)
+	_auto_buy_btn.text = ("自动购置: 开" if g.auto_buy else "自动购置: 关")
+	_auto_cast_on = g.auto_cast
+	_auto_cast_btn.set_pressed_no_signal(g.auto_cast)
+	_auto_cast_btn.text = ("自动施展: 开" if g.auto_cast else "自动施展: 关")
+	_auto_learn_on = g.auto_learn
+	_auto_learn_btn.set_pressed_no_signal(g.auto_learn)
+	_auto_learn_btn.text = ("自动领悟: 开" if g.auto_learn else "自动领悟: 关")
+	_auto_idle_on = target
+	_auto_idle_btn.set_pressed_no_signal(target)
+	_auto_idle_btn.text = ("一键挂机: 全开" if target else "一键挂机: 全关")
+	# 底部消息: 全开 = 列出 4 项 开启; 全关 = 恢复 手动 提示 (各开关 单独 开/关 仍 各自 确认 文案 口径)
+	if target:
+		_show_msg("一键挂机已开启: 突破 · 购置 · 施展 · 领悟 全部自动 (挂机全程无需手动点击; 可存档, 离线期间不触发)")
+	else:
+		_show_msg("一键挂机已关闭: 突破 / 购置 / 施展 / 领悟 全部关闭, 恢复手动点击")
+	_refresh()
 
 
 # 打磨-70: 自动系列 状态汇总行 刷新 (状态键 变化时 调用; 开启 金 / 未开 灰,

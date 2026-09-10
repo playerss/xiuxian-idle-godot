@@ -3946,6 +3946,78 @@ func _init() -> void:
 	g.dao = 0.0
 	g.stones = 0.0
 	g.ready_events.clear()
+	# ---------- 打磨-88: 一键挂机 自动系列 (auto_all_on 只读 / set_auto_all 一键 全开全关) ----------
+	g.set_process(false)
+	# 基准: 全关
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	check(g.auto_all_on() == false, "打磨-88 全关 auto_all_on=false (实际 %s)" % str(g.auto_all_on()))
+	check(g.auto_on_count() == 0, "打磨-88 全关 开启数=0")
+	# 部分开 → 未全开 (补齐 方向 测试 基准)
+	g.auto_break = true
+	g.auto_buy = true
+	g.auto_cast = true
+	check(g.auto_all_on() == false, "打磨-88 部分开(3/4) auto_all_on=false")
+	check(g.auto_on_count() == 3, "打磨-88 部分开 开启数=3 (实际 %d)" % g.auto_on_count())
+	# set_auto_all(true): 补齐 至 全开 (含 已开 3 项 保持)
+	g.set_auto_all(true)
+	check(g.auto_break and g.auto_buy and g.auto_cast and g.auto_learn, "打磨-88 set_auto_all(true) 全开 4 开关")
+	check(g.auto_all_on() == true, "打磨-88 全开 auto_all_on=true")
+	check(g.auto_on_count() == 4, "打磨-88 全开 开启数=4 (实际 %d)" % g.auto_on_count())
+	check(g.auto_summary_key() == "1|1|1|1", "打磨-88 全开 汇总键 1|1|1|1 (实际 %s)" % g.auto_summary_key())
+	# set_auto_all(false): 全关
+	g.set_auto_all(false)
+	check(not g.auto_break and not g.auto_buy and not g.auto_cast and not g.auto_learn, "打磨-88 set_auto_all(false) 全关 4 开关")
+	check(g.auto_all_on() == false, "打磨-88 全关 auto_all_on=false")
+	check(g.auto_summary_key() == "0|0|0|0", "打磨-88 全关 汇总键 0|0|0|0 (实际 %s)" % g.auto_summary_key())
+	# 单开关 开 仍 未全开 (set_auto_all 不 影响 单独 控制 口径)
+	g.auto_buy = true
+	check(g.auto_all_on() == false and g.auto_on_count() == 1, "打磨-88 单开(购置) 未全开 数=1")
+	g.set_auto_all(true)
+	check(g.auto_all_on() == true and g.auto_on_count() == 4, "打磨-88 单开 后 set_auto_all(true) 补齐 全开")
+	# 只读: auto_all_on 连读 恒定 无 副作用 (资源/统计/境界/已学 不变)
+	g.auto_break = false
+	g.auto_buy = true
+	g.auto_cast = true
+	g.auto_learn = false
+	var snap88: Dictionary = g.stats.duplicate(true)
+	var st88: float = g.stones
+	check(g.auto_all_on() == false and g.auto_all_on() == false, "打磨-88 auto_all_on 只读 连读 恒定")
+	check(g.stats == snap88 and g.stones == st88, "打磨-88 auto_all_on 只读 无 资源/统计 副作用")
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	# 收尾: 恢复 干净 基准 (防 污染 后续 段)
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.last_break_result = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	g.ready_events.clear()
+	g.set_process(true)
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

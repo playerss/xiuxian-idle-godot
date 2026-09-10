@@ -128,6 +128,7 @@ func _ready() -> void:
 	await _assert_auto_cast()
 	await _assert_auto_learn()
 	await _assert_auto_next_tips()
+	await _assert_auto_idle()
 	await _assert_auto_summary()
 	await _assert_auto_sum_jump()
 	_assert_auto_restore()
@@ -2650,6 +2651,116 @@ func _assert_auto_next_tips() -> void:
 	g.auto_break = false
 	g.auto_cast = false
 	g.auto_learn = false
+	g._active_cd = {}
+	g.ready_events.clear()
+	ui._refresh()
+	await get_tree().process_frame
+
+
+# 打磨-88: 一键挂机 — 一键挂机 按钮 (一键 全开/全关 自动系列 4 开关 [突破/购置/施展/领悟]):
+# 按钮存在/toggle_mode/tooltip 口径/初始 全关 态 (未全开 未按压 文本=全关)/点击 全开 (4 开关+
+# 各单开关 按钮 按压/文本 同步+底部消息+汇总行 4 金)/再点 全关/部分开 补齐 至 全开 (点击 方向 补齐)/
+# 外部 单开关 置 全开 _refresh 同步 按钮态/开关切换 无 资源/统计 副作用/收尾 基准 恢复 (四关)
+func _assert_auto_idle() -> void:
+	var g := GameData
+	var btn: Button = ui._auto_idle_btn
+	check(btn != null, "打磨-88 一键挂机 按钮 存在")
+	if btn == null:
+		return
+	check(btn.toggle_mode, "打磨-88 按钮 toggle_mode")
+	check(btn.tooltip_text.find("一键") >= 0 and btn.tooltip_text.find("突破") >= 0,
+			"打磨-88 tooltip 含 一键/突破 口径 (实际 %s)" % btn.tooltip_text.left(40))
+	check(btn.tooltip_text.find("离线期间不触发") >= 0, "打磨-88 tooltip 含 离线 口径")
+	# 基准: 全关
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	g.ready_events.clear()
+	ui._refresh()
+	# 初始 全关 态: 未按压 文本=全关 (与 各单开关 一致)
+	check(not btn.button_pressed and str(btn.text) == "一键挂机: 全关",
+			"打磨-88 初始 全关 态 (未按压 文本=全关; 实际 %s)" % str(btn.text))
+	# 点击: 全开 (4 开关 + 各单开关 按钮 按压/文本 + 底部消息)
+	var stats_k: Dictionary = g.stats.duplicate(true)
+	var ess_k: float = g.essence
+	var stones_k: float = g.stones
+	ui._on_auto_idle()
+	check(g.auto_break and g.auto_buy and g.auto_cast and g.auto_learn,
+			"打磨-88 点击 全开 4 开关 (实际 %s)" % g.auto_summary_key())
+	check(btn.button_pressed and str(btn.text) == "一键挂机: 全开", "打磨-88 点击 后 按压+文本 全开")
+	check(str(ui._msg_label.text).find("一键挂机已开启") >= 0,
+			"打磨-88 全开 底部消息 (实际 %s)" % str(ui._msg_label.text).left(40))
+	# 各单开关 按钮 同步 (按压/文本 与 开关值 一致)
+	check(ui._auto_break_btn.button_pressed and str(ui._auto_break_btn.text) == "自动突破: 开",
+			"打磨-88 全开 后 自动突破 按钮 同步 开")
+	check(ui._auto_buy_btn.button_pressed and str(ui._auto_buy_btn.text) == "自动购置: 开",
+			"打磨-88 全开 后 自动购置 按钮 同步 开")
+	check(ui._auto_cast_btn.button_pressed and str(ui._auto_cast_btn.text) == "自动施展: 开",
+			"打磨-88 全开 后 自动施展 按钮 同步 开")
+	check(ui._auto_learn_btn.button_pressed and str(ui._auto_learn_btn.text) == "自动领悟: 开",
+			"打磨-88 全开 后 自动领悟 按钮 同步 开")
+	# 汇总行 4 段 全 金 (auto_summary 同步 经 _refresh)
+	ui._refresh()
+	# 点击: 全关
+	ui._on_auto_idle()
+	check(not g.auto_break and not g.auto_buy and not g.auto_cast and not g.auto_learn,
+			"打磨-88 再点 全关 4 开关 (实际 %s)" % g.auto_summary_key())
+	check(not btn.button_pressed and str(btn.text) == "一键挂机: 全关", "打磨-88 再点 后 按压+文本 全关")
+	check(str(ui._msg_label.text).find("一键挂机已关闭") >= 0,
+			"打磨-88 全关 底部消息 (实际 %s)" % str(ui._msg_label.text).left(40))
+	check(ui._auto_break_btn.button_pressed == false and str(ui._auto_break_btn.text) == "自动突破: 关",
+			"打磨-88 全关 后 自动突破 按钮 同步 关")
+	# 部分开 补齐: 置 3/4 开, 点击 = 补齐 至 全开 (非 仅关 已开)
+	g.auto_break = true
+	g.auto_buy = true
+	g.auto_cast = true
+	g.auto_learn = false
+	ui._refresh()
+	check(not btn.button_pressed and str(btn.text) == "一键挂机: 全关",
+			"打磨-88 部分开(3/4) 按钮 仍 未按压/文本 全关 (补齐 方向)")
+	ui._on_auto_idle()
+	check(g.auto_break and g.auto_buy and g.auto_cast and g.auto_learn,
+			"打磨-88 部分开 点击 补齐 至 全开 (含 已开 3 项)")
+	check(btn.button_pressed and str(btn.text) == "一键挂机: 全开", "打磨-88 补齐 后 按压+文本 全开")
+	# 外部 单开关 置 全开: _refresh 同步 按钮态 (读档恢复 场景)
+	g.set_auto_all(false)
+	g.auto_break = true
+	g.auto_buy = true
+	g.auto_cast = true
+	g.auto_learn = true
+	ui._refresh()
+	check(btn.button_pressed and str(btn.text) == "一键挂机: 全开",
+			"打磨-88 _refresh 同步 外部 置 全开 按钮态")
+	# 开关切换 无 资源/统计 副作用 (开关动作 本身 无 资源 消耗)
+	check(g.stats == stats_k and absf(g.essence - ess_k) < 1e-9 and g.stones == stones_k,
+			"打磨-88 开关切换 无 资源/统计 副作用")
+	# 收尾: 恢复 基准 (四关)
+	g.set_auto_all(false)
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.last_break_result = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
 	g._active_cd = {}
 	g.ready_events.clear()
 	ui._refresh()
