@@ -1,0 +1,2898 @@
+{
+  "monsters": [
+    {
+      "id": "m01",
+      "name": "黑风·狼",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "heavy",
+        "poison"
+      ],
+      "reward": {
+        "stone_w": 1.335,
+        "mat_w": 0.841,
+        "affix_w": 0.55
+      }
+    },
+    {
+      "id": "m02",
+      "name": "血影·狼",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 1,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heavy",
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 0.837,
+        "mat_w": 0.999,
+        "affix_w": 0.688
+      }
+    },
+    {
+      "id": "m03",
+      "name": "雷翼·狼",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "stealth",
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 1.267,
+        "mat_w": 1.033,
+        "affix_w": 0.509
+      }
+    },
+    {
+      "id": "m04",
+      "name": "冰寒·狼",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 1,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "regen",
+        "stealth"
+      ],
+      "reward": {
+        "stone_w": 0.97,
+        "mat_w": 0.527,
+        "affix_w": 0.349
+      }
+    },
+    {
+      "id": "m05",
+      "name": "骨霜·狼",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "swift"
+      ],
+      "reward": {
+        "stone_w": 0.923,
+        "mat_w": 0.729,
+        "affix_w": 0.637
+      }
+    },
+    {
+      "id": "m06",
+      "name": "黑风·虎",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 2,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "counter"
+      ],
+      "reward": {
+        "stone_w": 0.828,
+        "mat_w": 0.508,
+        "affix_w": 0.455
+      }
+    },
+    {
+      "id": "m07",
+      "name": "血影·虎",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 2,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "lucky"
+      ],
+      "reward": {
+        "stone_w": 0.979,
+        "mat_w": 1.176,
+        "affix_w": 0.272
+      }
+    },
+    {
+      "id": "m08",
+      "name": "雷翼·虎",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 2,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "enrage",
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 1.358,
+        "mat_w": 0.743,
+        "affix_w": 0.366
+      }
+    },
+    {
+      "id": "m09",
+      "name": "冰寒·虎",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 2,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "drain",
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 0.875,
+        "mat_w": 0.9,
+        "affix_w": 0.713
+      }
+    },
+    {
+      "id": "m10",
+      "name": "骨霜·虎",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 2,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "drain",
+        "swift"
+      ],
+      "reward": {
+        "stone_w": 1.336,
+        "mat_w": 0.8,
+        "affix_w": 0.423
+      }
+    },
+    {
+      "id": "m11",
+      "name": "黑风·蛇",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 3,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "drain",
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 0.868,
+        "mat_w": 0.985,
+        "affix_w": 0.362
+      }
+    },
+    {
+      "id": "m12",
+      "name": "血影·蛇",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 3,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore",
+        "indomit"
+      ],
+      "reward": {
+        "stone_w": 0.827,
+        "mat_w": 0.659,
+        "affix_w": 0.671
+      }
+    },
+    {
+      "id": "m13",
+      "name": "雷翼·蛇",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "counter"
+      ],
+      "reward": {
+        "stone_w": 0.967,
+        "mat_w": 1.19,
+        "affix_w": 0.612
+      }
+    },
+    {
+      "id": "m14",
+      "name": "冰寒·蛇",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 3,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "shield",
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 1.116,
+        "mat_w": 0.995,
+        "affix_w": 0.425
+      }
+    },
+    {
+      "id": "m15",
+      "name": "骨霜·蛇",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 3,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "thorn_skin",
+        "shield"
+      ],
+      "reward": {
+        "stone_w": 1.16,
+        "mat_w": 0.754,
+        "affix_w": 0.351
+      }
+    },
+    {
+      "id": "m16",
+      "name": "黑风·狐",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "mat_bag",
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 0.804,
+        "mat_w": 0.516,
+        "affix_w": 0.541
+      }
+    },
+    {
+      "id": "m17",
+      "name": "血影·狐",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "enrage",
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 0.863,
+        "mat_w": 1.077,
+        "affix_w": 0.455
+      }
+    },
+    {
+      "id": "m18",
+      "name": "雷翼·狐",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 4,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "lucky",
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 1.394,
+        "mat_w": 0.503,
+        "affix_w": 0.509
+      }
+    },
+    {
+      "id": "m19",
+      "name": "冰寒·狐",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 4,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "enrage"
+      ],
+      "reward": {
+        "stone_w": 1.255,
+        "mat_w": 0.656,
+        "affix_w": 0.291
+      }
+    },
+    {
+      "id": "m20",
+      "name": "骨霜·狐",
+      "kind": "species",
+      "category": "demon_beast",
+      "category_name": "妖兽",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "regen",
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 1.391,
+        "mat_w": 0.582,
+        "affix_w": 0.471
+      }
+    },
+    {
+      "id": "m21",
+      "name": "九幽·魂",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "drain"
+      ],
+      "reward": {
+        "stone_w": 1.324,
+        "mat_w": 0.885,
+        "affix_w": 0.598
+      }
+    },
+    {
+      "id": "m22",
+      "name": "鬼焰·魂",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "lucky"
+      ],
+      "reward": {
+        "stone_w": 1.288,
+        "mat_w": 1.142,
+        "affix_w": 0.617
+      }
+    },
+    {
+      "id": "m23",
+      "name": "失魂·魂",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "affix_bag",
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 0.981,
+        "mat_w": 0.792,
+        "affix_w": 0.202
+      }
+    },
+    {
+      "id": "m24",
+      "name": "夜雾·魂",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "regen",
+        "drain"
+      ],
+      "reward": {
+        "stone_w": 1.212,
+        "mat_w": 0.767,
+        "affix_w": 0.573
+      }
+    },
+    {
+      "id": "m25",
+      "name": "白骨·魂",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 1,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "swift",
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 0.899,
+        "mat_w": 0.833,
+        "affix_w": 0.61
+      }
+    },
+    {
+      "id": "m26",
+      "name": "九幽·鬼",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 2,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 1.172,
+        "mat_w": 1.08,
+        "affix_w": 0.416
+      }
+    },
+    {
+      "id": "m27",
+      "name": "鬼焰·鬼",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 2,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore",
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 1.005,
+        "mat_w": 0.735,
+        "affix_w": 0.328
+      }
+    },
+    {
+      "id": "m28",
+      "name": "失魂·鬼",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 2,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 0.929,
+        "mat_w": 0.759,
+        "affix_w": 0.733
+      }
+    },
+    {
+      "id": "m29",
+      "name": "夜雾·鬼",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 2,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 1.124,
+        "mat_w": 0.555,
+        "affix_w": 0.495
+      }
+    },
+    {
+      "id": "m30",
+      "name": "白骨·鬼",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 2,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 1.165,
+        "mat_w": 0.963,
+        "affix_w": 0.453
+      }
+    },
+    {
+      "id": "m31",
+      "name": "九幽·煞",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 3,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 1.35,
+        "mat_w": 0.96,
+        "affix_w": 0.424
+      }
+    },
+    {
+      "id": "m32",
+      "name": "鬼焰·煞",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 3,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heaven_grudge",
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 1.184,
+        "mat_w": 0.755,
+        "affix_w": 0.606
+      }
+    },
+    {
+      "id": "m33",
+      "name": "失魂·煞",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 3,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "enrage",
+        "poison"
+      ],
+      "reward": {
+        "stone_w": 0.961,
+        "mat_w": 0.916,
+        "affix_w": 0.788
+      }
+    },
+    {
+      "id": "m34",
+      "name": "夜雾·煞",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 3,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "swift",
+        "stealth"
+      ],
+      "reward": {
+        "stone_w": 0.962,
+        "mat_w": 0.76,
+        "affix_w": 0.244
+      }
+    },
+    {
+      "id": "m35",
+      "name": "白骨·煞",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 3,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "mat_bag",
+        "swift"
+      ],
+      "reward": {
+        "stone_w": 1.12,
+        "mat_w": 0.784,
+        "affix_w": 0.249
+      }
+    },
+    {
+      "id": "m36",
+      "name": "九幽·魅",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "indomit",
+        "split"
+      ],
+      "reward": {
+        "stone_w": 1.391,
+        "mat_w": 0.537,
+        "affix_w": 0.482
+      }
+    },
+    {
+      "id": "m37",
+      "name": "鬼焰·魅",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 4,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 0.888,
+        "mat_w": 0.538,
+        "affix_w": 0.707
+      }
+    },
+    {
+      "id": "m38",
+      "name": "失魂·魅",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "indomit",
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 1.182,
+        "mat_w": 0.817,
+        "affix_w": 0.204
+      }
+    },
+    {
+      "id": "m39",
+      "name": "夜雾·魅",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 4,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "drain",
+        "split"
+      ],
+      "reward": {
+        "stone_w": 1.181,
+        "mat_w": 0.699,
+        "affix_w": 0.782
+      }
+    },
+    {
+      "id": "m40",
+      "name": "白骨·魅",
+      "kind": "species",
+      "category": "ghost_cult",
+      "category_name": "鬼修",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "shield"
+      ],
+      "reward": {
+        "stone_w": 1.355,
+        "mat_w": 0.748,
+        "affix_w": 0.402
+      }
+    },
+    {
+      "id": "m41",
+      "name": "灰烬·蝗",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 1.255,
+        "mat_w": 0.825,
+        "affix_w": 0.63
+      }
+    },
+    {
+      "id": "m42",
+      "name": "埋沙·蝗",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "poison",
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 0.829,
+        "mat_w": 1.114,
+        "affix_w": 0.749
+      }
+    },
+    {
+      "id": "m43",
+      "name": "雷殛·蝗",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 1.085,
+        "mat_w": 1.074,
+        "affix_w": 0.229
+      }
+    },
+    {
+      "id": "m44",
+      "name": "血沸·蝗",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "shield",
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 1.071,
+        "mat_w": 0.926,
+        "affix_w": 0.407
+      }
+    },
+    {
+      "id": "m45",
+      "name": "星坠·蝗",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "lucky",
+        "affix_bag"
+      ],
+      "reward": {
+        "stone_w": 1.292,
+        "mat_w": 0.789,
+        "affix_w": 0.239
+      }
+    },
+    {
+      "id": "m46",
+      "name": "灰烬·蜂",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 2,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 1.39,
+        "mat_w": 0.717,
+        "affix_w": 0.501
+      }
+    },
+    {
+      "id": "m47",
+      "name": "埋沙·蜂",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 2,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "swift"
+      ],
+      "reward": {
+        "stone_w": 0.883,
+        "mat_w": 0.728,
+        "affix_w": 0.621
+      }
+    },
+    {
+      "id": "m48",
+      "name": "雷殛·蜂",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 2,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 1.202,
+        "mat_w": 0.861,
+        "affix_w": 0.291
+      }
+    },
+    {
+      "id": "m49",
+      "name": "血沸·蜂",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 2,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "counter"
+      ],
+      "reward": {
+        "stone_w": 1.171,
+        "mat_w": 0.732,
+        "affix_w": 0.418
+      }
+    },
+    {
+      "id": "m50",
+      "name": "星坠·蜂",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 2,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 0.9,
+        "mat_w": 1.149,
+        "affix_w": 0.582
+      }
+    },
+    {
+      "id": "m51",
+      "name": "灰烬·甲",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 3,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 0.849,
+        "mat_w": 0.697,
+        "affix_w": 0.324
+      }
+    },
+    {
+      "id": "m52",
+      "name": "埋沙·甲",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 3,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "split",
+        "rich_ore"
+      ],
+      "reward": {
+        "stone_w": 1.035,
+        "mat_w": 0.843,
+        "affix_w": 0.692
+      }
+    },
+    {
+      "id": "m53",
+      "name": "雷殛·甲",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "split",
+        "swift"
+      ],
+      "reward": {
+        "stone_w": 0.925,
+        "mat_w": 0.821,
+        "affix_w": 0.405
+      }
+    },
+    {
+      "id": "m54",
+      "name": "血沸·甲",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "split",
+        "shield"
+      ],
+      "reward": {
+        "stone_w": 1.176,
+        "mat_w": 0.65,
+        "affix_w": 0.729
+      }
+    },
+    {
+      "id": "m55",
+      "name": "星坠·甲",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 3,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 1.315,
+        "mat_w": 0.672,
+        "affix_w": 0.685
+      }
+    },
+    {
+      "id": "m56",
+      "name": "灰烬·螳",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 4,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "indomit",
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 1.084,
+        "mat_w": 1.08,
+        "affix_w": 0.503
+      }
+    },
+    {
+      "id": "m57",
+      "name": "埋沙·螳",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 4,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "weak",
+        "split"
+      ],
+      "reward": {
+        "stone_w": 1.39,
+        "mat_w": 0.866,
+        "affix_w": 0.724
+      }
+    },
+    {
+      "id": "m58",
+      "name": "雷殛·螳",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "poison"
+      ],
+      "reward": {
+        "stone_w": 1.306,
+        "mat_w": 0.676,
+        "affix_w": 0.685
+      }
+    },
+    {
+      "id": "m59",
+      "name": "血沸·螳",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 4,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heaven_grudge"
+      ],
+      "reward": {
+        "stone_w": 1.298,
+        "mat_w": 0.521,
+        "affix_w": 0.39
+      }
+    },
+    {
+      "id": "m60",
+      "name": "星坠·螳",
+      "kind": "species",
+      "category": "insect_swarm",
+      "category_name": "虫群",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "shield"
+      ],
+      "reward": {
+        "stone_w": 1.353,
+        "mat_w": 0.991,
+        "affix_w": 0.325
+      }
+    },
+    {
+      "id": "m61",
+      "name": "铜·灯",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 1,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "enrage"
+      ],
+      "reward": {
+        "stone_w": 0.849,
+        "mat_w": 0.903,
+        "affix_w": 0.645
+      }
+    },
+    {
+      "id": "m62",
+      "name": "铁·灯",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "split"
+      ],
+      "reward": {
+        "stone_w": 1.269,
+        "mat_w": 0.683,
+        "affix_w": 0.743
+      }
+    },
+    {
+      "id": "m63",
+      "name": "玉·灯",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 1,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "affix_bag",
+        "indomit"
+      ],
+      "reward": {
+        "stone_w": 1.12,
+        "mat_w": 0.806,
+        "affix_w": 0.478
+      }
+    },
+    {
+      "id": "m64",
+      "name": "石·灯",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 1,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "affix_bag"
+      ],
+      "reward": {
+        "stone_w": 1.208,
+        "mat_w": 0.774,
+        "affix_w": 0.63
+      }
+    },
+    {
+      "id": "m65",
+      "name": "炎·灯",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "thorn_skin",
+        "affix_bag"
+      ],
+      "reward": {
+        "stone_w": 1.102,
+        "mat_w": 1.198,
+        "affix_w": 0.209
+      }
+    },
+    {
+      "id": "m66",
+      "name": "铜·铃",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 2,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "split",
+        "lucky"
+      ],
+      "reward": {
+        "stone_w": 0.966,
+        "mat_w": 0.752,
+        "affix_w": 0.327
+      }
+    },
+    {
+      "id": "m67",
+      "name": "铁·铃",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 2,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heaven_grudge",
+        "drain"
+      ],
+      "reward": {
+        "stone_w": 1.04,
+        "mat_w": 0.936,
+        "affix_w": 0.483
+      }
+    },
+    {
+      "id": "m68",
+      "name": "玉·铃",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 2,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "regen",
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 1.321,
+        "mat_w": 0.87,
+        "affix_w": 0.485
+      }
+    },
+    {
+      "id": "m69",
+      "name": "石·铃",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 2,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore"
+      ],
+      "reward": {
+        "stone_w": 1.03,
+        "mat_w": 0.83,
+        "affix_w": 0.646
+      }
+    },
+    {
+      "id": "m70",
+      "name": "炎·铃",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 2,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore",
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 1.123,
+        "mat_w": 0.821,
+        "affix_w": 0.539
+      }
+    },
+    {
+      "id": "m71",
+      "name": "铜·镜",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "affix_bag",
+        "poison"
+      ],
+      "reward": {
+        "stone_w": 1.064,
+        "mat_w": 0.926,
+        "affix_w": 0.504
+      }
+    },
+    {
+      "id": "m72",
+      "name": "铁·镜",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 3,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 1.062,
+        "mat_w": 0.539,
+        "affix_w": 0.238
+      }
+    },
+    {
+      "id": "m73",
+      "name": "玉·镜",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 3,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "poison"
+      ],
+      "reward": {
+        "stone_w": 1.382,
+        "mat_w": 0.833,
+        "affix_w": 0.663
+      }
+    },
+    {
+      "id": "m74",
+      "name": "石·镜",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heavy",
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 0.963,
+        "mat_w": 1.192,
+        "affix_w": 0.513
+      }
+    },
+    {
+      "id": "m75",
+      "name": "炎·镜",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore",
+        "stealth"
+      ],
+      "reward": {
+        "stone_w": 0.929,
+        "mat_w": 0.892,
+        "affix_w": 0.695
+      }
+    },
+    {
+      "id": "m76",
+      "name": "铜·笔",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "indomit",
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 0.808,
+        "mat_w": 0.752,
+        "affix_w": 0.676
+      }
+    },
+    {
+      "id": "m77",
+      "name": "铁·笔",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "shield",
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 0.806,
+        "mat_w": 0.657,
+        "affix_w": 0.739
+      }
+    },
+    {
+      "id": "m78",
+      "name": "玉·笔",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 4,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "shield"
+      ],
+      "reward": {
+        "stone_w": 1.168,
+        "mat_w": 0.646,
+        "affix_w": 0.608
+      }
+    },
+    {
+      "id": "m79",
+      "name": "石·笔",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "swift",
+        "split"
+      ],
+      "reward": {
+        "stone_w": 1.315,
+        "mat_w": 1.032,
+        "affix_w": 0.266
+      }
+    },
+    {
+      "id": "m80",
+      "name": "炎·笔",
+      "kind": "species",
+      "category": "spirit_fiend",
+      "category_name": "精怪",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "affix_bag",
+        "poison"
+      ],
+      "reward": {
+        "stone_w": 0.894,
+        "mat_w": 1.007,
+        "affix_w": 0.626
+      }
+    },
+    {
+      "id": "m81",
+      "name": "炽·魍",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "shield",
+        "drain"
+      ],
+      "reward": {
+        "stone_w": 1.037,
+        "mat_w": 0.77,
+        "affix_w": 0.226
+      }
+    },
+    {
+      "id": "m82",
+      "name": "夜嚎·魍",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 1,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "regen",
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 1.143,
+        "mat_w": 0.559,
+        "affix_w": 0.436
+      }
+    },
+    {
+      "id": "m83",
+      "name": "天晦·魍",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "stealth",
+        "enrage"
+      ],
+      "reward": {
+        "stone_w": 1.358,
+        "mat_w": 0.535,
+        "affix_w": 0.408
+      }
+    },
+    {
+      "id": "m84",
+      "name": "地朽·魍",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 1.13,
+        "mat_w": 0.63,
+        "affix_w": 0.699
+      }
+    },
+    {
+      "id": "m85",
+      "name": "噬灵·魍",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 1,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "poison"
+      ],
+      "reward": {
+        "stone_w": 0.881,
+        "mat_w": 0.859,
+        "affix_w": 0.548
+      }
+    },
+    {
+      "id": "m86",
+      "name": "炽·魉",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 2,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "regen",
+        "affix_bag"
+      ],
+      "reward": {
+        "stone_w": 1.243,
+        "mat_w": 0.641,
+        "affix_w": 0.28
+      }
+    },
+    {
+      "id": "m87",
+      "name": "夜嚎·魉",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 2,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "affix_bag",
+        "swift"
+      ],
+      "reward": {
+        "stone_w": 0.807,
+        "mat_w": 1.182,
+        "affix_w": 0.3
+      }
+    },
+    {
+      "id": "m88",
+      "name": "天晦·魉",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 2,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "split"
+      ],
+      "reward": {
+        "stone_w": 1.156,
+        "mat_w": 0.79,
+        "affix_w": 0.433
+      }
+    },
+    {
+      "id": "m89",
+      "name": "地朽·魉",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 2,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "heaven_grudge"
+      ],
+      "reward": {
+        "stone_w": 0.913,
+        "mat_w": 1.055,
+        "affix_w": 0.674
+      }
+    },
+    {
+      "id": "m90",
+      "name": "噬灵·魉",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 2,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore",
+        "indomit"
+      ],
+      "reward": {
+        "stone_w": 1.234,
+        "mat_w": 0.985,
+        "affix_w": 0.216
+      }
+    },
+    {
+      "id": "m91",
+      "name": "炽·魔女",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "mat_bag",
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 1.135,
+        "mat_w": 1.157,
+        "affix_w": 0.695
+      }
+    },
+    {
+      "id": "m92",
+      "name": "夜嚎·魔女",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 3,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "heavy",
+        "affix_bag"
+      ],
+      "reward": {
+        "stone_w": 1.162,
+        "mat_w": 0.877,
+        "affix_w": 0.263
+      }
+    },
+    {
+      "id": "m93",
+      "name": "天晦·魔女",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 1.249,
+        "mat_w": 1.076,
+        "affix_w": 0.524
+      }
+    },
+    {
+      "id": "m94",
+      "name": "地朽·魔女",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 3,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heavy",
+        "split"
+      ],
+      "reward": {
+        "stone_w": 1.083,
+        "mat_w": 0.79,
+        "affix_w": 0.211
+      }
+    },
+    {
+      "id": "m95",
+      "name": "噬灵·魔女",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "enrage"
+      ],
+      "reward": {
+        "stone_w": 0.994,
+        "mat_w": 0.982,
+        "affix_w": 0.524
+      }
+    },
+    {
+      "id": "m96",
+      "name": "炽·无头",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "poison"
+      ],
+      "reward": {
+        "stone_w": 1.07,
+        "mat_w": 0.989,
+        "affix_w": 0.728
+      }
+    },
+    {
+      "id": "m97",
+      "name": "夜嚎·无头",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 4,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "affix_bag"
+      ],
+      "reward": {
+        "stone_w": 1.011,
+        "mat_w": 0.956,
+        "affix_w": 0.736
+      }
+    },
+    {
+      "id": "m98",
+      "name": "天晦·无头",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "shield",
+        "stealth"
+      ],
+      "reward": {
+        "stone_w": 0.938,
+        "mat_w": 1.193,
+        "affix_w": 0.324
+      }
+    },
+    {
+      "id": "m99",
+      "name": "地朽·无头",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "heaven_grudge",
+        "drain"
+      ],
+      "reward": {
+        "stone_w": 0.807,
+        "mat_w": 1.02,
+        "affix_w": 0.202
+      }
+    },
+    {
+      "id": "m100",
+      "name": "噬灵·无头",
+      "kind": "species",
+      "category": "fierce_soul",
+      "category_name": "凶灵",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore",
+        "regen"
+      ],
+      "reward": {
+        "stone_w": 1.017,
+        "mat_w": 1.155,
+        "affix_w": 0.221
+      }
+    },
+    {
+      "id": "m101",
+      "name": "星陨·龙",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "split"
+      ],
+      "reward": {
+        "stone_w": 1.02,
+        "mat_w": 1.195,
+        "affix_w": 0.325
+      }
+    },
+    {
+      "id": "m102",
+      "name": "天裂·龙",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 1,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "indomit"
+      ],
+      "reward": {
+        "stone_w": 1.012,
+        "mat_w": 0.796,
+        "affix_w": 0.579
+      }
+    },
+    {
+      "id": "m103",
+      "name": "云崩·龙",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 1,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heavy"
+      ],
+      "reward": {
+        "stone_w": 0.856,
+        "mat_w": 0.694,
+        "affix_w": 0.526
+      }
+    },
+    {
+      "id": "m104",
+      "name": "穹断·龙",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 1,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "drain",
+        "enrage"
+      ],
+      "reward": {
+        "stone_w": 1.171,
+        "mat_w": 0.596,
+        "affix_w": 0.36
+      }
+    },
+    {
+      "id": "m105",
+      "name": "御天·龙",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 1,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore"
+      ],
+      "reward": {
+        "stone_w": 1.106,
+        "mat_w": 1.001,
+        "affix_w": 0.549
+      }
+    },
+    {
+      "id": "m106",
+      "name": "星陨·麒麟",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 2,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "lucky"
+      ],
+      "reward": {
+        "stone_w": 0.829,
+        "mat_w": 0.956,
+        "affix_w": 0.491
+      }
+    },
+    {
+      "id": "m107",
+      "name": "天裂·麒麟",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 2,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heavy",
+        "rich_ore"
+      ],
+      "reward": {
+        "stone_w": 0.816,
+        "mat_w": 1.12,
+        "affix_w": 0.276
+      }
+    },
+    {
+      "id": "m108",
+      "name": "云崩·麒麟",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 2,
+      "bias": "balanced",
+      "bias_cn": "均衡型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "shield"
+      ],
+      "reward": {
+        "stone_w": 1.04,
+        "mat_w": 1.073,
+        "affix_w": 0.458
+      }
+    },
+    {
+      "id": "m109",
+      "name": "穹断·麒麟",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 2,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "swift",
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 0.939,
+        "mat_w": 0.547,
+        "affix_w": 0.521
+      }
+    },
+    {
+      "id": "m110",
+      "name": "御天·麒麟",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 2,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "lucky"
+      ],
+      "reward": {
+        "stone_w": 0.886,
+        "mat_w": 1.005,
+        "affix_w": 0.414
+      }
+    },
+    {
+      "id": "m111",
+      "name": "星陨·凤",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 3,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "thorn_skin",
+        "swift"
+      ],
+      "reward": {
+        "stone_w": 0.988,
+        "mat_w": 0.688,
+        "affix_w": 0.767
+      }
+    },
+    {
+      "id": "m112",
+      "name": "天裂·凤",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 3,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "lucky"
+      ],
+      "reward": {
+        "stone_w": 1.29,
+        "mat_w": 0.649,
+        "affix_w": 0.4
+      }
+    },
+    {
+      "id": "m113",
+      "name": "云崩·凤",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 3,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "heaven_grudge",
+        "thorn_skin"
+      ],
+      "reward": {
+        "stone_w": 0.923,
+        "mat_w": 1.023,
+        "affix_w": 0.403
+      }
+    },
+    {
+      "id": "m114",
+      "name": "穹断·凤",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 3,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "weak"
+      ],
+      "reward": {
+        "stone_w": 1.193,
+        "mat_w": 1.031,
+        "affix_w": 0.227
+      }
+    },
+    {
+      "id": "m115",
+      "name": "御天·凤",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 3,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "thorn_skin",
+        "counter"
+      ],
+      "reward": {
+        "stone_w": 1.233,
+        "mat_w": 1.137,
+        "affix_w": 0.212
+      }
+    },
+    {
+      "id": "m116",
+      "name": "星陨·玄武",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 4,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "indomit",
+        "enrage"
+      ],
+      "reward": {
+        "stone_w": 1.375,
+        "mat_w": 0.847,
+        "affix_w": 0.721
+      }
+    },
+    {
+      "id": "m117",
+      "name": "天裂·玄武",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 4,
+      "bias": "hp",
+      "bias_cn": "血牛型",
+      "b_hp": 1.5,
+      "b_atk": 1.0,
+      "b_def": 1.0,
+      "traits": [
+        "rich_ore",
+        "mat_bag"
+      ],
+      "reward": {
+        "stone_w": 1.157,
+        "mat_w": 0.502,
+        "affix_w": 0.633
+      }
+    },
+    {
+      "id": "m118",
+      "name": "云崩·玄武",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 4,
+      "bias": "def",
+      "bias_cn": "铁壁型",
+      "b_hp": 1.0,
+      "b_atk": 1.0,
+      "b_def": 2.0,
+      "traits": [
+        "weak",
+        "stealth"
+      ],
+      "reward": {
+        "stone_w": 1.254,
+        "mat_w": 0.836,
+        "affix_w": 0.396
+      }
+    },
+    {
+      "id": "m119",
+      "name": "穹断·玄武",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "shield"
+      ],
+      "reward": {
+        "stone_w": 1.341,
+        "mat_w": 1.128,
+        "affix_w": 0.21
+      }
+    },
+    {
+      "id": "m120",
+      "name": "御天·玄武",
+      "kind": "species",
+      "category": "heaven_beast",
+      "category_name": "天兽",
+      "tier": 4,
+      "bias": "atk",
+      "bias_cn": "狂攻型",
+      "b_hp": 1.0,
+      "b_atk": 1.5,
+      "b_def": 1.0,
+      "traits": [
+        "shield",
+        "stealth"
+      ],
+      "reward": {
+        "stone_w": 1.06,
+        "mat_w": 0.805,
+        "affix_w": 0.603
+      }
+    },
+    {
+      "id": "b01",
+      "name": "石心巨熊",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 50,
+      "mult": 10.0,
+      "traits": [
+        "regen",
+        "mat_bag"
+      ]
+    },
+    {
+      "id": "b02",
+      "name": "雷鳞犀王",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 100,
+      "mult": 10.0,
+      "traits": [
+        "drain",
+        "indomit"
+      ]
+    },
+    {
+      "id": "b03",
+      "name": "九幽毒蟾",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 150,
+      "mult": 10.0,
+      "traits": [
+        "split",
+        "rich_ore"
+      ]
+    },
+    {
+      "id": "b04",
+      "name": "寒霜白狐",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 200,
+      "mult": 10.0,
+      "traits": [
+        "swift",
+        "lucky"
+      ]
+    },
+    {
+      "id": "b05",
+      "name": "沸血铁牛",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 250,
+      "mult": 10.0,
+      "traits": [
+        "enrage",
+        "heaven_grudge"
+      ]
+    },
+    {
+      "id": "b06",
+      "name": "幽冥火鸦",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 300,
+      "mult": 10.0,
+      "traits": [
+        "regen",
+        "affix_bag"
+      ]
+    },
+    {
+      "id": "b07",
+      "name": "枯骨战马",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 350,
+      "mult": 10.0,
+      "traits": [
+        "drain",
+        "weak"
+      ]
+    },
+    {
+      "id": "b08",
+      "name": "裂空巨鹏",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 400,
+      "mult": 10.0,
+      "traits": [
+        "split",
+        "mat_bag"
+      ]
+    },
+    {
+      "id": "b09",
+      "name": "朽木树灵",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 450,
+      "mult": 10.0,
+      "traits": [
+        "swift",
+        "indomit"
+      ]
+    },
+    {
+      "id": "b10",
+      "name": "熔岩巨魔",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 500,
+      "mult": 10.0,
+      "traits": [
+        "enrage",
+        "rich_ore"
+      ]
+    },
+    {
+      "id": "b11",
+      "name": "霜骨枭王",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 550,
+      "mult": 10.0,
+      "traits": [
+        "regen",
+        "lucky"
+      ]
+    },
+    {
+      "id": "b12",
+      "name": "沙暴鼠君",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 600,
+      "mult": 10.0,
+      "traits": [
+        "drain",
+        "heaven_grudge"
+      ]
+    },
+    {
+      "id": "b13",
+      "name": "血毒蝎后",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 650,
+      "mult": 10.0,
+      "traits": [
+        "split",
+        "affix_bag"
+      ]
+    },
+    {
+      "id": "b14",
+      "name": "魂灯魅主",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 700,
+      "mult": 10.0,
+      "traits": [
+        "swift",
+        "weak"
+      ]
+    },
+    {
+      "id": "b15",
+      "name": "陨星猿魔",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 750,
+      "mult": 10.0,
+      "traits": [
+        "enrage",
+        "mat_bag"
+      ]
+    },
+    {
+      "id": "b16",
+      "name": "雾影幽狐",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 800,
+      "mult": 10.0,
+      "traits": [
+        "regen",
+        "indomit"
+      ]
+    },
+    {
+      "id": "b17",
+      "name": "刺骨蜈蚣",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 850,
+      "mult": 10.0,
+      "traits": [
+        "drain",
+        "rich_ore"
+      ]
+    },
+    {
+      "id": "b18",
+      "name": "炎爪獬豸",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 900,
+      "mult": 10.0,
+      "traits": [
+        "split",
+        "lucky"
+      ]
+    },
+    {
+      "id": "b19",
+      "name": "幽魂蟒尊",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 950,
+      "mult": 10.0,
+      "traits": [
+        "swift",
+        "heaven_grudge"
+      ]
+    },
+    {
+      "id": "b20",
+      "name": "雷翼凤枭",
+      "kind": "boss",
+      "boss_type": "small",
+      "floor": 1000,
+      "mult": 10.0,
+      "traits": [
+        "enrage",
+        "affix_bag"
+      ]
+    },
+    {
+      "id": "b21",
+      "name": "万幻妖殿主",
+      "kind": "boss",
+      "boss_type": "theme",
+      "floor": 100,
+      "mult": 20.0,
+      "theme": "demon_hall",
+      "traits": [
+        "split",
+        "lucky"
+      ]
+    },
+    {
+      "id": "b22",
+      "name": "幽冥魂帝",
+      "kind": "boss",
+      "boss_type": "theme",
+      "floor": 250,
+      "mult": 20.0,
+      "theme": "nether",
+      "traits": [
+        "swift",
+        "weak"
+      ]
+    },
+    {
+      "id": "b23",
+      "name": "破天魔君",
+      "kind": "boss",
+      "boss_type": "theme",
+      "floor": 500,
+      "mult": 20.0,
+      "theme": "sky_break",
+      "traits": [
+        "enrage",
+        "rich_ore"
+      ]
+    },
+    {
+      "id": "b24",
+      "name": "万魔阵主",
+      "kind": "boss",
+      "boss_type": "theme",
+      "floor": 750,
+      "mult": 20.0,
+      "theme": "myriad_devil",
+      "traits": [
+        "regen",
+        "affix_bag"
+      ]
+    },
+    {
+      "id": "b25",
+      "name": "镇妖塔主",
+      "kind": "boss",
+      "boss_type": "final",
+      "floor": 1000,
+      "mult": 50.0,
+      "theme": "final",
+      "traits": [
+        "enrage",
+        "lucky"
+      ]
+    }
+  ]
+}

@@ -51,6 +51,170 @@ func _init() -> void:
 	for i in 6:
 		check(tier_costs[i] > 0.0 and tier_costs[i + 1] > tier_costs[i], "装备品质%d价格梯度上升" % i)
 
+	# ---------- M5-1: 爬塔数据层 (monster_traits / monsters / tower_monsters) ----------
+	var trf := FileAccess.open("res://data/monster_traits.json", FileAccess.READ)
+	var monf := FileAccess.open("res://data/monsters.json", FileAccess.READ)
+	var twf := FileAccess.open("res://data/tower_monsters.json", FileAccess.READ)
+	check(trf != null and monf != null and twf != null, "M5 数据文件可读 (traits/monsters/tower)")
+	if trf != null:
+		var traits_v: Variant = JSON.parse_string(trf.get_as_text())
+		trf.close()
+		var monv: Variant = JSON.parse_string(monf.get_as_text())
+		monf.close()
+		var twv: Variant = JSON.parse_string(twf.get_as_text())
+		twf.close()
+		check(typeof(traits_v) == TYPE_DICTIONARY and typeof(monv) == TYPE_DICTIONARY and typeof(twv) == TYPE_DICTIONARY, "M5 数据为合法 JSON 对象")
+		if typeof(traits_v) == TYPE_DICTIONARY and typeof(monv) == TYPE_DICTIONARY and typeof(twv) == TYPE_DICTIONARY:
+			var traits: Array = (traits_v as Dictionary).get("traits", [])
+			var mons: Array = (monv as Dictionary).get("monsters", [])
+			var tw: Dictionary = twv as Dictionary
+			var floors: Array = (tw as Dictionary).get("floors", [])
+			# 特性表: 18 项, id 唯一, 组合法, 含倍率字段
+			check(traits.size() == 18, "特性表 18 项 (实际 %d)" % traits.size())
+			var tr_ids: Dictionary = {}
+			var tr_groups: Dictionary = {}
+			for t in traits:
+				var td: Dictionary = t
+				var tid: String = str((td as Dictionary)["id"])
+				check(not tr_ids.has(tid), "特性 id %s 唯一" % tid)
+				tr_ids[tid] = true
+				var grp: String = str((td as Dictionary)["group"])
+				tr_groups[tid] = grp
+				check(grp == "强化" or grp == "削弱" or grp == "奖励" or grp == "特殊", "特性 %s 组合法 (%s)" % [tid, grp])
+				check(not (td as Dictionary).get("mult", {}).is_empty(), "特性 %s 含倍率字段" % tid)
+			# 怪物表: 145 = 120 种 + 25 Boss, 全表名唯一
+			check(mons.size() == 145, "怪物总数 145 (实际 %d)" % mons.size())
+			var sp_by_id: Dictionary = {}
+			for m0 in mons:
+				sp_by_id[str((m0 as Dictionary)["id"])] = m0
+			var sp_cnt := 0
+			var bo_cnt := 0
+			var names_seen: Dictionary = {}
+			var tr_use: Dictionary = {}
+			var bias_exp := {"hp": [1.5, 1.0, 1.0], "atk": [1.0, 1.5, 1.0], "def": [1.0, 1.0, 2.0], "balanced": [1.0, 1.0, 1.0]}
+			var cat_cnt: Dictionary = {}
+			var tier_cnt: Dictionary = {}
+			for m in mons:
+				var md: Dictionary = m
+				var mname: String = str(md["name"])
+				if names_seen.has(mname):
+					check(false, "怪物名 %s 全表唯一" % mname)
+				names_seen[mname] = true
+				var mtr: Array = md["traits"]
+				check(mtr.size() >= 1 and mtr.size() <= 2, "怪物 %s 特性 1~2 个" % str(md["id"]))
+				var dups := false
+				for tr in mtr:
+					var trid: String = str(tr)
+					if not tr_ids.has(trid):
+						check(false, "怪物 %s 引用未知特性 %s" % [str(md["id"]), trid])
+					tr_use[trid] = int(tr_use.get(trid, 0)) + 1
+					if mtr.count(trid) > 1:
+						dups = true
+				check(not dups, "怪物 %s 同种特性不重复" % str(md["id"]))
+				if str(md["kind"]) == "species":
+					sp_cnt += 1
+					var bias: String = str(md["bias"])
+					check(bias in bias_exp, "怪物 %s 属性偏向合法 (%s)" % [str(md["id"]), bias])
+					if bias in bias_exp:
+						var b: Array = bias_exp[bias]
+						check(float(md["b_hp"]) == float(b[0]) and float(md["b_atk"]) == float(b[1]) and float(md["b_def"]) == float(b[2]), "怪物 %s 偏向倍率与 %s 型一致" % [str(md["id"]), bias])
+					cat_cnt[str(md["category_name"])] = int(cat_cnt.get(str(md["category_name"]), 0)) + 1
+					var mtier: int = int(md["tier"])
+					check(mtier >= 1 and mtier <= 4, "怪物 %s tier 1~4" % str(md["id"]))
+					tier_cnt[mtier] = int(tier_cnt.get(mtier, 0)) + 1
+				else:
+					bo_cnt += 1
+					var btr: Array = md["traits"]
+					check(btr.size() == 2, "Boss %s 固定 2 特性" % str(md["id"]))
+					var enh := 0
+					var rw := 0
+					for tr in btr:
+						if tr_groups.get(str(tr), "") == "强化":
+							enh += 1
+						if tr_groups.get(str(tr), "") in ["奖励", "特殊"]:
+							rw += 1
+					check(enh == 1 and rw == 1, "Boss %s = 1 强化 + 1 奖励/特殊特性 (%s)" % [str(md["id"]), " / ".join(btr)])
+			check(sp_cnt == 120, "普通怪物种 120 (实际 %d)" % sp_cnt)
+			check(bo_cnt == 25, "专属 Boss 25 (实际 %d)" % bo_cnt)
+			check(cat_cnt.size() == 6, "怪物 6 大类 (实际 %d)" % cat_cnt.size())
+			for c in cat_cnt:
+				check(int(cat_cnt[c]) == 20, "大类 %s 20 种 (实际 %d)" % [c, int(cat_cnt[c])])
+			for t in [1, 2, 3, 4]:
+				check(int(tier_cnt.get(t, 0)) == 30, "怪物 tier%d 每档 30 种 (实际 %d)" % [t, int(tier_cnt.get(t, 0))])
+			for tr in tr_ids:
+				check(int(tr_use.get(tr, 0)) >= 3, "特性 %s 至少 3 种怪物使用 (实际 %d)" % [tr, int(tr_use.get(tr, 0))])
+			# 塔表: 1000 层连续, 名唯一, 基础数值单调, 落表公式一致
+			check(floors.size() == 1000, "塔表 1000 层 (实际 %d)" % floors.size())
+			var fl_names: Dictionary = {}
+			var elite_cnt := 0
+			var small_floors: Dictionary = {}
+			var theme_floors: Dictionary = {}
+			var final_floors: Dictionary = {}
+			for i in floors.size():
+				var fd: Dictionary = floors[i]
+				check(int(fd["floor"]) == i + 1, "塔表第 %d 项为第 %d 层" % [i, i + 1])
+				var fname: String = str(fd["name"])
+				if fl_names.has(fname):
+					check(false, "塔层名 %s 唯一" % fname)
+				fl_names[fname] = true
+				if i > 0:
+					var pf: Dictionary = floors[i - 1]
+					check(float(fd["base_hp"]) > float(pf["base_hp"]) and float(fd["base_atk"]) > float(pf["base_atk"]) and float(fd["base_def"]) > float(pf["base_def"]), "第 %d 层基础数值严格单调" % int(fd["floor"]))
+				var struct := 1.0
+				var btype: String = str(fd["boss_type"])
+				if btype == "small":
+					struct = 10.0
+					small_floors[int(fd["floor"])] = true
+				elif btype == "theme":
+					struct = 20.0
+					theme_floors[int(fd["floor"])] = true
+				elif btype == "final":
+					struct = 50.0
+					final_floors[int(fd["floor"])] = true
+				elif bool(fd["is_elite"]):
+					struct = 3.0
+				var bh: float = 1.0
+				var ba: float = 1.0
+				var bd: float = 1.0
+				if btype == "" and str(fd["species"]) != "":
+					var spd: Dictionary = sp_by_id.get(str(fd["species"]), {})
+					bh = float(spd.get("b_hp", 1.0))
+					ba = float(spd.get("b_atk", 1.0))
+					bd = float(spd.get("b_def", 1.0))
+				var exp_hp: float = float(fd["base_hp"]) * struct * bh
+				var exp_atk: float = float(fd["base_atk"]) * struct * ba
+				var exp_def: float = float(fd["base_def"]) * struct * bd
+				check(abs(float(fd["hp"]) - exp_hp) < 1e-6 * maxf(exp_hp, 1.0), "第 %d 层 hp 落表 = 基础x结构x偏向 (%s)" % [int(fd["floor"]), fd["name"]])
+				check(abs(float(fd["atk"]) - exp_atk) < 1e-6 * maxf(exp_atk, 1.0), "第 %d 层 atk 落表公式一致" % int(fd["floor"]))
+				check(abs(float(fd["def"]) - exp_def) < 1e-6 * maxf(exp_def, 1.0), "第 %d 层 def 落表公式一致" % int(fd["floor"]))
+				var is_elite: bool = bool(fd["is_elite"])
+				var exp_rm := 1.0
+				if btype != "":
+					exp_rm = 5.0
+				elif is_elite:
+					exp_rm = 2.0
+				check(int(fd["reward_mult"]) == int(exp_rm) and float(fd["reward_stone"]) > 0.0, "第 %d 层奖励倍率口径 (%s)" % [int(fd["floor"]), btype if btype != "" else ("精英" if is_elite else "普通")])
+				check(is_elite == (int(fd["floor"]) % 10 == 0 and btype == ""), "第 %d 层精英标记口径 (每 10 层且非 Boss)" % int(fd["floor"]))
+				if is_elite:
+					elite_cnt += 1
+			check(fl_names.size() == 1000, "塔表 1000 层名唯一")
+			check(elite_cnt == 80, "精英层 80 个 (实际 %d)" % elite_cnt)
+			# Boss 层共 20 层 (每 50 层); 其中 100/250/500/750 被主题 Boss 占位, 1000 被最终 Boss 占位,
+			# 故塔内小 Boss 层 = 15 (monsters.json 中 20 个小 Boss, 5 个留作登天梯里程碑 Boss 池)
+			check(small_floors.size() == 15, "塔内小 Boss 层 15 个 (实际 %d)" % small_floors.size())
+			var small_ok := true
+			for k in 20:
+				var fl := 50 * (k + 1)
+				if fl in [100, 250, 500, 750, 1000]:
+					continue
+				if not small_floors.has(fl):
+					small_ok = false
+			check(small_ok, "小 Boss 层 = 50/.../1000 减 主题/最终 占位层")
+			var boss_total := small_floors.size() + theme_floors.size() + final_floors.size()
+			check(boss_total == 20, "塔内 Boss 层共 20 层 (实际 %d)" % boss_total)
+			check(theme_floors.size() == 4 and theme_floors.has(100) and theme_floors.has(250) and theme_floors.has(500) and theme_floors.has(750), "主题 Boss 层 = 100/250/500/750")
+			check(final_floors.size() == 1 and final_floors.has(1000), "最终 Boss 层 = 1000")
+
 	# ---------- 技能: 学习 / 未解锁 / 重复学习 ----------
 	var passive_id := ""
 	var active_id := ""

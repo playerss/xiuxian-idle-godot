@@ -164,16 +164,300 @@ def gen_equipment():
                 })
     return eq
 
+# ============ M5 爬塔: 特性 / 怪物 / 塔表 (M5-1 数据层) ============
+# 设计见 PROJECT_PLAN.md「新特性: M5 爬塔系统」。
+# 规模: 145 怪物 = 120 普通怪物种 (6 大类 x 20 种, tier 1~4) + 25 专属 Boss。
+# Boss 分布 (1000 层, 每 50 层一个 Boss 层):
+#   - 20 小 Boss: 每 50 层各占其一 (50/100/.../1000), 数值 x10, 掉落 x5
+#   - 4 主题 Boss: 第 100/250/500/750 层, 数值 x20 (该层实际出战的是主题 Boss)
+#   - 1 最终 Boss「镇妖塔主」: 第 1000 层, 数值 x50
+#   注: 100/250/500/750/1000 层的小 Boss 实体不出战固定塔,
+#       留作登天梯每 100 层天阶里程碑 Boss 池 (M5-3 接入)。
+# 固定种子独立 RNG (20260910), 不与技能/装备生成器共享随机流。
+TOWER_RNG_SEED = 20260910
+
+# 18 特性 (id, 名称, 组, 说明)。组: 强化/削弱/奖励/特殊。
+TRAIT_DEFS = [
+    ("regen",         "再生",     "强化", "有效 HP x1.3"),
+    ("drain",         "汲取",     "强化", "有效 HP x1.25"),
+    ("split",         "分身",     "强化", "有效 HP x1.8"),
+    ("swift",         "迅捷",     "强化", "有效 ATK x1.3"),
+    ("enrage",        "狂暴",     "强化", "ATK x1.5 但 HP x0.9"),
+    ("thorn_skin",    "石肤",     "削弱", "有效 DEF x1.5"),
+    ("heavy",         "重甲",     "削弱", "DEF x2 但 ATK x0.8"),
+    ("shield",        "护盾",     "削弱", "DEF +10 (固定值)"),
+    ("counter",       "反噬",     "削弱", "玩家伤害 x0.85"),
+    ("stealth",       "隐匿",     "削弱", "玩家伤害 x0.9"),
+    ("poison",        "剧毒",     "削弱", "战胜后玩家 ATK -15%, 持续 2 场战斗 (可刷新)"),
+    ("rich_ore",      "富矿",     "奖励", "灵石奖励 x2"),
+    ("mat_bag",       "材料囊",   "奖励", "材料奖励 x2"),
+    ("affix_bag",     "词缀袋",   "奖励", "词缀掉率 +10%"),
+    ("lucky",         "幸运",     "奖励", "50% 概率全奖励 x2"),
+    ("indomit",       "不屈",     "奖励", "全奖励 x1.2"),
+    ("weak",          "虚弱",     "奖励", "HP x0.7 (轻松层)"),
+    ("heaven_grudge", "天怨",     "特殊", "仅无尽塔生效, HP x(1+层数/400)"),
+]
+# 数值倍率字段 (M5-2 战斗计算直接消费; 缺省 1.0 = 无影响)
+TRAIT_MULT = {
+    "regen":         {"hp": 1.3},
+    "drain":         {"hp": 1.25},
+    "split":         {"hp": 1.8},
+    "swift":         {"atk": 1.3},
+    "enrage":        {"atk": 1.5, "hp": 0.9},
+    "thorn_skin":    {"def": 1.5},
+    "heavy":         {"def": 2.0, "atk": 0.8},
+    "shield":        {"shield_add": 10.0},
+    "counter":       {"p_dmg": 0.85},
+    "stealth":       {"p_dmg": 0.9},
+    "poison":        {"atk_debuff": 0.15, "debuff_battles": 2},
+    "rich_ore":      {"stone": 2.0},
+    "mat_bag":       {"mat": 2.0},
+    "affix_bag":     {"affix_drop": 0.10},
+    "lucky":         {"all_reward": 2.0, "lucky_chance": 0.5},
+    "indomit":       {"all_reward": 1.2},
+    "weak":          {"hp": 0.7},
+    "heaven_grudge": {"heaven_grudge": 1.0},
+}
+TRAIT_GROUP = {tid: grp for tid, _, grp, _ in TRAIT_DEFS}
+ENHANCE_TRAITS = [t for t, _, g, _ in TRAIT_DEFS if g == "强化"]
+REWARD_TRAITS = [t for t, _, g, _ in TRAIT_DEFS if g in ("奖励", "特殊")]
+
+# 6 大类 x (5 前缀 x 4 种类) = 120 种; 种类词跨类互斥保证全表唯一
+MONSTER_CATS = {
+    "demon_beast":  ("妖兽", ["黑风", "血影", "雷翼", "冰寒", "骨霜"], ["狼", "虎", "蛇", "狐"]),
+    "ghost_cult":   ("鬼修", ["九幽", "鬼焰", "失魂", "夜雾", "白骨"], ["魂", "鬼", "煞", "魅"]),
+    "insect_swarm": ("虫群", ["灰烬", "埋沙", "雷殛", "血沸", "星坠"], ["蝗", "蜂", "甲", "螳"]),
+    "spirit_fiend": ("精怪", ["铜", "铁", "玉", "石", "炎"], ["灯", "铃", "镜", "笔"]),
+    "fierce_soul":  ("凶灵", ["炽", "夜嚎", "天晦", "地朽", "噬灵"], ["魍", "魉", "魔女", "无头"]),
+    "heaven_beast": ("天兽", ["星陨", "天裂", "云崩", "穹断", "御天"], ["龙", "麒麟", "凤", "玄武"]),
+}
+# 属性偏向: 血牛 HPx1.5 / 狂攻 ATKx1.5 / 铁壁 DEFx2 / 均衡 x1
+BIAS_TYPES = ["hp", "atk", "def", "balanced"]
+BIAS_MULT = {"hp": (1.5, 1.0, 1.0), "atk": (1.0, 1.5, 1.0),
+             "def": (1.0, 1.0, 2.0), "balanced": (1.0, 1.0, 1.0)}
+BIAS_CN = {"hp": "血牛型", "atk": "狂攻型", "def": "铁壁型", "balanced": "均衡型"}
+
+# 25 专属 Boss 命名 (小 Boss 按 50 层起每 50 层序; 无「·」避免与塔层名冲突)
+SMALL_BOSS_NAMES = ["石心巨熊", "雷鳞犀王", "九幽毒蟾", "寒霜白狐", "沸血铁牛",
+                    "幽冥火鸦", "枯骨战马", "裂空巨鹏", "朽木树灵", "熔岩巨魔",
+                    "霜骨枭王", "沙暴鼠君", "血毒蝎后", "魂灯魅主", "陨星猿魔",
+                    "雾影幽狐", "刺骨蜈蚣", "炎爪獬豸", "幽魂蟒尊", "雷翼凤枭"]
+THEME_BOSS = {100: ("万幻妖殿主", "demon_hall"), 250: ("幽冥魂帝", "nether"),
+              500: ("破天魔君", "sky_break"), 750: ("万魔阵主", "myriad_devil")}
+FINAL_BOSS_NAME = "镇妖塔主"
+
+def gen_monster_traits():
+    out = []
+    for tid, name, grp, desc in TRAIT_DEFS:
+        out.append({"id": tid, "name": name, "group": grp, "desc": desc,
+                    "mult": TRAIT_MULT[tid]})
+    return out
+
+def _pick_traits(rng, n):
+    """种子随机取 n 个不重复特性"""
+    pool = [t for t, _, _, _ in TRAIT_DEFS]
+    rng.shuffle(pool)
+    return pool[:n]
+
+def gen_monsters(rng):
+    monsters = []
+    # --- 120 普通怪物种: 每类 5 前缀 x 4 种类; i//5 = 种类 -> tier 1~4 ---
+    for cat, (cat_cn, prefs, specs) in MONSTER_CATS.items():
+        for i in range(20):
+            name = f"{prefs[i % 5]}·{specs[i // 5]}"
+            tier = 1 + i // 5
+            n_tr = 1 if rng.random() < 0.4 else 2
+            bias = rng.choice(BIAS_TYPES)
+            bh, ba, bd = BIAS_MULT[bias]
+            monsters.append({
+                "id": f"m{len(monsters) + 1:02d}", "name": name, "kind": "species",
+                "category": cat, "category_name": cat_cn, "tier": tier,
+                "bias": bias, "bias_cn": BIAS_CN[bias],
+                "b_hp": bh, "b_atk": ba, "b_def": bd,
+                "traits": _pick_traits(rng, n_tr),
+                "reward": {"stone_w": round(rng.uniform(0.8, 1.4), 3),
+                           "mat_w": round(rng.uniform(0.5, 1.2), 3),
+                           "affix_w": round(rng.uniform(0.2, 0.8), 3)},
+            })
+    # --- 25 专属 Boss: 20 小 (每 50 层) + 4 主题 + 1 最终; 各 2 特性 (1 强化 + 1 奖励/特殊) ---
+    for i in range(20):
+        monsters.append({
+            "id": f"b{i + 1:02d}", "name": SMALL_BOSS_NAMES[i], "kind": "boss",
+            "boss_type": "small", "floor": 50 * (i + 1), "mult": 10.0,
+            "traits": [ENHANCE_TRAITS[i % 5], REWARD_TRAITS[(i * 3 + 1) % len(REWARD_TRAITS)]],
+        })
+    for j, (fl, (bname, theme)) in enumerate(THEME_BOSS.items()):
+        monsters.append({
+            "id": f"b{21 + j:02d}", "name": bname, "kind": "boss",
+            "boss_type": "theme", "floor": fl, "mult": 20.0, "theme": theme,
+            "traits": [ENHANCE_TRAITS[(j + 2) % 5], REWARD_TRAITS[(j * 2 + 3) % len(REWARD_TRAITS)]],
+        })
+    monsters.append({
+        "id": "b25", "name": FINAL_BOSS_NAME, "kind": "boss",
+        "boss_type": "final", "floor": 1000, "mult": 50.0, "theme": "final",
+        "traits": ["enrage", "lucky"],
+    })
+    # 特性覆盖保证: 每特性至少 3 种怪物使用 (不足则确定性补到 特性数<2 的怪物种)
+    use = {}
+    for m in monsters:
+        for tr in m["traits"]:
+            use[tr] = use.get(tr, 0) + 1
+    species = [m for m in monsters if m["kind"] == "species"]
+    for tr in [t for t, _, _, _ in TRAIT_DEFS]:
+        while use.get(tr, 0) < 3:
+            host = next((m for m in species if tr not in m["traits"] and len(m["traits"]) < 2), None)
+            assert host is not None, f"特性 {tr} 覆盖不足且无可用怪物种"
+            host["traits"].append(tr)
+            use[tr] = use.get(tr, 0) + 1
+    return monsters
+
+# 塔层名 1000 个唯一: 36 前缀 x 30 种类 = 1080 组合, 种子洗牌取 980 (非 Boss 层) + 20 Boss 名
+TOWER_PREFS = ["暮岚", "血潮", "雷嶂", "冰髓", "瘴骨", "幽冥眼", "熔砂", "岩隙", "阴翳", "穹崖",
+               "魔渊", "夺魂", "流星", "裂云", "刺棘", "沸血", "枯木", "霜咬", "埋沙", "蚀水",
+               "游星", "震雷", "鬼氛", "魔啸", "裂穹", "崩地", "夜霭", "染血", "皓骨", "失魄",
+               "坠星", "晦天", "朽地", "夜魆", "流焰", "穹渊"]
+TOWER_SPKS = ["狼", "虎", "蟒", "狐", "熊", "蝎", "蛛", "蝠", "鼠", "蟾",
+              "蜥", "鳄", "鹿", "犀牛", "枭", "鹰", "鹤", "猿", "兔", "鼬",
+              "鼹", "蜈蚣", "螳螂", "甲虫", "鳝", "蛙", "鸦", "猩", "蛟", "豨"]
+
+# 镇妖塔数值公式 (数据驱动, 落表)
+TOWER_HP_BASE, TOWER_HP_GROWTH = 5.0, 1.055
+TOWER_ATK_BASE, TOWER_ATK_GROWTH = 2.0, 1.055
+TOWER_DEF_BASE, TOWER_DEF_GROWTH = 1.0, 1.04
+TOWER_STONE_BASE, TOWER_STONE_GROWTH = 10.0, 1.06
+TOWER_ELITE_MULT, TOWER_ELITE_REWARD = 3.0, 2
+TOWER_BOST_MULTS = {"small": 10.0, "theme": 20.0, "final": 50.0}
+TOWER_BOST_REWARD = 5
+
+def gen_tower_floors(rng, monsters):
+    by_id = {m["id"]: m for m in monsters}
+    boss_at = {m["floor"]: m for m in monsters if m["kind"] == "boss" and m["boss_type"] != ""}
+    # 每层怪物种按 tier 段位: 1-250 -> tier1, 251-500 -> tier2, 501-750 -> tier3, 751-1000 -> tier4
+    tier_pool = {}
+    for tier in range(1, 5):
+        tier_pool[tier] = [m["id"] for m in monsters
+                           if m["kind"] == "species" and m["tier"] == tier]
+    name_pool = [f"{p}·{s}" for p in TOWER_PREFS for s in TOWER_SPKS]
+    rng.shuffle(name_pool)
+    it = iter(name_pool)
+    floors = []
+    for fl in range(1, 1001):
+        base_hp = TOWER_HP_BASE * (TOWER_HP_GROWTH ** fl)
+        base_atk = TOWER_ATK_BASE * (TOWER_ATK_GROWTH ** fl)
+        base_def = TOWER_DEF_BASE * (TOWER_DEF_GROWTH ** fl)
+        reward_mult = 1
+        btype = ""
+        if fl in boss_at:
+            bm = boss_at[fl]
+            btype = bm["boss_type"]
+            name, traits = bm["name"], list(bm["traits"])
+            b_hp = b_atk = b_def = 1.0
+            struct = TOWER_BOST_MULTS[btype]
+            reward_mult = TOWER_BOST_REWARD
+            species_id, is_elite = "", False
+        else:
+            tier = 1 if fl <= 250 else 2 if fl <= 500 else 3 if fl <= 750 else 4
+            species_id = rng.choice(tier_pool[tier])
+            sm = by_id[species_id]
+            is_elite = (fl % 10 == 0)
+            traits = list(sm["traits"])
+            if is_elite:
+                extra = _pick_traits(rng, 1)
+                extra = extra[0] if extra[0] not in traits else _pick_traits(rng, 1)[0]
+                while extra in traits:
+                    extra = rng.choice([t for t, _, _, _ in TRAIT_DEFS])
+                traits.append(extra)
+            name = "魔化·" + next(it) if is_elite else next(it)
+            b_hp, b_atk, b_def = sm["b_hp"], sm["b_atk"], sm["b_def"]
+            struct = TOWER_ELITE_MULT if is_elite else 1.0
+            if is_elite:
+                reward_mult = TOWER_ELITE_REWARD
+        floors.append({
+            "floor": fl, "name": name, "species": species_id, "traits": traits,
+            "is_elite": is_elite, "boss_type": btype,
+            "b_hp": b_hp, "b_atk": b_atk, "b_def": b_def,
+            "base_hp": base_hp, "base_atk": base_atk, "base_def": base_def,
+            "hp": base_hp * struct * b_hp, "atk": base_atk * struct * b_atk,
+            "def": base_def * struct * b_def,
+            "reward_stone": TOWER_STONE_BASE * (TOWER_STONE_GROWTH ** fl) * reward_mult,
+            "reward_mult": reward_mult,
+        })
+    return floors
+
 def main():
     skills = gen_skills()
     equipment = gen_equipment()
     achievements = gen_achievements()
+    tower_rng = random.Random(TOWER_RNG_SEED)
+    traits = gen_monster_traits()
+    monsters = gen_monsters(tower_rng)
+    floors = gen_tower_floors(tower_rng, monsters)
+    # ---- M5 校验 ----
+    assert len(traits) == 18 and len({t["id"] for t in traits}) == 18, "特性表须为 18 项且 id 唯一"
+    assert len(monsters) == 145, f"怪物总数 {len(monsters)} != 145"
+    species = [m for m in monsters if m["kind"] == "species"]
+    bosses = [m for m in monsters if m["kind"] == "boss"]
+    assert len(species) == 120 and len(bosses) == 25, "怪物构成须为 120 种 + 25 Boss"
+    assert len({m["name"] for m in monsters}) == 145, "145 怪物名须全表唯一"
+    assert sum(1 for m in bosses if m["boss_type"] == "small") == 20, "小 Boss 须 20 个"
+    assert sum(1 for m in bosses if m["boss_type"] == "theme") == 4, "主题 Boss 须 4 个"
+    assert sum(1 for m in bosses if m["boss_type"] == "final") == 1, "最终 Boss 须 1 个"
+    assert {m["floor"] for m in bosses if m["boss_type"] == "small"} == set(range(50, 1001, 50)), "小 Boss 层须为 50/100/.../1000"
+    assert {m["floor"] for m in bosses if m["boss_type"] == "theme"} == {100, 250, 500, 750}, "主题 Boss 层须为 100/250/500/750"
+    assert [m["floor"] for m in bosses if m["boss_type"] == "final"] == [1000], "最终 Boss 层须为 1000"
+    for m in monsters:
+        trs = m["traits"]
+        assert 1 <= len(trs) <= 2 and len(set(trs)) == len(trs), f"怪物 {m['id']} 特性须 1~2 个且不重复"
+        for tr in trs:
+            assert tr in {t["id"] for t in traits}, f"怪物 {m['id']} 引用未知特性 {tr}"
+        if m["kind"] == "boss":
+            assert len(trs) == 2, f"Boss {m['id']} 须固定 2 特性"
+            assert sum(1 for tr in trs if TRAIT_GROUP[tr] == "强化") == 1, f"Boss {m['id']} 须含 1 强化特性"
+            assert sum(1 for tr in trs if TRAIT_GROUP[tr] in ("奖励", "特殊")) == 1, f"Boss {m['id']} 须含 1 奖励/特殊特性"
+    use = {}
+    for m in monsters:
+        for tr in m["traits"]:
+            use[tr] = use.get(tr, 0) + 1
+    low = [t["id"] for t in traits if use.get(t["id"], 0) < 3]
+    assert not low, f"以下特性使用数 <3: {low}"
+    # 塔表校验
+    assert len(floors) == 1000 and [f["floor"] for f in floors] == list(range(1, 1001)), "塔表须为 1000 层连续"
+    assert len({f["name"] for f in floors}) == 1000, "塔表 1000 层名须唯一"
+    for i, f in enumerate(floors):
+        prev = floors[i - 1] if i else None
+        if prev is not None:
+            assert f["base_hp"] > prev["base_hp"] and f["base_atk"] > prev["base_atk"] \
+                and f["base_def"] > prev["base_def"], f"第 {f['floor']} 层基础数值须严格单调"
+        struct = TOWER_BOST_MULTS[f["boss_type"]] if f["boss_type"] else (TOWER_ELITE_MULT if f["is_elite"] else 1.0)
+        assert abs(f["hp"] - f["base_hp"] * struct * f["b_hp"]) < 1e-6 * f["hp"], f"第 {f['floor']} 层 hp 公式落表不符"
+        assert abs(f["atk"] - f["base_atk"] * struct * f["b_atk"]) < 1e-6 * f["atk"], f"第 {f['floor']} 层 atk 公式落表不符"
+        assert abs(f["def"] - f["base_def"] * struct * f["b_def"]) < 1e-6 * f["def"], f"第 {f['floor']} 层 def 公式落表不符"
+        exp_rm = TOWER_BOST_REWARD if f["boss_type"] else (TOWER_ELITE_REWARD if f["is_elite"] else 1)
+        assert f["reward_mult"] == exp_rm and f["reward_stone"] > 0, f"第 {f['floor']} 层奖励口径错误"
+        assert f["is_elite"] == (f["floor"] % 10 == 0 and f["boss_type"] == ""), f"第 {f['floor']} 层精英标记错误"
+    elite_cnt = sum(1 for f in floors if f["is_elite"])
+    assert elite_cnt == 80, f"精英层须 80 个 (每 10 层 100 减 Boss 层 20, 实际 {elite_cnt})"
     with open(os.path.join(DATA, "skills.json"), "w", encoding="utf-8") as f:
         json.dump({"skills": skills}, f, ensure_ascii=False, indent=2)
     with open(os.path.join(DATA, "equipment.json"), "w", encoding="utf-8") as f:
         json.dump({"equipment": equipment}, f, ensure_ascii=False, indent=2)
     with open(os.path.join(DATA, "achievements.json"), "w", encoding="utf-8") as f:
         json.dump({"achievements": achievements}, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(DATA, "monster_traits.json"), "w", encoding="utf-8") as f:
+        json.dump({"traits": traits}, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(DATA, "monsters.json"), "w", encoding="utf-8") as f:
+        json.dump({"monsters": monsters}, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(DATA, "tower_monsters.json"), "w", encoding="utf-8") as f:
+        json.dump({
+            "fixed": {"name": "镇妖塔", "max_floor": 1000,
+                      "formulas": {"hp": [TOWER_HP_BASE, TOWER_HP_GROWTH],
+                                   "atk": [TOWER_ATK_BASE, TOWER_ATK_GROWTH],
+                                   "def": [TOWER_DEF_BASE, TOWER_DEF_GROWTH],
+                                   "stone": [TOWER_STONE_BASE, TOWER_STONE_GROWTH]},
+                      "elite": {"mult": TOWER_ELITE_MULT, "reward": TOWER_ELITE_REWARD},
+                      "boss": {"mult": TOWER_BOST_MULTS, "reward": TOWER_BOST_REWARD}},
+            "floors": floors,
+        }, f, ensure_ascii=False, indent=2)
     # 校验
     assert len(skills) >= 100, f"技能数 {len(skills)} < 100"
     assert len(equipment) >= 100, f"装备数 {len(equipment)} < 100"
