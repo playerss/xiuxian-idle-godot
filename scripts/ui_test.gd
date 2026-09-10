@@ -172,10 +172,11 @@ func _assert_initial() -> void:
 # 打磨-42→43: 初始态 (全新档, 成就页): 5 条收集进度条 (4 类 + 总计), 节点齐全/0 填充/青色/计数文本/tooltip + 节流缓存 (同态再刷不重写)
 func _assert_collect_bars_initial() -> void:
 	var g := GameData
+	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size()
 	check(ui._collect_items.size() == 5, "收集进度 5 条节点齐全 (4 类+总计) (实际 %d)" % ui._collect_items.size())
 	check(ui._collect_wrap != null and ui._collect_box == ui._collect_wrap, "打磨-43 收集进度一览为 FlowContainer (宽不足逐条换行不截断)")
 	var expect_txt := {"skill": "技能 0/%d" % g.skill_ids.size(), "equip": "装备 0/%d" % g.equip_ids.size(),
-		"item": "法器 0/10", "ach": "成就 0/%d" % g.ach_ids.size(), "total": "总计 0/287"}
+		"item": "法器 0/10", "ach": "成就 0/%d" % g.ach_ids.size(), "total": "总计 0/%d" % total_collect}
 	for k in expect_txt:
 		var it: Dictionary = ui._collect_items.get(k, {})
 		check(it.has("label") and it.has("bar_bg") and it.has("bar_fill"), "收集 %s 节点 (label/bar_bg/bar_fill) 存在" % k)
@@ -191,7 +192,7 @@ func _assert_collect_bars_initial() -> void:
 		var lc: Color = (it["label"] as Label).get_theme_color("font_color")
 		check(lc == ui.CYAN, "收集 %s 未集齐 文字色=青" % k)
 	check(ui._collect_box.tooltip_text.find("全局收集进度") >= 0, "收集进度 tooltip 说明 (实际 %s)" % ui._collect_box.tooltip_text)
-	check(str(ui._collect_text).find("收集进度") >= 0 and str(ui._collect_text).find("(总 0/287)") >= 0, "收集汇总文本含 总 0/287 (实际 %s)" % str(ui._collect_text))
+	check(str(ui._collect_text).find("收集进度") >= 0 and str(ui._collect_text).find("(总 0/%d)" % total_collect) >= 0, "收集汇总文本含 总 0/总量 (实际 %s)" % str(ui._collect_text))
 	# 节流: 同态再刷两帧, 缓存键不变 (不重写)
 	var keys_before := {}
 	for k in expect_txt:
@@ -259,12 +260,13 @@ func _mutate_state() -> void:
 # 再学全技能/全法器 -> 满态金 (技能/法器 金 + 总计 137/287 仍青, 金/青混合二态)
 func _assert_collect_bars_mutated() -> void:
 	var g := GameData
+	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size()
 	ui._tab.current_tab = 3
 	ui._refresh()
 	await get_tree().process_frame
 	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就", "total": "总计"}
 	var expect := {"skill": [2, g.skill_ids.size()], "equip": [2, g.equip_ids.size()],
-		"item": [1, 10], "ach": [5, g.ach_ids.size()], "total": [10, 287]}
+		"item": [1, 10], "ach": [5, g.ach_ids.size()], "total": [10, total_collect]}
 	for k in expect:
 		var it: Dictionary = ui._collect_items.get(k, {})
 		if it.is_empty():
@@ -278,7 +280,7 @@ func _assert_collect_bars_mutated() -> void:
 		check(int(fill.size.x) == int(bg.size.x * float(q) / 100.0), "收集 %s 填充=1%%档 %d%% (fill=%d bg=%d)" % [k, q, int(fill.size.x), int(bg.size.x)])
 		check(fill.color == ui.CYAN, "收集 %s 未满填充色=青" % k)
 		check((it["label"] as Label).get_theme_color("font_color") == ui.CYAN, "收集 %s 未满文字色=青" % k)
-	check(str(ui._collect_text).find("(总 10/287)") >= 0, "收集汇总文本含 总 10/287 (实际 %s)" % str(ui._collect_text))
+	check(str(ui._collect_text).find("(总 10/%d)" % total_collect) >= 0, "收集汇总文本含 总 10/总量 (实际 %s)" % str(ui._collect_text))
 	# 满态: 学全技能 + 全法器 -> 技能/法器 满条金色, 装备/成就 仍青色 (金/青 混合二态)
 	g.learned.clear()
 	for sid in g.skill_ids:
@@ -298,22 +300,25 @@ func _assert_collect_bars_mutated() -> void:
 	for k in ["equip", "ach"]:
 		var it: Dictionary = ui._collect_items[k]
 		check((it["bar_fill"] as ColorRect).color == ui.CYAN, "收集 %s 未满分态保持青" % k)
-	check(str(ui._collect_text).find("(总 137/287)") >= 0, "满态汇总文本含 总 137/287 (实际 %s)" % str(ui._collect_text))
-	# 打磨-43: 总计条 满态 137/287 — 青色 48%档 (未满保持青, 与 4 类同口径; 10/287 态已在上方 for 循环 q 公式断言)
+	# 满态 总计 分子 = 全技能 + 全法器 + 2 装备 + 5 成就
+	var full_got := g.skill_ids.size() + g.ITEMS.size() + 2 + 5
+	check(str(ui._collect_text).find("(总 %d/%d)" % [full_got, total_collect]) >= 0, "满态汇总文本含 总 %d/总量 (实际 %s)" % [full_got, str(ui._collect_text)])
+	# 打磨-43: 总计条 满态 分子/总量 — 青色 (未满保持青, 与 4 类同口径)
 	var t2: Dictionary = ui._collect_items["total"]
 	var tb2: ColorRect = t2["bar_bg"]
 	var tf2: ColorRect = t2["bar_fill"]
-	var q2: int = int(ceil(clampf(137.0 / 287.0, 0.0, 1.0) * 100.0))
-	check(int(tf2.size.x) == int(tb2.size.x * float(q2) / 100.0), "总计条 137/287 填充=1%%档 %d%% (fill=%d bg=%d)" % [q2, int(tf2.size.x), int(tb2.size.x)])
-	check(tf2.color == ui.CYAN, "总计条 137/287 未满=青")
+	var q2: int = int(ceil(clampf(float(full_got) / float(total_collect), 0.0, 1.0) * 100.0))
+	check(int(tf2.size.x) == int(tb2.size.x * float(q2) / 100.0), "总计条 %d/总量 填充=1%%档 %d%% (fill=%d bg=%d)" % [full_got, q2, int(tf2.size.x), int(tb2.size.x)])
+	check(tf2.color == ui.CYAN, "总计条 %d/总量 未满=青" % full_got)
 	await _assert_collect_total_wrap()
 
 
 # 打磨-43: 顶栏宽度不足时逐条换行不截断 — 压缩 FlowContainer 宽度 -> 5 条目折到多行; 恢复宽 -> 回单行
 func _assert_collect_total_wrap() -> void:
 	var g := GameData
+	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size()
 	var wrap: FlowContainer = ui._collect_wrap
-	# 全收集态 (287/287) 下断言: 总计条 满条金色
+	# 全收集态 (总量/总量) 下断言: 总计条 满条金色
 	g.owned_eq.clear()
 	for eid in g.equip_ids:
 		g.owned_eq.append(eid)
@@ -322,7 +327,7 @@ func _assert_collect_total_wrap() -> void:
 		g.ach_done.append(str(aid))
 	ui._refresh()
 	await get_tree().process_frame
-	var full_txt := "总计 287/287"
+	var full_txt := "总计 %d/%d" % [total_collect, total_collect]
 	var it_all: Dictionary = ui._collect_items["total"]
 	check(str((it_all["label"] as Label).text) == full_txt, "总计条 全收集 %s (实际 %s)" % [full_txt, str((it_all["label"] as Label).text)])
 	check((it_all["bar_fill"] as ColorRect).color == ui.GOLD, "总计条 全收集=金")

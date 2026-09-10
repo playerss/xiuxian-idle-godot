@@ -33,8 +33,17 @@ ACHIEVEMENTS = [
     {"id": "skill_50",         "name": "博闻强记", "desc": "领悟 50 个技能"},
     {"id": "equip_first",      "name": "初具规模", "desc": "购入第一件装备"},
     {"id": "equip_10",         "name": "行头齐全", "desc": "购入 10 件装备"},
-    {"id": "rich_100k",        "name": "灵石满堂", "desc": "持有灵石达 10 万"},
+    {"id": "rich_100k",      "name": "灵石满堂", "desc": "持有灵石达 10 万"},
     {"id": "dao_zuzi",         "name": "道祖",     "desc": "道行精进至道祖境"},
+    # M5-2: 爬塔成就 (8 项: 镇妖塔 3 + 登天梯 4 + 首通 1)
+    {"id": "tower_100",        "name": "小有名气", "desc": "镇妖塔 登上 100 层"},
+    {"id": "tower_500",        "name": "声名鹊起", "desc": "镇妖塔 登上 500 层"},
+    {"id": "tower_clear",      "name": "镇妖塔·通关者", "desc": "镇妖塔 登遍 1000 层"},
+    {"id": "endless_100",      "name": "登天启程", "desc": "登天梯 登上 100 层"},
+    {"id": "endless_500",      "name": "天阶在望", "desc": "登天梯 登上 500 层"},
+    {"id": "endless_1000",     "name": "百步穿云", "desc": "登天梯 登上 1000 层"},
+    {"id": "endless_5000",     "name": "问鼎登天", "desc": "登天梯 登上 5000 层"},
+    {"id": "first_tower",      "name": "初入塔门", "desc": "首次通过任意塔一层"},
 ]
 # 境界里程碑 id 与 REALMS 索引的对应 (realm_xxx -> realm_idx)
 ACH_REALM_IDX = {"realm_zhuji": 1, "realm_jindan": 2, "realm_yuanying": 3,
@@ -66,7 +75,17 @@ SKILL_CATS = {
     "divine": ("神通", ["金刚身", "法天术", "须弥诀", "乾坤法"]),
 }
 # 被动效果池（权重随机），主动神通固定 qi_burst
+# M5-2: 新增 atk/def 池 (爬塔战力; 与 灵气/灵石/突破/离线 同 乘算独立 口径 1+Σ)
 PASSIVE_EFFECTS = ["qi_mult", "stone_mult", "bt_chance", "offline_rate", "all_mult"]
+# M5-2: 攻击/防御 独立 属性池 (爬塔 战力; 与 灵气/灵石/突破/离线 主效果 解耦, 不占 主 效果 循环,
+# 使 旧 功法 效果 分配 不 变 [sword_5_2 仍 bt_chance 等 受测 技能 效果 保持], 仅 追加 atk/def 字段)
+SKILL_CAT_ATKDEF = {
+    "sword":  (3.0, 1.0),   # 剑法 偏 攻击
+    "spell":  (3.0, 1.0),   # 法术 偏 攻击
+    "mind":   (1.0, 3.0),   # 心法 偏 防御
+    "body":   (1.0, 3.0),   # 身法 偏 防御
+    "divine": (2.0, 2.0),   # 神通 均衡
+}
 EFFECT_CN = {
     "qi_mult": "灵气速率 +{v}%",
     "stone_mult": "灵石速率 +{v}%",
@@ -108,10 +127,15 @@ def gen_skills():
                 else:
                     eff = PASSIVE_EFFECTS[(tier + v + (0 if cat != "divine" else 1)) % len(PASSIVE_EFFECTS)]
                     pct = TIER_BASE_PCT[tier] + v * 2
+                    # M5-2: atk/def 独立 属性池 (乘算 加成, 与 主 效果 解耦; 类别 攻/防 偏向, 随 品质/变体 上升)
+                    sa, sd = SKILL_CAT_ATKDEF[cat]
+                    sk_atk = round((0.02 + 0.05 * tier + 0.02 * v) * sa, 3)
+                    sk_def = round((0.02 + 0.05 * tier + 0.02 * v) * sd, 3)
                     skills.append({
                         "id": sid, "name": name, "category": cat, "category_name": cat_cn,
                         "tier": tier, "tier_name": SKILL_TIERS[tier], "type": "passive",
                         "effect": eff, "value": round(pct / 100.0, 3),
+                        "atk": sk_atk, "def": sk_def,
                         "unlock_realm": TIER_UNLOCK_REALM[tier], "unlock_layer": (v % 3) + 1,
                         "desc": EFFECT_CN[eff].format(v=pct),
                     })
@@ -137,6 +161,14 @@ EQUIP_ATTR = {
 # 打磨-4: 后期价格曲线调平 —— 各档约 x5, 与灵石速率的境界增幅 (~x2.5~4) 匹配,
 # 保证每升一档的购买耗时约为上一档的 1.5~2 倍 (旧曲线 x8 导致 仙品/神品 需数小时~十几小时)
 EQUIP_BASE_COST = [100, 500, 2500, 12000, 60000, 300000, 1500000]
+# M5-2: 装备 atk/def 属性池 (爬塔战力; 武器偏攻, 法袍/云靴偏防, 玉佩/灵珠均衡)
+EQUIP_SLOT_ATKDEF = {
+    "weapon": (1.0, 0.2),
+    "robe":   (0.2, 1.0),
+    "amulet": (0.6, 0.6),
+    "bead":   (0.7, 0.4),
+    "boot":   (0.3, 0.7),
+}
 
 def gen_equipment():
     eq, used = [], set()
@@ -156,11 +188,16 @@ def gen_equipment():
                 bt = round(0.0 + 0.005 * tier + 0.003 * v, 4) if v % 2 == 0 else 0.0
                 off = round(0.0 + 0.01 * tier + 0.005 * v, 4) if v % 2 == 1 else 0.0
                 cost = int(EQUIP_BASE_COST[tier] * (1 + 0.25 * v))
+                # M5-2: atk/def 乘算独立加成 (与 qi/stone 同梯度, 部位偏向 攻/防)
+                sa, sd = EQUIP_SLOT_ATKDEF[slot]
+                atk = round((0.05 + 0.10 * tier + 0.03 * v) * sa, 3)
+                dfn = round((0.05 + 0.10 * tier + 0.03 * v) * sd, 3)
                 eq.append({
                     "id": eid, "name": name, "slot": slot, "slot_name": slot_cn,
                     "tier": tier, "tier_name": EQUIP_TIERS[tier], "cost": cost,
                     "qi_mult": qi, "stone_mult": stone, "bt_chance": bt, "offline_rate": off,
-                    "desc": f"灵气+{qi*100:.0f}% 灵石+{stone*100:.0f}% 突破+{bt*100:.1f}% 离线+{off*100:.1f}%",
+                    "atk": atk, "def": dfn,
+                    "desc": f"灵气+{qi*100:.0f}% 灵石+{stone*100:.0f}% 攻击+{atk*100:.0f}% 防御+{dfn*100:.0f}% 突破+{bt*100:.1f}% 离线+{off*100:.1f}%",
                 })
     return eq
 
@@ -328,6 +365,13 @@ TOWER_STONE_BASE, TOWER_STONE_GROWTH = 10.0, 1.06
 TOWER_ELITE_MULT, TOWER_ELITE_REWARD = 3.0, 2
 TOWER_BOST_MULTS = {"small": 10.0, "theme": 20.0, "final": 50.0}
 TOWER_BOST_REWARD = 5
+# M5-2: 登天梯 (无尽塔) 公式 — 底数 1.06 略高于 镇妖塔 1.055, 越打越难 无上限;
+# 每 100 层 天阶里程碑 (小 Boss 池轮转 + 宝箱), 奖励指数同 镇妖塔 口径
+ENDLESS_HP_BASE, ENDLESS_HP_GROWTH = 5.0, 1.06
+ENDLESS_ATK_BASE, ENDLESS_ATK_GROWTH = 2.0, 1.06
+ENDLESS_DEF_BASE, ENDLESS_DEF_GROWTH = 1.0, 1.04
+ENDLESS_STONE_BASE, ENDLESS_STONE_GROWTH = 10.0, 1.06
+ENDLESS_MILESTONE_FLOOR = 100
 
 def gen_tower_floors(rng, monsters):
     by_id = {m["id"]: m for m in monsters}
@@ -437,6 +481,53 @@ def main():
         assert f["is_elite"] == (f["floor"] % 10 == 0 and f["boss_type"] == ""), f"第 {f['floor']} 层精英标记错误"
     elite_cnt = sum(1 for f in floors if f["is_elite"])
     assert elite_cnt == 80, f"精英层须 80 个 (每 10 层 100 减 Boss 层 20, 实际 {elite_cnt})"
+    # ---- M5-2 校验: 技能 atk/def 池 + 装备 atk/def 属性 ----
+    for e in equipment:
+        assert "atk" in e and "def" in e, f"装备 {e['id']} 缺 atk/def 字段"
+        assert e["atk"] >= 0.0 and e["def"] >= 0.0, f"装备 {e['id']} atk/def 须非负"
+    for slot in EQUIP_SLOTS:
+        sa, sd = EQUIP_SLOT_ATKDEF[slot]
+        # 同部位 atk/def 比例恒定 = 部位偏向 (武器偏攻, 法袍偏防 ...)
+        for e in equipment:
+            if e["slot"] != slot:
+                continue
+            if e["def"] <= 0:
+                assert e["atk"] == 0, f"装备 {e['id']} def=0 时 atk 须 0"
+                continue
+            # 独立四舍五入到 3 位, 比例允许 2e-2 误差
+            assert abs((e["atk"] / e["def"]) - (sa / sd)) < 2e-2, \
+                f"装备 {e['id']} atk/def 比例须≈{sa:.1f}:{sd:.1f} (实际 {e['atk']/e['def']:.3f})"
+        # 品质/变体 越高 atk+def 越大 (单调)
+        by_tier = {}
+        for e in equipment:
+            if e["slot"] == slot:
+                by_tier.setdefault(e["tier"], {})[e["id"]] = e["atk"] + e["def"]
+        prev_tier_max = -1.0
+        for t in sorted(by_tier):
+            vals = by_tier[t]
+            # 同品质 变体递增
+            sorted_vals = sorted(vals.values())
+            for i in range(len(sorted_vals) - 1):
+                assert sorted_vals[i + 1] > sorted_vals[i], \
+                    f"装备 {slot} 品质{t} atk+def 须随变体上升 ({sorted_vals})"
+            assert max(vals.values()) > prev_tier_max, \
+                f"装备 {slot} atk+def 须随品质上升 (t{t} max={max(vals.values())})"
+            prev_tier_max = max(vals.values())
+    eff_cnt = {}
+    for s in skills:
+        if s["type"] == "passive":
+            eff_cnt[s["effect"]] = eff_cnt.get(s["effect"], 0) + 1
+    # M5-2: 被动 技能 须 带 atk/def 属性池 (独立 字段, 非 主 效果)
+    for s in skills:
+        if s["type"] == "passive":
+            assert "atk" in s and "def" in s, f"技能 {s['id']} 缺 atk/def 属性池"
+            assert s["atk"] >= 0.0 and s["def"] >= 0.0, f"技能 {s['id']} atk/def 须非负"
+    atk_cnt = sum(1 for s in skills if s["type"] == "passive" and s["atk"] > 0.0)
+    def_cnt = sum(1 for s in skills if s["type"] == "passive" and s["def"] > 0.0)
+    assert atk_cnt >= 5 and def_cnt >= 5, f"技能 atk/def 属性池覆盖不足 (atk {atk_cnt} / def {def_cnt})"
+    # 登天梯 底数 须 严格高于 镇妖塔 (越打越难 口径)
+    assert ENDLESS_HP_GROWTH > TOWER_HP_GROWTH, "登天梯 hp 底数须高于镇妖塔"
+    assert ENDLESS_ATK_GROWTH > TOWER_ATK_GROWTH, "登天梯 atk 底数须高于镇妖塔"
     with open(os.path.join(DATA, "skills.json"), "w", encoding="utf-8") as f:
         json.dump({"skills": skills}, f, ensure_ascii=False, indent=2)
     with open(os.path.join(DATA, "equipment.json"), "w", encoding="utf-8") as f:
@@ -456,6 +547,14 @@ def main():
                                    "stone": [TOWER_STONE_BASE, TOWER_STONE_GROWTH]},
                       "elite": {"mult": TOWER_ELITE_MULT, "reward": TOWER_ELITE_REWARD},
                       "boss": {"mult": TOWER_BOST_MULTS, "reward": TOWER_BOST_REWARD}},
+            "endless": {"name": "登天梯", "max_floor": None,
+                        "milestone_floor": ENDLESS_MILESTONE_FLOOR,
+                        "formulas": {"hp": [ENDLESS_HP_BASE, ENDLESS_HP_GROWTH],
+                                     "atk": [ENDLESS_ATK_BASE, ENDLESS_ATK_GROWTH],
+                                     "def": [ENDLESS_DEF_BASE, ENDLESS_DEF_GROWTH],
+                                     "stone": [ENDLESS_STONE_BASE, ENDLESS_STONE_GROWTH]},
+                        "elite": {"mult": TOWER_ELITE_MULT, "reward": TOWER_ELITE_REWARD},
+                        "boss": {"mult": TOWER_BOST_MULTS, "reward": TOWER_BOST_REWARD}},
             "floors": floors,
         }, f, ensure_ascii=False, indent=2)
     # 校验

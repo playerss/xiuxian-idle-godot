@@ -10,6 +10,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.03,
+      "atk": 0.06,
+      "def": 0.02,
       "unlock_realm": 0,
       "unlock_layer": 1,
       "desc": "灵气速率 +3%"
@@ -24,6 +26,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.05,
+      "atk": 0.12,
+      "def": 0.04,
       "unlock_realm": 0,
       "unlock_layer": 2,
       "desc": "灵石速率 +5%"
@@ -38,6 +42,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.07,
+      "atk": 0.18,
+      "def": 0.06,
       "unlock_realm": 0,
       "unlock_layer": 3,
       "desc": "突破成功率 +7%"
@@ -67,6 +73,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.08,
+      "atk": 0.21,
+      "def": 0.07,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "灵石速率 +8%"
@@ -81,6 +89,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.1,
+      "atk": 0.27,
+      "def": 0.09,
       "unlock_realm": 1,
       "unlock_layer": 2,
       "desc": "突破成功率 +10%"
@@ -95,6 +105,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.12,
+      "atk": 0.33,
+      "def": 0.11,
       "unlock_realm": 1,
       "unlock_layer": 3,
       "desc": "离线效率 +12%"
@@ -109,6 +121,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.14,
+      "atk": 0.39,
+      "def": 0.13,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +14%"
@@ -123,6 +137,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.15,
+      "atk": 0.36,
+      "def": 0.12,
       "unlock_realm": 2,
       "unlock_layer": 1,
       "desc": "突破成功率 +15%"
@@ -137,6 +153,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.17,
+      "atk": 0.42,
+      "def": 0.14,
       "unlock_realm": 2,
       "unlock_layer": 2,
       "desc": "离线效率 +17%"
@@ -151,6 +169,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.19,
+      "atk": 0.48,
+      "def": 0.16,
       "unlock_realm": 2,
       "unlock_layer": 3,
       "desc": "灵气/灵石速率 +19%"
@@ -180,6 +200,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.25,
+      "atk": 0.51,
+      "def": 0.17,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "离线效率 +25%"
@@ -194,6 +216,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.27,
+      "atk": 0.57,
+      "def": 0.19,
       "unlock_realm": 3,
       "unlock_layer": 2,
       "desc": "灵气/灵石速率 +27%"
@@ -208,6 +232,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.29,
+      "atk": 0.63,
+      "def": 0.21,
       "unlock_realm": 3,
       "unlock_layer": 3,
       "desc": "灵气速率 +29%"
@@ -222,6 +248,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.31,
+      "atk": 0.69,
+      "def": 0.23,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "灵石速率 +31%"
@@ -236,6 +264,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.4,
+      "atk": 0.66,
+      "def": 0.22,
       "unlock_realm": 4,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +40%"
@@ -250,6 +280,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.42,
+      "atk": 0.72,
+      "def": 0.24,
       "unlock_realm": 4,
       "unlock_layer": 2,
       "desc": "灵气速率 +42%"
@@ -264,6 +296,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.44,
+      "atk": 0.78,
+      "def": 0.26,
       "unlock_realm": 4,
       "unlock_layer": 3,
       "desc": "灵石速率 +44%"
@@ -293,6 +327,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.7,
+      "atk": 0.81,
+      "def": 0.27,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "灵气速率 +70%"
@@ -307,6 +343,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.72,
+      "atk": 0.87,
+      "def": 0.29,
       "unlock_realm": 5,
       "unlock_layer": 2,
       "desc": "灵石速率 +72%"
@@ -321,6 +359,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.74,
+      "atk": 0.93,
+      "def": 0.31,
       "unlock_realm": 5,
       "unlock_layer": 3,
       "desc": "突破成功率 +74%"
@@ -335,6 +375,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.76,
+      "atk": 0.99,
+      "def": 0.33,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "离线效率 +76%"
@@ -349,6 +391,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.03,
+      "atk": 0.06,
+      "def": 0.02,
       "unlock_realm": 0,
       "unlock_layer": 1,
       "desc": "灵气速率 +3%"
@@ -363,6 +407,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.05,
+      "atk": 0.12,
+      "def": 0.04,
       "unlock_realm": 0,
       "unlock_layer": 2,
       "desc": "灵石速率 +5%"
@@ -377,6 +423,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.07,
+      "atk": 0.18,
+      "def": 0.06,
       "unlock_realm": 0,
       "unlock_layer": 3,
       "desc": "突破成功率 +7%"
@@ -406,6 +454,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.08,
+      "atk": 0.21,
+      "def": 0.07,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "灵石速率 +8%"
@@ -420,6 +470,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.1,
+      "atk": 0.27,
+      "def": 0.09,
       "unlock_realm": 1,
       "unlock_layer": 2,
       "desc": "突破成功率 +10%"
@@ -434,6 +486,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.12,
+      "atk": 0.33,
+      "def": 0.11,
       "unlock_realm": 1,
       "unlock_layer": 3,
       "desc": "离线效率 +12%"
@@ -448,6 +502,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.14,
+      "atk": 0.39,
+      "def": 0.13,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +14%"
@@ -462,6 +518,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.15,
+      "atk": 0.36,
+      "def": 0.12,
       "unlock_realm": 2,
       "unlock_layer": 1,
       "desc": "突破成功率 +15%"
@@ -476,6 +534,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.17,
+      "atk": 0.42,
+      "def": 0.14,
       "unlock_realm": 2,
       "unlock_layer": 2,
       "desc": "离线效率 +17%"
@@ -490,6 +550,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.19,
+      "atk": 0.48,
+      "def": 0.16,
       "unlock_realm": 2,
       "unlock_layer": 3,
       "desc": "灵气/灵石速率 +19%"
@@ -519,6 +581,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.25,
+      "atk": 0.51,
+      "def": 0.17,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "离线效率 +25%"
@@ -533,6 +597,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.27,
+      "atk": 0.57,
+      "def": 0.19,
       "unlock_realm": 3,
       "unlock_layer": 2,
       "desc": "灵气/灵石速率 +27%"
@@ -547,6 +613,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.29,
+      "atk": 0.63,
+      "def": 0.21,
       "unlock_realm": 3,
       "unlock_layer": 3,
       "desc": "灵气速率 +29%"
@@ -561,6 +629,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.31,
+      "atk": 0.69,
+      "def": 0.23,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "灵石速率 +31%"
@@ -575,6 +645,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.4,
+      "atk": 0.66,
+      "def": 0.22,
       "unlock_realm": 4,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +40%"
@@ -589,6 +661,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.42,
+      "atk": 0.72,
+      "def": 0.24,
       "unlock_realm": 4,
       "unlock_layer": 2,
       "desc": "灵气速率 +42%"
@@ -603,6 +677,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.44,
+      "atk": 0.78,
+      "def": 0.26,
       "unlock_realm": 4,
       "unlock_layer": 3,
       "desc": "灵石速率 +44%"
@@ -632,6 +708,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.7,
+      "atk": 0.81,
+      "def": 0.27,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "灵气速率 +70%"
@@ -646,6 +724,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.72,
+      "atk": 0.87,
+      "def": 0.29,
       "unlock_realm": 5,
       "unlock_layer": 2,
       "desc": "灵石速率 +72%"
@@ -660,6 +740,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.74,
+      "atk": 0.93,
+      "def": 0.31,
       "unlock_realm": 5,
       "unlock_layer": 3,
       "desc": "突破成功率 +74%"
@@ -674,6 +756,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.76,
+      "atk": 0.99,
+      "def": 0.33,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "离线效率 +76%"
@@ -688,6 +772,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.03,
+      "atk": 0.02,
+      "def": 0.06,
       "unlock_realm": 0,
       "unlock_layer": 1,
       "desc": "灵气速率 +3%"
@@ -702,6 +788,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.05,
+      "atk": 0.04,
+      "def": 0.12,
       "unlock_realm": 0,
       "unlock_layer": 2,
       "desc": "灵石速率 +5%"
@@ -716,6 +804,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.07,
+      "atk": 0.06,
+      "def": 0.18,
       "unlock_realm": 0,
       "unlock_layer": 3,
       "desc": "突破成功率 +7%"
@@ -745,6 +835,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.08,
+      "atk": 0.07,
+      "def": 0.21,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "灵石速率 +8%"
@@ -759,6 +851,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.1,
+      "atk": 0.09,
+      "def": 0.27,
       "unlock_realm": 1,
       "unlock_layer": 2,
       "desc": "突破成功率 +10%"
@@ -773,6 +867,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.12,
+      "atk": 0.11,
+      "def": 0.33,
       "unlock_realm": 1,
       "unlock_layer": 3,
       "desc": "离线效率 +12%"
@@ -787,6 +883,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.14,
+      "atk": 0.13,
+      "def": 0.39,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +14%"
@@ -801,6 +899,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.15,
+      "atk": 0.12,
+      "def": 0.36,
       "unlock_realm": 2,
       "unlock_layer": 1,
       "desc": "突破成功率 +15%"
@@ -815,6 +915,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.17,
+      "atk": 0.14,
+      "def": 0.42,
       "unlock_realm": 2,
       "unlock_layer": 2,
       "desc": "离线效率 +17%"
@@ -829,6 +931,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.19,
+      "atk": 0.16,
+      "def": 0.48,
       "unlock_realm": 2,
       "unlock_layer": 3,
       "desc": "灵气/灵石速率 +19%"
@@ -858,6 +962,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.25,
+      "atk": 0.17,
+      "def": 0.51,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "离线效率 +25%"
@@ -872,6 +978,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.27,
+      "atk": 0.19,
+      "def": 0.57,
       "unlock_realm": 3,
       "unlock_layer": 2,
       "desc": "灵气/灵石速率 +27%"
@@ -886,6 +994,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.29,
+      "atk": 0.21,
+      "def": 0.63,
       "unlock_realm": 3,
       "unlock_layer": 3,
       "desc": "灵气速率 +29%"
@@ -900,6 +1010,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.31,
+      "atk": 0.23,
+      "def": 0.69,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "灵石速率 +31%"
@@ -914,6 +1026,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.4,
+      "atk": 0.22,
+      "def": 0.66,
       "unlock_realm": 4,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +40%"
@@ -928,6 +1042,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.42,
+      "atk": 0.24,
+      "def": 0.72,
       "unlock_realm": 4,
       "unlock_layer": 2,
       "desc": "灵气速率 +42%"
@@ -942,6 +1058,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.44,
+      "atk": 0.26,
+      "def": 0.78,
       "unlock_realm": 4,
       "unlock_layer": 3,
       "desc": "灵石速率 +44%"
@@ -971,6 +1089,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.7,
+      "atk": 0.27,
+      "def": 0.81,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "灵气速率 +70%"
@@ -985,6 +1105,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.72,
+      "atk": 0.29,
+      "def": 0.87,
       "unlock_realm": 5,
       "unlock_layer": 2,
       "desc": "灵石速率 +72%"
@@ -999,6 +1121,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.74,
+      "atk": 0.31,
+      "def": 0.93,
       "unlock_realm": 5,
       "unlock_layer": 3,
       "desc": "突破成功率 +74%"
@@ -1013,6 +1137,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.76,
+      "atk": 0.33,
+      "def": 0.99,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "离线效率 +76%"
@@ -1027,6 +1153,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.03,
+      "atk": 0.02,
+      "def": 0.06,
       "unlock_realm": 0,
       "unlock_layer": 1,
       "desc": "灵气速率 +3%"
@@ -1041,6 +1169,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.05,
+      "atk": 0.04,
+      "def": 0.12,
       "unlock_realm": 0,
       "unlock_layer": 2,
       "desc": "灵石速率 +5%"
@@ -1055,6 +1185,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.07,
+      "atk": 0.06,
+      "def": 0.18,
       "unlock_realm": 0,
       "unlock_layer": 3,
       "desc": "突破成功率 +7%"
@@ -1084,6 +1216,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.08,
+      "atk": 0.07,
+      "def": 0.21,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "灵石速率 +8%"
@@ -1098,6 +1232,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.1,
+      "atk": 0.09,
+      "def": 0.27,
       "unlock_realm": 1,
       "unlock_layer": 2,
       "desc": "突破成功率 +10%"
@@ -1112,6 +1248,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.12,
+      "atk": 0.11,
+      "def": 0.33,
       "unlock_realm": 1,
       "unlock_layer": 3,
       "desc": "离线效率 +12%"
@@ -1126,6 +1264,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.14,
+      "atk": 0.13,
+      "def": 0.39,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +14%"
@@ -1140,6 +1280,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.15,
+      "atk": 0.12,
+      "def": 0.36,
       "unlock_realm": 2,
       "unlock_layer": 1,
       "desc": "突破成功率 +15%"
@@ -1154,6 +1296,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.17,
+      "atk": 0.14,
+      "def": 0.42,
       "unlock_realm": 2,
       "unlock_layer": 2,
       "desc": "离线效率 +17%"
@@ -1168,6 +1312,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.19,
+      "atk": 0.16,
+      "def": 0.48,
       "unlock_realm": 2,
       "unlock_layer": 3,
       "desc": "灵气/灵石速率 +19%"
@@ -1197,6 +1343,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.25,
+      "atk": 0.17,
+      "def": 0.51,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "离线效率 +25%"
@@ -1211,6 +1359,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.27,
+      "atk": 0.19,
+      "def": 0.57,
       "unlock_realm": 3,
       "unlock_layer": 2,
       "desc": "灵气/灵石速率 +27%"
@@ -1225,6 +1375,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.29,
+      "atk": 0.21,
+      "def": 0.63,
       "unlock_realm": 3,
       "unlock_layer": 3,
       "desc": "灵气速率 +29%"
@@ -1239,6 +1391,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.31,
+      "atk": 0.23,
+      "def": 0.69,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "灵石速率 +31%"
@@ -1253,6 +1407,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.4,
+      "atk": 0.22,
+      "def": 0.66,
       "unlock_realm": 4,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +40%"
@@ -1267,6 +1423,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.42,
+      "atk": 0.24,
+      "def": 0.72,
       "unlock_realm": 4,
       "unlock_layer": 2,
       "desc": "灵气速率 +42%"
@@ -1281,6 +1439,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.44,
+      "atk": 0.26,
+      "def": 0.78,
       "unlock_realm": 4,
       "unlock_layer": 3,
       "desc": "灵石速率 +44%"
@@ -1310,6 +1470,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.7,
+      "atk": 0.27,
+      "def": 0.81,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "灵气速率 +70%"
@@ -1324,6 +1486,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.72,
+      "atk": 0.29,
+      "def": 0.87,
       "unlock_realm": 5,
       "unlock_layer": 2,
       "desc": "灵石速率 +72%"
@@ -1338,6 +1502,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.74,
+      "atk": 0.31,
+      "def": 0.93,
       "unlock_realm": 5,
       "unlock_layer": 3,
       "desc": "突破成功率 +74%"
@@ -1352,6 +1518,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.76,
+      "atk": 0.33,
+      "def": 0.99,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "离线效率 +76%"
@@ -1366,6 +1534,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.03,
+      "atk": 0.04,
+      "def": 0.04,
       "unlock_realm": 0,
       "unlock_layer": 1,
       "desc": "灵石速率 +3%"
@@ -1380,6 +1550,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.05,
+      "atk": 0.08,
+      "def": 0.08,
       "unlock_realm": 0,
       "unlock_layer": 2,
       "desc": "突破成功率 +5%"
@@ -1424,6 +1596,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.08,
+      "atk": 0.14,
+      "def": 0.14,
       "unlock_realm": 1,
       "unlock_layer": 1,
       "desc": "突破成功率 +8%"
@@ -1438,6 +1612,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.1,
+      "atk": 0.18,
+      "def": 0.18,
       "unlock_realm": 1,
       "unlock_layer": 2,
       "desc": "离线效率 +10%"
@@ -1482,6 +1658,8 @@
       "type": "passive",
       "effect": "offline_rate",
       "value": 0.15,
+      "atk": 0.24,
+      "def": 0.24,
       "unlock_realm": 2,
       "unlock_layer": 1,
       "desc": "离线效率 +15%"
@@ -1496,6 +1674,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.17,
+      "atk": 0.28,
+      "def": 0.28,
       "unlock_realm": 2,
       "unlock_layer": 2,
       "desc": "灵气/灵石速率 +17%"
@@ -1540,6 +1720,8 @@
       "type": "passive",
       "effect": "all_mult",
       "value": 0.25,
+      "atk": 0.34,
+      "def": 0.34,
       "unlock_realm": 3,
       "unlock_layer": 1,
       "desc": "灵气/灵石速率 +25%"
@@ -1554,6 +1736,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.27,
+      "atk": 0.38,
+      "def": 0.38,
       "unlock_realm": 3,
       "unlock_layer": 2,
       "desc": "灵气速率 +27%"
@@ -1598,6 +1782,8 @@
       "type": "passive",
       "effect": "qi_mult",
       "value": 0.4,
+      "atk": 0.44,
+      "def": 0.44,
       "unlock_realm": 4,
       "unlock_layer": 1,
       "desc": "灵气速率 +40%"
@@ -1612,6 +1798,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.42,
+      "atk": 0.48,
+      "def": 0.48,
       "unlock_realm": 4,
       "unlock_layer": 2,
       "desc": "灵石速率 +42%"
@@ -1656,6 +1844,8 @@
       "type": "passive",
       "effect": "stone_mult",
       "value": 0.7,
+      "atk": 0.54,
+      "def": 0.54,
       "unlock_realm": 5,
       "unlock_layer": 1,
       "desc": "灵石速率 +70%"
@@ -1670,6 +1860,8 @@
       "type": "passive",
       "effect": "bt_chance",
       "value": 0.72,
+      "atk": 0.58,
+      "def": 0.58,
       "unlock_realm": 5,
       "unlock_layer": 2,
       "desc": "突破成功率 +72%"

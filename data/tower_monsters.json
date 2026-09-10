@@ -33,6 +33,41 @@
       "reward": 5
     }
   },
+  "endless": {
+    "name": "登天梯",
+    "max_floor": null,
+    "milestone_floor": 100,
+    "formulas": {
+      "hp": [
+        5.0,
+        1.06
+      ],
+      "atk": [
+        2.0,
+        1.06
+      ],
+      "def": [
+        1.0,
+        1.04
+      ],
+      "stone": [
+        10.0,
+        1.06
+      ]
+    },
+    "elite": {
+      "mult": 3.0,
+      "reward": 2
+    },
+    "boss": {
+      "mult": {
+        "small": 10.0,
+        "theme": 20.0,
+        "final": 50.0
+      },
+      "reward": 5
+    }
+  },
   "floors": [
     {
       "floor": 1,

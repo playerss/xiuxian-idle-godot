@@ -215,7 +215,250 @@ func _init() -> void:
 			check(theme_floors.size() == 4 and theme_floors.has(100) and theme_floors.has(250) and theme_floors.has(500) and theme_floors.has(750), "主题 Boss 层 = 100/250/500/750")
 			check(final_floors.size() == 1 and final_floors.has(1000), "最终 Boss 层 = 1000")
 
-	# ---------- 技能: 学习 / 未解锁 / 重复学习 ----------
+			# ---------- M5-2: 爬塔 战斗逻辑 (玩家 atk/def / 战斗判定 / 奖励 / 剧毒 / 每日首胜 / 存档) ----------
+			# 受控基准: 此时 g 为 全新档 (境界0层1, 无 技能/装备/法器, 灵石 0) — 冻结 _process 防 挂机 累积
+			g.set_process(false)
+			g.tower_fixed_floor = 0
+			g.tower_fixed_clear = false
+			g.tower_endless_floor = 1
+			g.tower_endless_best = 0
+			g.tower_daily_date = ""
+			g.tower_daily_bonus_stones = 0.0
+			g.poison_battles = 0
+			g.learned.clear()
+			g.owned.clear()
+			g.owned_eq.clear()
+			g.equipped.clear()
+			g.realm_idx = 0
+			g.layer = 1
+			g.ascended = false
+			g.dao_level = 0
+			# 数据 加载 断言
+			check(g.tower_floors.size() == 1000, "镇妖塔 1000 层表 加载 (实际 %d)" % g.tower_floors.size())
+			check(g.tower_fixed.has("max_floor") and int(g.tower_fixed["max_floor"]) == 1000, "镇妖塔 max_floor = 1000")
+			check(g.tower_endless.has("formulas"), "登天梯 公式 加载")
+			check(g.monster_ids.size() == 145, "怪物 145 (实际 %d)" % g.monster_ids.size())
+			check(g.trait_by_id.size() == 18, "特性 18 (实际 %d)" % g.trait_by_id.size())
+			check(g._endless_species.size() == 120, "无尽 普通 怪物种 120 (实际 %d)" % g._endless_species.size())
+			check(g._endless_small_bosses.size() == 20, "无尽 里程碑 Boss 池 20 (实际 %d)" % g._endless_small_bosses.size())
+			check(g._trait_ids.size() == 18, "无尽 精英 特性池 18 (实际 %d)" % g._trait_ids.size())
+			# 玩家 战力 基准 (无 技能/装备: 2.0 x 40^0 = 2.0)
+			check(absf(g.player_atk() - 2.0) < 1e-9, "新档 玩家 atk = 2.0 (实际 %s)" % g.fmt(g.player_atk()))
+			check(absf(g.player_def() - 2.0) < 1e-9, "新档 玩家 def = 2.0 (实际 %s)" % g.fmt(g.player_def()))
+			check(g.tower_power_progress() == 0, "新档 战力 进度 = 0 (实际 %d)" % g.tower_power_progress())
+			check(absf(g.player_atk_effective() - 2.0) < 1e-9, "无 剧毒 时 有效 atk = atk")
+			# 剧毒 debuff: 有效 atk x0.85
+			g.poison_battles = 2
+			check(absf(g.player_atk_effective() - 2.0 * 0.85) < 1e-9, "剧毒 2 场 有效 atk x0.85 (实际 %s)" % g.fmt(g.player_atk_effective()))
+			g.poison_battles = 0
+			# 战力 随 境界 单调 上升
+			g.realm_idx = 2
+			check(g.tower_power_progress() == 2, "境界2 战力 进度 = 2 (实际 %d)" % g.tower_power_progress())
+			check(g.player_atk() > 2.0, "境界2 玩家 atk 上升 (实际 %s)" % g.fmt(g.player_atk()))
+			g.realm_idx = 0
+			# 功法 atk/def 属性池 (M5-2 新增 独立 字段, 与 主 效果 解耦)
+			var atk_skill := ""
+			var def_skill := ""
+			for id in g.skill_ids:
+				var s0: Dictionary = g.skill_by_id[id]
+				if str(s0.get("type", "")) == "passive" and float(s0.get("atk", 0.0)) > 0.0 and atk_skill == "":
+					atk_skill = id
+				if str(s0.get("type", "")) == "passive" and float(s0.get("def", 0.0)) > 0.0 and def_skill == "":
+					def_skill = id
+			check(atk_skill != "", "存在 带 atk 的 被动 技能 (M5-2 攻击 属性池)")
+			check(def_skill != "", "存在 带 def 的 被动 技能 (M5-2 防御 属性池)")
+			# 剑法 类 偏 攻击: 取 高 品质 剑法 验证 atk 字段 存在
+			var sword_atk := ""
+			for id in g.skill_ids:
+				var ss: Dictionary = g.skill_by_id[id]
+				if str(ss.get("category", "")) == "sword" and str(ss.get("type", "")) == "passive" and int(ss.get("tier", 0)) == 5:
+					sword_atk = id
+			check(sword_atk != "" and float(g.skill_by_id[sword_atk].get("atk", 0.0)) > 0.0, "剑法 仙品 被动 带 atk 字段 (M5-2)")
+			if atk_skill != "":
+				g.learned.append(atk_skill)
+				var atk_after: float = float(g.player_atk())
+				check(atk_after > 2.0, "学 带 atk 功法 后 玩家 atk 上升 (实际 %s)" % g.fmt(atk_after))
+				check(g.skill_atk_bonus() > 0.0, "skill_atk_bonus 汇总 功法 atk 池 >0")
+				g.learned.clear()
+			# 怪物 有效 属性 (第 1 层 特性 atk 倍率; 动态 期望)
+			var f1: Dictionary = g.get_fixed_floor(1)
+			check(not f1.is_empty() and int(f1["floor"]) == 1, "镇妖塔 第 1 层 记录 可查")
+			var m1: Dictionary = g.tower_monster_stats(f1)
+			var exp1_atk: float = float(f1["atk"])
+			for t in f1["traits"]:
+				exp1_atk *= float(g.trait_by_id[str(t)]["mult"].get("atk", 1.0))
+			check(absf(float(m1["atk"]) - exp1_atk) < 1e-6 * maxf(exp1_atk, 1.0), "第 1 层 怪 atk = 基础 x 特性 (实际 %s / 期望 %s)" % [g.fmt(float(m1["atk"])), g.fmt(exp1_atk)])
+			check(str(m1["name"]) == str(f1["name"]), "怪物 名 = 塔表 层名 (%s)" % str(m1["name"]))
+			# 镇妖塔 战斗: 新档 (atk 2.0) 胜 第 1 层 (怪 atk 1.688, 阈值 1.43 < 2.0)
+			var r1: Dictionary = g.try_tower_challenge("fixed", 0.5)
+			check(bool(r1["win"]), "新档 胜 第 1 层 (实际 %s)" % str(r1["win"]))
+			check(int(g.tower_fixed_floor) == 1, "胜 第 1 层 后 最高 层 = 1 (实际 %d)" % g.tower_fixed_floor)
+			check(g.stones > 0.0, "胜 第 1 层 灵石 入账 (实际 %s)" % g.fmt(g.stones))
+			check(absf(float(r1["reward_stone"]) - float(f1["reward_stone"])) < 1e-9, "奖励 灵石 = 层表 值")
+			check(g.fixed_challenge_floor() == 2, "下一 挑战 层 = 2 (实际 %d)" % g.fixed_challenge_floor())
+			check(int(g.stats.get("tower_win", 0.0)) == 1, "战斗 统计 tower_win +1")
+			# 新档 atk 2.0 败 第 2 层 (怪 atk 3.339 x 0.85 = 2.84 > 2.0) — 无 惩罚 无 消耗
+			var stones_before: float = float(g.stones)
+			var r2: Dictionary = g.try_tower_challenge("fixed", 0.5)
+			check(not bool(r2["win"]), "新档 败 第 2 层 (战力 不足, 实际 %s)" % str(r2["win"]))
+			check(int(g.tower_fixed_floor) == 1, "败 后 最高 层 不变 (=1, 可 重试)")
+			check(absf(g.stones - stones_before) < 1e-9, "败 无 灵石 消耗 (无 惩罚)")
+			check(int(r2["floor"]) == 2, "败 仍 停在 本层 (第 2 层)")
+			# 精英/Boss 奖励 倍率 (查 层表 口径)
+			var fe: Dictionary = g.get_fixed_floor(10)
+			check(bool(fe["is_elite"]) and int(fe["reward_mult"]) == 2, "第 10 层 精英 奖励 x2")
+			var fb: Dictionary = g.get_fixed_floor(50)
+			check(str(fb["boss_type"]) == "small" and int(fb["reward_mult"]) == 5, "第 50 层 小 Boss 奖励 x5")
+			var ff: Dictionary = g.get_fixed_floor(1000)
+			check(str(ff["boss_type"]) == "final" and str(ff["name"]) == "镇妖塔主", "第 1000 层 最终 Boss 镇妖塔主")
+			# 渡劫期 (境界8, 未飞升) 不可 通关 1000 层 (通关点 在 道祖)
+			g.tower_fixed_floor = 999
+			g.tower_fixed_clear = false
+			g.realm_idx = 8
+			var r7: Dictionary = g.try_tower_challenge("fixed", 0.5)
+			check(not bool(r7["win"]), "渡劫期 败 第 1000 层 (通关点 在 道祖; 玩家 atk %s vs 阈值 %s)" % [g.fmt(g.player_atk()), g.fmt(float(r7["mon_atk"]) * 0.85)])
+			check(not g.tower_fixed_clear, "渡劫期 未 通关")
+			# 道祖 (飞升 + 道行 8 阶, 战力 进度 17) 胜 第 1000 层 最终 Boss -> 通关
+			g.ascended = true
+			g.dao_level = 8
+			g.learned.clear()
+			for id in g.skill_ids:
+				var s6: Dictionary = g.skill_by_id[id]
+				if str(s6.get("type", "")) == "passive" and str(s6.get("effect", "")) in ["atk", "all_mult"]:
+					g.learned.append(id)
+			var r6: Dictionary = g.try_tower_challenge("fixed", 0.5)
+			check(bool(r6["win"]), "道祖 胜 第 1000 层 最终 Boss (怪 atk %s, 玩家 atk %s)" % [g.fmt(float(r6["mon_atk"])), g.fmt(g.player_atk())])
+			check(bool(r6["clear"]), "第 1000 层 通过 -> 通关 态")
+			check(g.tower_fixed_clear, "通关 态 置 位")
+			check(g.fixed_challenge_floor() == 1000, "通关 后 守塔模式 反复 打 1000 层 (实际 %d)" % g.fixed_challenge_floor())
+			# 登天梯: 新档 胜 第 1 层 (无尽 第 1 层 怪 atk 较低, 动态 期望)
+			g.ascended = false
+			g.dao_level = 0
+			g.realm_idx = 0
+			g.learned.clear()
+			g.tower_endless_floor = 1
+			g.tower_endless_best = 0
+			g.tower_daily_date = ""
+			g.tower_daily_bonus_stones = 0.0
+			var e1: Dictionary = g.get_endless_floor(1)
+			var me1: Dictionary = g.tower_monster_stats(e1)
+			check(not e1.is_empty() and int(e1["floor"]) == 1, "登天梯 第 1 层 记录")
+			check(str(e1["name"]) == str(g._endless_species[0]["name"]), "无尽 第 1 层 怪物 = 怪物种 轮转 首项")
+			var r4: Dictionary = g.try_tower_challenge("endless", 0.5)
+			check(bool(r4["win"]), "新档 胜 登天梯 第 1 层 (怪 atk %s, 阈值 %s)" % [g.fmt(float(me1["atk"])), g.fmt(float(me1["atk"]) * 0.85)])
+			check(int(g.tower_endless_floor) == 2, "无尽 胜 后 待挑战 层 = 2 (实际 %d)" % g.tower_endless_floor)
+			check(int(g.tower_endless_best) == 1, "无尽 最高 纪录 = 1 (实际 %d)" % g.tower_endless_best)
+			check(g.tower_daily_bonus_stones > 0.0, "无尽 每日首胜 奖励 发放 (新纪录 + 今日首胜)")
+			check(g.tower_daily_date != "", "无尽 每日首胜 日期 标记 置位")
+			# 同 日 再 胜 (新纪录): 今日 已 发放 首胜 -> 不 重复 发放
+			var bonus_before: float = float(g.tower_daily_bonus_stones)
+			var r5: Dictionary = g.try_tower_challenge("endless", 0.5)
+			if bool(r5["win"]):
+				check(absf(g.tower_daily_bonus_stones - bonus_before) < 1e-9, "无尽 同 日 二 胜 不 重复 发放 每日首胜")
+				check(float(r5["daily_bonus"]) == 0.0, "无尽 同 日 二 胜 daily_bonus = 0")
+			# 无尽 精英/Boss 标记 (每 10 层 精英, 每 100 层 里程碑 Boss)
+			var e10: Dictionary = g.get_endless_floor(10)
+			check(bool(e10["is_elite"]) and int(e10["reward_mult"]) == 2, "无尽 第 10 层 精英 x2")
+			var e100: Dictionary = g.get_endless_floor(100)
+			check(str(e100["boss_type"]) == "boss" and int(e100["reward_mult"]) == 5, "无尽 第 100 层 里程碑 Boss x5")
+			check(str(e100["name"]) == str(g._endless_small_bosses[0]["name"]), "无尽 里程碑 Boss = 小 Boss 池 轮转")
+			# 无尽 底数 须 高于 镇妖塔 (越打越难 口径; 从 数据 公式 校验)
+			var hp_fe: Array = g.tower_fixed["formulas"]["hp"]
+			var hp_ee: Array = g.tower_endless["formulas"]["hp"]
+			check(float(hp_ee[1]) > float(hp_fe[1]), "无尽 hp 底数 高于 镇妖塔 (%s > %s)" % [str(hp_ee[1]), str(hp_fe[1])])
+			# 爬塔 成就 (受控: 清空 已解锁 + 全部 塔 状态, 逐项 设 塔 状态 验证 解锁)
+			g.ach_done.clear()
+			g.realm_idx = 0
+			g.layer = 1
+			g.tower_fixed_floor = 0
+			g.tower_endless_best = 0
+			g.tower_fixed_clear = false
+			g.stones = 0.0
+			g.owned.clear()
+			var gotFirst: Array[String] = g.check_achievements()
+			check(not gotFirst.has("first_tower") and not gotFirst.has("tower_100") and not gotFirst.has("tower_clear"), "塔 状态 全 0 时 无 爬塔 成就 解锁 (实际 %s)" % str(gotFirst))
+			g.ach_done.clear()
+			g.tower_fixed_floor = 120
+			var got100: Array[String] = g.check_achievements()
+			check(got100.has("first_tower") and got100.has("tower_100") and not got100.has("tower_500"), "镇妖塔 120 层 解锁 first_tower + tower_100 (不越级): %s" % str(got100))
+			g.tower_fixed_floor = 520
+			var got500: Array[String] = g.check_achievements()
+			check(got500.has("tower_500") and not got500.has("endless_100"), "镇妖塔 520 层 解锁 tower_500: %s" % str(got500))
+			g.tower_endless_best = 150
+			var gotE100: Array[String] = g.check_achievements()
+			check(gotE100.has("endless_100"), "登天梯 150 层 解锁 endless_100: %s" % str(gotE100))
+			g.tower_endless_best = 5500
+			var gotE5000: Array[String] = g.check_achievements()
+			check(gotE5000.has("endless_1000") and gotE5000.has("endless_5000"), "登天梯 5500 层 解锁 endless_1000 + endless_5000: %s" % str(gotE5000))
+			g.tower_fixed_clear = true
+			var gotClear: Array[String] = g.check_achievements()
+			check(gotClear.has("tower_clear"), "镇妖塔 通关 解锁 tower_clear: %s" % str(gotClear))
+			# ach_progress / 进度比例 口径 (独立 受控: 清空 已解锁, 塔 状态 单独 设, 先验 未解锁 进度 再 验 已解锁 文案)
+			g.ach_done.clear()
+			g.tower_fixed_floor = 30
+			g.tower_endless_best = 0
+			g.tower_fixed_clear = false
+			check(g.ach_progress("tower_100") == "30/100", "ach_progress tower_100 进度 30/100 (实际 %s)" % g.ach_progress("tower_100"))
+			check(absf(g.ach_progress_ratio("tower_100") - 0.3) < 1e-9, "ach_progress_ratio tower_100 = 0.3 (实际 %s)" % str(g.ach_progress_ratio("tower_100")))
+			check(absf(g.ach_progress_ratio("endless_1000") - 0.0) < 1e-9, "ach_progress_ratio endless_1000 当前 0 (实际 %s)" % str(g.ach_progress_ratio("endless_1000")))
+			g.tower_fixed_floor = 120
+			g.check_achievements()
+			check(g.ach_progress("tower_100") == "已解锁", "ach_progress tower_100 已解锁 (实际 %s)" % g.ach_progress("tower_100"))
+			# 存档 往返 (爬塔 字段 持久化)
+			g.ach_done.clear()
+			g.tower_fixed_floor = 123
+			g.tower_fixed_clear = true
+			g.tower_endless_floor = 45
+			g.tower_endless_best = 44
+			g.tower_daily_date = "2026-09-10"
+			g.tower_daily_bonus_stones = 88.0
+			g.poison_battles = 2
+			g.save_game()
+			var saved: Dictionary = _save_json()
+			check(int(saved.get("tower_fixed_floor", -1)) == 123, "存档 tower_fixed_floor 往返 (实际 %s)" % str(saved.get("tower_fixed_floor")))
+			check(bool(saved.get("tower_fixed_clear", false)), "存档 tower_fixed_clear 往返")
+			check(int(saved.get("tower_endless_floor", -1)) == 45, "存档 tower_endless_floor 往返 (实际 %s)" % str(saved.get("tower_endless_floor")))
+			check(int(saved.get("tower_endless_best", -1)) == 44, "存档 tower_endless_best 往返 (实际 %s)" % str(saved.get("tower_endless_best")))
+			check(str(saved.get("tower_daily_date", "")) == "2026-09-10", "存档 tower_daily_date 往返 (实际 %s)" % str(saved.get("tower_daily_date")))
+			check(int(saved.get("poison_battles", -1)) == 2, "存档 poison_battles 往返 (实际 %s)" % str(saved.get("poison_battles")))
+			g.load_game()
+			check(g.tower_fixed_floor == 123 and g.tower_fixed_clear and g.tower_endless_floor == 45 and g.tower_endless_best == 44 and g.poison_battles == 2 and g.tower_daily_date == "2026-09-10", "读档 恢复 爬塔 状态")
+			# 旧档 兼容 (缺 爬塔 字段 -> 默认)
+			var oldf := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+			oldf.store_string(JSON.stringify({"realm_idx": 1, "layer": 2, "essence": 100.0, "stones": 50.0, "owned": [], "skills": [], "eq_owned": [], "equipped": {}, "ach_done": [], "ascended": false, "dao": 0.0, "dao_level": 0, "stats": {}, "ts": 0}))
+			oldf.close()
+			g.load_game()
+			check(g.tower_fixed_floor == 0, "旧档 缺 tower_fixed_floor 默认 0 (实际 %d)" % g.tower_fixed_floor)
+			check(not g.tower_fixed_clear, "旧档 缺 tower_fixed_clear 默认 未通关")
+			check(g.tower_endless_floor == 1, "旧档 缺 tower_endless_floor 默认 1 (实际 %d)" % g.tower_endless_floor)
+			check(g.tower_endless_best == 0, "旧档 缺 tower_endless_best 默认 0 (实际 %d)" % g.tower_endless_best)
+			check(g.poison_battles == 0, "旧档 缺 poison_battles 默认 0 (实际 %d)" % g.poison_battles)
+			check(g.tower_daily_date == "", "旧档 缺 tower_daily_date 默认 空")
+			# 收尾: 恢复 干净 基准 (防 污染 后续 段)
+			g.tower_fixed_floor = 0
+			g.tower_fixed_clear = false
+			g.tower_endless_floor = 1
+			g.tower_endless_best = 0
+			g.tower_daily_date = ""
+			g.tower_daily_bonus_stones = 0.0
+			g.poison_battles = 0
+			g.ach_done.clear()
+			g.realm_idx = 0
+			g.layer = 1
+			g.essence = 0.0
+			g.stones = 0.0
+			g.dao = 0.0
+			g.dao_level = 0
+			g.ascended = false
+			g.learned.clear()
+			g.owned.clear()
+			g.owned_eq.clear()
+			g.equipped.clear()
+			g._active_cd = {}
+			g.ready_events.clear()
+			g.set_process(true)
+
+			# ---------- 技能: 学习 / 未解锁 / 重复学习 ----------
 	var passive_id := ""
 	var active_id := ""
 	var locked_passive := ""
@@ -449,9 +692,15 @@ func _init() -> void:
 	g.realm_idx = 8
 	var got10: Array[String] = g.check_achievements()
 	check(got10.has("realm_dujie") and got10.has("realm_dacheng"), "渡劫解锁 realm_dujie/realm_dacheng: " + str(got10))
-	# 已解锁数 = 飞升前全部可解锁成就 (境界里程碑 8 + 飞升 + 玩法 7 = 16/17, dao_zuzi 需飞升后道祖)
+	# 已解锁数 = 飞升前全部可解锁成就 (境界里程碑 8 + 飞升 + 玩法 7 = 16; dao_zuzi 需 道祖,
+	# 8 爬塔成就 需 登塔 —— 均在 本节 受控态 未 满足, 保持 未解锁; 计数 按 非爬塔 且 非道祖 动态 恒等)
 	g.check_achievements()
-	check(g.ach_done.size() == g.ach_ids.size() - 1, "飞升前 16/17 成就解锁 (实际 %d/%d)" % [g.ach_done.size(), g.ach_ids.size()])
+	var non_tower_ach := 0
+	for id in g.ach_ids:
+		if not str(id).begins_with("tower_") and not str(id).begins_with("endless_") and str(id) != "first_tower" and str(id) != "dao_zuzi":
+			non_tower_ach += 1
+	check(g.ach_done.size() == non_tower_ach, "飞升前 %d 项 非爬塔/非道祖 成就 解锁 (实际 %d)" % [non_tower_ach, g.ach_done.size()])
+	check(g.ach_done.size() == g.ach_ids.size() - 1 - 8, "飞升前 = 总量 - dao_zuzi - 8 爬塔 (实际 %d, 总量 %d)" % [g.ach_done.size(), g.ach_ids.size()])
 	g.realm_idx = 0
 	g.layer = 1
 	# 成就存档往返: 部分解锁后存/读档
@@ -1356,17 +1605,18 @@ func _init() -> void:
 	check(int(cs28["item"]["got"]) == 0 and int(cs28["item"]["total"]) == 10, "collect_summary 法器 = 0/10 (实际 %s)" % str(cs28["item"]))
 	check(int(cs28["ach"]["total"]) == g.ach_ids.size(), "collect_summary 成就总量 = 成就数 (实际 %s)" % str(cs28["ach"]))
 	check(int(cs28["ach"]["got"]) == g.ach_done.size(), "collect_summary 成就已解锁数 = ach_done 数 (实际 %s)" % str(cs28["ach"]))
-	# 总量合计恒等: 总 = 120+140+10+17 = 287 (数据驱动, 用实际总量校验)
+	# 总量合计恒等: 总 = 技能 + 装备 + 法器 + 成就 (数据驱动, 用 实际 总量 校验)
 	var t28 := 0
 	for k in cs28:
 		t28 += int(cs28[k]["total"])
-	check(t28 == 287, "收集总量合计 = 287 (实际 %d)" % t28)
+	var total_collect: int = g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size()
+	check(t28 == total_collect, "收集总量合计 = 实际 总和 (实际 %d, 期望 %d)" % [t28, total_collect])
 	var txt28: String = g.collect_summary_text()
 	check(txt28.begins_with("收集进度"), "collect_summary_text 以 收集进度 开头 (实际 %s)" % txt28)
 	check(txt28.find("技能 2/%d" % g.skill_ids.size()) >= 0, "收集文本含 技能 2/120 (实际 %s)" % txt28)
 	check(txt28.find("装备 0/%d" % g.equip_ids.size()) >= 0, "收集文本含 装备 0/140 (实际 %s)" % txt28)
 	check(txt28.find("法器 0/10") >= 0, "收集文本含 法器 0/10")
-	check(txt28.find("(总 %d/%d)" % [2 + g.ach_done.size(), 287]) >= 0, "收集文本含 总 N/287 (实际 %s)" % txt28)
+	check(txt28.find("(总 %d/%d)" % [2 + g.ach_done.size(), total_collect]) >= 0, "收集文本含 总 N/总量 (实际 %s)" % txt28)
 	# 收集变化 -> 文本变化 (购买 1 件装备后)
 	g.stones = 1e12
 	g.buy_equipment("weapon_0_0")
@@ -1384,8 +1634,8 @@ func _init() -> void:
 		got43 += int(cs43[k]["got"])
 		tot43 += int(cs43[k]["total"])
 	var txt43: String = g.collect_summary_text()
-	check(txt43.find("(总 %d/%d)" % [got43, tot43]) >= 0, "打磨-43 总计 N/287 = 四类之和 (总 %d/%d, 文本 %s)" % [got43, tot43, txt43])
-	check(tot43 == 287, "打磨-43 总计分母 = 287 (实际 %d)" % tot43)
+	check(txt43.find("(总 %d/%d)" % [got43, tot43]) >= 0, "打磨-43 总计 N/总量 = 四类之和 (总 %d/%d, 文本 %s)" % [got43, tot43, txt43])
+	check(tot43 == g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size(), "打磨-43 总计分母 = 四类 实际 总和 (实际 %d)" % tot43)
 	check(got43 == int(cs43["skill"]["got"]) + int(cs43["equip"]["got"]) + int(cs43["item"]["got"]) + int(cs43["ach"]["got"]), "打磨-43 总计分子 = 四类已收集之和 (实际 %d)" % got43)
 
 	# ---------- 打磨-29: 法器 一键购买 (价格升序连买买得起的, 与装备 一键购买 口径一致) ----------
