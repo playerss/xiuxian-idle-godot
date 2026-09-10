@@ -2199,11 +2199,12 @@ func _resort_ach() -> void:
 # 打磨-91: 成就页 "只看未解锁" 开关 — 与 打磨-38 技能页 只看可学 同模式:
 # 开启后 只显示 未解锁 行 (已解锁行 暂时隐藏), 排序口径不变; 按钮文案按 当前 未解锁数 计
 # (与 各页 一键 按钮 计数口径 统一: 显示 可执行/目标 数), 解锁数 变化 才 刷 文案 (节流)。
-# 本处理器 只 切状态 + 底部消息 (纯开关, 无 资源/统计 副作用); 按钮文案/行 可见性 由
-# _refresh 的 _apply_ach_nofilter 统一同步 (每帧 幂等, 避免 手动驱动 路径 与 _refresh
-# 双写 造成 文案 状态 错位).
+# 本处理器 翻转 内部开关态 + 同步 按钮按压态 (口径 同 _on_auto_* 系列: 状态 在 UI 内存,
+# 不 存档; 显示 筛选 非 存档 状态, 与 打磨-38 只看可学 同 定位), 底部消息 确认;
+# 按钮文案/行 可见性 由 _refresh 的 _apply_ach_nofilter 统一同步 (每帧 幂等).
 func _on_ach_nofilter() -> void:
-	_ach_nofilter_on = _ach_nofilter_btn.button_pressed
+	_ach_nofilter_on = not _ach_nofilter_on
+	_ach_nofilter_btn.set_pressed_no_signal(_ach_nofilter_on)
 	_show_msg("成就页: " + ("只看未解锁 (已解锁行 暂时隐藏)" if _ach_nofilter_on else "显示全部成就"))
 
 

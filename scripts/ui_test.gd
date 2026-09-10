@@ -4131,8 +4131,18 @@ func _assert_ach_nofilter() -> void:
 	await get_tree().process_frame
 	check(str(btn.text) == "只看未解锁 x%d" % (g.ach_ids.size() - g.ach_done.size()),
 			"打磨-91 解锁 5 后 文案 计数 同步 x12 (实际 %s, done=%d)" % [str(btn.text), g.ach_done.size()])
-	# 开启: 外部 置 按压态 模拟 点击 (口径 同 打磨-71 外部置 开关), _refresh 同步 文案+行 可见性
-	btn.button_pressed = true
+	# 点击 处理器: 开 (口径 同 打磨-67 点击切换: 内部态+按压+底部消息 一致)
+	ui._on_ach_nofilter()
+	await get_tree().process_frame
+	check(ui._ach_nofilter_on == true and btn.button_pressed, "打磨-91 点击 后 开 态 (内部+按压 一致)")
+	check(str(ui._msg_label.text).find("只看未解锁") >= 0,
+			"打磨-91 开启 底部消息 (实际 %s)" % str(ui._msg_label.text).left(20))
+	check(str(btn.text) == "显示全部", "打磨-91 点击 开 后 文案 显示全部 (实际 %s)" % str(btn.text))
+	ui._on_ach_nofilter()
+	await get_tree().process_frame
+	check(ui._ach_nofilter_on == false and not btn.button_pressed, "打磨-91 再点 关 态")
+	# 开启: 外部 置 开关态 模拟 (口径 同 打磨-67 外部置 存档值), _refresh 同步 文案+行 可见性
+	ui._ach_nofilter_on = true
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(btn.text) == "显示全部", "打磨-91 开启 后 文案 显示全部 (实际 %s)" % str(btn.text))
@@ -4167,7 +4177,8 @@ func _assert_ach_nofilter() -> void:
 		check((ui._ach_rows["realm_huashen"]["row"] as Node).visible == false,
 				"打磨-91 开启 中 新解锁行 保持 隐藏 (口径 一致)")
 	# 关: 外部 置 关态, _refresh 同步 全部 恢复可见
-	btn.button_pressed = false
+	ui._ach_nofilter_on = false
+	btn.set_pressed_no_signal(false)
 	ui._refresh()
 	await get_tree().process_frame
 	var vis2 := true
@@ -4184,8 +4195,7 @@ func _assert_ach_nofilter() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(btn.text) == "已无未解锁", "打磨-91 全解锁 文案 已无未解锁 (实际 %s)" % str(btn.text))
-	btn.button_pressed = true
-	ui._refresh()
+	ui._on_ach_nofilter()
 	await get_tree().process_frame
 	var all_hid := true
 	for id in g.ach_ids:
@@ -4206,7 +4216,8 @@ func _assert_ach_nofilter() -> void:
 	g.owned.clear()
 	g.owned_eq.clear()
 	g.equipped.clear()
-	btn.button_pressed = false
+	btn.set_pressed_no_signal(false)
+	ui._ach_nofilter_on = false
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(btn.text) == "只看未解锁 x%d" % g.ach_ids.size(),
