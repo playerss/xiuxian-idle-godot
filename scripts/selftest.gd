@@ -4002,6 +4002,54 @@ func _init() -> void:
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
+	# ---------- 打磨-89: 一键挂机 按钮 tooltip 动态段 (auto_idle_next_tip 只读 汇总 各 开启中 开关) ----------
+	# 基准: 全关 + realm0 层1 + 0 资源 (与 打磨-88 基准 同态, 接口 复用 打磨-84/85/86)
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.last_break_result = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	g.ready_events.clear()
+	# 全关: 说明 文案 (4 开关 均未开启, 点击 一键 全开 指引)
+	check(g.auto_idle_next_tip() == "各开关 均 未开启 (点击 一键 全开; 开启后 此处 展示 各开关 动态 状态)",
+			"打磨-89 全关 说明 文案 (实际 %s)" % g.auto_idle_next_tip())
+	# 单开 购置: 仅 购置段 带 开关名 前缀, 与 单开关 接口 恒等
+	g.auto_buy = true
+	check(g.auto_idle_next_tip() == "购置: " + g.auto_buy_next_tip(),
+			"打磨-89 单开 购置 仅 购置段=接口 (实际 %s)" % g.auto_idle_next_tip().left(60))
+	# 组合 突破+领悟: 两段 固定序 突破>领悟, 各段 与 单开关 接口 恒等
+	g.auto_buy = false
+	g.auto_break = true
+	g.auto_learn = true
+	var expect89: String = "突破: " + g.auto_break_next_tip() + "\n领悟: " + g.auto_learn_next_tip()
+	check(g.auto_idle_next_tip() == expect89,
+			"打磨-89 组合 突破+领悟 两段 固定序 恒等 (实际 %s)" % g.auto_idle_next_tip().left(60))
+	# 资源 变化 → 动态段 同步 (突破 缺口 变化; 同态 连读 恒定 无 副作用)
+	var st89: float = g.stones
+	g.essence += 5.0
+	var t1: String = g.auto_idle_next_tip()
+	check(t1.find("突破: 当前") >= 0 and t1 != expect89,
+			"打磨-89 资源 变化 动态段 同步 (实际 %s)" % t1.left(60))
+	check(g.auto_idle_next_tip() == t1, "打磨-89 同态 连读 恒定")
+	check(g.stones == st89 and g.stats == snap88, "打磨-89 只读 无 资源/统计 副作用")
+	# 全开 4 段: 固定序 突破>购置>施展>领悟, 各段 与 单开关 接口 恒等 (含 未学 主动神通 说明 文案)
+	g.set_auto_all(true)
+	var expect89b: String = "突破: " + g.auto_break_next_tip() + "\n购置: " + g.auto_buy_next_tip() + \
+			"\n施展: " + g.auto_cast_next_tip() + "\n领悟: " + g.auto_learn_next_tip()
+	check(g.auto_idle_next_tip() == expect89b,
+			"打磨-89 全开 4 段 固定序 恒等 (实际 %s)" % g.auto_idle_next_tip().left(60))
+	# 境界 提升 → 突破段 动态 同步 (消耗/缺口 变化)
+	g.realm_idx = 1
+	check(g.auto_idle_next_tip() != expect89b, "打磨-89 境界 提升 动态段 同步")
+	g.set_process(true)
 	# 收尾: 恢复 干净 基准 (防 污染 后续 段)
 	g.realm_idx = 0
 	g.layer = 1

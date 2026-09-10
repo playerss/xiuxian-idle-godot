@@ -70,6 +70,8 @@ var _auto_cast_last_text := ""   # 打磨-69: 最近一次自动施展 浮动文
 var _auto_learn_btn: Button      # 打磨-80: 自动领悟开关 (toggle, 存档持久化)
 var _auto_idle_btn: Button       # 打磨-88: 一键挂机 (一键 全开/全关 自动系列 4 开关, toggle)
 var _auto_idle_on := false       # 打磨-88: 上帧 全开 状态缓存 (变化才刷 按钮态)
+var _auto_idle_tip := ""        # 打磨-89: 一键挂机按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84/85/86 口径)
+var _auto_idle_tip_static := "" # 打磨-89: 一键挂机按钮 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼)
 var _auto_learn_on := false      # 打磨-80: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_learn_msg_seq := 0     # 打磨-80: 已处理过的 自动领悟 变更事件序号 (避免重复刷底部消息; 启动=0 与 GameData 同态)
 var _auto_learn_tip := ""        # 打磨-86: 自动领悟按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84/85 口径)
@@ -648,9 +650,14 @@ func _build_training_page(page: Panel) -> void:
 	_auto_idle_btn = _make_button("一键挂机: 全关")
 	_auto_idle_btn.toggle_mode = true
 	_auto_idle_btn.pressed.connect(_on_auto_idle)
-	_auto_idle_btn.tooltip_text = ("一键 开启/关闭 全部 自动系列 开关 (自动突破 + 自动购置 + 自动施展 + 自动领悟), 挂机 全程 自动 无需 手动 点击。\n"
+	# 打磨-89: tooltip = 静态口径 + 动态段 (各 开启中 开关 动态 状态 汇总, 随 开关 状态/资源/
+	# 速率/境界/已学/冷却 变化 由 _refresh 刷新); 静态 前缀 存 成员 供 重拼 (避免 split 截断 坑,
+	# 与 打磨-84/85/86 动态段 口径 同)
+	_auto_idle_tip_static = ("一键 开启/关闭 全部 自动系列 开关 (自动突破 + 自动购置 + 自动施展 + 自动领悟), 挂机 全程 自动 无需 手动 点击。\n"
 		+ "当前 未全开 (含 部分开) 时 点击 = 补齐 至 全开; 全开 时 点击 = 全部 关闭。各 开关 单独 开/关 与 上方 4 个 自动开关 按钮 同口径。\n"
-		+ "各开关 独立 存档 持久化 (各自 auto_* 字段), 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。")
+		+ "各开关 独立 存档 持久化 (各自 auto_* 字段), 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
+		+ "【各开关 动态 状态 (动态)】")
+	_auto_idle_btn.tooltip_text = _auto_idle_tip_static
 	break_box.add_child(_auto_idle_btn)
 	# 打磨-70: 自动系列 状态汇总行 (三个开关 开启后 扫视 不知 哪些 已 生效;
 	# 一行摘要 "自动: 突破 ✓/✗ · 购置 ✓/✗ · 施展 ✓/✗", 开启 金 / 未开 灰, 状态 变化 才刷)
@@ -1653,6 +1660,12 @@ func _refresh() -> void:
 		_auto_idle_on = idle_on
 		_auto_idle_btn.set_pressed_no_signal(idle_on)
 		_auto_idle_btn.text = ("一键挂机: 全开" if idle_on else "一键挂机: 全关")
+	# 打磨-89: 一键挂机按钮 tooltip 动态段 (各 开启中 开关 动态 状态 汇总, 随 开关 状态/资源/
+	# 速率/境界/已学/冷却 变化 才刷; 同 打磨-84/85/86 缓存口径, 文本 变化 才 写)
+	var idl_tip: String = g.auto_idle_next_tip()
+	if idl_tip != _auto_idle_tip:
+		_auto_idle_tip = idl_tip
+		_auto_idle_btn.tooltip_text = _auto_idle_tip_static + idl_tip
 	# 打磨-75: 顶栏 一键系列 状态汇总 (6 段 可执行数, 与 各页 一键 按钮 计数 同口径 —
 	# 领悟/神通 段 复用 技能页 当前 类别/品质 筛选 (打磨-27 计数口径统一), 其余 全局 口径;
 	# 状态键 变化才刷 文本/颜色 — 领悟/神通 随 境界/筛选/已学, 施展 随 冷却/已学,

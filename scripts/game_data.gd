@@ -1174,6 +1174,28 @@ func set_auto_all(on: bool) -> void:
 	auto_cast = on
 	auto_learn = on
 
+# ---------- 打磨-89: 一键挂机 按钮 tooltip 动态段 (各 开启中 开关 动态 状态 汇总) ----------
+# 只读: 一键挂机 是 4 自动 开关 的 批量 开关 (打磨-88), 悬停 只有 静态 口径, 开启 后 悬停 不知
+# 各 开启中 开关 当前 状态 (下次 突破 ETA / 下一件 购置 ETA / 神通 就绪数 / 可学 数); 4 个 单开关
+# 按钮 的 动态段 (打磨-84/85/86) 要 逐个 按钮 悬停 才 见; tooltip 追加 动态段: 按 各 单开关 接口
+# 口径 汇总 (auto_break_next_tip/auto_buy_next_tip/auto_cast_next_tip/auto_learn_next_tip),
+# 各段 带 开关名 前缀, 固定序 突破>购置>施展>领悟; 仅 展示 开启中 开关 的 段 (动态段 与 开关
+# 状态 无关 恒可算, 但 只 展示 生效中 的 避免 全关 时 4 段 空谈 拉长 tooltip); 全关 = 简短
+# "全关" 说明 文案。只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
+func auto_idle_next_tip() -> String:
+	var parts: Array[String] = []
+	if auto_break:
+		parts.append("突破: " + auto_break_next_tip())
+	if auto_buy:
+		parts.append("购置: " + auto_buy_next_tip())
+	if auto_cast:
+		parts.append("施展: " + auto_cast_next_tip())
+	if auto_learn:
+		parts.append("领悟: " + auto_learn_next_tip())
+	if parts.is_empty():
+		return "各开关 均 未开启 (点击 一键 全开; 开启后 此处 展示 各开关 动态 状态)"
+	return "\n".join(parts)
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0

@@ -2735,6 +2735,41 @@ func _assert_auto_idle() -> void:
 	check(g.auto_break and g.auto_buy and g.auto_cast and g.auto_learn,
 			"打磨-88 部分开 点击 补齐 至 全开 (含 已开 3 项)")
 	check(btn.button_pressed and str(btn.text) == "一键挂机: 全开", "打磨-88 补齐 后 按压+文本 全开")
+	# 打磨-89: 一键挂机按钮 tooltip 动态段 (静态前缀+动态段 恒等 / 4 段 固定序 / 同态 节流 /
+	# 开关 切换 同步 / 全关 说明 文案 / 无 资源 副作用)
+	check(str(btn.tooltip_text).find("【各开关 动态 状态 (动态)】") >= 0,
+			"打磨-89 tooltip 含 动态段 标记 (实际 %s)" % str(btn.tooltip_text).left(40))
+	check(str(btn.tooltip_text) == ui._auto_idle_tip_static + g.auto_idle_next_tip(),
+			"打磨-89 tooltip=静态前缀+动态段 恒等")
+	var p_break: int = str(btn.tooltip_text).find("突破: 当前")
+	var p_buy: int = str(btn.tooltip_text).find("购置: 当前")
+	var p_cast: int = str(btn.tooltip_text).find("施展: ")
+	var p_learn: int = str(btn.tooltip_text).find("领悟: ")
+	check(p_break >= 0 and p_buy >= 0 and p_cast >= 0 and p_learn >= 0,
+			"打磨-89 全开 tooltip 含 4 段 前缀 (突破/购置/施展/领悟)")
+	check(p_break < p_buy and p_buy < p_cast and p_cast < p_learn,
+			"打磨-89 4 段 固定序 突破>购置>施展>领悟 (实际 %d,%d,%d,%d)" % [p_break, p_buy, p_cast, p_learn])
+	check(str(btn.tooltip_text).find("未学 任何 主动神通") >= 0,
+			"打磨-89 未学 神通 时 施展段=说明 文案")
+	ui._refresh()
+	check(str(btn.tooltip_text) == ui._auto_idle_tip_static + g.auto_idle_next_tip(),
+			"打磨-89 同态 节流 tooltip 稳定 无 资源 副作用")
+	# 组合 2 开 (购置+领悟): 动态段 仅 2 段 (固定序 购置<领悟)
+	g.set_auto_all(false)
+	g.auto_buy = true
+	g.auto_learn = true
+	ui._refresh()
+	check(str(btn.tooltip_text).find("突破: 当前") < 0 and str(btn.tooltip_text).find("施展: ") < 0,
+			"打磨-89 组合 2 开 不含 未开 段 (突破/施展)")
+	check(str(btn.tooltip_text).find("购置: 当前") < str(btn.tooltip_text).find("领悟: "),
+			"打磨-89 组合 2 开 固定序 购置<领悟")
+	# 全关: 说明 文案
+	g.set_auto_all(false)
+	ui._refresh()
+	check(str(btn.tooltip_text).find("各开关 均 未开启") >= 0,
+			"打磨-89 全关 动态段=说明 文案 (实际 %s)" % str(btn.tooltip_text).left(40))
+	check(g.stats == stats_k and absf(g.essence - ess_k) < 1e-9 and g.stones == stones_k,
+			"打磨-89 tooltip 动态段 只读 无 资源/统计 副作用")
 	# 外部 单开关 置 全开: _refresh 同步 按钮态 (读档恢复 场景)
 	g.set_auto_all(false)
 	g.auto_break = true
