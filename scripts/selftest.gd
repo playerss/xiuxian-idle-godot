@@ -3362,16 +3362,179 @@ func _init() -> void:
 	g._active_cd = {}
 	g.ready_events.clear()
 	g.set_process(true)
+	# ---------- M5-3: 爬塔 自动挑战 (_try_auto_tower 门控/胜负边界/奖励/剧毒 联动/1000 层通关态/
+	# 旧档 兼容 auto_tower 默认关; 确定性 基准: realm0 层1 无 装备 无 已学 玩家 有效 atk=2.0,
+	# 镇妖塔 第 1 层 怪 atk 2.11 x0.85=1.79 ≤ 2.0 恒胜, 第 2 层 3.339 x0.85=2.84 > 2.0 恒败;
+	# 驱动 口径: 门控/首胜 用 _process (同 真实 挂机), 边界/剧毒/守塔 用 手动 try_tower_challenge
+	# (roll 注入 确定性, 不 混入 挂机 收益/登天梯 推进)) ----------
+	g.set_process(false)
+	g.auto_tower = false
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	g.ready_events.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	# 门控: 关时 _process 一帧 不 触发 挑战 (冻结 状态 手动 驱动; 断言 塔 状态/统计 稳定,
+	# 灵石 不锚定 — _process 帧 含 挂机 收益 累积, 与 塔 无关)
+	var tw_floor0: int = g.tower_fixed_floor
+	var tw_win0: int = int(g.stats.get("tower_win", 0.0))
+	g._process(0.016)
+	check(g.tower_fixed_floor == tw_floor0 and g.tower_endless_floor == 1
+			and int(g.stats.get("tower_win", 0.0)) == tw_win0,
+			"M5-3 关 不 自动 挑战 (_process 一帧 塔 状态/统计 无 变化)")
+	# 开: 同帧 双塔 各 1 场 首胜 推进 (镇妖塔 第 1 层 胜 -> 最高 层 1; 登天梯 第 1 层 胜 -> 待挑战 2)
+	# + 灵石 奖励 与 数据表 一致 (登天梯 新纪录 首胜 x1.5; 容差 覆盖 同帧 挂机 收益 微量 累积)
+	g.auto_tower = true
+	var f1t: Dictionary = g.get_fixed_floor(1)
+	var m1t: Dictionary = g.tower_monster_stats(f1t)
+	var e1t: Dictionary = g.get_endless_floor(1)
+	var me1t: Dictionary = g.tower_monster_stats(e1t)
+	var exp_st: float = float(m1t["stone"]) + float(me1t["stone"]) * 1.5
+	g._process(0.016)
+	check(g.tower_fixed_floor == 1, "M5-3 自动 第 1 层 胜 推进 (最高 层=1, 实际 %d)" % g.tower_fixed_floor)
+	check(absf(g.stones - exp_st) < 0.05,
+			"M5-3 奖励 灵石 = 双塔 第 1 层 数据表 一致 (实际 %s 期望 %s)" % [g.fmt(g.stones), g.fmt(exp_st)])
+	check(int(g.stats.get("tower_win", 0.0)) == tw_win0 + 2, "M5-3 统计 tower_win +2 (双塔 各 1, 同 手动 口径)")
+	check(int(g.tower_endless_floor) >= 2 and int(g.tower_endless_best) >= 1,
+			"M5-3 登天梯 自动 首胜 推进 (实际 层=%d 最高=%d)" % [g.tower_endless_floor, g.tower_endless_best])
+	# 胜负 边界: 镇妖塔 第 2 层 恒败 停留 本层 (手动 路径 驱动 3 次, 确定性: 无 挂机 收益/无 推进 干扰)
+	g.auto_tower = false
+	var f2: Dictionary = g.get_fixed_floor(2)
+	var m2: Dictionary = g.tower_monster_stats(f2)
+	check(g.player_atk_effective() < float(m2["atk"]) * g.TOWER_WIN_RATIO, "M5-3 基准 镇妖塔 第 2 层 判定=败 (数据 锚定)")
+	var st2: float = g.stones
+	var fl2: int = g.tower_fixed_floor
+	var win2: int = int(g.stats.get("tower_win", 0.0))
+	for _i in 3:
+		g.try_tower_challenge("fixed", 0.5)
+	check(g.tower_fixed_floor == fl2 and absf(g.stones - st2) < 1e-9 and int(g.stats.get("tower_win", 0.0)) == win2,
+			"M5-3 镇妖塔 败 停留 本层 (3 次 层/灵石/统计 无 变化, 幂等 无 惩罚)")
+	# 剧毒 联动: 手动 置 剧毒 2 场, 有效 atk 按 -15% 口径, 战力对比/状态行 预测 同源 (含 debuff 文案)
+	g.poison_battles = g.TOWER_POISON_BATTLES
+	var pa_n: float = g.player_atk_effective()
+	check(absf(pa_n - (2.0 * 0.85)) < 0.001, "M5-3 剧毒 有效 atk -15%% = 1.7 (实际 %s)" % str(pa_n))
+	var pv: Dictionary = g.tower_challenge_preview()
+	var f1now: Dictionary = g.get_fixed_floor(g.fixed_challenge_floor())
+	var m1now: Dictionary = g.tower_monster_stats(f1now)
+	check(bool(pv["fixed_win"]) == (pa_n >= float(m1now["atk"]) * g.TOWER_WIN_RATIO),
+			"M5-3 preview 胜负 与 判定 同源 (含 debuff, 当前 挑战 层 %d)" % g.fixed_challenge_floor())
+	var pl: String = g.tower_power_line(float(m1now["atk"]))
+	check(pl.find("剧毒 -15% x 2 场") >= 0, "M5-3 战力对比 含 剧毒 标记 (实际 %s)" % pl)
+	check(g.tower_status_line().find("剧毒 -15% 攻 x 2 场") >= 0, "M5-3 状态行 含 剧毒 提醒")
+	# 每 场 战斗 末 递减 1 (手动 1 场 后 2->1; 口径 同 M5-2 跨场 debuff)
+	g.try_tower_challenge("fixed", 0.5)
+	check(g.poison_battles == 1, "M5-3 剧毒 场数 逐场 递减 (2->1, 实际 %d)" % g.poison_battles)
+	g.poison_battles = 0
+	# 1000 层 通关态: 守塔 模式 (通关 置位 后 恒 挑战 1000 层 Boss; 弱 战力 打 1000 层 恒败 停留,
+	# 无 层 奖励 无 统计 — 首胜 通关 判定点 口径 M5-2 已 覆盖, 此处 验 守塔 停留 确定性)
+	g.tower_fixed_floor = 999
+	g.tower_fixed_clear = true
+	var stc: float = g.stones
+	var winc: int = int(g.stats.get("tower_win", 0.0))
+	var rc: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(not bool(rc["win"]), "M5-3 通关态 弱 战力 打 1000 层 Boss = 败 (守塔 停留)")
+	check(int(rc["floor"]) == 1000, "M5-3 通关态 挑战 层 恒 1000 (实际 %d)" % int(rc["floor"]))
+	for _i in 2:
+		g.try_tower_challenge("fixed", 0.5)
+	check(g.tower_fixed_floor == 999 and g.tower_fixed_clear and absf(g.stones - stc) < 1e-9
+			and int(g.stats.get("tower_win", 0.0)) == winc,
+			"M5-3 通关后 守塔 模式 恒 1000 层 败 停留 (无 奖励 无 统计, 守塔 掉落 见 M5-4)")
+	var pv2: Dictionary = g.tower_challenge_preview()
+	check(int(pv2["fixed_floor"]) == 1000, "M5-3 通关后 preview 恒 1000 层 (实际 %d)" % int(pv2["fixed_floor"]))
+	check(g.auto_tower_next_tip().find("已通关") >= 0, "M5-3 通关后 自动爬塔 tooltip 含 守塔 口径")
+	# UI 只读 接口 (连读 无 状态/统计 副作用)
+	var snap_t: Dictionary = g.stats.duplicate(true)
+	var txt_t: String = g.tower_status_line()
+	g.tower_challenge_preview()
+	g.tower_power_line(float(m1now["atk"]))
+	g.tower_monster_tip(f1now)
+	g.auto_tower_next_tip()
+	check(g.tower_status_line() == txt_t and g.stats == snap_t, "M5-3 UI 只读接口 连读 无 副作用")
+	# 存档 往返: auto_tower 保存/读取 一致
+	g.auto_tower = false
+	g.save_game()
+	g.auto_tower = true
+	g.load_game()
+	check(g.auto_tower == false, "M5-3 存档 auto_tower=false 往返 (实际 %s)" % str(g.auto_tower))
+	g.auto_tower = true
+	g.save_game()
+	var sd_t: Dictionary = _save_json()
+	check(bool(sd_t.get("auto_tower", false)) == true, "M5-3 存档含 auto_tower=true 字段")
+	# 旧档 兼容: 含 字段 档 读回 true (塔 状态 同源 恢复); 再 写 缺 字段 旧档 读回 默认 关
+	var wf_t := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	wf_t.store_string(JSON.stringify({
+		"realm_idx": 0, "layer": 1, "essence": 1.0, "stones": 5.0,
+		"tower_fixed_floor": 3, "tower_fixed_clear": false, "tower_endless_floor": 2,
+		"tower_endless_best": 1, "auto_tower": true,
+	}))
+	wf_t.close()
+	g.auto_tower = false
+	g.load_game()
+	check(g.auto_tower == true and g.tower_fixed_floor == 3,
+			"M5-3 读档恢复 auto_tower=true + 塔 状态 (实际 %s/%d)" % [str(g.auto_tower), g.tower_fixed_floor])
+	var wf_t2 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	wf_t2.store_string(JSON.stringify({
+		"realm_idx": 0, "layer": 1, "essence": 1.0, "stones": 5.0,
+		"tower_fixed_floor": 3, "tower_fixed_clear": false, "tower_endless_floor": 2,
+		"tower_endless_best": 1,
+	}))
+	wf_t2.close()
+	g.auto_tower = true
+	g.load_game()
+	check(g.auto_tower == false and g.tower_fixed_floor == 3 and g.tower_fixed_clear == false,
+			"M5-3 旧档缺 auto_tower 默认 关 (塔 状态 仍 恢复, 实际 %s/%d)" % [str(g.auto_tower), g.tower_fixed_floor])
+	# 收尾: 恢复 干净 基准 + 清 存档 残留 (防 污染 后续 段 打磨-70/72/73/75 的 load_game 恢复态;
+	# 塔 状态 归零 + 5 开关 全 关 + 资源 归零 后 落盘, 与 全新档 基准 对齐)
+	g.auto_tower = false
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.set_process(true)
+	g.save_game()
 	# ---------- 打磨-70: 自动系列 状态汇总 (只读接口 auto_summary_key/auto_summary_text, 纯展示无副作用;
-	# 打磨-80 起 4 开关: 键 4 段 突破|购置|施展|领悟) ----------
+	# M5-3 起 5 开关: 键 5 段 突破|购置|施展|领悟|爬塔) ----------
 	# 基准态 (四开关全关): 状态键 0|0|0|0, 文案 全 ✗
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
-	check(g.auto_summary_key() == "0|0|0|0", "打磨-70 四关 状态键 0|0|0|0 (实际 %s)" % g.auto_summary_key())
-	check(g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✗ · 施展 ✗ · 领悟 ✗",
-		"打磨-70 四关 文案 (实际 %s)" % g.auto_summary_text())
+	check(g.auto_summary_key() == "0|0|0|0|0", "打磨-70 五关 状态键 0|0|0|0|0 (M5-3, 实际 %s)" % g.auto_summary_key())
+	check(g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✗ · 施展 ✗ · 领悟 ✗ · 爬塔 ✗",
+		"打磨-70 五关 文案 (M5-3, 实际 %s)" % g.auto_summary_text())
 	# 只读性: 连读多次 键/文案 恒定, 且 不改动 开关/资源/统计
 	var sum_snap: Dictionary = g.stats.duplicate(true)
 	var stones_sum: float = g.stones
@@ -3385,34 +3548,38 @@ func _init() -> void:
 			and g.stats == sum_snap and g.stones == stones_sum, "打磨-70 只读 无 开关/资源/统计 副作用")
 	# 状态切换: 单开/组合开 键与文案 恒等 (与 开关 一一对应)
 	g.auto_break = true
-	check(g.auto_summary_key() == "1|0|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✗ · 施展 ✗ · 领悟 ✗",
+	check(g.auto_summary_key() == "1|0|0|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✗ · 施展 ✗ · 领悟 ✗ · 爬塔 ✗",
 		"打磨-70 仅突破 开 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
 	g.auto_buy = true
-	check(g.auto_summary_key() == "1|1|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✗ · 领悟 ✗",
+	check(g.auto_summary_key() == "1|1|0|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✗ · 领悟 ✗ · 爬塔 ✗",
 		"打磨-70 突破+购置 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
 	g.auto_cast = true
-	check(g.auto_summary_key() == "1|1|1|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✓ · 领悟 ✗",
+	check(g.auto_summary_key() == "1|1|1|0|0" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✓ · 领悟 ✗ · 爬塔 ✗",
 		"打磨-70 三开 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
-	# 四开 (领悟 开, 打磨-80)
+	# 五开 (爬塔 开, M5-3)
 	g.auto_learn = true
-	check(g.auto_summary_key() == "1|1|1|1" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✓ · 领悟 ✓",
-		"打磨-70 四开 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
-	# 关回 单开 组合 (购置+施展 开, 突破/领悟 关)
+	g.auto_tower = true
+	check(g.auto_summary_key() == "1|1|1|1|1" and g.auto_summary_text() == "自动: 突破 ✓ · 购置 ✓ · 施展 ✓ · 领悟 ✓ · 爬塔 ✓",
+		"打磨-70 五开 键+文案 (M5-3, 实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
+	# 关回 单开 组合 (购置+施展 开, 突破/领悟/爬塔 关)
 	g.auto_break = false
 	g.auto_learn = false
-	check(g.auto_summary_key() == "0|1|1|0" and g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✓ · 施展 ✓ · 领悟 ✗",
+	g.auto_tower = false
+	check(g.auto_summary_key() == "0|1|1|0|0" and g.auto_summary_text() == "自动: 突破 ✗ · 购置 ✓ · 施展 ✓ · 领悟 ✗ · 爬塔 ✗",
 		"打磨-70 购置+施展 键+文案 (实际 %s / %s)" % [g.auto_summary_key(), g.auto_summary_text()])
 	# 存档往返后 状态 与 键 一致 (读档 恢复 开关, 汇总 口径 同源)
 	g.save_game()
 	g.auto_break = true
 	g.load_game()
-	check(g.auto_summary_key() == "0|1|1|0", "打磨-70 读档恢复 后 键 与 存档 一致 (实际 %s)" % g.auto_summary_key())
-	check(g.auto_break == false and g.auto_buy == true and g.auto_cast == true and g.auto_learn == false, "打磨-70 读档恢复 四开关 值")
-	# 收尾: 四开关 全 关 (防 污染 后续 段)
+	check(g.auto_summary_key() == "0|1|1|0|0", "打磨-70 读档恢复 后 键 与 存档 一致 (实际 %s)" % g.auto_summary_key())
+	check(g.auto_break == false and g.auto_buy == true and g.auto_cast == true and g.auto_learn == false
+			and g.auto_tower == false, "打磨-70 读档恢复 五开关 值 (M5-3, 旧档 无 auto_tower 默认 关)")
+	# 收尾: 五开关 全 关 (防 污染 后续 段; M5-3 起 含 爬塔)
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
+	g.auto_tower = false
 	# 收尾: 清空 拥有/穿戴/已学 (防 后续 段/存档 污染) + 恢复 基准
 	g.owned.clear()
 	g.owned_eq.clear()
@@ -3436,7 +3603,8 @@ func _init() -> void:
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
-	check(g.auto_restore_text() == "", "打磨-72 四关 文案 空串 (实际 %s)" % g.auto_restore_text())
+	g.auto_tower = false
+	check(g.auto_restore_text() == "", "打磨-72 五关 文案 空串 (M5-3, 实际 %s)" % g.auto_restore_text())
 	# 只读性: 连读多次 文案 恒定, 且 不改动 开关/资源/统计
 	var r72_snap: Dictionary = g.stats.duplicate(true)
 	var r72_stones: float = g.stones
@@ -3459,15 +3627,17 @@ func _init() -> void:
 	g.auto_learn = true
 	check(g.auto_restore_text() == "已恢复 自动: 领悟",
 		"打磨-72 仅领悟 开 文案 (打磨-80, 实际 %s)" % g.auto_restore_text())
-	# 四开 全开 (打磨-80)
+	# 五开 全开 (M5-3: 含 爬塔, 固定序 突破>购置>施展>领悟>爬塔)
 	g.auto_buy = true
 	g.auto_cast = true
 	g.auto_break = true
-	check(g.auto_restore_text() == "已恢复 自动: 突破·购置·施展·领悟",
-		"打磨-72 四开 文案 全开 (实际 %s)" % g.auto_restore_text())
-	# 关 突破 组合 (突破/领悟 关, 购置+施展 开)
+	g.auto_tower = true
+	check(g.auto_restore_text() == "已恢复 自动: 突破·购置·施展·领悟·爬塔",
+		"打磨-72 五开 文案 全开 (M5-3, 实际 %s)" % g.auto_restore_text())
+	# 关 突破 组合 (突破/领悟/爬塔 关, 购置+施展 开)
 	g.auto_break = false
 	g.auto_learn = false
+	g.auto_tower = false
 	check(g.auto_restore_text() == "已恢复 自动: 购置·施展",
 		"打磨-72 关突破 后 购置+施展 文案 (实际 %s)" % g.auto_restore_text())
 	# 存档往返后 读档 恢复 开关, 文案 与 恢复态 一致 (与 打磨-70 读档 同口径)
@@ -3477,26 +3647,29 @@ func _init() -> void:
 		"打磨-72 读档恢复 四开关 值")
 	check(g.auto_restore_text() == "已恢复 自动: 购置·施展",
 		"打磨-72 读档后 文案 与 恢复态 一致 (实际 %s)" % g.auto_restore_text())
-	# 收尾: 四开关 全 关 + 文案 空串 (防 污染 后续 段)
+	# 收尾: 五开关 全 关 + 文案 空串 (防 污染 后续 段; M5-3 起 含 爬塔)
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
-	check(g.auto_restore_text() == "", "打磨-72 收尾 四关 空串")
+	g.auto_tower = false
+	check(g.auto_restore_text() == "", "打磨-72 收尾 五关 空串")
 	# ---------- 打磨-73: 顶栏 自动系列 状态徽标 (只读接口 auto_on_count 开启数, 全关=0 单开=1 四开=4,
 	# 只读性+存档往返 计数 与 四开关 同源, 收尾 四开关 全 关; 打磨-80 起 4 开关) ----------
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
-	check(g.auto_on_count() == 0, "打磨-73 四关 开启数 0 (实际 %d)" % g.auto_on_count())
+	g.auto_tower = false
+	check(g.auto_on_count() == 0, "打磨-73 五关 开启数 0 (M5-3, 实际 %d)" % g.auto_on_count())
 	# 只读性: 连读多次 计数 恒定, 且 不改动 开关/资源/统计
 	var r73_stones: float = g.stones
 	var r73_txt: String = g.auto_restore_text()
 	for _i73 in 3:
 		g.auto_on_count()
 	check(g.auto_on_count() == 0 and g.auto_break == false and g.auto_buy == false
-			and g.auto_cast == false and g.auto_learn == false and g.stones == r73_stones
+			and g.auto_cast == false and g.auto_learn == false and g.auto_tower == false
+			and g.stones == r73_stones
 			and g.auto_restore_text() == r73_txt, "打磨-73 只读 连读 恒定 无 开关/资源/统计 副作用")
 	# 单开 计数 1 (每档 各断言)
 	g.auto_buy = true
@@ -3511,7 +3684,10 @@ func _init() -> void:
 	g.auto_learn = true
 	check(g.auto_on_count() == 1, "打磨-73 仅领悟 开启数 1 (打磨-80, 实际 %d)" % g.auto_on_count())
 	g.auto_learn = false
-	# 组合 计数 (突破+施展=2, 三开=3, 四开=4)
+	g.auto_tower = true
+	check(g.auto_on_count() == 1, "打磨-73 仅爬塔 开启数 1 (M5-3, 实际 %d)" % g.auto_on_count())
+	g.auto_tower = false
+	# 组合 计数 (突破+施展=2, 三开=3, 四开=4, 五开=5, M5-3)
 	g.auto_cast = true
 	g.auto_break = true
 	check(g.auto_on_count() == 2, "打磨-73 突破+施展 开启数 2 (实际 %d)" % g.auto_on_count())
@@ -3519,18 +3695,21 @@ func _init() -> void:
 	check(g.auto_on_count() == 3, "打磨-73 三开 开启数 3 (实际 %d)" % g.auto_on_count())
 	g.auto_learn = true
 	check(g.auto_on_count() == 4, "打磨-73 四开 开启数 4 (打磨-80, 实际 %d)" % g.auto_on_count())
-	# 存档往返 后 计数 与 恢复态 一致 (与 打磨-72 读档 同口径: 四开 落盘 读回)
+	g.auto_tower = true
+	check(g.auto_on_count() == 5, "打磨-73 五开 开启数 5 (M5-3, 实际 %d)" % g.auto_on_count())
+	# 存档往返 后 计数 与 恢复态 一致 (与 打磨-72 读档 同口径: 五开 落盘 读回, M5-3 含 爬塔)
 	g.save_game()
 	g.load_game()
-	check(g.auto_on_count() == 4 and g.auto_break == true and g.auto_buy == true and g.auto_cast == true
-			and g.auto_learn == true,
-		"打磨-73 读档恢复 计数 4 与 四开关 一致")
-	# 收尾: 四开关 全 关 (计数 0), 防 污染 后续 段
+	check(g.auto_on_count() == 5 and g.auto_break == true and g.auto_buy == true and g.auto_cast == true
+			and g.auto_learn == true and g.auto_tower == true,
+		"打磨-73 读档恢复 计数 5 与 五开关 一致 (M5-3)")
+	# 收尾: 五开关 全 关 (计数 0), 防 污染 后续 段
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
-	check(g.auto_on_count() == 0, "打磨-73 收尾 四关 计数 0")
+	g.auto_tower = false
+	check(g.auto_on_count() == 0, "打磨-73 收尾 五关 计数 0")
 	# ---------- 打磨-75: 一键系列 顶栏 状态汇总 (六项 可执行数, 只读 无副作用) ----------
 	# 受控基准: 境界2 层1 / 灵石 5000 / 空 已学 已拥有 已穿戴 (数据 固定 种子, 期望值 按 数据 锚定)
 	g.realm_idx = 2
@@ -3766,6 +3945,16 @@ func _init() -> void:
 	check(g.play_time_text() == g.play_time_text(), "打磨-77 只读 连读 恒定")
 	check(g.stats == pt0 and g.stones == stones_pt, "打磨-77 只读 接口 无 资源/统计 副作用")
 	# 存读档 往返: 时长 随 stats 持久化 (断点续挂 累加不重置)
+	# 前置: 塔 状态 归零 + auto_tower 关 — 防 本段 之前的 爬塔 自测 (M5-3/打磨-73) 留下 的
+	# 塔 层数/自动爬塔 落盘, 被 ui_test load_game 读回 后 触发 自动爬塔 污染 成就 进度 断言
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
 	g.stats["play_sec"] = 7260.0
 	g.save_game()
 	g.stats["play_sec"] = 0.0
@@ -4362,11 +4551,19 @@ func _init() -> void:
 	g.ready_events.clear()
 	# ---------- 打磨-88: 一键挂机 自动系列 (auto_all_on 只读 / set_auto_all 一键 全开全关) ----------
 	g.set_process(false)
-	# 基准: 全关
+	# 基准: 全关 (M5-3 起 5 开关, 含 爬塔; 塔 层数 归零 防 自动爬塔 tooltip 段 受 旧档 影响)
 	g.auto_break = false
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
 	g.realm_idx = 0
 	g.layer = 1
 	g.essence = 0.0
@@ -4381,33 +4578,36 @@ func _init() -> void:
 	g._active_cd = {}
 	check(g.auto_all_on() == false, "打磨-88 全关 auto_all_on=false (实际 %s)" % str(g.auto_all_on()))
 	check(g.auto_on_count() == 0, "打磨-88 全关 开启数=0")
-	# 部分开 → 未全开 (补齐 方向 测试 基准)
+	# 部分开 → 未全开 (补齐 方向 测试 基准; M5-3 起 4/5)
 	g.auto_break = true
 	g.auto_buy = true
 	g.auto_cast = true
-	check(g.auto_all_on() == false, "打磨-88 部分开(3/4) auto_all_on=false")
+	check(g.auto_all_on() == false, "打磨-88 部分开(4/5) auto_all_on=false (M5-3)")
 	check(g.auto_on_count() == 3, "打磨-88 部分开 开启数=3 (实际 %d)" % g.auto_on_count())
-	# set_auto_all(true): 补齐 至 全开 (含 已开 3 项 保持)
+	# set_auto_all(true): 补齐 至 全开 (含 已开 3 项 保持 + 补 领悟/爬塔)
 	g.set_auto_all(true)
-	check(g.auto_break and g.auto_buy and g.auto_cast and g.auto_learn, "打磨-88 set_auto_all(true) 全开 4 开关")
+	check(g.auto_break and g.auto_buy and g.auto_cast and g.auto_learn and g.auto_tower,
+			"打磨-88 set_auto_all(true) 全开 5 开关 (M5-3)")
 	check(g.auto_all_on() == true, "打磨-88 全开 auto_all_on=true")
-	check(g.auto_on_count() == 4, "打磨-88 全开 开启数=4 (实际 %d)" % g.auto_on_count())
-	check(g.auto_summary_key() == "1|1|1|1", "打磨-88 全开 汇总键 1|1|1|1 (实际 %s)" % g.auto_summary_key())
-	# set_auto_all(false): 全关
+	check(g.auto_on_count() == 5, "打磨-88 全开 开启数=5 (M5-3, 实际 %d)" % g.auto_on_count())
+	check(g.auto_summary_key() == "1|1|1|1|1", "打磨-88 全开 汇总键 1|1|1|1|1 (M5-3, 实际 %s)" % g.auto_summary_key())
+	# set_auto_all(false): 全关 (5 开关)
 	g.set_auto_all(false)
-	check(not g.auto_break and not g.auto_buy and not g.auto_cast and not g.auto_learn, "打磨-88 set_auto_all(false) 全关 4 开关")
+	check(not g.auto_break and not g.auto_buy and not g.auto_cast and not g.auto_learn and not g.auto_tower,
+			"打磨-88 set_auto_all(false) 全关 5 开关 (M5-3)")
 	check(g.auto_all_on() == false, "打磨-88 全关 auto_all_on=false")
-	check(g.auto_summary_key() == "0|0|0|0", "打磨-88 全关 汇总键 0|0|0|0 (实际 %s)" % g.auto_summary_key())
+	check(g.auto_summary_key() == "0|0|0|0|0", "打磨-88 全关 汇总键 0|0|0|0|0 (M5-3, 实际 %s)" % g.auto_summary_key())
 	# 单开关 开 仍 未全开 (set_auto_all 不 影响 单独 控制 口径)
 	g.auto_buy = true
 	check(g.auto_all_on() == false and g.auto_on_count() == 1, "打磨-88 单开(购置) 未全开 数=1")
 	g.set_auto_all(true)
-	check(g.auto_all_on() == true and g.auto_on_count() == 4, "打磨-88 单开 后 set_auto_all(true) 补齐 全开")
+	check(g.auto_all_on() == true and g.auto_on_count() == 5, "打磨-88 单开 后 set_auto_all(true) 补齐 全开 (M5-3)")
 	# 只读: auto_all_on 连读 恒定 无 副作用 (资源/统计/境界/已学 不变)
 	g.auto_break = false
 	g.auto_buy = true
 	g.auto_cast = true
 	g.auto_learn = false
+	g.auto_tower = false
 	var snap88: Dictionary = g.stats.duplicate(true)
 	var st88: float = g.stones
 	check(g.auto_all_on() == false and g.auto_all_on() == false, "打磨-88 auto_all_on 只读 连读 恒定")
@@ -4416,7 +4616,9 @@ func _init() -> void:
 	g.auto_buy = false
 	g.auto_cast = false
 	g.auto_learn = false
-	# ---------- 打磨-89: 一键挂机 按钮 tooltip 动态段 (auto_idle_next_tip 只读 汇总 各 开启中 开关) ----------
+	g.auto_tower = false
+	# ---------- 打磨-89: 一键挂机 按钮 tooltip 动态段 (auto_idle_next_tip 只读 汇总 各 开启中 开关;
+	# M5-3 起 含 爬塔段 [5 开关 之 5, 固定序 突破>购置>施展>领悟>爬塔]) ----------
 	# 基准: 全关 + realm0 层1 + 0 资源 (与 打磨-88 基准 同态, 接口 复用 打磨-84/85/86)
 	g.realm_idx = 0
 	g.layer = 1
@@ -4454,12 +4656,19 @@ func _init() -> void:
 			"打磨-89 资源 变化 动态段 同步 (实际 %s)" % t1.left(60))
 	check(g.auto_idle_next_tip() == t1, "打磨-89 同态 连读 恒定")
 	check(g.stones == st89 and g.stats == snap88, "打磨-89 只读 无 资源/统计 副作用")
-	# 全开 4 段: 固定序 突破>购置>施展>领悟, 各段 与 单开关 接口 恒等 (含 未学 主动神通 说明 文案)
+	# 全开 5 段 (M5-3: 含 爬塔): 固定序 突破>购置>施展>领悟>爬塔, 各段 与 单开关 接口 恒等
 	g.set_auto_all(true)
 	var expect89b: String = "突破: " + g.auto_break_next_tip() + "\n购置: " + g.auto_buy_next_tip() + \
-			"\n施展: " + g.auto_cast_next_tip() + "\n领悟: " + g.auto_learn_next_tip()
+			"\n施展: " + g.auto_cast_next_tip() + "\n领悟: " + g.auto_learn_next_tip() + \
+			"\n爬塔: " + g.auto_tower_next_tip()
 	check(g.auto_idle_next_tip() == expect89b,
-			"打磨-89 全开 4 段 固定序 恒等 (实际 %s)" % g.auto_idle_next_tip().left(60))
+			"打磨-89 全开 5 段 固定序 恒等 (M5-3, 实际 %s)" % g.auto_idle_next_tip().left(60))
+	# 爬塔段 口径: 双塔 当前 挑战 层 + 胜负 预测 (基准 塔 层数 归零 后 = 镇妖塔 1/1000 + 登天梯 1 层)
+	var at_t: String = g.auto_tower_next_tip()
+	check(at_t.find("镇妖塔 第 1/1000 层") >= 0 and at_t.find("登天梯 第 1 层") >= 0,
+			"打磨-89 爬塔段 双塔 当前 层 口径 (M5-3, 实际 %s)" % at_t.left(60))
+	check(g.auto_idle_next_tip().find("爬塔: " + at_t) >= 0,
+			"打磨-89 爬塔段 与 单开关 接口 恒等 (M5-3)")
 	# 境界 提升 → 突破段 动态 同步 (消耗/缺口 变化)
 	g.realm_idx = 1
 	check(g.auto_idle_next_tip() != expect89b, "打磨-89 境界 提升 动态段 同步")
@@ -4480,6 +4689,37 @@ func _init() -> void:
 	g._active_cd = {}
 	g.ready_events.clear()
 	g.set_process(true)
+	# ---------- 收尾 落盘: 恢复 干净 基准 存档 (防 污染 后续 独立 测试进程) ----------
+	# 各 段 自测 会 临时 置 塔 层数/自动爬塔/资源 并 多次 save_game, 最后 一次 落盘 可能 残留
+	# auto_tower=true / 塔 已推进 等 态; ui_test 等 独立 进程 load_game 会 读回 触发 自动爬塔,
+	# 污染 成就 进度 断言。故 收尾 归零 塔 状态 + 5 开关 全 关 + 资源 归零 后 落盘 一次。
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.last_break_result = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	g.ready_events.clear()
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

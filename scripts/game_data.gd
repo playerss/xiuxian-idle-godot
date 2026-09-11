@@ -141,6 +141,9 @@ var tower_endless_best := 0      # 登天梯 历史 最高 纪录 层
 var tower_daily_date := ""       # 登天梯 每日首胜 日期 标记 (YYYY-MM-DD, 跨日 重置)
 var tower_daily_bonus_stones := 0.0  # 登天梯 当日 首胜 已发 灵石 总数
 var poison_battles := 0          # 剧毒 跨场 debuff 剩余 场数 (0=无毒; >0=玩家 atk -15%, 持续 2 场)
+# M5-3: 自动爬塔 (开=镇妖塔+登天梯 自动 挑战; GameData._process 每帧驱动, 自门控,
+# 胜推进/败停留 天然无热循环; 与 自动系列 4 开关 同口径: 存档持久化, 旧档缺字段默认 关, 离线期间 不触发)
+var auto_tower := false
 
 var _active_cd := {}        # 技能 id -> 剩余冷却秒
 var _save_acc := 0.0
@@ -174,6 +177,9 @@ func _process(delta: float) -> void:
 	# auto_cast, 每帧至多一轮; 置于 _tick_active_cd 之前: 冷却归零 同帧 即自动施展,
 	# 施展后 各神通 进冷却, 全冷却中 0 施展 幂等 无热循环)
 	_try_auto_cast()
+	# M5-3: 自动爬塔 (开启时 双塔 自动 挑战; _try_auto_tower 自门控于 auto_tower,
+	# 镇妖塔 通关态 守塔 模式 恒胜 1000 层 Boss, 登天梯 败 停留 本层, 无热循环)
+	_try_auto_tower()
 	_stat_inc("play_sec", delta)  # 打磨-14: 累计在线时长
 	_tick_active_cd(delta)  # 神通冷却
 	# 成就检测 (节流 1 秒, 幂等; 灵石达标记类成就在挂机中也能触发)
@@ -1479,19 +1485,105 @@ func auto_learn_last_text() -> String:
 		return ""
 	return "自动领悟 %d 个技能" % _auto_learn_last_n
 
-# 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1|1" = 突破|购置|施展|领悟, 1=开 0=关;
-# 打磨-80 起 4 开关: 第 4 段=自动领悟; UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
-func auto_summary_key() -> String:
-	return "%d|%d|%d|%d" % [
-		1 if auto_break else 0, 1 if auto_buy else 0,
-		1 if auto_cast else 0, 1 if auto_learn else 0]
+# ================= M5-3: 爬塔 自动挑战 + UI 只读接口 =================
+# 自动爬塔 (GameData._process 每帧驱动; 自门控于 auto_tower, 关闭时直接返回 可直接调用测试;
+# 每帧 双塔 各 至多 挑战一次 (镇妖塔 先, 登天梯 后, 口径=try_tower_challenge 手动按钮同路径,
+# 复用 奖励结算/剧毒/每日首胜/统计埋点); 胜=层数推进 (灵石+奖励), 败=停留 本层 无 消耗 无 惩罚,
+# 层数 单调 推进/停留 天然 无热循环 (与 自动突破 同 门控 口径); 镇妖塔 通关态 恒 守塔 模式
+# 反复 挑战 1000 层 Boss (口径=fixed_challenge_floor); 离线期间 不触发 (离线只结算收益))
+func _try_auto_tower() -> void:
+	if not auto_tower:
+		return
+	try_tower_challenge("fixed")
+	try_tower_challenge("endless")
 
-# 打磨-70: 自动系列 状态汇总 文案 (只读; ✓=开 ✗=关, 口径 与 四个 开关 按钮 一致;
-# 打磨-80 起 4 段: 突破·购置·施展·领悟)
+# 爬塔 UI 只读接口 (UI 每帧 调用; 不 改 状态/存档/统计)
+# 双塔 当前 挑战 层 记录 (镇妖塔=守塔 1000 层 或 最高已过层+1; 登天梯=当前 待挑战 层;
+# 怪物 有效 属性 含 结构/偏向/特性 倍率; 供 怪物卡/战力对比 展示)
+func tower_challenge_preview() -> Dictionary:
+	var frec: Dictionary = get_fixed_floor(fixed_challenge_floor())
+	var erec: Dictionary = get_endless_floor(tower_endless_floor)
+	var fmon: Dictionary = tower_monster_stats(frec)
+	var emon: Dictionary = tower_monster_stats(erec)
+	return {
+		"fixed_floor": fixed_challenge_floor(),
+		"fixed_mon": fmon,
+		"fixed_win": player_atk_effective() >= float(fmon["atk"]) * TOWER_WIN_RATIO,
+		"endless_floor": tower_endless_floor,
+		"endless_mon": emon,
+		"endless_win": player_atk_effective() >= float(emon["atk"]) * TOWER_WIN_RATIO,
+	}
+
+# 怪物 特性 名称 列表 文案 (未知 id 原样保留; 空 返回 "")
+func _trait_names(traits: Array) -> String:
+	var names: Array[String] = []
+	for tid in traits:
+		var td: Dictionary = trait_by_id.get(str(tid), {})
+		names.append(str(td.get("name", str(tid))) if not td.is_empty() else str(tid))
+	return "、".join(names)
+
+# 怪物卡 tooltip (名/特性说明/数值 构成; 与 M5-1 数据表 同口径)
+func tower_monster_tip(rec: Dictionary) -> String:
+	var mon: Dictionary = tower_monster_stats(rec)
+	var lines: Array[String] = []
+	lines.append(str(mon["name"]) + (" (精英)" if bool(mon["is_elite"]) else "") + (" (Boss)" if str(mon["boss_type"]) != "" else ""))
+	var tn: String = _trait_names(mon["traits"])
+	if tn != "":
+		lines.append("特性: " + tn)
+	for tid in mon["traits"]:
+		var td: Dictionary = trait_by_id.get(str(tid), {})
+		if not td.is_empty():
+			lines.append("· %s — %s" % [str(td.get("name", "")), str(td.get("desc", ""))])
+	lines.append("HP %s · ATK %s · DEF %s" % [fmt(float(mon["hp"])), fmt(float(mon["atk"])), fmt(float(mon["def"]))])
+	lines.append("奖励 灵石 %s" % fmt(float(mon["stone"])))
+	return "\n".join(lines)
+
+# 战力对比 行 文案 (玩家 atk/def 有效 vs 怪物 atk; 胜=绿/败=红 由 UI 着色, 此处 只给 文本)
+func tower_power_line(mon_atk: float) -> String:
+	var ok: bool = player_atk_effective() >= mon_atk * TOWER_WIN_RATIO
+	return "玩家 ATK %s%s vs 怪物 ATK %s → %s (判定: 玩家 ≥ 怪 x %.2f)" % [
+		fmt(player_atk_effective()),
+		" (剧毒 -15%% x %d 场)" % poison_battles if poison_battles > 0 else "",
+		fmt(mon_atk), ("胜" if ok else "败"), TOWER_WIN_RATIO]
+
+# M5-3: 自动爬塔按钮 tooltip 动态段 (只读; 双塔 当前 挑战 层 + 胜负 预测 + 层数进度;
+# 口径 与 爬塔页 怪物卡/战力对比 同源; 不 改 状态/存档/统计; 供 按钮 悬停 动态 刷新, 同 打磨-84/85/86)
+func auto_tower_next_tip() -> String:
+	var p: Dictionary = tower_challenge_preview()
+	var lines: Array[String] = []
+	lines.append("镇妖塔 第 %d/%d 层「%s」→ %s" % [
+		int(p["fixed_floor"]), int(tower_fixed.get("max_floor", 1000)),
+		str(p["fixed_mon"]["name"]), ("可胜" if bool(p["fixed_win"]) else "战力不足")])
+	if tower_fixed_clear:
+		lines.append("已通关 (守塔模式: 反复 挑战 1000 层 Boss 拿刷新掉落)")
+	lines.append("登天梯 第 %d 层「%s」→ %s (历史最高 %d 层)" % [
+		int(p["endless_floor"]), str(p["endless_mon"]["name"]),
+		("可胜" if bool(p["endless_win"]) else "战力不足"), tower_endless_best])
+	return "\n".join(lines)
+
+# M5-3: 爬塔 状态汇总 文案 (只读; 修行页 爬塔区 展示; 含 剧毒 debuff 提醒; 不 改 状态)
+func tower_status_line() -> String:
+	var s: String = "镇妖塔 最高 %d/1000 层%s · 登天梯 待挑战 第 %d 层 (最高 %d)" % [
+		tower_fixed_floor, " (通关)" if tower_fixed_clear else "",
+		tower_endless_floor, tower_endless_best]
+	if poison_battles > 0:
+		s += " · 剧毒 -15%% 攻 x %d 场" % poison_battles
+	return s
+
+# 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1|1|0" = 突破|购置|施展|领悟|爬塔, 1=开 0=关;
+# M5-3 起 5 开关: 第 5 段=自动爬塔; UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
+func auto_summary_key() -> String:
+	return "%d|%d|%d|%d|%d" % [
+		1 if auto_break else 0, 1 if auto_buy else 0,
+		1 if auto_cast else 0, 1 if auto_learn else 0, 1 if auto_tower else 0]
+
+# 打磨-70: 自动系列 状态汇总 文案 (只读; ✓=开 ✗=关, 口径 与 各 开关 按钮 一致;
+# M5-3 起 5 段: 突破·购置·施展·领悟·爬塔)
 func auto_summary_text() -> String:
-	return "自动: 突破 %s · 购置 %s · 施展 %s · 领悟 %s" % [
+	return "自动: 突破 %s · 购置 %s · 施展 %s · 领悟 %s · 爬塔 %s" % [
 		"✓" if auto_break else "✗", "✓" if auto_buy else "✗",
-		"✓" if auto_cast else "✗", "✓" if auto_learn else "✗"]
+		"✓" if auto_cast else "✗", "✓" if auto_learn else "✗",
+		"✓" if auto_tower else "✗"]
 
 # 打磨-72: 启动 恢复 自动系列 开关 提示 文案 (只读; 全关 返回 空串, 否则
 # "已恢复 自动: 突破·购置·施展·领悟" (仅 开启项, 固定序 突破>购置>施展>领悟, 全开 即 突破·购置·施展·领悟);
@@ -1506,6 +1598,8 @@ func auto_restore_text() -> String:
 		parts.append("施展")
 	if auto_learn:
 		parts.append("领悟")
+	if auto_tower:
+		parts.append("爬塔")
 	if parts.is_empty():
 		return ""
 	return "已恢复 自动: %s" % "·".join(parts)
@@ -1522,14 +1616,17 @@ func auto_on_count() -> int:
 		n += 1
 	if auto_learn:
 		n += 1
+	if auto_tower:
+		n += 1
 	return n
 
-# 打磨-88: 自动系列 一键挂机 — 是否 全部 开启 (只读; 4 开关 全 true 才 返回 true, 部分开 返回 false;
-# 供 一键挂机 按钮 判断 文案/点击方向: 未全开=点击 全开, 全开=点击 全关; 无 存档/统计 副作用)
+# 打磨-88: 自动系列 一键挂机 — 是否 全部 开启 (只读; 5 开关 全 true 才 返回 true, 部分开 返回 false;
+# M5-3 起 5 开关 [突破/购置/施展/领悟/爬塔]; 供 一键挂机 按钮 判断 文案/点击方向: 未全开=点击 全开,
+# 全开=点击 全关; 无 存档/统计 副作用)
 func auto_all_on() -> bool:
-	return auto_break and auto_buy and auto_cast and auto_learn
+	return auto_break and auto_buy and auto_cast and auto_learn and auto_tower
 
-# 打磨-88: 自动系列 一键 全开/全关 (供 一键挂机 按钮 直接 置 4 开关 [突破/购置/施展/领悟];
+# 打磨-88: 自动系列 一键 全开/全关 (供 一键挂机 按钮 直接 置 5 开关 [突破/购置/施展/领悟/爬塔];
 # 各开关 口径/持久化 不变 (各自 auto_* 存档字段, 离线期间不触发, 道祖封顶 自动突破 恒不触发);
 # 开关 动作 本身 无 资源/统计 副作用, 实际 行为 由 各 _try_auto_* 走 真实 埋点 路径;
 # 部分开 时 点击 一键挂机 = 补齐 至 全开 (而非 仅关 已开的), 与 "挂机 全程 自动" 目标一致)
@@ -1538,6 +1635,7 @@ func set_auto_all(on: bool) -> void:
 	auto_buy = on
 	auto_cast = on
 	auto_learn = on
+	auto_tower = on
 
 # ---------- 打磨-89: 一键挂机 按钮 tooltip 动态段 (各 开启中 开关 动态 状态 汇总) ----------
 # 只读: 一键挂机 是 4 自动 开关 的 批量 开关 (打磨-88), 悬停 只有 静态 口径, 开启 后 悬停 不知
@@ -1557,6 +1655,8 @@ func auto_idle_next_tip() -> String:
 		parts.append("施展: " + auto_cast_next_tip())
 	if auto_learn:
 		parts.append("领悟: " + auto_learn_next_tip())
+	if auto_tower:
+		parts.append("爬塔: " + auto_tower_next_tip())
 	if parts.is_empty():
 		return "各开关 均 未开启 (点击 一键 全开; 开启后 此处 展示 各开关 动态 状态)"
 	return "\n".join(parts)
@@ -2130,6 +2230,7 @@ func save_game() -> void:
 		"auto_buy": auto_buy,      # 打磨-68: 自动购置开关 (旧档缺字段默认关)
 		"auto_cast": auto_cast,    # 打磨-69: 自动施展开关 (旧档缺字段默认关)
 		"auto_learn": auto_learn,  # 打磨-80: 自动领悟开关 (旧档缺字段默认关)
+		"auto_tower": auto_tower,  # M5-3: 自动爬塔开关 (旧档缺字段默认关)
 		# M5-2: 爬塔 状态 (旧档缺字段默认 0 / 未通关)
 		"tower_fixed_floor": tower_fixed_floor,
 		"tower_fixed_clear": tower_fixed_clear,
@@ -2169,6 +2270,7 @@ func load_game() -> void:
 	auto_buy = bool(parsed.get("auto_buy", false))      # 打磨-68: 自动购置开关 (旧档缺字段默认关)
 	auto_cast = bool(parsed.get("auto_cast", false))    # 打磨-69: 自动施展开关 (旧档缺字段默认关)
 	auto_learn = bool(parsed.get("auto_learn", false))  # 打磨-80: 自动领悟开关 (旧档缺字段默认关)
+	auto_tower = bool(parsed.get("auto_tower", false))  # M5-3: 自动爬塔开关 (旧档缺字段默认关)
 	# M5-2: 爬塔 状态 (旧档缺字段 默认 0 / 未通关 / 登天梯 从 1 层 起)
 	tower_fixed_floor = clampi(int(parsed.get("tower_fixed_floor", 0)), 0, 1000)
 	tower_fixed_clear = bool(parsed.get("tower_fixed_clear", false))

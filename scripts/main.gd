@@ -109,7 +109,7 @@ var _offline_float_count := 0      # 打磨-66: 离线浮动提示次数 (自测
 var _offline_last_text := ""       # 打磨-66: 最近一次离线浮动文案 (自测断言用)
 var _auto_restore_count := 0       # 打磨-72: 启动 自动系列 恢复 提示 次数 (自测断言用)
 var _auto_restore_last_text := ""  # 打磨-72: 最近一次 自动 恢复 提示 文案 (自测断言用)
-var _auto_badge: Button            # 打磨-73/74: 顶栏 自动系列 状态徽标 ("自动 N/4", 任一开关开 显示 全关 隐藏; flat Button 可点击热区=切修行页+汇总行金边高亮)
+var _auto_badge: Button            # 打磨-73/74: 顶栏 自动系列 状态徽标 ("自动 N/5", M5-3 起 5 开关; 任一开关开 显示 全关 隐藏; flat Button 可点击热区=切修行页+汇总行金边高亮)
 var _auto_badge_n := -1            # 打磨-73: 已刷过的 开启开关数 缓存 (-1=未应用, 首帧必刷; 变化才刷)
 var _auto_badge_sb: StyleBoxFlat   # 打磨-90: 自动 徽标 normal 样式 (供 一键挂机 徽标 同风格 复用)
 var _auto_badge_sb_hover: StyleBoxFlat  # 打磨-90: 自动 徽标 hover 样式 (供 一键挂机 徽标 复用)
@@ -133,6 +133,20 @@ var _btn_sb_gold: StyleBoxFlat    # 打磨-32: 突破按钮"可突破"金边高�
 var _break_ready := false         # 打磨-32: 上帧可突破状态缓存 (变化才刷样式)
 var _flash_sb: StyleBoxFlat       # 闪烁用样式 (成功绿/失败红)
 var _flash_left := 0              # 剩余闪烁帧数
+# M5-3: 爬塔 Tab (Tab 4 爬塔页; 双塔入口/怪物卡/战力对比/挑战+自动爬塔开关)
+var _tower_box: VBoxContainer     # 爬塔页 外框
+var _tw_cards: Dictionary = {}    # 双塔入口卡片 id -> {panel, prog_label, mon_label, win_label, bar_bg, bar_fill, btn, floor_label}
+var _tw_mon_labels: Dictionary = {}  # 塔 id -> 怪物名 Label (刷新键 变化才刷)
+var _tw_mon_tips: Dictionary = {}    # 塔 id -> 怪物卡 tooltip 缓存
+var _tw_pwr_labels: Dictionary = {}  # 塔 id -> 战力对比 Label (变化才刷, 着色 胜绿/败红)
+var _tw_pwr_tips: Dictionary = {}    # 塔 id -> 战力对比 tooltip 缓存
+var _tw_key := ""                # 爬塔页 刷新键 (层数/怪物名/胜负/玩家 atk 变化才刷)
+var _tw_status_label: Label      # 爬塔 状态汇总行 (镇妖塔最高/登天梯纪录/剧毒提醒)
+var _tw_status_text := ""
+var _tw_auto_btn: Button         # M5-3: 自动爬塔开关 (toggle, 存档持久化, 一键挂机 5 开关 之 5)
+var _tw_auto_on := false         # M5-3: 上帧 自动爬塔 开关 缓存 (变化才刷 按钮态)
+var _tw_auto_tip := ""           # M5-3: 自动爬塔 按钮 tooltip 动态段 缓存
+var _tw_auto_tip_static := ""    # M5-3: 自动爬塔 按钮 tooltip 静态 前缀
 var _tab: TabContainer
 var _skill_box: VBoxContainer
 var _skill_row_nodes: Dictionary = {}
@@ -327,8 +341,8 @@ func _build_ui() -> void:
 	_auto_badge.visible = false
 	top.add_child(_auto_badge)
 	# 打磨-90: 顶栏 一键挂机 状态徽标 (金色圆角 "挂机", 4 自动开关 全开 才 显示, 部分开/全关 隐藏;
-	# 与 打磨-73 "自动 N/4" 徽标 同风格 同位置 (紧随其后), 区别: 本 徽标 只 表达 "一键挂机 已全开"
-	# 终态 (挂机全程自动 无需手动), 部分开 不显示 (用 自动 N/4 表达 进度);
+	# 与 打磨-73 "自动 N/5" 徽标 同风格 同位置 (紧随其后; M5-3 起 5 开关), 区别: 本 徽标 只 表达 "一键挂机 已全开"
+	# 终态 (挂机全程自动 无需手动), 部分开 不显示 (用 自动 N/5 表达 进度);
 	# 升级 flat Button 可点击热区 (手型光标+悬停 淡底 金边, 复用 打磨-73/74 模式):
 	# 点击=切 修行页 + 一键挂机 按钮 金边高亮 1.2s (复用 法器区 高亮 口径); 纯导航 无 存档/统计 副作用)
 	_idle_badge = Button.new()
@@ -452,15 +466,18 @@ func _build_ui() -> void:
 	var page2 := _make_page("技能")
 	var page3 := _make_page("装备")
 	var page4 := _make_page("成就")
+	var page5 := _make_page("爬塔")  # M5-3
 	_tab.add_child(page1)
 	_tab.add_child(page2)
 	_tab.add_child(page3)
 	_tab.add_child(page4)
+	_tab.add_child(page5)
 
 	_build_training_page(page1)
 	_build_skill_page(page2)
 	_build_equip_page(page3)
 	_build_ach_page(page4)
+	_build_tower_page(page5)  # M5-3
 
 	# 底部消息
 	_msg_label = _label("", 18, GOLD)
@@ -681,8 +698,8 @@ func _build_training_page(page: Panel) -> void:
 	# 打磨-89: tooltip = 静态口径 + 动态段 (各 开启中 开关 动态 状态 汇总, 随 开关 状态/资源/
 	# 速率/境界/已学/冷却 变化 由 _refresh 刷新); 静态 前缀 存 成员 供 重拼 (避免 split 截断 坑,
 	# 与 打磨-84/85/86 动态段 口径 同)
-	_auto_idle_tip_static = ("一键 开启/关闭 全部 自动系列 开关 (自动突破 + 自动购置 + 自动施展 + 自动领悟), 挂机 全程 自动 无需 手动 点击。\n"
-		+ "当前 未全开 (含 部分开) 时 点击 = 补齐 至 全开; 全开 时 点击 = 全部 关闭。各 开关 单独 开/关 与 上方 4 个 自动开关 按钮 同口径。\n"
+	_auto_idle_tip_static = ("一键 开启/关闭 全部 自动系列 开关 (自动突破 + 自动购置 + 自动施展 + 自动领悟 + 自动爬塔), 挂机 全程 自动 无需 手动 点击。\n"
+		+ "当前 未全开 (含 部分开) 时 点击 = 补齐 至 全开; 全开 时 点击 = 全部 关闭。各 开关 单独 开/关 与 上方 4 个 自动开关/爬塔页 自动爬塔 按钮 同口径。\n"
 		+ "各开关 独立 存档 持久化 (各自 auto_* 字段), 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
 		+ "【各开关 动态 状态 (动态)】")
 	_auto_idle_btn.tooltip_text = _auto_idle_tip_static
@@ -700,7 +717,7 @@ func _build_training_page(page: Panel) -> void:
 	asp_sb.bg_color = Color(0, 0, 0, 0)
 	asp_sb.set_corner_radius_all(8)
 	_auto_sum_panel.add_theme_stylebox_override("panel", asp_sb)
-	_auto_sum_panel.tooltip_text = "挂机自动系列 状态汇总 (✓=开 ✗=关, 与上方四个 自动开关 同步; 各段可点击, 点击切换 对应 自动开关, 与上方按钮同口径+底部消息确认; 顶栏 自动 N/4 徽标 点击也可直达本行):\n· 自动突破 — 资源攒够 自动 尝试 突破/道行精进\n· 自动购置 — 灵石攒够 自动 购入 法器/装备 + 最佳换装\n· 自动施展 — 已学 主动神通 冷却完毕 自动 施展 爆发\n· 自动领悟 — 境界/层 提升 解锁 新技能 自动 批量 领悟\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
+	_auto_sum_panel.tooltip_text = "挂机自动系列 状态汇总 (✓=开 ✗=关, 与上方 4 自动开关+爬塔页 自动爬塔 同步; 各段可点击, 点击切换 对应 自动开关, 与上方按钮同口径+底部消息确认; 顶栏 自动 N/5 徽标 (M5-3 起 5 开关) 点击也可直达本行):\n· 自动突破 — 资源攒够 自动 尝试 突破/道行精进\n· 自动购置 — 灵石攒够 自动 购入 法器/装备 + 最佳换装\n· 自动施展 — 已学 主动神通 冷却完毕 自动 施展 爆发\n· 自动领悟 — 境界/层 提升 解锁 新技能 自动 批量 领悟\n· 自动爬塔 — 挂机时 镇妖塔/登天梯 自动 挑战 (胜推进 败停留)\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
 	left.add_child(_auto_sum_panel)
 	_auto_sum_box = HBoxContainer.new()
 	_auto_sum_box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -724,13 +741,14 @@ func _build_training_page(page: Panel) -> void:
 	_auto_sum_sb_hover.set_border_width_all(1)
 	_auto_sum_sb_hover.content_margin_left = 2
 	_auto_sum_sb_hover.content_margin_right = 2
-	var sum_names: Array = ["突破", "购置", "施展", "领悟"]
-	var sum_handlers: Array = [_on_auto_break, _on_auto_buy, _on_auto_cast, _on_auto_learn]
+	var sum_names: Array = ["突破", "购置", "施展", "领悟", "爬塔"]
+	var sum_handlers: Array = [_on_auto_break, _on_auto_buy, _on_auto_cast, _on_auto_learn, _on_auto_sum_tower]
 	var sum_tips: Array = [
 		"点击切换 自动突破 (与上方按钮同口径, 底部消息确认): 资源攒够 自动 尝试 突破/道行精进; 开关 存档 持久化, 离线期间不触发",
 		"点击切换 自动购置 (与上方按钮同口径, 底部消息确认): 灵石攒够 自动 购入 法器/装备 + 最佳换装; 开关 存档 持久化, 离线期间不触发",
 		"点击切换 自动施展 (与上方按钮同口径, 底部消息确认): 已学 主动神通 冷却完毕 自动 施展 爆发; 开关 存档 持久化, 离线期间不触发",
 		"点击切换 自动领悟 (与上方按钮同口径, 底部消息确认): 境界/层 提升 解锁 新技能 自动 批量 领悟; 开关 存档 持久化, 离线期间不触发",
+		"点击切换 自动爬塔 (与爬塔页按钮同口径, 底部消息确认): 挂机时 镇妖塔/登天梯 自动 挑战 (胜推进 败停留 无热循环); 开关 存档 持久化, 离线期间不触发",
 	]
 	for si in sum_names.size():
 		var seg_l := _label("", 12, DIM)
@@ -1347,6 +1365,194 @@ func _add_equip_row(id: String) -> void:
 	_equip_row_nodes[id] = row
 
 
+# ---------- M5-3: 爬塔页 (双塔入口卡片/怪物卡/战力对比/挑战+自动爬塔开关) ----------
+# 卡片: 塔名+进度条 (镇妖塔 N/1000, 通关后 守塔 模式 满条; 登天梯 第 N 层)/怪物卡 (名+精英/Boss 标记)/
+# 战力对比 (玩家 ATK 有效 vs 怪物 ATK, 胜=绿 败=红)/挑战 按钮 (立即 结算 一次, 胜=推进+灵石 败=停留)
+# 刷新 节流: 刷新键 = 双塔 层数|怪物名|胜负|玩家 有效 atk 量化 变化才刷 (挂机 恒定 无 每帧 重建)
+func _build_tower_page(page: Panel) -> void:
+	var g := GameData
+	var outer := VBoxContainer.new()
+	outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	outer.offset_left = 10
+	outer.offset_top = 8
+	outer.offset_right = -10
+	outer.offset_bottom = -8
+	outer.add_theme_constant_override("separation", 10)
+	page.add_child(outer)
+	_tower_box = outer
+	# 状态汇总行 (镇妖塔 最高层/登天梯 纪录/剧毒 提醒; 文本变化 才刷)
+	_tw_status_label = _label("", 14, CYAN)
+	_tw_status_label.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。"
+	outer.add_child(_tw_status_label)
+	# 双塔入口卡片 横排 (镇妖塔 / 登天梯)
+	var cards := HBoxContainer.new()
+	cards.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cards.add_theme_constant_override("separation", 12)
+	outer.add_child(cards)
+	_build_tower_card(cards, "fixed", "镇妖塔", "固定 1000 层 · 每 10 层 精英 · 每 50 层 Boss · 通关后 守塔 模式 反复挑战 1000 层 Boss")
+	_build_tower_card(cards, "endless", "登天梯", "无尽 塔 · 无 层数 上限 · 每 100 层 里程碑 Boss · 每日首胜 额外 灵石")
+	# 双塔 卡片 均 构建完 后 强制 全量 刷新 一次 (清 刷新键 绕过 节流, 确保 首帧 非空;
+	# 构建期 单卡 首刷 会 因 另一塔 _tw_cards 未登记 而 报 无效键, 故 统一 收尾 刷)
+	_tw_key = ""
+	_refresh_tower()
+	# M5-3: 自动爬塔 开关 (挂机 时 双塔 自动 挑战, 纳入 自动系列 5 开关 体系 [突破/购置/施展/领悟/爬塔];
+	# 与 4 自动开关 同口径: toggle_mode, 底部消息确认, 存档持久化, 离线期间 不触发; tooltip = 静态口径 + 动态段)
+	_tw_auto_btn = _make_button("自动爬塔: 关")
+	_tw_auto_btn.toggle_mode = true
+	_tw_auto_btn.pressed.connect(_on_tower_auto)
+	_tw_auto_tip_static = ("开启后 挂机时 镇妖塔+登天梯 每帧 自动 挑战 (胜=层数推进+灵石奖励, 败=停留本层 无消耗 无惩罚, 可 无限重试, 与 手动 挑战 按钮 同口径 同结算)。\n"
+		+ "每帧 双塔 各 至多 挑战一次, 层数 单调 推进/停留 无热循环; 开关 存档 持久化 默认 关, 离线期间 不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
+		+ "【双塔 当前 挑战 层 (动态)】")
+	_tw_auto_btn.tooltip_text = _tw_auto_tip_static
+	outer.add_child(_tw_auto_btn)
+
+
+# M5-3: 单塔入口卡片 (panel: 塔名+副标题/进度条/怪物卡/战力对比/挑战按钮; 刷新由 _refresh_tower 节流驱动)
+func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String) -> void:
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_theme_stylebox_override("panel", _card_sb_normal)
+	parent.add_child(card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	card.add_child(box)
+	# 塔名 + 副标题
+	box.add_child(_label(tname, 16, GOLD))
+	var sub_l := _label(tsub, 12, DIM)
+	sub_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(sub_l)
+	# 层数 + 进度条 (镇妖塔 N/1000 通关 满条 守塔; 登天梯 第 N 层 无 进度条 概念, 用 纪录 行)
+	var row1 := HBoxContainer.new()
+	row1.add_theme_constant_override("separation", 8)
+	box.add_child(row1)
+	var floor_l := _label("", 13, WHITEISH)
+	floor_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row1.add_child(floor_l)
+	var bar_bg := ColorRect.new()
+	bar_bg.color = Color(0.18, 0.19, 0.25)
+	bar_bg.custom_minimum_size = Vector2(0, 10)
+	bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar_bg.size_flags_stretch_ratio = 1.0
+	row1.add_child(bar_bg)
+	var bar_fill := ColorRect.new()
+	bar_fill.color = CYAN
+	bar_fill.position = Vector2.ZERO
+	bar_bg.add_child(bar_fill)
+	# 怪物卡 (名 + 精英/Boss 标记 + 特性 tooltip; 键变化才刷)
+	var mon_l := _label("", 15, CYAN)
+	mon_l.tooltip_text = ""
+	box.add_child(mon_l)
+	# 战力对比 (玩家 有效 ATK vs 怪物 ATK; 胜=绿 败=红, 文本变化才刷)
+	var pwr_l := _label("", 13, WHITEISH)
+	pwr_l.tooltip_text = ""
+	box.add_child(pwr_l)
+	# 挑战按钮 (立即结算一次; 与 自动爬塔 同路径 try_tower_challenge)
+	var btn := _make_button("挑战 本层")
+	btn.pressed.connect(_on_tower_challenge.bind(tid))
+	box.add_child(btn)
+	_tw_cards[tid] = {
+		"panel": card, "floor": floor_l, "bar_bg": bar_bg, "bar_fill": bar_fill,
+		"btn": btn,
+	}
+	_tw_mon_labels[tid] = mon_l
+	_tw_pwr_labels[tid] = pwr_l
+	# 首刷 不 在 此处: 双塔 卡片 构建期 另一塔 尚未 登记 (_tw_cards 缺键),
+	# 统一 由 _build_tower_page 收尾 强制 全量 刷新 (清 刷新键 后 _refresh_tower)
+
+
+# M5-3: 挑战按钮 — 立即 结算 一次 (胜=推进+灵石 底部消息, 败=停留 无 惩罚; 与 自动爬塔 同口径)
+func _on_tower_challenge(tid: String) -> void:
+	var g := GameData
+	var r: Dictionary = g.try_tower_challenge(tid)
+	var tname: String = "镇妖塔" if tid == "fixed" else "登天梯"
+	if bool(r["win"]):
+		var extra := ""
+		if float(r["daily_bonus"]) > 0.0:
+			extra = " (含每日首胜 +%s)" % g.fmt(float(r["daily_bonus"]))
+		_show_msg("✔ %s 第 %d 层「%s」胜利! 灵石 +%s%s" % [
+			tname, int(r["floor"]), str(r["monster"]), g.fmt(float(r["reward_stone"])), extra])
+	else:
+		_show_msg("✖ %s 第 %d 层「%s」战力不足, 停留本层 (无惩罚, 可重试)" % [
+			tname, int(r["floor"]), str(r["monster"])])
+	_refresh_tower()
+
+
+# M5-3: 自动爬塔开关 — 点击切 开/关 (存档持久化, 由 GameData._process 驱动 双塔 自动 挑战;
+# 底部消息确认口径 同 4 自动开关; 开关动作 本身 无 资源/统计 副作用)
+func _on_tower_auto() -> void:
+	var g := GameData
+	g.auto_tower = not g.auto_tower
+	_tw_auto_on = g.auto_tower
+	_tw_auto_btn.set_pressed_no_signal(g.auto_tower)
+	_tw_auto_btn.text = ("自动爬塔: 开" if g.auto_tower else "自动爬塔: 关")
+	_show_msg("自动爬塔已开启, 挂机时镇妖塔/登天梯将自动挑战 (可存档, 离线期间不触发)" if g.auto_tower else "自动爬塔已关闭, 恢复手动点击挑战")
+	_refresh_tower()
+
+
+# M5-3: 爬塔页 节流 刷新 (刷新键 = 双塔 层数|怪物名|精英/Boss|胜负|玩家 有效 atk 0.5 档;
+# 键 变化 才 写 怪物卡/战力对比/层数/进度条; 挂机 恒定 无 每帧 重建; 纯展示 无 副作用)
+func _refresh_tower() -> void:
+	var g := GameData
+	var p: Dictionary = g.tower_challenge_preview()
+	var fmon: Dictionary = p["fixed_mon"]
+	var emon: Dictionary = p["endless_mon"]
+	var key: String = "%d|%d|%s|%s|%d|%d|%d" % [
+		int(p["fixed_floor"]), int(p["endless_floor"]),
+		str(fmon["name"]), str(emon["name"]),
+		1 if bool(p["fixed_win"]) else 0, 1 if bool(p["endless_win"]) else 0,
+		int(g.player_atk_effective() / 0.5)]
+	if key == _tw_key and _tw_key != "":
+		return
+	_tw_key = key
+	# 状态汇总行 (文本变化才刷)
+	var st: String = g.tower_status_line()
+	if st != _tw_status_text:
+		_tw_status_text = st
+		_tw_status_label.text = st
+	# 镇妖塔 卡片
+	_apply_tower_card("fixed", int(p["fixed_floor"]), "第 %d/1000 层" % int(p["fixed_floor"]),
+		g.tower_fixed_clear, float(g.tower_fixed_floor) / 1000.0, fmon, bool(p["fixed_win"]))
+	# 登天梯 卡片 (进度 = 最高 纪录 层数, 无 1000 上限; 层数 展示 第 N 层)
+	_apply_tower_card("endless", int(p["endless_floor"]), "第 %d 层 · 最高 %d" % [int(p["endless_floor"]), g.tower_endless_best],
+		false, -1.0, emon, bool(p["endless_win"]))
+
+
+# M5-3: 单塔卡片 应用 (怪物卡/战力对比/层数/进度条; 只写 文本/颜色/填充 尺寸)
+func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: bool, ratio: float, mon: Dictionary, win: bool) -> void:
+	var g := GameData
+	var c: Dictionary = _tw_cards[tid]
+	(c["floor"] as Label).text = ("守塔 模式 · 1000 层 Boss" if is_clear else floor_txt)
+	# 进度条: 镇妖塔 层数/1000 (通关 恒 满); 登天梯 无 进度 概念 恒 满条 青色 (装饰)
+	var fill: ColorRect = c["bar_fill"]
+	var bg: ColorRect = c["bar_bg"]
+	var r: float = (1.0 if is_clear else clampf(ratio, 0.0, 1.0)) if tid == "fixed" else 1.0
+	fill.size = Vector2(bg.size.x * r, bg.size.y)
+	fill.color = GOLD if is_clear else CYAN
+	# 怪物卡 (名 + 精英/Boss 标记; tooltip 特性 说明)
+	var tag: String = ""
+	if bool(mon["is_elite"]):
+		tag = " ★精英"
+	elif str(mon["boss_type"]) != "":
+		tag = " ⚑Boss"
+	var mon_txt: String = "第 %d 层「%s」%s" % [floor_n, str(mon["name"]), tag]
+	var mon_l: Label = _tw_mon_labels[tid]
+	if str(mon_l.text) != mon_txt:
+		mon_l.text = mon_txt
+	var tip: String = g.tower_monster_tip(mon)
+	if _tw_mon_tips.get(tid, "") != tip:
+		_tw_mon_tips[tid] = tip
+		mon_l.tooltip_text = tip
+	# 战力对比 (胜=绿 败=红; 文本+着色 变化才刷)
+	var pwr_txt: String = g.tower_power_line(float(mon["atk"]))
+	var pwr_l: Label = _tw_pwr_labels[tid]
+	if str(pwr_l.text) != pwr_txt or pwr_l.get_meta("_win", null) != win:
+		pwr_l.set_meta("_win", win)
+		pwr_l.text = pwr_txt
+		pwr_l.add_theme_color_override("font_color", Color(0.6, 0.95, 0.6) if win else Color(0.98, 0.55, 0.5))
+		pwr_l.tooltip_text = ("判定口径: 玩家 有效 ATK ≥ 怪物 ATK x 0.85 即胜 (即时判定, 无死亡惩罚, 败 停留本层 可 无限重试)。\n"
+			+ ("玩家 当前 处 剧毒 debuff (ATK -15% x %d 场), 按 减成 后 口径 预测。" % g.poison_battles if g.poison_battles > 0 else "无 debuff, 按 当前 战力 预测。"))
+
+
 # ---------- 成就页 ----------
 
 func _build_ach_page(page: Panel) -> void:
@@ -1675,19 +1881,31 @@ func _refresh() -> void:
 		var al_t: String = g.auto_learn_last_text()
 		if al_t != "":
 			_show_msg(al_t)
+	# M5-3: 自动爬塔开关 按钮态 (开关状态 变化才刷; 读档恢复/外部改 同步)
+	if g.auto_tower != _tw_auto_on:
+		_tw_auto_on = g.auto_tower
+		_tw_auto_btn.set_pressed_no_signal(g.auto_tower)
+		_tw_auto_btn.text = ("自动爬塔: 开" if g.auto_tower else "自动爬塔: 关")
+	# M5-3: 自动爬塔按钮 tooltip 动态段 (双塔 当前 挑战 层 + 胜负 预测, 随 层数/怪物/战力 变化 才刷; 同 打磨-84/85/86 缓存口径)
+	var at_tip: String = g.auto_tower_next_tip()
+	if at_tip != _tw_auto_tip:
+		_tw_auto_tip = at_tip
+		_tw_auto_btn.tooltip_text = _tw_auto_tip_static + at_tip
+	# M5-3: 爬塔页 节流 刷新 (刷新键 变化才刷; 挂机 恒定 无 每帧 重建, 手动 挑战/自动爬塔/读档 恢复 后 同步)
+	_refresh_tower()
 	# 打磨-70: 自动系列 状态汇总行 (状态键 变化才刷 文本/颜色; 读档恢复/外部改 同步)
 	var ak: String = g.auto_summary_key()
 	if ak != _auto_sum_key:
 		_auto_sum_key = ak
 		_apply_auto_summary()
-	# 打磨-73: 顶栏 自动系列 状态徽标 (任一开关开 显示 "自动 N/4" 金色, 全关 隐藏;
+	# 打磨-73: 顶栏 自动系列 状态徽标 (任一开关开 显示 "自动 N/5" 金色 (M5-3 起 5 开关), 全关 隐藏;
 	# 开启数 变化才刷, 读档恢复/外部改 同步; 纯展示 无 存档/统计 副作用)
 	var bn: int = g.auto_on_count()
 	if bn != _auto_badge_n:
 		_auto_badge_n = bn
 		if bn > 0:
 			_auto_badge.visible = true
-			_auto_badge.text = "自动 %d/4" % bn
+			_auto_badge.text = "自动 %d/5" % bn
 			_auto_badge.tooltip_text = g.auto_summary_text() + "\n(离线期间不触发, 游戏运行时生效; 明细见 修行页 自动系列 状态汇总行)\n点击: 直达 修行页·自动系列状态汇总行 (金边高亮)"
 		else:
 			_auto_badge.visible = false
@@ -1702,7 +1920,7 @@ func _refresh() -> void:
 		if ib_on:
 			_idle_badge.visible = true
 			_idle_badge.text = "挂机"
-			_idle_badge.tooltip_text = ("一键挂机 已全开 (自动突破 + 自动购置 + 自动施展 + 自动领悟 全部自动, 挂机全程无需手动点击)。"
+			_idle_badge.tooltip_text = ("一键挂机 已全开 (自动突破 + 自动购置 + 自动施展 + 自动领悟 + 自动爬塔 全部自动, 挂机全程无需手动点击)。"
 				+ "\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
 				+ "\n点击: 直达 修行页·一键挂机按钮 (金边高亮)")
 		else:
@@ -2539,6 +2757,14 @@ func _on_auto_learn() -> void:
 	_auto_learn_btn.text = ("自动领悟: 开" if GameData.auto_learn else "自动领悟: 关")
 	_show_msg("自动领悟已开启, 境界提升解锁新技能将自动批量领悟 (可存档, 离线期间不触发)" if GameData.auto_learn else "自动领悟已关闭, 恢复手动点击领悟")
 
+# M5-3: 自动爬塔开关 — 汇总行 爬塔段 点击 切换 (与 爬塔页 按钮 同口径, 底部消息 确认)
+func _on_auto_sum_tower() -> void:
+	GameData.auto_tower = not GameData.auto_tower
+	_tw_auto_on = GameData.auto_tower
+	_tw_auto_btn.set_pressed_no_signal(GameData.auto_tower)
+	_tw_auto_btn.text = ("自动爬塔: 开" if GameData.auto_tower else "自动爬塔: 关")
+	_show_msg("自动爬塔已开启, 挂机时镇妖塔/登天梯将自动挑战 (胜推进 败停留, 可存档, 离线期间不触发)" if GameData.auto_tower else "自动爬塔已关闭, 恢复手动点击挑战")
+
 
 # 打磨-88: 一键挂机 — 点击 一键 全开/全关 自动系列 4 开关 (突破/购置/施展/领悟);
 # 点击 方向: 未全开 (含 部分开) → 全开 (补齐 至 全开), 全开 → 全关;
@@ -2560,22 +2786,26 @@ func _on_auto_idle() -> void:
 	_auto_learn_on = g.auto_learn
 	_auto_learn_btn.set_pressed_no_signal(g.auto_learn)
 	_auto_learn_btn.text = ("自动领悟: 开" if g.auto_learn else "自动领悟: 关")
+	# M5-3: 自动爬塔 按钮 同步 (5 开关 之 5, 口径 与 其余 4 开关 一致)
+	_tw_auto_on = g.auto_tower
+	_tw_auto_btn.set_pressed_no_signal(g.auto_tower)
+	_tw_auto_btn.text = ("自动爬塔: 开" if g.auto_tower else "自动爬塔: 关")
 	_auto_idle_on = target
 	_auto_idle_btn.set_pressed_no_signal(target)
 	_auto_idle_btn.text = ("一键挂机: 全开" if target else "一键挂机: 全关")
-	# 底部消息: 全开 = 列出 4 项 开启; 全关 = 恢复 手动 提示 (各开关 单独 开/关 仍 各自 确认 文案 口径)
+	# 底部消息: 全开 = 列出 5 项 开启; 全关 = 恢复 手动 提示 (各开关 单独 开/关 仍 各自 确认 文案 口径)
 	if target:
-		_show_msg("一键挂机已开启: 突破 · 购置 · 施展 · 领悟 全部自动 (挂机全程无需手动点击; 可存档, 离线期间不触发)")
+		_show_msg("一键挂机已开启: 突破 · 购置 · 施展 · 领悟 · 爬塔 全部自动 (挂机全程无需手动点击; 可存档, 离线期间不触发)")
 	else:
-		_show_msg("一键挂机已关闭: 突破 / 购置 / 施展 / 领悟 全部关闭, 恢复手动点击")
+		_show_msg("一键挂机已关闭: 突破 / 购置 / 施展 / 领悟 / 爬塔 全部关闭, 恢复手动点击")
 	_refresh()
 
 
 # 打磨-70: 自动系列 状态汇总行 刷新 (状态键 变化时 调用; 开启 金 / 未开 灰,
 # 口径 与 四个 自动开关 按钮 一致 (打磨-80 起 4 段: 突破/购置/施展/领悟); 纯展示 无 存档/统计 副作用)
 func _apply_auto_summary() -> void:
-	var names: Array = ["突破", "购置", "施展", "领悟"]
-	var on: Array = [GameData.auto_break, GameData.auto_buy, GameData.auto_cast, GameData.auto_learn]
+	var names: Array = ["突破", "购置", "施展", "领悟", "爬塔"]
+	var on: Array = [GameData.auto_break, GameData.auto_buy, GameData.auto_cast, GameData.auto_learn, GameData.auto_tower]
 	for i in names.size():
 		var seg_l: Label = _auto_sum_segs[i]
 		seg_l.text = names[i] + (" ✓" if on[i] else " ✗")
