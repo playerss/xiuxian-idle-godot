@@ -1,0 +1,1542 @@
+{
+  "affixes": [
+    {
+      "id": "af_qi_rate_0_0",
+      "name": "聚灵·普通",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 0,
+      "value": 0.05,
+      "desc": "灵气速率 +5%"
+    },
+    {
+      "id": "af_qi_rate_0_1",
+      "name": "纳灵·普通",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 1,
+      "value": 0.0575,
+      "desc": "灵气速率 +5.75%"
+    },
+    {
+      "id": "af_qi_rate_0_2",
+      "name": "引气·普通",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 2,
+      "value": 0.065,
+      "desc": "灵气速率 +6.5%"
+    },
+    {
+      "id": "af_qi_rate_0_3",
+      "name": "凝露·普通",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 3,
+      "value": 0.0725,
+      "desc": "灵气速率 +7.25%"
+    },
+    {
+      "id": "af_qi_rate_1_0",
+      "name": "聚灵·优秀",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 0,
+      "value": 0.09,
+      "desc": "灵气速率 +9%"
+    },
+    {
+      "id": "af_qi_rate_1_1",
+      "name": "纳灵·优秀",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 1,
+      "value": 0.1035,
+      "desc": "灵气速率 +10.35%"
+    },
+    {
+      "id": "af_qi_rate_1_2",
+      "name": "引气·优秀",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 2,
+      "value": 0.117,
+      "desc": "灵气速率 +11.7%"
+    },
+    {
+      "id": "af_qi_rate_1_3",
+      "name": "凝露·优秀",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 3,
+      "value": 0.1305,
+      "desc": "灵气速率 +13.05%"
+    },
+    {
+      "id": "af_qi_rate_2_0",
+      "name": "聚灵·稀有",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 0,
+      "value": 0.16,
+      "desc": "灵气速率 +16%"
+    },
+    {
+      "id": "af_qi_rate_2_1",
+      "name": "纳灵·稀有",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 1,
+      "value": 0.184,
+      "desc": "灵气速率 +18.4%"
+    },
+    {
+      "id": "af_qi_rate_2_2",
+      "name": "引气·稀有",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 2,
+      "value": 0.208,
+      "desc": "灵气速率 +20.8%"
+    },
+    {
+      "id": "af_qi_rate_2_3",
+      "name": "凝露·稀有",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 3,
+      "value": 0.232,
+      "desc": "灵气速率 +23.2%"
+    },
+    {
+      "id": "af_qi_rate_3_0",
+      "name": "聚灵·史诗",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 0,
+      "value": 0.3,
+      "desc": "灵气速率 +30%"
+    },
+    {
+      "id": "af_qi_rate_3_1",
+      "name": "纳灵·史诗",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 1,
+      "value": 0.345,
+      "desc": "灵气速率 +34.5%"
+    },
+    {
+      "id": "af_qi_rate_3_2",
+      "name": "引气·史诗",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 2,
+      "value": 0.39,
+      "desc": "灵气速率 +39%"
+    },
+    {
+      "id": "af_qi_rate_3_3",
+      "name": "凝露·史诗",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 3,
+      "value": 0.435,
+      "desc": "灵气速率 +43.5%"
+    },
+    {
+      "id": "af_qi_rate_4_0",
+      "name": "聚灵·传说",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 0,
+      "value": 0.6,
+      "desc": "灵气速率 +60%"
+    },
+    {
+      "id": "af_qi_rate_4_1",
+      "name": "纳灵·传说",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 1,
+      "value": 0.69,
+      "desc": "灵气速率 +69%"
+    },
+    {
+      "id": "af_qi_rate_4_2",
+      "name": "引气·传说",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 2,
+      "value": 0.78,
+      "desc": "灵气速率 +78%"
+    },
+    {
+      "id": "af_qi_rate_4_3",
+      "name": "凝露·传说",
+      "pool": "qi_rate",
+      "pool_name": "灵气速率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 3,
+      "value": 0.87,
+      "desc": "灵气速率 +87%"
+    },
+    {
+      "id": "af_stone_rate_0_0",
+      "name": "凝晶·普通",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 0,
+      "value": 0.04,
+      "desc": "灵石速率 +4%"
+    },
+    {
+      "id": "af_stone_rate_0_1",
+      "name": "吸髓·普通",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 1,
+      "value": 0.046,
+      "desc": "灵石速率 +4.6%"
+    },
+    {
+      "id": "af_stone_rate_0_2",
+      "name": "聚宝·普通",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 2,
+      "value": 0.052,
+      "desc": "灵石速率 +5.2%"
+    },
+    {
+      "id": "af_stone_rate_0_3",
+      "name": "藏金·普通",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 3,
+      "value": 0.058,
+      "desc": "灵石速率 +5.8%"
+    },
+    {
+      "id": "af_stone_rate_1_0",
+      "name": "凝晶·优秀",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 0,
+      "value": 0.072,
+      "desc": "灵石速率 +7.2%"
+    },
+    {
+      "id": "af_stone_rate_1_1",
+      "name": "吸髓·优秀",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 1,
+      "value": 0.0828,
+      "desc": "灵石速率 +8.28%"
+    },
+    {
+      "id": "af_stone_rate_1_2",
+      "name": "聚宝·优秀",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 2,
+      "value": 0.0936,
+      "desc": "灵石速率 +9.36%"
+    },
+    {
+      "id": "af_stone_rate_1_3",
+      "name": "藏金·优秀",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 3,
+      "value": 0.1044,
+      "desc": "灵石速率 +10.44%"
+    },
+    {
+      "id": "af_stone_rate_2_0",
+      "name": "凝晶·稀有",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 0,
+      "value": 0.128,
+      "desc": "灵石速率 +12.8%"
+    },
+    {
+      "id": "af_stone_rate_2_1",
+      "name": "吸髓·稀有",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 1,
+      "value": 0.1472,
+      "desc": "灵石速率 +14.72%"
+    },
+    {
+      "id": "af_stone_rate_2_2",
+      "name": "聚宝·稀有",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 2,
+      "value": 0.1664,
+      "desc": "灵石速率 +16.64%"
+    },
+    {
+      "id": "af_stone_rate_2_3",
+      "name": "藏金·稀有",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 3,
+      "value": 0.1856,
+      "desc": "灵石速率 +18.56%"
+    },
+    {
+      "id": "af_stone_rate_3_0",
+      "name": "凝晶·史诗",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 0,
+      "value": 0.24,
+      "desc": "灵石速率 +24%"
+    },
+    {
+      "id": "af_stone_rate_3_1",
+      "name": "吸髓·史诗",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 1,
+      "value": 0.276,
+      "desc": "灵石速率 +27.6%"
+    },
+    {
+      "id": "af_stone_rate_3_2",
+      "name": "聚宝·史诗",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 2,
+      "value": 0.312,
+      "desc": "灵石速率 +31.2%"
+    },
+    {
+      "id": "af_stone_rate_3_3",
+      "name": "藏金·史诗",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 3,
+      "value": 0.348,
+      "desc": "灵石速率 +34.8%"
+    },
+    {
+      "id": "af_stone_rate_4_0",
+      "name": "凝晶·传说",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 0,
+      "value": 0.48,
+      "desc": "灵石速率 +48%"
+    },
+    {
+      "id": "af_stone_rate_4_1",
+      "name": "吸髓·传说",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 1,
+      "value": 0.552,
+      "desc": "灵石速率 +55.2%"
+    },
+    {
+      "id": "af_stone_rate_4_2",
+      "name": "聚宝·传说",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 2,
+      "value": 0.624,
+      "desc": "灵石速率 +62.4%"
+    },
+    {
+      "id": "af_stone_rate_4_3",
+      "name": "藏金·传说",
+      "pool": "stone_rate",
+      "pool_name": "灵石速率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 3,
+      "value": 0.696,
+      "desc": "灵石速率 +69.6%"
+    },
+    {
+      "id": "af_bt_chance_0_0",
+      "name": "明心·普通",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 0,
+      "value": 0.02,
+      "desc": "突破成功率 +2%"
+    },
+    {
+      "id": "af_bt_chance_0_1",
+      "name": "定神·普通",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 1,
+      "value": 0.023,
+      "desc": "突破成功率 +2.3%"
+    },
+    {
+      "id": "af_bt_chance_0_2",
+      "name": "通玄·普通",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 2,
+      "value": 0.026,
+      "desc": "突破成功率 +2.6%"
+    },
+    {
+      "id": "af_bt_chance_0_3",
+      "name": "悟道·普通",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 3,
+      "value": 0.029,
+      "desc": "突破成功率 +2.9%"
+    },
+    {
+      "id": "af_bt_chance_1_0",
+      "name": "明心·优秀",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 0,
+      "value": 0.036,
+      "desc": "突破成功率 +3.6%"
+    },
+    {
+      "id": "af_bt_chance_1_1",
+      "name": "定神·优秀",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 1,
+      "value": 0.0414,
+      "desc": "突破成功率 +4.14%"
+    },
+    {
+      "id": "af_bt_chance_1_2",
+      "name": "通玄·优秀",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 2,
+      "value": 0.0468,
+      "desc": "突破成功率 +4.68%"
+    },
+    {
+      "id": "af_bt_chance_1_3",
+      "name": "悟道·优秀",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 3,
+      "value": 0.0522,
+      "desc": "突破成功率 +5.22%"
+    },
+    {
+      "id": "af_bt_chance_2_0",
+      "name": "明心·稀有",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 0,
+      "value": 0.064,
+      "desc": "突破成功率 +6.4%"
+    },
+    {
+      "id": "af_bt_chance_2_1",
+      "name": "定神·稀有",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 1,
+      "value": 0.0736,
+      "desc": "突破成功率 +7.36%"
+    },
+    {
+      "id": "af_bt_chance_2_2",
+      "name": "通玄·稀有",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 2,
+      "value": 0.0832,
+      "desc": "突破成功率 +8.32%"
+    },
+    {
+      "id": "af_bt_chance_2_3",
+      "name": "悟道·稀有",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 3,
+      "value": 0.0928,
+      "desc": "突破成功率 +9.28%"
+    },
+    {
+      "id": "af_bt_chance_3_0",
+      "name": "明心·史诗",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 0,
+      "value": 0.12,
+      "desc": "突破成功率 +12%"
+    },
+    {
+      "id": "af_bt_chance_3_1",
+      "name": "定神·史诗",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 1,
+      "value": 0.138,
+      "desc": "突破成功率 +13.8%"
+    },
+    {
+      "id": "af_bt_chance_3_2",
+      "name": "通玄·史诗",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 2,
+      "value": 0.156,
+      "desc": "突破成功率 +15.6%"
+    },
+    {
+      "id": "af_bt_chance_3_3",
+      "name": "悟道·史诗",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 3,
+      "value": 0.174,
+      "desc": "突破成功率 +17.4%"
+    },
+    {
+      "id": "af_bt_chance_4_0",
+      "name": "明心·传说",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 0,
+      "value": 0.24,
+      "desc": "突破成功率 +24%"
+    },
+    {
+      "id": "af_bt_chance_4_1",
+      "name": "定神·传说",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 1,
+      "value": 0.276,
+      "desc": "突破成功率 +27.6%"
+    },
+    {
+      "id": "af_bt_chance_4_2",
+      "name": "通玄·传说",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 2,
+      "value": 0.312,
+      "desc": "突破成功率 +31.2%"
+    },
+    {
+      "id": "af_bt_chance_4_3",
+      "name": "悟道·传说",
+      "pool": "bt_chance",
+      "pool_name": "突破成功率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 3,
+      "value": 0.348,
+      "desc": "突破成功率 +34.8%"
+    },
+    {
+      "id": "af_offline_rate_0_0",
+      "name": "守拙·普通",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 0,
+      "value": 0.06,
+      "desc": "离线效率 +6%"
+    },
+    {
+      "id": "af_offline_rate_0_1",
+      "name": "温养·普通",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 1,
+      "value": 0.069,
+      "desc": "离线效率 +6.9%"
+    },
+    {
+      "id": "af_offline_rate_0_2",
+      "name": "藏灵·普通",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 2,
+      "value": 0.078,
+      "desc": "离线效率 +7.8%"
+    },
+    {
+      "id": "af_offline_rate_0_3",
+      "name": "归根·普通",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 3,
+      "value": 0.087,
+      "desc": "离线效率 +8.7%"
+    },
+    {
+      "id": "af_offline_rate_1_0",
+      "name": "守拙·优秀",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 0,
+      "value": 0.108,
+      "desc": "离线效率 +10.8%"
+    },
+    {
+      "id": "af_offline_rate_1_1",
+      "name": "温养·优秀",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 1,
+      "value": 0.1242,
+      "desc": "离线效率 +12.42%"
+    },
+    {
+      "id": "af_offline_rate_1_2",
+      "name": "藏灵·优秀",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 2,
+      "value": 0.1404,
+      "desc": "离线效率 +14.04%"
+    },
+    {
+      "id": "af_offline_rate_1_3",
+      "name": "归根·优秀",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 3,
+      "value": 0.1566,
+      "desc": "离线效率 +15.66%"
+    },
+    {
+      "id": "af_offline_rate_2_0",
+      "name": "守拙·稀有",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 0,
+      "value": 0.192,
+      "desc": "离线效率 +19.2%"
+    },
+    {
+      "id": "af_offline_rate_2_1",
+      "name": "温养·稀有",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 1,
+      "value": 0.2208,
+      "desc": "离线效率 +22.08%"
+    },
+    {
+      "id": "af_offline_rate_2_2",
+      "name": "藏灵·稀有",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 2,
+      "value": 0.2496,
+      "desc": "离线效率 +24.96%"
+    },
+    {
+      "id": "af_offline_rate_2_3",
+      "name": "归根·稀有",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 3,
+      "value": 0.2784,
+      "desc": "离线效率 +27.84%"
+    },
+    {
+      "id": "af_offline_rate_3_0",
+      "name": "守拙·史诗",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 0,
+      "value": 0.36,
+      "desc": "离线效率 +36%"
+    },
+    {
+      "id": "af_offline_rate_3_1",
+      "name": "温养·史诗",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 1,
+      "value": 0.414,
+      "desc": "离线效率 +41.4%"
+    },
+    {
+      "id": "af_offline_rate_3_2",
+      "name": "藏灵·史诗",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 2,
+      "value": 0.468,
+      "desc": "离线效率 +46.8%"
+    },
+    {
+      "id": "af_offline_rate_3_3",
+      "name": "归根·史诗",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 3,
+      "value": 0.522,
+      "desc": "离线效率 +52.2%"
+    },
+    {
+      "id": "af_offline_rate_4_0",
+      "name": "守拙·传说",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 0,
+      "value": 0.72,
+      "desc": "离线效率 +72%"
+    },
+    {
+      "id": "af_offline_rate_4_1",
+      "name": "温养·传说",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 1,
+      "value": 0.828,
+      "desc": "离线效率 +82.8%"
+    },
+    {
+      "id": "af_offline_rate_4_2",
+      "name": "藏灵·传说",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 2,
+      "value": 0.936,
+      "desc": "离线效率 +93.6%"
+    },
+    {
+      "id": "af_offline_rate_4_3",
+      "name": "归根·传说",
+      "pool": "offline_rate",
+      "pool_name": "离线效率",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 3,
+      "value": 1.044,
+      "desc": "离线效率 +104.4%"
+    },
+    {
+      "id": "af_atk_0_0",
+      "name": "破虚·普通",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 0,
+      "value": 0.08,
+      "desc": "攻击 +8%"
+    },
+    {
+      "id": "af_atk_0_1",
+      "name": "裂岩·普通",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 1,
+      "value": 0.092,
+      "desc": "攻击 +9.2%"
+    },
+    {
+      "id": "af_atk_0_2",
+      "name": "斩魄·普通",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 2,
+      "value": 0.104,
+      "desc": "攻击 +10.4%"
+    },
+    {
+      "id": "af_atk_0_3",
+      "name": "惊雷·普通",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 3,
+      "value": 0.116,
+      "desc": "攻击 +11.6%"
+    },
+    {
+      "id": "af_atk_1_0",
+      "name": "破虚·优秀",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 0,
+      "value": 0.144,
+      "desc": "攻击 +14.4%"
+    },
+    {
+      "id": "af_atk_1_1",
+      "name": "裂岩·优秀",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 1,
+      "value": 0.1656,
+      "desc": "攻击 +16.56%"
+    },
+    {
+      "id": "af_atk_1_2",
+      "name": "斩魄·优秀",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 2,
+      "value": 0.1872,
+      "desc": "攻击 +18.72%"
+    },
+    {
+      "id": "af_atk_1_3",
+      "name": "惊雷·优秀",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 3,
+      "value": 0.2088,
+      "desc": "攻击 +20.88%"
+    },
+    {
+      "id": "af_atk_2_0",
+      "name": "破虚·稀有",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 0,
+      "value": 0.256,
+      "desc": "攻击 +25.6%"
+    },
+    {
+      "id": "af_atk_2_1",
+      "name": "裂岩·稀有",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 1,
+      "value": 0.2944,
+      "desc": "攻击 +29.44%"
+    },
+    {
+      "id": "af_atk_2_2",
+      "name": "斩魄·稀有",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 2,
+      "value": 0.3328,
+      "desc": "攻击 +33.28%"
+    },
+    {
+      "id": "af_atk_2_3",
+      "name": "惊雷·稀有",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 3,
+      "value": 0.3712,
+      "desc": "攻击 +37.12%"
+    },
+    {
+      "id": "af_atk_3_0",
+      "name": "破虚·史诗",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 0,
+      "value": 0.48,
+      "desc": "攻击 +48%"
+    },
+    {
+      "id": "af_atk_3_1",
+      "name": "裂岩·史诗",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 1,
+      "value": 0.552,
+      "desc": "攻击 +55.2%"
+    },
+    {
+      "id": "af_atk_3_2",
+      "name": "斩魄·史诗",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 2,
+      "value": 0.624,
+      "desc": "攻击 +62.4%"
+    },
+    {
+      "id": "af_atk_3_3",
+      "name": "惊雷·史诗",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 3,
+      "value": 0.696,
+      "desc": "攻击 +69.6%"
+    },
+    {
+      "id": "af_atk_4_0",
+      "name": "破虚·传说",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 0,
+      "value": 0.96,
+      "desc": "攻击 +96%"
+    },
+    {
+      "id": "af_atk_4_1",
+      "name": "裂岩·传说",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 1,
+      "value": 1.104,
+      "desc": "攻击 +110.4%"
+    },
+    {
+      "id": "af_atk_4_2",
+      "name": "斩魄·传说",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 2,
+      "value": 1.248,
+      "desc": "攻击 +124.8%"
+    },
+    {
+      "id": "af_atk_4_3",
+      "name": "惊雷·传说",
+      "pool": "atk",
+      "pool_name": "攻击",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 3,
+      "value": 1.392,
+      "desc": "攻击 +139.2%"
+    },
+    {
+      "id": "af_def_0_0",
+      "name": "磐石·普通",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 0,
+      "value": 0.08,
+      "desc": "防御 +8%"
+    },
+    {
+      "id": "af_def_0_1",
+      "name": "玄铁·普通",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 1,
+      "value": 0.092,
+      "desc": "防御 +9.2%"
+    },
+    {
+      "id": "af_def_0_2",
+      "name": "金刚·普通",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 2,
+      "value": 0.104,
+      "desc": "防御 +10.4%"
+    },
+    {
+      "id": "af_def_0_3",
+      "name": "龟息·普通",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 0,
+      "tier_name": "普通",
+      "variant": 3,
+      "value": 0.116,
+      "desc": "防御 +11.6%"
+    },
+    {
+      "id": "af_def_1_0",
+      "name": "磐石·优秀",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 0,
+      "value": 0.144,
+      "desc": "防御 +14.4%"
+    },
+    {
+      "id": "af_def_1_1",
+      "name": "玄铁·优秀",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 1,
+      "value": 0.1656,
+      "desc": "防御 +16.56%"
+    },
+    {
+      "id": "af_def_1_2",
+      "name": "金刚·优秀",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 2,
+      "value": 0.1872,
+      "desc": "防御 +18.72%"
+    },
+    {
+      "id": "af_def_1_3",
+      "name": "龟息·优秀",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 1,
+      "tier_name": "优秀",
+      "variant": 3,
+      "value": 0.2088,
+      "desc": "防御 +20.88%"
+    },
+    {
+      "id": "af_def_2_0",
+      "name": "磐石·稀有",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 0,
+      "value": 0.256,
+      "desc": "防御 +25.6%"
+    },
+    {
+      "id": "af_def_2_1",
+      "name": "玄铁·稀有",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 1,
+      "value": 0.2944,
+      "desc": "防御 +29.44%"
+    },
+    {
+      "id": "af_def_2_2",
+      "name": "金刚·稀有",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 2,
+      "value": 0.3328,
+      "desc": "防御 +33.28%"
+    },
+    {
+      "id": "af_def_2_3",
+      "name": "龟息·稀有",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 2,
+      "tier_name": "稀有",
+      "variant": 3,
+      "value": 0.3712,
+      "desc": "防御 +37.12%"
+    },
+    {
+      "id": "af_def_3_0",
+      "name": "磐石·史诗",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 0,
+      "value": 0.48,
+      "desc": "防御 +48%"
+    },
+    {
+      "id": "af_def_3_1",
+      "name": "玄铁·史诗",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 1,
+      "value": 0.552,
+      "desc": "防御 +55.2%"
+    },
+    {
+      "id": "af_def_3_2",
+      "name": "金刚·史诗",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 2,
+      "value": 0.624,
+      "desc": "防御 +62.4%"
+    },
+    {
+      "id": "af_def_3_3",
+      "name": "龟息·史诗",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 3,
+      "tier_name": "史诗",
+      "variant": 3,
+      "value": 0.696,
+      "desc": "防御 +69.6%"
+    },
+    {
+      "id": "af_def_4_0",
+      "name": "磐石·传说",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 0,
+      "value": 0.96,
+      "desc": "防御 +96%"
+    },
+    {
+      "id": "af_def_4_1",
+      "name": "玄铁·传说",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 1,
+      "value": 1.104,
+      "desc": "防御 +110.4%"
+    },
+    {
+      "id": "af_def_4_2",
+      "name": "金刚·传说",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 2,
+      "value": 1.248,
+      "desc": "防御 +124.8%"
+    },
+    {
+      "id": "af_def_4_3",
+      "name": "龟息·传说",
+      "pool": "def",
+      "pool_name": "防御",
+      "tier": 4,
+      "tier_name": "传说",
+      "variant": 3,
+      "value": 1.392,
+      "desc": "防御 +139.2%"
+    }
+  ],
+  "drop": {
+    "sources": {
+      "normal": {
+        "chance": 0.05,
+        "count_min": 1,
+        "count_max": 1,
+        "bonus_buckets": 0
+      },
+      "elite": {
+        "chance": 0.2,
+        "count_min": 1,
+        "count_max": 1,
+        "bonus_buckets": 3
+      },
+      "boss": {
+        "chance": 1.0,
+        "count_min": 1,
+        "count_max": 3,
+        "bonus_buckets": 7
+      },
+      "milestone": {
+        "chance": 1.0,
+        "count_min": 1,
+        "count_max": 2,
+        "bonus_buckets": 14
+      }
+    },
+    "bucket_size": 50,
+    "max_bucket": 19,
+    "buckets": [
+      [
+        70,
+        22,
+        6,
+        2,
+        0
+      ],
+      [
+        69,
+        22,
+        7,
+        3,
+        1
+      ],
+      [
+        68,
+        23,
+        8,
+        5,
+        3
+      ],
+      [
+        66,
+        23,
+        9,
+        6,
+        5
+      ],
+      [
+        63,
+        24,
+        9,
+        7,
+        8
+      ],
+      [
+        61,
+        24,
+        10,
+        9,
+        11
+      ],
+      [
+        58,
+        25,
+        11,
+        10,
+        13
+      ],
+      [
+        54,
+        25,
+        12,
+        12,
+        16
+      ],
+      [
+        51,
+        25,
+        13,
+        13,
+        19
+      ],
+      [
+        47,
+        26,
+        14,
+        14,
+        23
+      ],
+      [
+        43,
+        26,
+        14,
+        16,
+        26
+      ],
+      [
+        39,
+        27,
+        15,
+        17,
+        29
+      ],
+      [
+        35,
+        27,
+        16,
+        18,
+        33
+      ],
+      [
+        30,
+        27,
+        17,
+        20,
+        37
+      ],
+      [
+        26,
+        28,
+        18,
+        21,
+        40
+      ],
+      [
+        21,
+        28,
+        19,
+        23,
+        44
+      ],
+      [
+        16,
+        29,
+        19,
+        24,
+        48
+      ],
+      [
+        11,
+        29,
+        20,
+        25,
+        52
+      ],
+      [
+        5,
+        30,
+        21,
+        27,
+        56
+      ],
+      [
+        2,
+        30,
+        22,
+        28,
+        60
+      ]
+    ]
+  },
+  "config": {
+    "bag_capacity": 30,
+    "slots_per_equip": 3,
+    "slot_max": 4
+  },
+  "tier_names": [
+    "普通",
+    "优秀",
+    "稀有",
+    "史诗",
+    "传说"
+  ],
+  "tier_mult": [
+    1.0,
+    1.8,
+    3.2,
+    6.0,
+    12.0
+  ],
+  "tier_color": [
+    [
+      0.6,
+      0.62,
+      0.68
+    ],
+    [
+      0.55,
+      0.85,
+      0.55
+    ],
+    [
+      0.5,
+      0.7,
+      0.98
+    ],
+    [
+      0.8,
+      0.55,
+      0.98
+    ],
+    [
+      0.98,
+      0.86,
+      0.5
+    ]
+  ]
+}

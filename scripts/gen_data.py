@@ -428,6 +428,104 @@ def gen_tower_floors(rng, monsters):
         })
     return floors
 
+# ============ M6 DIY 装备: 词缀 (affix) 数据层 (M6-1) ============
+# 设计见 PROJECT_PLAN.md「新特性: M6 DIY 装备」。
+# 规模: 120 词缀 = 6 效果池 x 5 品质 x 4 变体 (与 技能/装备 同规模)。
+# 效果池: 灵气速率/灵石速率/突破成功率/离线效率/攻击/防御
+#         (与现有 加成 体系 打通: 塔怪 靠 atk/def 压制, 挂机 靠 前 4 项)。
+# 品质: 普通/优秀/稀有/史诗/传说, 数值 梯度 x1/x1.8/x3.2/x6/x12,
+#       颜色 灰/绿/蓝/紫/金 (复用 TIER_COLOR 风格)。
+# 命名: 效果词 x 品质词 (如「破虚·传说」), 24 效果词 跨 池 互斥 保证 全表 唯一。
+# 掉落: 镇妖塔/登天梯 战斗 (普通 5% / 精英 20% / Boss 必掉 1~3 件) + 里程碑 宝箱;
+#       品质 按 层数 桶 (每 50 层 一桶, 共 20 桶) 权重 表, 精英/Boss/宝箱 桶位 上移
+#       (低层 无 传说, 顶层 传说 权重 60; 桶 = (层-1)//50 封顶 19, 登天梯 越层 取 顶桶)。
+AFFIX_POOLS = [
+    ("qi_rate",      "灵气速率",   0.05),
+    ("stone_rate",   "灵石速率",   0.04),
+    ("bt_chance",    "突破成功率", 0.02),
+    ("offline_rate", "离线效率",   0.06),
+    ("atk",          "攻击",       0.08),
+    ("def",          "防御",       0.08),
+]
+AFFIX_TIERS = ["普通", "优秀", "稀有", "史诗", "传说"]
+AFFIX_TIER_MULT = [1.0, 1.8, 3.2, 6.0, 12.0]
+AFFIX_TIER_COLOR = [
+    [0.60, 0.62, 0.68],   # 普通 灰
+    [0.55, 0.85, 0.55],   # 优秀 绿
+    [0.50, 0.70, 0.98],   # 稀有 蓝
+    [0.80, 0.55, 0.98],   # 史诗 紫
+    [0.98, 0.86, 0.50],   # 传说 金
+]
+# 效果词: 6 池 x 4 变体, 全表 24 词 互斥 (命名 唯一 靠 此)
+AFFIX_EFF_WORDS = {
+    "qi_rate":      ["聚灵", "纳灵", "引气", "凝露"],
+    "stone_rate":   ["凝晶", "吸髓", "聚宝", "藏金"],
+    "bt_chance":    ["明心", "定神", "通玄", "悟道"],
+    "offline_rate": ["守拙", "温养", "藏灵", "归根"],
+    "atk":          ["破虚", "裂岩", "斩魄", "惊雷"],
+    "def":          ["磐石", "玄铁", "金刚", "龟息"],
+}
+AFFIX_VARIANT_STEP = 0.15   # 变体 0..3: 数值 x(1 + 0.15 x v)
+# 掉落 桶: 每 50 层 一桶, 20 桶; 品质 权重 公式 (s = 桶/19):
+#   普通 = max(2, 70 x (1-s^1.5))  优秀 = 22+8s  稀有 = 6+16s
+#   史诗 = 2+26s  传说 = 60 x s^1.3  (桶0 = [70,22,6,2,0], 桶19 = [2,30,22,28,60])
+AFFIX_BUCKET_SIZE = 50
+AFFIX_MAX_BUCKET = 19
+# 掉落 来源: 掉率 / 件数范围 / 桶位 上移 (精英 +3, Boss +7, 里程碑 宝箱 +14 保底 高级)
+AFFIX_DROP_SOURCES = {
+    "normal":    {"chance": 0.05, "count_min": 1, "count_max": 1, "bonus_buckets": 0},
+    "elite":     {"chance": 0.20, "count_min": 1, "count_max": 1, "bonus_buckets": 3},
+    "boss":      {"chance": 1.0,  "count_min": 1, "count_max": 3, "bonus_buckets": 7},
+    "milestone": {"chance": 1.0,  "count_min": 1, "count_max": 2, "bonus_buckets": 14},
+}
+# M6-2 消费 的 装配/背包 配置 (数据驱动; 旧档 兼容 默认值 与 此 一致)
+AFFIX_BAG_CAPACITY = 30      # 背包 容量 (格, 可 成就 解锁 +10)
+AFFIX_SLOTS_PER_EQUIP = 3    # 每件 装备 3 词缀 槽
+AFFIX_SLOT_MAX = 4           # 道祖期 强化 上限 4 槽
+
+def _affix_tier_weights(b):
+    """桶 b (0..19) 的品质 权重 [普通,优秀,稀有,史诗,传说] (整数, 滚动时 归一化)"""
+    s = b / float(AFFIX_MAX_BUCKET)
+    return [
+        round(max(2.0, 70.0 * (1.0 - s ** 1.5))),
+        round(22.0 + 8.0 * s),
+        round(6.0 + 16.0 * s),
+        round(2.0 + 26.0 * s),
+        round(60.0 * s ** 1.3),
+    ]
+
+def gen_affixes():
+    affixes, used = [], set()
+    for pid, pname, base in AFFIX_POOLS:
+        words = AFFIX_EFF_WORDS[pid]
+        for tier in range(len(AFFIX_TIERS)):
+            for v in range(4):
+                name = f"{words[v]}·{AFFIX_TIERS[tier]}"
+                assert name not in used, f"词缀 名 重复 {name}"
+                used.add(name)
+                value = round(base * AFFIX_TIER_MULT[tier] * (1.0 + AFFIX_VARIANT_STEP * v), 4)
+                assert value > 0.0, f"词缀 {name} 数值 须 >0"
+                pct = value * 100.0
+                pct_s = f"{pct:.2f}".rstrip("0").rstrip(".")
+                affixes.append({
+                    "id": f"af_{pid}_{tier}_{v}",
+                    "name": name,
+                    "pool": pid, "pool_name": pname,
+                    "tier": tier, "tier_name": AFFIX_TIERS[tier],
+                    "variant": v,
+                    "value": value,
+                    "desc": f"{pname} +{pct_s}%",
+                })
+    return affixes
+
+def gen_affix_drop():
+    return {
+        "sources": AFFIX_DROP_SOURCES,
+        "bucket_size": AFFIX_BUCKET_SIZE,
+        "max_bucket": AFFIX_MAX_BUCKET,
+        "buckets": [_affix_tier_weights(b) for b in range(AFFIX_MAX_BUCKET + 1)],
+    }
+
 def main():
     skills = gen_skills()
     equipment = gen_equipment()
@@ -436,6 +534,9 @@ def main():
     traits = gen_monster_traits()
     monsters = gen_monsters(tower_rng)
     floors = gen_tower_floors(tower_rng, monsters)
+    # ---- M6-1: 词缀 120 项 + 掉落概率表 (数据层, M6-2 逻辑 消费) ----
+    affixes = gen_affixes()
+    drop = gen_affix_drop()
     # ---- M5 校验 ----
     assert len(traits) == 18 and len({t["id"] for t in traits}) == 18, "特性表须为 18 项且 id 唯一"
     assert len(monsters) == 145, f"怪物总数 {len(monsters)} != 145"
@@ -528,6 +629,52 @@ def main():
     # 登天梯 底数 须 严格高于 镇妖塔 (越打越难 口径)
     assert ENDLESS_HP_GROWTH > TOWER_HP_GROWTH, "登天梯 hp 底数须高于镇妖塔"
     assert ENDLESS_ATK_GROWTH > TOWER_ATK_GROWTH, "登天梯 atk 底数须高于镇妖塔"
+    # ---- M6-1 校验: 词缀 120 项 + 掉落概率表 ----
+    assert len(affixes) == 120, f"词缀总数 {len(affixes)} != 120"
+    assert len({a["id"] for a in affixes}) == 120, "词缀 id 须唯一"
+    assert len({a["name"] for a in affixes}) == 120, "词缀名 须全表唯一"
+    # 构成: 6 池 x 5 品质 x 4 变体
+    from collections import Counter
+    pool_cnt = Counter(a["pool"] for a in affixes)
+    assert dict(pool_cnt) == {p: 20 for p, _, _ in AFFIX_POOLS}, f"每池须 20 个 (实际 {dict(pool_cnt)})"
+    for a in affixes:
+        assert 0 <= a["tier"] < 5, f"词缀 {a['id']} 品质越界"
+        assert a["pool_name"] == next(n for p, n, _b in AFFIX_POOLS if p == a["pool"]), f"词缀 {a['id']} 池名不一致"
+        # 数值 = 基数 x 品质倍率 x (1+0.15 x 变体)
+        base = next(b for p, _, b in AFFIX_POOLS if p == a["pool"])
+        exp = round(base * AFFIX_TIER_MULT[a["tier"]] * (1.0 + AFFIX_VARIANT_STEP * a["variant"]), 4)
+        assert abs(a["value"] - exp) < 1e-9, f"词缀 {a['id']} 数值落表不符 (实际 {a['value']} 期望 {exp})"
+    # 品质 梯度: 同池 同变体 数值 随 品质 严格递增 (x1/x1.8/x3.2/x6/x12)
+    for p, _, _ in AFFIX_POOLS:
+        for v in range(4):
+            col = [a["value"] for a in affixes if a["pool"] == p and a["variant"] == v]
+            for i in range(4):
+                assert col[i + 1] > col[i], f"池 {p} 变体 {v} 数值 须 随 品质 严格 递增 ({col})"
+    # 变体 梯度: 同池 同品质 数值 随 变体 严格 递增 (x1/x1.15/x1.3/x1.45)
+    for p, _, _ in AFFIX_POOLS:
+        for t in range(5):
+            col = [a["value"] for a in affixes if a["pool"] == p and a["tier"] == t]
+            for i in range(3):
+                assert col[i + 1] > col[i], f"池 {p} 品质 {t} 数值 须 随 变体 严格 递增 ({col})"
+    # 掉落 表: 20 桶, 每桶 5 品质 权重 非负 且 总和>0, 顶层 传说 权重 最高
+    assert drop["bucket_size"] == 50 and drop["max_bucket"] == 19, "掉落 桶 配置 须 50 层 20 桶"
+    assert len(drop["buckets"]) == 20, f"掉落 桶 须 20 个 (实际 {len(drop['buckets'])})"
+    for b in drop["buckets"]:
+        assert len(b) == 5 and all(int(x) >= 0 for x in b), f"掉落 桶 {b} 须 5 品质 非负 权重"
+        assert sum(b) > 0, f"掉落 桶 权重 总和 须 >0"
+    for i in range(19):
+        assert drop["buckets"][i + 1][4] >= drop["buckets"][i][4], "传说 权重 须 随 层 桶 不降"
+    assert drop["buckets"][0][4] == 0 and drop["buckets"][19][4] > 0, "低层 无 传说 / 顶层 有 传说"
+    assert drop["buckets"][19][4] == max(drop["buckets"][19]), "顶层 传说 权重 最高"
+    # 掉落 来源: 普通 5% / 精英 20% / Boss 100% (1~3 件) / 宝箱 100% (1~2 件, 桶位 上移 最高)
+    src = drop["sources"]
+    assert abs(src["normal"]["chance"] - 0.05) < 1e-9 and abs(src["elite"]["chance"] - 0.20) < 1e-9, "普通/精英 掉率 口径 5%/20%"
+    assert src["boss"]["chance"] == 1.0 and src["boss"]["count_min"] == 1 and src["boss"]["count_max"] == 3, "Boss 必掉 1~3 件"
+    assert src["milestone"]["chance"] == 1.0 and src["milestone"]["bonus_buckets"] == 14, "里程碑 宝箱 必掉 且 桶位 上移 14"
+    assert src["elite"]["bonus_buckets"] > src["normal"]["bonus_buckets"] and \
+        src["boss"]["bonus_buckets"] > src["elite"]["bonus_buckets"], "桶位 上移 须 普通<精英<Boss"
+    # 装配/背包 配置
+    assert AFFIX_BAG_CAPACITY == 30 and AFFIX_SLOTS_PER_EQUIP == 3 and AFFIX_SLOT_MAX == 4, "背包 30 格 / 3 槽 / 上限 4 槽 口径"
     with open(os.path.join(DATA, "skills.json"), "w", encoding="utf-8") as f:
         json.dump({"skills": skills}, f, ensure_ascii=False, indent=2)
     with open(os.path.join(DATA, "equipment.json"), "w", encoding="utf-8") as f:
@@ -557,6 +704,16 @@ def main():
                         "boss": {"mult": TOWER_BOST_MULTS, "reward": TOWER_BOST_REWARD}},
             "floors": floors,
         }, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(DATA, "affixes.json"), "w", encoding="utf-8") as f:
+        json.dump({
+            "affixes": affixes,
+            "drop": drop,
+            "config": {"bag_capacity": AFFIX_BAG_CAPACITY,
+                       "slots_per_equip": AFFIX_SLOTS_PER_EQUIP,
+                       "slot_max": AFFIX_SLOT_MAX},
+            "tier_names": AFFIX_TIERS, "tier_mult": AFFIX_TIER_MULT,
+            "tier_color": AFFIX_TIER_COLOR,
+        }, f, ensure_ascii=False, indent=2)
     # 校验
     assert len(skills) >= 100, f"技能数 {len(skills)} < 100"
     assert len(equipment) >= 100, f"装备数 {len(equipment)} < 100"
@@ -571,6 +728,13 @@ def main():
     passive = sum(1 for s in skills if s["type"] == "passive")
     print(f"skills: {len(skills)} (passive {passive}, active {active})")
     print(f"equipment: {len(equipment)}")
+    print(f"monsters: {len(monsters)} (species {len(species)}, bosses {len(bosses)})")
+    print(f"tower floors: {len(floors)}")
+    print(f"affixes: {len(affixes)} (6 池 x 5 品质 x 4 变体) + 掉落表 20 桶")
+    print("\n--- 词缀样例 ---")
+    for a in affixes[:2] + [x for x in affixes if x["tier"] == 4][:2] + affixes[-2:]:
+        print(f"  {a['id']:20s} {a['name']:10s} {a['pool_name']}/{a['tier_name']} +{a['value']*100:.1f}%")
+    print(f"  掉落桶0 = {drop['buckets'][0]}  桶19 = {drop['buckets'][19]}")
     print(f"achievements: {len(achievements)}")
     print("\n--- 技能样例 ---")
     for s in skills[:3] + [x for x in skills if x["type"] == "active"][:2]:

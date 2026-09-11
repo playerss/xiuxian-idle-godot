@@ -215,6 +215,151 @@ func _init() -> void:
 			check(theme_floors.size() == 4 and theme_floors.has(100) and theme_floors.has(250) and theme_floors.has(500) and theme_floors.has(750), "主题 Boss 层 = 100/250/500/750")
 			check(final_floors.size() == 1 and final_floors.has(1000), "最终 Boss 层 = 1000")
 
+		# ---------- M6-1: DIY 装备 词缀 数据层 (affixes.json: 120 词缀 6池x5品质x4变体 + 掉落概率表) ----------
+		var afxf := FileAccess.open("res://data/affixes.json", FileAccess.READ)
+		check(afxf != null, "M6-1 affixes.json 可读")
+		if afxf != null:
+			var afxv: Variant = JSON.parse_string(afxf.get_as_text())
+			afxf.close()
+			check(typeof(afxv) == TYPE_DICTIONARY, "M6-1 词缀 数据 为 合法 JSON 对象")
+			if typeof(afxv) == TYPE_DICTIONARY:
+				var afx: Dictionary = afxv
+				var affs: Array = (afx as Dictionary).get("affixes", [])
+				var dropd: Dictionary = (afx as Dictionary).get("drop", {})
+				var cfgd: Dictionary = (afx as Dictionary).get("config", {})
+				var tier_names: Array = (afx as Dictionary).get("tier_names", [])
+				var tier_color: Array = (afx as Dictionary).get("tier_color", [])
+				# 规模: 120 = 6 池 x 5 品质 x 4 变体, id/名 全表 唯一
+				check(affs.size() == 120, "M6-1 词缀 总数 120 (实际 %d)" % affs.size())
+				var af_ids: Dictionary = {}
+				var af_names: Dictionary = {}
+				var af_pool_cnt: Dictionary = {}
+				var af_pools_expect: Dictionary = {}
+				for pexpect in ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]:
+					af_pools_expect[pexpect] = 20
+				for af in affs:
+					var ad: Dictionary = af
+					var aid: String = str(ad["id"])
+					var aname: String = str(ad["name"])
+					check(not af_ids.has(aid), "M6-1 词缀 id %s 唯一" % aid)
+					af_ids[aid] = true
+					check(not af_names.has(aname), "M6-1 词缀名 %s 全表 唯一" % aname)
+					af_names[aname] = true
+					var apool: String = str(ad["pool"])
+					check(apool in af_pools_expect, "M6-1 词缀 %s 效果池 合法 (%s)" % [aid, apool])
+					if apool in af_pools_expect:
+						af_pool_cnt[apool] = int(af_pool_cnt.get(apool, 0)) + 1
+						check(str(ad["pool_name"]) != "", "M6-1 词缀 %s 池名 非空" % aid)
+					var atier: int = int(ad["tier"])
+					check(atier >= 0 and atier < 5, "M6-1 词缀 %s 品质 0..4 (%d)" % [aid, atier])
+					check(atier < tier_names.size() and str(ad["tier_name"]) == str(tier_names[atier]),
+							"M6-1 词缀 %s 品质名 与 表 一致 (%s)" % [aid, ad["tier_name"]])
+					var av: int = int(ad["variant"])
+					check(av >= 0 and av < 4, "M6-1 词缀 %s 变体 0..3 (%d)" % [aid, av])
+					check(float(ad["value"]) > 0.0, "M6-1 词缀 %s 数值 >0 (%s)" % [aid, str(ad["value"])])
+					check(str(ad["desc"]).find("+") >= 0 and str(ad["desc"]).find("%") >= 0,
+							"M6-1 词缀 %s desc 含 +N%% 口径" % aid)
+				check(af_pool_cnt.size() == 6, "M6-1 效果池 6 个 (实际 %d)" % af_pool_cnt.size())
+				for pk in af_pools_expect:
+					check(int(af_pool_cnt.get(pk, 0)) == int(af_pools_expect[pk]),
+							"M6-1 池 %s 20 个 (实际 %d)" % [pk, int(af_pool_cnt.get(pk, 0))])
+				# 数值 公式: 基数 x 品质倍率 x (1+0.15 x 变体) — 逐 词缀 恒等
+				var af_base: Dictionary = {"qi_rate": 0.05, "stone_rate": 0.04, "bt_chance": 0.02,
+						"offline_rate": 0.06, "atk": 0.08, "def": 0.08}
+				var af_mult: Dictionary = {0: 1.0, 1: 1.8, 2: 3.2, 3: 6.0, 4: 12.0}
+				var af_formula_ok := true
+				for af in affs:
+					var ad: Dictionary = af
+					var expv: float = float(af_base[str(ad["pool"])]) * float(af_mult[int(ad["tier"])]) * (1.0 + 0.15 * int(ad["variant"]))
+					expv = roundf(expv * 10000.0) / 10000.0
+					if absf(float(ad["value"]) - expv) > 1e-9:
+						af_formula_ok = false
+				check(af_formula_ok, "M6-1 词缀 数值 = 基数x品质倍率x(1+0.15x变体) 全表 恒等")
+				# 品质 梯度: 同池 同变体 数值 随 品质 严格 递增
+				var af_tier_ok := true
+				for p in ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]:
+					for v in 4:
+						var col: Array = []
+						for af in affs:
+							var ad: Dictionary = af
+							if str(ad["pool"]) == p and int(ad["variant"]) == v:
+								col.append(float(ad["value"]))
+						if col.size() != 5:
+							af_tier_ok = false
+						else:
+							for i in 4:
+								if col[i + 1] <= col[i]:
+									af_tier_ok = false
+				check(af_tier_ok, "M6-1 词缀 数值 随 品质 严格 递增 (每 池x变体 5 档)")
+				# 变体 梯度: 同池 同品质 数值 随 变体 严格 递增
+				var af_var_ok := true
+				for p in ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]:
+					for t in 5:
+						var col: Array = []
+						for af in affs:
+							var ad: Dictionary = af
+							if str(ad["pool"]) == p and int(ad["tier"]) == t:
+								col.append(float(ad["value"]))
+						if col.size() != 4:
+							af_var_ok = false
+						else:
+							for i in 3:
+								if col[i + 1] <= col[i]:
+									af_var_ok = false
+				check(af_var_ok, "M6-1 词缀 数值 随 变体 严格 递增 (每 池x品质 4 档)")
+				# 掉落 表: 20 桶 (每 50 层), 每桶 5 品质 权重 非负 总和>0, 传说 权重 随 桶 不降
+				check(int(dropd.get("bucket_size", -1)) == 50 and int(dropd.get("max_bucket", -1)) == 19,
+						"M6-1 掉落 桶 配置 = 50 层 20 桶")
+				var buckets: Array = dropd.get("buckets", [])
+				check(buckets.size() == 20, "M6-1 掉落 桶 20 个 (实际 %d)" % buckets.size())
+				var b_ok := true
+				for bk in buckets:
+					var b: Array = bk
+					if b.size() != 5:
+						b_ok = false
+						continue
+					var s := 0
+					for w in b:
+						if int(w) < 0:
+							b_ok = false
+						s += int(w)
+					if s <= 0:
+						b_ok = false
+				check(b_ok, "M6-1 掉落 每桶 5 品质 权重 非负 且 总和>0")
+				var leg_ok := true
+				for i in 19:
+					if int((buckets[i + 1] as Array)[4]) < int((buckets[i] as Array)[4]):
+						leg_ok = false
+				check(leg_ok, "M6-1 传说 权重 随 层 桶 不降")
+				check(int((buckets[0] as Array)[4]) == 0 and int((buckets[19] as Array)[4]) > 0,
+						"M6-1 低层 无 传说 / 顶层 有 传说")
+				var topb: Array = buckets[19]
+				var top_max := int(topb[4])
+				for w in topb:
+					if int(w) > top_max:
+						top_max = int(w)
+				check(int(topb[4]) == top_max, "M6-1 顶层 传说 权重 最高 (桶19=%s)" % str(topb))
+				# 掉落 来源: 普通 5% / 精英 20% / Boss 100%% (1~3 件) / 宝箱 100%% (桶位 上移 最高)
+				var srcs: Dictionary = dropd.get("sources", {})
+				check(absf(float(srcs.get("normal", {}).get("chance", -1.0)) - 0.05) < 1e-9,
+						"M6-1 普通 层 词缀 掉率 5%%")
+				check(absf(float(srcs.get("elite", {}).get("chance", -1.0)) - 0.20) < 1e-9,
+						"M6-1 精英 层 词缀 掉率 20%%")
+				var bs: Dictionary = srcs.get("boss", {})
+				check(float(bs.get("chance", -1.0)) == 1.0 and int(bs.get("count_min", -1)) == 1 and int(bs.get("count_max", -1)) == 3,
+						"M6-1 Boss 必掉 1~3 件")
+				var ms: Dictionary = srcs.get("milestone", {})
+				check(float(ms.get("chance", -1.0)) == 1.0 and int(ms.get("bonus_buckets", -1)) == 14,
+						"M6-1 里程碑 宝箱 必掉 且 桶位 上移 14")
+				check(int(srcs.get("elite", {}).get("bonus_buckets", -1)) > int(srcs.get("normal", {}).get("bonus_buckets", 0))
+						and int(srcs.get("boss", {}).get("bonus_buckets", -1)) > int(srcs.get("elite", {}).get("bonus_buckets", -1)),
+						"M6-1 桶位 上移 普通<精英<Boss")
+				# 装配/背包 配置: 背包 30 格 / 每件 3 槽 / 道祖期 上限 4 槽
+				check(int(cfgd.get("bag_capacity", -1)) == 30 and int(cfgd.get("slots_per_equip", -1)) == 3
+						and int(cfgd.get("slot_max", -1)) == 4, "M6-1 背包 30 格 / 3 槽 / 上限 4 槽 口径")
+				check(tier_names.size() == 5 and tier_color.size() == 5,
+						"M6-1 品质 5 档 名称/颜色 表 齐全 (实际 %d/%d)" % [tier_names.size(), tier_color.size()])
+
 			# ---------- M5-2: 爬塔 战斗逻辑 (玩家 atk/def / 战斗判定 / 奖励 / 剧毒 / 每日首胜 / 存档) ----------
 			# 受控基准: 此时 g 为 全新档 (境界0层1, 无 技能/装备/法器, 灵石 0) — 冻结 _process 防 挂机 累积
 			g.set_process(false)
