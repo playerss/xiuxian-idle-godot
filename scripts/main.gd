@@ -114,6 +114,8 @@ var _auto_badge_n := -1            # 打磨-73: 已刷过的 开启开关数 缓
 var _auto_badge_sb: StyleBoxFlat   # 打磨-90: 自动 徽标 normal 样式 (供 一键挂机 徽标 同风格 复用)
 var _auto_badge_sb_hover: StyleBoxFlat  # 打磨-90: 自动 徽标 hover 样式 (供 一键挂机 徽标 复用)
 var _idle_badge: Button            # 打磨-90: 顶栏 一键挂机 状态徽标 ("挂机", 4 自动开关 全开 才 显示, 部分开/全关 隐藏; flat Button 可点击热区=切修行页+一键挂机按钮金边高亮)
+var _clear_badge: Button          # M5-4: 镇妖塔 通关 称号徽标 (通关后 恒显 "镇妖塔·通关者", 点击 直达 爬塔页)
+var _clear_badge_on := false      # M5-4: 已刷过的 通关态 缓存 (变化才刷 显隐)
 var _idle_badge_on := false        # 打磨-90: 已刷过的 全开 态 缓存 (变化才刷 显隐; 与 按钮 全开态 同口径 auto_all_on)
 var _idle_btn_hi_tween: Tween      # 打磨-90: 一键挂机按钮 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
 var _idle_btn_sb_rest: StyleBoxFlat  # 打磨-90: 一键挂机按钮 构建时 normal 样式缓存 (高亮后 恢复 用)
@@ -141,6 +143,7 @@ var _tw_mon_tips: Dictionary = {}    # 塔 id -> 怪物卡 tooltip 缓存
 var _tw_pwr_labels: Dictionary = {}  # 塔 id -> 战力对比 Label (变化才刷, 着色 胜绿/败红)
 var _tw_pwr_tips: Dictionary = {}    # 塔 id -> 战力对比 tooltip 缓存
 var _tw_key := ""                # 爬塔页 刷新键 (层数/怪物名/胜负/玩家 atk 变化才刷)
+var _tw_card_hi_tween: Tween      # M5-4: 爬塔 卡片 金边高亮 tween (顶栏 通关 徽标 点击直达 1.2s 自动恢复)
 var _tw_status_label: Label      # 爬塔 状态汇总行 (镇妖塔最高/登天梯纪录/剧毒提醒)
 var _tw_status_text := ""
 var _tw_auto_btn: Button         # M5-3: 自动爬塔开关 (toggle, 存档持久化, 一键挂机 5 开关 之 5)
@@ -359,6 +362,22 @@ func _build_ui() -> void:
 	_idle_badge.pressed.connect(_on_idle_badge)
 	_idle_badge.visible = false
 	top.add_child(_idle_badge)
+	# M5-4: 镇妖塔 通关 称号徽标 (金色圆角 "镇妖塔·通关者", 通关后 恒显; 与 自动/挂机 徽标 同父 同风格;
+	# 纯展示 无 存档/统计 副作用; 显隐 随 tower_fixed_clear 变化才刷 [通关 为 一次性 事件, 极低频])
+	_clear_badge = Button.new()
+	_clear_badge.flat = true
+	_clear_badge.toggle_mode = false
+	_clear_badge.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_clear_badge.text = ""
+	_clear_badge.add_theme_font_size_override("font_size", 15)
+	_clear_badge.add_theme_color_override("font_color", GOLD)
+	_clear_badge.add_theme_stylebox_override("normal", _auto_badge_sb.duplicate())
+	_clear_badge.add_theme_stylebox_override("hover", _auto_badge_sb_hover.duplicate())
+	_clear_badge.add_theme_stylebox_override("pressed", _auto_badge_sb_hover.duplicate())
+	_clear_badge.add_theme_stylebox_override("focus", _auto_badge_sb_hover.duplicate())
+	_clear_badge.pressed.connect(_on_clear_badge)
+	_clear_badge.visible = false
+	top.add_child(_clear_badge)
 	# 打磨-75: 顶栏 一键系列 状态汇总 徽标 (六项 可执行数 一览; 各段 可点击 热区:
 	# 领悟/神通/法器/装备/最佳 = 直达对应页 并重置 筛选 (口径 同 打磨-44 收集直达),
 	# 施展 = 直接 执行 一键施展 (核心批量 点击 反馈, 与 各页 一键 按钮 完全 同口径);
@@ -1469,6 +1488,8 @@ func _on_tower_challenge(tid: String) -> void:
 		var extra := ""
 		if float(r["daily_bonus"]) > 0.0:
 			extra = " (含每日首胜 +%s)" % g.fmt(float(r["daily_bonus"]))
+		if float(r.get("clear_reward_stone", 0.0)) > 0.0:
+			extra += g.tower_clear_reward_text(float(r["clear_reward_stone"]))
 		_show_msg("✔ %s 第 %d 层「%s」胜利! 灵石 +%s%s" % [
 			tname, int(r["floor"]), str(r["monster"]), g.fmt(float(r["reward_stone"])), extra])
 	else:
@@ -1927,6 +1948,20 @@ func _refresh() -> void:
 			_idle_badge.visible = false
 			_idle_badge.text = ""
 			_idle_badge.tooltip_text = ""
+	# M5-4: 顶栏 镇妖塔 通关 称号 徽标 (通关后 恒显 "镇妖塔·通关者", 未通关 隐藏;
+	# tower_fixed_clear 一次性 事件 变化才刷 显隐 [通关/读档恢复 同步]; 纯展示 无 存档/统计 副作用)
+	var cl_on: bool = g.tower_fixed_clear
+	if cl_on != _clear_badge_on:
+		_clear_badge_on = cl_on
+		if cl_on:
+			_clear_badge.visible = true
+			_clear_badge.text = g.tower_clear_title()
+			_clear_badge.tooltip_text = ("镇妖塔 已通关 (1000 层 全部 登遍), 获得 称号「镇妖塔·通关者」+ 一次性 灵石 大奖 + 永久 atk/def 增益 (守塔模式: 反复 挑战 1000 层 Boss 拿 刷新 掉落)。\n"
+				+ "点击: 直达 爬塔页·镇妖塔 卡片")
+		else:
+			_clear_badge.visible = false
+			_clear_badge.text = ""
+			_clear_badge.tooltip_text = ""
 	# 打磨-88: 一键挂机 按钮 态 (全开 态 变化才刷; 读档恢复/外部 单开关 改 同步;
 	# 按压=全开, 文本 全开/全关; 纯展示 无 存档/统计 副作用)
 	var idle_on: bool = g.auto_all_on()
@@ -2978,6 +3013,42 @@ func _on_idle_badge() -> void:
 	_tab.current_tab = 0
 	_flash_idle_btn()
 	_show_msg("直达 修行页·一键挂机按钮 (一键 全开/全关 自动系列)")
+
+
+# M5-4: 顶栏 通关 称号 徽标 点击直达 — 点击=切 爬塔页 + 镇妖塔 卡片 金边高亮 1.2s
+# (复用 法器区/突破区 高亮 口径: 卡片 panel 换 金边 2px 样式, 1.2s 自动恢复; 重入 kill 旧 tween;
+# 纯导航 无 存档/统计 副作用; 仅 通关态 显示 徽标, 隐藏态 无 热区)
+func _on_clear_badge() -> void:
+	_tab.current_tab = 4
+	_flash_tower_card("fixed")
+	_show_msg("直达 爬塔页·镇妖塔 (守塔模式: 反复 挑战 1000 层 Boss)")
+
+
+# M5-4: 爬塔 卡片 金边高亮 1.2s 后自动恢复 (tween 驱动, 重入 先 kill 旧 tween, 同 法器区 口径;
+# 高亮=卡片 panel 换 金边 2px 样式, 恢复=构建时 缓存 默认 卡片 样式)
+func _flash_tower_card(tid: String) -> void:
+	var c: Dictionary = _tw_cards.get(tid, {})
+	if c.is_empty() or not c.has("panel"):
+		return
+	var panel: PanelContainer = c["panel"]
+	if _tw_card_hi_tween != null and _tw_card_hi_tween.is_valid():
+		_tw_card_hi_tween.kill()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.1, 0.1, 0.12)
+	sb.border_color = GOLD
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", sb)
+	_tw_card_hi_tween = create_tween()
+	_tw_card_hi_tween.tween_interval(1.2)
+	_tw_card_hi_tween.tween_callback(_restore_tower_card.bind(tid))
+
+
+func _restore_tower_card(tid: String) -> void:
+	var c: Dictionary = _tw_cards.get(tid, {})
+	if c.is_empty() or not c.has("panel"):
+		return
+	(c["panel"] as PanelContainer).add_theme_stylebox_override("panel", _card_sb_normal)
 
 
 # 打磨-90: 一键挂机 按钮 金边高亮 1.2s 后自动恢复 (tween 驱动, 重入 先 kill 旧 tween, 同 法器区 口径;

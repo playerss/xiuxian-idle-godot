@@ -14,6 +14,7 @@ const SHOTS := [
 	{"tab": 1, "name": "02_skills"},
 	{"tab": 2, "name": "03_equipment"},
 	{"tab": 3, "name": "04_achievements"},
+	{"tab": 4, "name": "05_tower"},  # M5-4: 爬塔页 (双塔卡片 + 怪物卡 + 战力对比 + 自动爬塔)
 ]
 const SETTLE_SEC := 1.2     # 每次切页后等待 UI 稳定的秒数
 
@@ -136,6 +137,11 @@ func _setup_demo_state() -> void:
 		"skill_use": 15.0, "item_buy": 3.0, "equip_buy": 4.0,
 	}
 	g.check_achievements()  # 自动解锁 6 个 (境界/首次/法器/技能/装备)
+	# M5-4: 爬塔 演示态 (金丹 战力 2x40^2=3200 可胜 镇妖塔 ~141 层; 镇妖塔 140/1000 +
+	# 登天梯 最高 55 — 双塔卡片 有 进度/怪物卡/战力对比 "胜" 绿字, 未通关 无 称号徽标)
+	g.tower_fixed_floor = 140
+	g.tower_endless_floor = 56
+	g.tower_endless_best = 55
 	# 打磨-69: 自动施展 展示 开 态 (自动突破/购置 保持 关, 仅 施展 展示 开 态 按钮 金边)
 	g.auto_cast = true
 	# 打磨-80: 自动领悟 展示 开 态 (与 施展 同开, 顶栏 徽标 自动 2/4, 汇总行 两段 金)

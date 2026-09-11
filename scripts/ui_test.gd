@@ -84,7 +84,18 @@ func _ready() -> void:
 	g0.owned_eq.clear()
 	g0.equipped.clear()
 	g0.stats = {}
-	# 冻结 GameData 挂机/成就/自动存档 (同 store_shots.gd), 由 UI 手动驱动 _refresh
+	# M5-4: 防御性 重置 爬塔 状态 (autoload 启动 load_game 读 残留档, 塔 进度 可能 非零;
+	# 残留 会 让 成就段/收集段 断言 看到 非零 塔 进度 泄漏 [tower_*/endless_*/first_tower 进度条非 0,
+	# 收集 ach 计数偏多] — 每轮 强制 干净 基准, 同 打磨-71/72 自动开关/离线收益 防御性 重置 口径)
+	g0.tower_fixed_floor = 0
+	g0.tower_fixed_clear = false
+	g0.tower_endless_floor = 1
+	g0.tower_endless_best = 0
+	g0.tower_daily_date = ""
+	g0.tower_daily_bonus_stones = 0.0
+	g0.tower_clear_reward_got = false
+	g0.poison_battles = 0
+	g0.auto_tower = false
 	g0.set_process(false)
 	var script: GDScript = load("res://scripts/main.gd")
 	ui = Control.new()
@@ -145,6 +156,7 @@ func _ready() -> void:
 	await _assert_goalbar()
 	await _assert_goalbar_jump()
 	await _assert_ach_nofilter()
+	await _assert_tower_clear()  # M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 称号 徽标
 	_finish()
 
 
@@ -4258,4 +4270,125 @@ func _assert_ach_nofilter() -> void:
 			"打磨-91 收尾 干净 基准 文案 x17 (实际 %s)" % str(btn.text))
 	check(g.essence == 0.0 and g.stones == 0.0 and g.stats == snap_stats,
 			"打磨-91 收尾 无 资源/统计 副作用")
+
+
+# M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 通关 称号 徽标 断言:
+# 通关 前 隐藏 徽标/通关 后 恒显 称号 徽标 (与 自动/挂机 徽标 同父)+tooltip 口径+状态行 含 称号/
+# 点击 直达 爬塔页 (tab 4)+镇妖塔 卡片 金边高亮/守塔 模式 恒 1000 层 胜 不 重复 发放 大奖 (reward_got 幂等)/
+# 未通关 不 发放/收尾 恢复 干净 基准
+func _assert_tower_clear() -> void:
+	var g := GameData
+	var badge: Button = ui._clear_badge
+	# 基准: 未通关 (全新 塔 态)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.tower_clear_reward_got = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.set_process(false)  # 冻结 挂机/成就, 确定性 受控
+	ui._refresh()
+	await get_tree().process_frame
+	# 未通关: 称号 接口 空串 + 徽标 隐藏
+	check(g.tower_clear_title() == "", "M5-4 未通关 称号 空串 (实际 %s)" % g.tower_clear_title())
+	check(badge != null, "M5-4 顶栏 通关 称号 徽标 节点 存在")
+	check(badge != null and not badge.visible and str(badge.text) == "",
+			"M5-4 未通关 徽标 隐藏 文本空 (visible=%s 文本=%s)" % [str(badge.visible), str(badge.text)])
+	# 通关 前: 新档 败 第 2 层 (atk 2.0 < 怪 2.84 恒败) — 验 未通关 不 发放 大奖
+	g.tower_fixed_floor = 1  # 待挑战 层 = 2 (恒败, 不 推进 不 通关)
+	var rc_pre: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(not bool(rc_pre["win"]) and not g.tower_fixed_clear, "M5-4 新档 败 第 2 层 未 通关 (实际 win=%s clear=%s)" % [str(rc_pre["win"]), str(rc_pre["clear"])])
+	check(int(rc_pre["floor"]) == 2, "M5-4 新档 镇妖塔 挑战 层 = 2 (实际 %d)" % int(rc_pre["floor"]))
+	check(float(rc_pre["clear_reward_stone"]) == 0.0, "M5-4 未通关 不 发放 大奖")
+	# 受控: 999->1000 层 Boss 首通 (战力 拉满 道祖 级), 触发 通关 一次性 大奖
+	g.tower_fixed_clear = false
+	g.tower_fixed_floor = 999
+	g.tower_clear_reward_got = false
+	# 拉满 战力 (道祖 级): 胜 守塔 1000 层 Boss
+	g.ascended = true
+	g.dao_level = 8
+	var stones_before: float = g.stones
+	var rc: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rc["win"]), "M5-4 道祖 守塔 1000 层 Boss 胜 (实际 win=%s)" % str(rc["win"]))
+	check(bool(rc["clear"]), "M5-4 守塔 胜 返回 clear=true (首次 通关 态)")
+	# 通关 一次性 大奖: 灵石 大奖 发放 (reward_got 由 false->true 触发)
+	check(float(rc["clear_reward_stone"]) > 0.0, "M5-4 通关 灵石 大奖 发放 (实际 %s)" % g.fmt(float(rc["clear_reward_stone"])))
+	check(absf(g.stones - (stones_before + g.TOWER_CLEAR_BONUS_STONE + float(rc["reward_stone"]))) < 1e-6,
+			"M5-4 灵石 = 前值 + 通关大奖 + 本层 奖励 (实际 %s)" % g.fmt(g.stones))
+	check(g.tower_clear_reward_got, "M5-4 通关 大奖 已发放 标记 置位")
+	# 称号 接口 非空 (通关态)
+	check(g.tower_clear_title() == "镇妖塔·通关者", "M5-4 通关 称号 = 镇妖塔·通关者 (实际 %s)" % g.tower_clear_title())
+	# 通关 文案 接口 (灵石 大奖 文案 含 称号/灵石/永久 atk/def/守塔)
+	var rw_txt: String = g.tower_clear_reward_text(g.TOWER_CLEAR_BONUS_STONE)
+	check(rw_txt.find("镇妖塔·通关者") >= 0 and rw_txt.find("永久 atk/def") >= 0 and rw_txt.find("守塔") >= 0,
+			"M5-4 通关 大奖 文案 含 称号/永久atk/def/守塔 (实际 %s)" % rw_txt)
+	check(g.tower_clear_reward_text(0.0) == "", "M5-4 通关 大奖 文案 0 发放 = 空串")
+	# 通关 后 状态行 含 称号
+	check(g.tower_status_line().find("镇妖塔·通关者") >= 0, "M5-4 状态行 含 通关 称号 (实际 %s)" % g.tower_status_line())
+	# 守塔 模式: 通关 后 反复 打 1000 层, 再胜 不 重复 发放 大奖 (reward_got 幂等)
+	var stones_before2: float = g.stones
+	var rc2: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rc2["win"]) and int(rc2["floor"]) == 1000, "M5-4 守塔 反复 打 恒 1000 层 (实际 %d)" % int(rc2["floor"]))
+	check(float(rc2["clear_reward_stone"]) == 0.0, "M5-4 守塔 再胜 不 重复 发放 大奖 (幂等, 实际 %s)" % str(rc2["clear_reward_stone"]))
+	check(absf(g.stones - (stones_before2 + float(rc2["reward_stone"]))) < 1e-6,
+			"M5-4 守塔 再胜 仅 本层 奖励 无 大奖 (实际 %s)" % g.fmt(g.stones))
+	# 通关 永久 增益: atk/def +15% (乘算 独立 项, 通关 恒 生效)
+	check(absf(g.clear_buff_mult() - (1.0 + g.TOWER_CLEAR_BUFF)) < 1e-9, "M5-4 通关 增益 倍率 = 1+0.15 (实际 %s)" % str(g.clear_buff_mult()))
+	# 顶栏 徽标 刷 显隐 (通关态 显示, 与 自动 徽标 同父)
+	ui._refresh()
+	await get_tree().process_frame
+	check(badge.visible and str(badge.text) == "镇妖塔·通关者",
+			"M5-4 通关 后 徽标 显 称号 (visible=%s 文本=%s)" % [str(badge.visible), str(badge.text)])
+	check(badge.get_parent() == ui._auto_badge.get_parent(), "M5-4 徽标 与 自动 徽标 同父 (顶栏)")
+	check(badge.tooltip_text.find("镇妖塔") >= 0 and badge.tooltip_text.find("通关") >= 0,
+			"M5-4 徽标 tooltip 含 镇妖塔/通关 口径 (实际 %s)" % badge.tooltip_text.left(40))
+	# 点击 直达 爬塔页 (tab 4) + 镇妖塔 卡片 金边 高亮 (1.2s 自动恢复)
+	ui._on_clear_badge()
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 4, "M5-4 点击 徽标 直达 爬塔页 (tab=4, 实际 %d)" % ui._tab.current_tab)
+	var fcard: Dictionary = ui._tw_cards.get("fixed", {})
+	var fpanel: PanelContainer = fcard.get("panel", null)
+	if fpanel != null:
+		var fhi: StyleBoxFlat = fpanel.get_theme_stylebox("panel")
+		check(fhi != null and fhi.border_width_left == 2, "M5-4 点击 后 镇妖塔 卡片 金边 高亮 (边框宽=%d)" % (fhi.border_width_left if fhi != null else -1))
+	# 无 资源/统计 副作用 (点击 导航 不改 存档)
+	await get_tree().process_frame
+	# 收尾: 恢复 干净 基准 (本 测试 为 末段, 清档 到 全新, 防 残留)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.tower_clear_reward_got = false
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(not badge.visible and str(badge.text) == "", "M5-4 收尾 未通关 徽标 隐藏 (实际 visible=%s)" % str(badge.visible))
+	check(g.tower_clear_title() == "", "M5-4 收尾 称号 空串")
 

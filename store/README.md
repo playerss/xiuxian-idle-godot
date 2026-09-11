@@ -26,9 +26,13 @@ DISPLAY=:110 ~/bin/godot --path . res://scenes/store_shots.tscn
 | `shots/02_skills.png` | 技能页：筛选 + 已学技能金框高亮 + 总加成汇总 |
 | `shots/03_equipment.png` | 装备页：5 部位槽位 + 部位筛选 + 购买/穿戴 |
 | `shots/04_achievements.png` | 成就页：已解锁成就金框 + 进度提示 |
+| `shots/05_tower.png` | 爬塔页（M5-4）：双塔卡片 + 怪物卡 + 战力对比 + 自动爬塔开关 |
 
 截图为「当前游戏版本」的真实渲染（gl_compatibility），上架前重新执行一次即可
 拿到最新素材；`shots/` 已提交仓库，diff 可查。
+
+> M5-4 起产出 5 张（新增 `05_tower.png` 爬塔页）。演示档塔进度：镇妖塔 140/1000 +
+> 登天梯 最高 55（金丹 战力，双塔卡片均含 进度条/怪物卡/战力对比「胜」绿字）。
 
 ## 商店页文案（见 store_page.md）
 

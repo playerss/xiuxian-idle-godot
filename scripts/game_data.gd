@@ -22,6 +22,10 @@ const TOWER_POWER_GROWTH := 40.0
 const TOWER_WIN_RATIO := 0.85        # 判定: 玩家 atk >= 怪 atk x 0.85 即胜
 const TOWER_POISON_ATK_MULT := 0.85  # 剧毒: 战胜后 玩家 atk -15%, 持续 2 场
 const TOWER_POISON_BATTLES := 2      # 剧毒持续场数
+# M5-4: 镇妖塔 通关 一次性 大奖 (首通 1000 层 Boss: 称号 + 灵石 大奖 + 永久 atk/def 增益,
+# 守塔 模式 保持 长期 收益; 神品词缀 大奖 待 M6 词缀系统 落地 后 替换 口径 — 原计划 神品词缀 x3)
+const TOWER_CLEAR_BONUS_STONE := 1000000.0  # 通关 一次性 灵石 大奖
+const TOWER_CLEAR_BUFF := 0.15              # 通关 永久 增益: 玩家 atk/def +15% (乘算 独立 项)
 const ENDLESS_ELITE_MULT := 3.0      # 登天梯 精英层 (每 10 层) 数值 x3
 const ENDLESS_BOSS_MULT := 10.0      # 登天梯 里程碑 Boss (每 100 层) 数值 x10
 
@@ -140,6 +144,7 @@ var tower_endless_floor := 1     # 登天梯 当前 可挑战 层 (从 1 起, �
 var tower_endless_best := 0      # 登天梯 历史 最高 纪录 层
 var tower_daily_date := ""       # 登天梯 每日首胜 日期 标记 (YYYY-MM-DD, 跨日 重置)
 var tower_daily_bonus_stones := 0.0  # 登天梯 当日 首胜 已发 灵石 总数
+var tower_clear_reward_got := false  # M5-4: 通关 一次性 大奖 已 发放 (称号/灵石/永久增益 只 触发一次, 防 存档 重放 重复 发放)
 var poison_battles := 0          # 剧毒 跨场 debuff 剩余 场数 (0=无毒; >0=玩家 atk -15%, 持续 2 场)
 # M5-3: 自动爬塔 (开=镇妖塔+登天梯 自动 挑战; GameData._process 每帧驱动, 自门控,
 # 胜推进/败停留 天然无热循环; 与 自动系列 4 开关 同口径: 存档持久化, 旧档缺字段默认 关, 离线期间 不触发)
@@ -310,16 +315,20 @@ func tower_power_progress() -> int:
 		return realm_idx
 	return 9 + dao_level
 
-# 玩家 攻击 (爬塔战斗用): 基础 x 成长^进度 x (1 + 功法 atk 池 + 装备 atk 池)
+# 玩家 攻击 (爬塔战斗用): 基础 x 成长^进度 x (1 + 功法 atk 池 + 装备 atk 池) x 通关增益
 # 旧数据 无 atk 字段 时 equip_bonus 返回 0 (只读, 不改动状态)
 func player_atk() -> float:
 	var base := TOWER_BASE_ATK * pow(TOWER_POWER_GROWTH, float(tower_power_progress()))
-	return base * (1.0 + skill_atk_bonus() + equip_bonus("atk") + item_attack())
+	return base * (1.0 + skill_atk_bonus() + equip_bonus("atk") + item_attack()) * clear_buff_mult()
 
-# 玩家 防御 (爬塔战斗用): 基础 x 成长^进度 x (1 + 功法 def 池 + 装备 def 池 + 法器 def 池)
+# 玩家 防御 (爬塔战斗用): 基础 x 成长^进度 x (1 + 功法 def 池 + 装备 def 池 + 法器 def 池) x 通关增益
 func player_def() -> float:
 	var base := TOWER_BASE_DEF * pow(TOWER_POWER_GROWTH, float(tower_power_progress()))
-	return base * (1.0 + skill_def_bonus() + equip_bonus("def") + item_defense())
+	return base * (1.0 + skill_def_bonus() + equip_bonus("def") + item_defense()) * clear_buff_mult()
+
+# M5-4: 镇妖塔 通关 永久 增益 (通关后 玩家 atk/def +15%, 乘算 独立 项; 未通关=1.0; 只读)
+func clear_buff_mult() -> float:
+	return 1.0 + TOWER_CLEAR_BUFF if tower_fixed_clear else 1.0
 
 # M5-2: 法器 atk/def 池 (已拥有 法器 加成; 只读)
 func item_attack() -> float:
@@ -498,6 +507,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 	var new_floor := next_floor
 	var clear := tower_fixed_clear
 	var daily_bonus := 0.0
+	var clear_reward_stone := 0.0
 	var daily_date_today := _today_str()
 	if win:
 		reward_stone = float(mon["stone"])
@@ -512,8 +522,14 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 			else:
 				new_floor = 1000
 				if not clear:
-					clear = true  # 1000 层 Boss 首次 通过 -> 通关 (称号/大奖 见 M5-4)
+					clear = true  # 1000 层 Boss 首次 通过 -> 通关
 					tower_fixed_clear = true
+					# M5-4: 通关 一次性 大奖 (称号「镇妖塔·通关者」+ 灵石 大奖 + 永久 atk/def 增益;
+					# 发放 以 本局 首次 通关 事件 为准 (reward_got 防 重放), 守塔 模式 不再 重复 发放)
+					if not tower_clear_reward_got:
+						tower_clear_reward_got = true
+						clear_reward_stone = TOWER_CLEAR_BONUS_STONE
+						stones += clear_reward_stone
 		elif tower == "endless":
 			# 口径: tower_endless_best = 历史 最高 已 通关 层; tower_endless_floor = 当前 待挑战 层 (最高+1)
 			# 本胜 通关 next_floor 层 -> 最高纪录 更新 为 next_floor, 待挑战 推进 到 next_floor+1
@@ -540,6 +556,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		"mon_hp": m_hp, "mon_atk": m_atk, "mon_def": m_def,
 		"player_atk": p_atk, "player_def": p_def,
 		"dmg": dmg, "rounds": rounds, "reward_stone": reward_stone,
+		"clear_reward_stone": clear_reward_stone,
 		"daily_bonus": daily_bonus, "clear": clear, "poison": bool(mon["poison"]),
 		"poison_battles": poison_battles,
 		"reason": ("胜" if win else "败: 战力 不足, 停留 本层 (无 惩罚, 可 重试)"),
@@ -1561,10 +1578,22 @@ func auto_tower_next_tip() -> String:
 		("可胜" if bool(p["endless_win"]) else "战力不足"), tower_endless_best])
 	return "\n".join(lines)
 
+# M5-4: 镇妖塔 通关 一次性 大奖 文案 (首通 1000 层 Boss 触发; 灵石 大奖 100 万 + 永久 atk/def +15%;
+# 称号 与 成就 tower_clear 由 check_achievements 判定, 此处 只 给 灵石 大奖 文案; 0 发放=空串)
+func tower_clear_reward_text(stone: float) -> String:
+	if stone <= 0.0:
+		return ""
+	return " 通关大奖: 称号「镇妖塔·通关者」+ 灵石 %s + 永久 atk/def +%.0f%% (守塔模式)" % [
+		fmt(stone), TOWER_CLEAR_BUFF * 100.0]
+
+# M5-4: 镇妖塔 通关 称号 (顶栏/爬塔页 展示; 未通关 空串; 只读 无 状态/存档/统计 副作用)
+func tower_clear_title() -> String:
+	return "镇妖塔·通关者" if tower_fixed_clear else ""
+
 # M5-3: 爬塔 状态汇总 文案 (只读; 修行页 爬塔区 展示; 含 剧毒 debuff 提醒; 不 改 状态)
 func tower_status_line() -> String:
 	var s: String = "镇妖塔 最高 %d/1000 层%s · 登天梯 待挑战 第 %d 层 (最高 %d)" % [
-		tower_fixed_floor, " (通关)" if tower_fixed_clear else "",
+		tower_fixed_floor, " (通关「镇妖塔·通关者」)" if tower_fixed_clear else "",
 		tower_endless_floor, tower_endless_best]
 	if poison_battles > 0:
 		s += " · 剧毒 -15%% 攻 x %d 场" % poison_battles
@@ -2238,6 +2267,7 @@ func save_game() -> void:
 		"tower_endless_best": tower_endless_best,
 		"tower_daily_date": tower_daily_date,
 		"tower_daily_bonus_stones": tower_daily_bonus_stones,
+		"tower_clear_reward_got": tower_clear_reward_got,  # M5-4: 通关大奖已发放标记 (旧档缺字段默认 未发放)
 		"poison_battles": poison_battles,
 		"ts": int(Time.get_unix_time_from_system()),
 	}
@@ -2278,6 +2308,7 @@ func load_game() -> void:
 	tower_endless_best = maxi(0, int(parsed.get("tower_endless_best", 0)))
 	tower_daily_date = str(parsed.get("tower_daily_date", ""))
 	tower_daily_bonus_stones = float(parsed.get("tower_daily_bonus_stones", 0.0))
+	tower_clear_reward_got = bool(parsed.get("tower_clear_reward_got", false))  # M5-4: 旧档缺字段默认 未发放 (首通 1000 层 Boss 时 正常 发放)
 	poison_battles = clampi(int(parsed.get("poison_battles", 0)), 0, TOWER_POISON_BATTLES)
 	# 登天梯 一致性: 当前 层 不 低于 历史 最高+1 的 防御 (断点 续爬)
 	if tower_endless_floor < tower_endless_best + 1:

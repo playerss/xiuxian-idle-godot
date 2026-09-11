@@ -331,6 +331,35 @@ func _init() -> void:
 			check(bool(r6["clear"]), "第 1000 层 通过 -> 通关 态")
 			check(g.tower_fixed_clear, "通关 态 置 位")
 			check(g.fixed_challenge_floor() == 1000, "通关 后 守塔模式 反复 打 1000 层 (实际 %d)" % g.fixed_challenge_floor())
+			# M5-4: 通关 一次性 大奖 (首通 1000 层 Boss: 灵石 大奖 + 已发放 标记 + 永久 atk/def 增益;
+			# 称号「镇妖塔·通关者」展示 与 成就 tower_clear 判定 同源 tower_fixed_clear; 神品词缀 待 M6)
+			check(absf(float(r6["clear_reward_stone"]) - g.TOWER_CLEAR_BONUS_STONE) < 1e-9,
+					"M5-4 通关 大奖 = 灵石 100 万 (实际 %s)" % g.fmt(float(r6["clear_reward_stone"])))
+			check(g.tower_clear_reward_got, "M5-4 通关 大奖 已发放 标记 置位")
+			check(absf(g.clear_buff_mult() - (1.0 + g.TOWER_CLEAR_BUFF)) < 1e-9,
+					"M5-4 通关 增益 倍率 = 1.15 (实际 %s)" % str(g.clear_buff_mult()))
+			var atk_cl: float = g.player_atk()
+			# 守塔 幂等: 反复 打 1000 层 不 重复 发放 大奖 (reward_got 防 重放)
+			var r6b: Dictionary = g.try_tower_challenge("fixed", 0.5)
+			check(bool(r6b["win"]) and int(r6b["floor"]) == 1000, "M5-4 守塔 反复 打 恒 1000 层 (实际 %d)" % int(r6b["floor"]))
+			check(float(r6b["clear_reward_stone"]) == 0.0, "M5-4 守塔 再胜 不 重复 发放 大奖 (幂等)")
+			check(absf(g.player_atk() - atk_cl) < 1e-9, "M5-4 守塔 再胜 战力 不变 (buff 恒 乘算 独立 项)")
+			# 称号/文案 接口 (只读)
+			check(g.tower_clear_title() == "镇妖塔·通关者", "M5-4 通关 称号 = 镇妖塔·通关者 (实际 %s)" % g.tower_clear_title())
+			check(g.tower_status_line().find("镇妖塔·通关者") >= 0, "M5-4 状态行 含 通关 称号 (实际 %s)" % g.tower_status_line())
+			var rw_t: String = g.tower_clear_reward_text(g.TOWER_CLEAR_BONUS_STONE)
+			check(rw_t.find("镇妖塔·通关者") >= 0 and rw_t.find("永久 atk/def") >= 0 and rw_t.find("守塔") >= 0,
+					"M5-4 通关 大奖 文案 含 称号/永久增益/守塔 (实际 %s)" % rw_t)
+			check(g.tower_clear_reward_text(0.0) == "", "M5-4 通关 大奖 文案 0 发放 = 空串")
+			# 存档 往返 + 旧档 兼容 (tower_clear_reward_got 旧档缺字段 默认 未发放)
+			g.save_game()
+			var saved4: Dictionary = _save_json()
+			check(bool(saved4.get("tower_clear_reward_got", false)), "M5-4 存档 含 tower_clear_reward_got=true")
+			var oldf4 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+			oldf4.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 0.0, "stones": 0.0}))
+			oldf4.close()
+			g.load_game()
+			check(not g.tower_clear_reward_got, "M5-4 旧档缺 tower_clear_reward_got 默认 未发放 (实际 %s)" % str(g.tower_clear_reward_got))
 			# 登天梯: 新档 胜 第 1 层 (无尽 第 1 层 怪 atk 较低, 动态 期望)
 			g.ascended = false
 			g.dao_level = 0
