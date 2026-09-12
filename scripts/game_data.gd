@@ -9,6 +9,7 @@ const ACH_JSON := "res://data/achievements.json"
 const TOWER_JSON := "res://data/tower_monsters.json"
 const MONSTERS_JSON := "res://data/monsters.json"
 const TRAITS_JSON := "res://data/monster_traits.json"
+const AFFIX_JSON := "res://data/affixes.json"
 const OFFLINE_CAP_SEC := 8 * 3600.0   # 离线收益上限 8 小时
 const OFFLINE_BASE_RATE := 0.5       # 基础离线效率 50%
 const SAVE_INTERVAL_SEC := 15.0
@@ -100,6 +101,12 @@ var trait_by_id := {}                  # 特性 id -> {name,group,desc,mult} (18
 var _endless_species: Array = []       # 120 普通怪物种 (登天梯 普通层 候选池)
 var _endless_small_bosses: Array = []  # 20 小 Boss (登天梯 里程碑 候选池)
 var _trait_ids: Array = []             # 18 特性 id (确定性 追加特性 用)
+var affix_by_id := {}                  # M6-2: 词缀 id -> 记录 (120)
+var affix_ids: Array = []
+var affix_tier_names: Array = []       # M6-2: 词缀 品质 5 档 名称
+var _affix_buckets: Array = []         # M6-2: 掉落 品质 权重 20 桶
+var _affix_sources := {}               # M6-2: 掉落 来源 配置 (normal/elite/boss/milestone)
+var _affix_cfg := {}                   # M6-2: 装配/背包 配置 (bag_capacity/slots_per_equip/slot_max)
 
 # ---- 玩家状态 ----
 var realm_idx := 0          # 当前境界索引
@@ -146,6 +153,10 @@ var tower_daily_date := ""       # 登天梯 每日首胜 日期 标记 (YYYY-MM
 var tower_daily_bonus_stones := 0.0  # 登天梯 当日 首胜 已发 灵石 总数
 var tower_clear_reward_got := false  # M5-4: 通关 一次性 大奖 已 发放 (称号/灵石/永久增益 只 触发一次, 防 存档 重放 重复 发放)
 var poison_battles := 0          # 剧毒 跨场 debuff 剩余 场数 (0=无毒; >0=玩家 atk -15%, 持续 2 场)
+# M6-2: DIY 词缀 (库存/装配/槽位升级; 旧档缺字段 默认 空/0)
+var affix_bag := {}             # 词缀 id -> 堆叠 数量 (数量制, 背包格数 = 非零 id 数)
+var affix_load := {}            # 装备 id -> {0,1,2,...: 词缀 id} (槽位 -> 词缀)
+var slot_upgrades := {}         # 装备 id -> 额外 槽位数 (0..1, 道祖期 上限 4 槽)
 # M5-3: 自动爬塔 (开=镇妖塔+登天梯 自动 挑战; GameData._process 每帧驱动, 自门控,
 # 胜推进/败停留 天然无热循环; 与 自动系列 4 开关 同口径: 存档持久化, 旧档缺字段默认 关, 离线期间 不触发)
 var auto_tower := false
@@ -221,6 +232,32 @@ func load_data() -> void:
 			ach_by_id[item["id"]] = item
 			ach_ids.append(item["id"])
 	_load_tower_data()
+	_load_affix_data()
+
+# M6-2: 加载 词缀 数据 (120 词缀 + 掉落 概率 表 + 装配/背包 配置)
+func _load_affix_data() -> void:
+	var af: Dictionary = _load_json(AFFIX_JSON)
+	if af == null:
+		return
+	affix_by_id = {}
+	affix_ids.clear()
+	if af.has("affixes"):
+		for a in af["affixes"]:
+			affix_by_id[a["id"]] = a
+			affix_ids.append(a["id"])
+	affix_tier_names.clear()
+	if af.has("tier_names"):
+		for t in af["tier_names"]:
+			affix_tier_names.append(str(t))
+	_affix_buckets.clear()
+	if af.has("drop") and typeof(af["drop"]) == TYPE_DICTIONARY:
+		var dp: Dictionary = af["drop"]
+		if dp.has("buckets"):
+			for b in dp["buckets"]:
+				_affix_buckets.append(b)
+		if dp.has("sources"):
+			_affix_sources = dp["sources"]
+	_affix_cfg = af.get("config", {})
 
 # M5-2: 加载 爬塔 数据 (镇妖塔 1000 层表 / 登天梯 公式 / 145 怪物 / 18 特性)
 func _load_tower_data() -> void:
@@ -278,7 +315,8 @@ func passive_bonus(eff: String) -> float:
 		total += float(s.get("value", 0.0))
 	return total
 
-# 已穿戴装备的加成汇总
+# 已穿戴装备的加成汇总 (M6-2: 含 已装配 词缀 同池 加成; 词缀 按 已装 槽位 生效,
+# 卸下/未拥有 装备 的词缀 不 计入)
 func equip_bonus(eff: String) -> float:
 	var total := 0.0
 	for slot in SLOTS:
@@ -288,6 +326,7 @@ func equip_bonus(eff: String) -> float:
 		var e: Dictionary = equip_by_id.get(id, {})
 		if not e.is_empty():
 			total += float(e.get(eff, 0.0))
+		total += affix_bonus_for_equipment(id, eff)
 	return total
 
 # M5-2: 已学 功法 atk/def 属性池 汇总 (独立 字段, 非 主 效果; 只读)
@@ -315,16 +354,311 @@ func tower_power_progress() -> int:
 		return realm_idx
 	return 9 + dao_level
 
-# 玩家 攻击 (爬塔战斗用): 基础 x 成长^进度 x (1 + 功法 atk 池 + 装备 atk 池) x 通关增益
+# ================= M6-2: DIY 词缀 (库存/装配/拆卸/分解/槽位升级 + 装备属性 接入) =================
+# 模型: 词缀 数量制 堆叠 (affix_bag), 每件 装备 3 槽 (slot_upgrades 道祖期 +1 至 4 槽);
+# 装配 = 从背包选 词缀 装入槽位 (背包 -1), 拆卸 = 无损 回背包; 词缀 不消耗.
+# 加成 口径: 已装 词缀 与 装备 同池 乘算 独立 项 — 装备 总属性 = 基础 x (1 + Σ词缀)
+# (沿用 M1 防溢出 口径; 词缀 value 已 数据层 按 池 区分 加成 类型, 同池 直接 求和).
+# 词缀 效果池 -> 现有 加成 体系 键: qi_rate=灵气速率 / stone_rate=灵石速率 /
+# bt_chance=突破成功率 / offline_rate=离线效率 / atk=攻击 / def=防御.
+const AFFIX_POOL_KEY := {
+	"qi_rate": "qi_mult",
+	"stone_rate": "stone_mult",
+	"bt_chance": "bt_chance",
+	"offline_rate": "offline_rate",
+	"atk": "atk",
+	"def": "def",
+}
+
+# 指定 装备 的 词缀 加成 (eff = 池键 qi_mult/stone_mult/bt_chance/offline_rate/atk/def)
+# 只读: 不 改 状态/存档/统计; 未拥有 装备/空槽 返回 0
+func affix_bonus_for_equipment(equip_id: String, eff: String) -> float:
+	var total := 0.0
+	var slots: Variant = affix_load.get(equip_id, {})
+	if typeof(slots) != TYPE_DICTIONARY:
+		return 0.0
+	for pos in slots:
+		var aid: String = str(slots[pos])
+		var a: Dictionary = affix_by_id.get(aid, {})
+		if a.is_empty() or str(AFFIX_POOL_KEY.get(str(a.get("pool", "")), "")) != eff:
+			continue
+		total += float(a.get("value", 0.0))
+	return total
+
+# 词缀 品质 名 (越界 钳制, 复用 skill_tier_name 风格)
+func affix_tier_name(t: int) -> String:
+	if affix_tier_names.is_empty():
+		return "词缀"
+	return str(affix_tier_names[clampi(t, 0, affix_tier_names.size() - 1)])
+
+# 指定 装备 的 词缀槽 数 (基础 3 + 道祖期 升级 +1, 上限 4; 数据 配置 兜底)
+func equipment_slots(equip_id: String) -> int:
+	var base := int(_affix_cfg.get("slots_per_equip", 3))
+	var cap := int(_affix_cfg.get("slot_max", 4))
+	var up := int(slot_upgrades.get(equip_id, 0))
+	return clampi(base + up, 1, cap)
+
+# 指定 装备 已装 词缀 槽位 数 (0..槽数)
+func affix_slots_used(equip_id: String) -> int:
+	var slots: Variant = affix_load.get(equip_id, {})
+	if typeof(slots) != TYPE_DICTIONARY:
+		return 0
+	return (slots as Dictionary).size()
+
+# 装备 词缀 配置 行 (tooltip/UI 展示: 槽位 N/M + 已装 词缀 名·品质·数值)
+func affix_load_text(equip_id: String) -> String:
+	var n := affix_slots_used(equip_id)
+	var m := equipment_slots(equip_id)
+	if n == 0:
+		return "词缀槽 %d/%d (未装配)" % [n, m]
+	var parts: Array = []
+	var slots: Dictionary = affix_load.get(equip_id, {})
+	var keys: Array = (slots.keys() as Array).duplicate()
+	keys.sort_custom(func(a, b): return int(a) < int(b))
+	for pos in keys:
+		var a: Dictionary = affix_by_id.get(str(slots[pos]), {})
+		if a.is_empty():
+			parts.append(str(slots[pos]))
+			continue
+		parts.append("%s(%s +%s)" % [a["name"], affix_tier_name(int(a["tier"])), fmt(float(a["value"]))])
+	return "词缀槽 %d/%d: %s" % [n, m, " · ".join(parts)]
+
+# ---------- M6-2: 套装 共鸣 (同 品质 装配 词缀 满 3 件 触发; 只读) ----------
+# 口径: 统计 已装配 (affix_load) 词缀 按 品质 分档; 某档 装配 数 N>=3 时
+# atk/def 乘算 独立 项 x(1 + 0.02 x N) (每 件 同品质 +2%, 3 件 = +6%).
+# 仅 atk/def (计划 口径: 同 品质 N 件 atk/def 额外 xN%); 不 进 equip_bonus (独立 乘项, 防 溢出).
+const AFFIX_RESONANCE_MIN := 3
+const AFFIX_RESONANCE_PER := 0.02
+
+# 已装配 词缀 按 品质 计数 {tier: 件数} (只读)
+func resonance_count() -> Dictionary:
+	var out: Dictionary = {}
+	for equip_id in affix_load:
+		var slots: Variant = affix_load.get(equip_id, {})
+		if typeof(slots) != TYPE_DICTIONARY:
+			continue
+		for pos in (slots as Dictionary):
+			var a: Dictionary = affix_by_id.get(str((slots as Dictionary)[pos]), {})
+			if a.is_empty():
+				continue
+			var t: int = int(a.get("tier", 0))
+			out[t] = int(out.get(t, 0)) + 1
+	return out
+
+# 共鸣 乘数 (未 触发 = 1.0; 多档 可 叠加 连乘)
+func resonance_mult() -> float:
+	var m := 1.0
+	var cnt := resonance_count()
+	for t in cnt:
+		var n: int = int(cnt[t])
+		if n >= AFFIX_RESONANCE_MIN:
+			m *= 1.0 + AFFIX_RESONANCE_PER * float(n)
+	return m
+
+# 共鸣 文案 (tooltip/UI: 无 触发 = 提示 条件; 已 触发 = 逐档 倍率)
+func resonance_text() -> String:
+	var cnt := resonance_count()
+	if resonance_mult() <= 1.0 + 1e-9:
+		var best := 0
+		for t in cnt:
+			best = maxi(best, int(cnt[t]))
+		return "套装 共鸣: 同 品质 装配 满 %d 件 触发 (当前 最多 一档 %d 件, 未 触发)" % [AFFIX_RESONANCE_MIN, best]
+	var parts: Array = []
+	for t in cnt:
+		var n: int = int(cnt[t])
+		if n >= AFFIX_RESONANCE_MIN:
+			parts.append("%s %d 件 x%.2f" % [affix_tier_name(t), n, 1.0 + AFFIX_RESONANCE_PER * float(n)])
+	return "套装 共鸣: " + " · ".join(parts) + " (atk/def)"
+
+# 背包 格数 (非零 词缀 id 数) / 容量
+func affix_bag_used() -> int:
+	return affix_bag.size()
+
+func affix_bag_capacity() -> int:
+	return int(_affix_cfg.get("bag_capacity", 30))
+
+# 背包 容量 是否 已满
+func affix_bag_full() -> bool:
+	return affix_bag_used() >= affix_bag_capacity()
+
+# 入包 (词缀掉落/分解 回退 用): 堆叠 +n; 背包 满 时 普通品质 自动 入料 (分解, 不占格),
+# 高品质 拒绝 (返回 未入包 计数, 掉落 结算 跳过). 返回 实际 入包 数.
+func affix_add(id: String, n: int) -> int:
+	var a: Dictionary = affix_by_id.get(id, {})
+	if a.is_empty() or n <= 0:
+		return 0
+	if not affix_bag.has(id) and affix_bag_full():
+		# 背包满: 普通品质 (tier 0) 自动入料 (丢弃不占格, 计 分解 埋点), 高品质 拒绝
+		if int(a.get("tier", 0)) == 0:
+			_stat_inc("affix_decompose", n)
+			return 0
+		return 0
+	affix_bag[id] = int(affix_bag.get(id, 0)) + n
+	return n
+
+# 分解: 词缀 -> 材料 (防 背包 溢出; 数量 上限 钳制). 返回 实际 分解 数
+func affix_decompose(id: String, n: int = -1) -> int:
+	if not affix_bag.has(id):
+		return 0
+	var have := int(affix_bag[id])
+	var cnt := have if n < 0 else mini(n, have)
+	if cnt <= 0:
+		return 0
+	_stat_inc("affix_decompose", cnt)
+	if have - cnt <= 0:
+		affix_bag.erase(id)
+	else:
+		affix_bag[id] = have - cnt
+	return cnt
+
+# 装配: 背包 词缀 装入 装备 槽位 (背包 -1; 词缀 不消耗, 纯 排列 组合).
+# 成功 返回 "", 失败 返回 原因 (背包 无此词缀/槽位 已满/该槽已装 同词缀 等)
+func affix_equip(equip_id: String, slot_pos: int, affix_id: String) -> String:
+	var e: Dictionary = equip_by_id.get(equip_id, {})
+	if e.is_empty():
+		return "未找到该装备"
+	if not owned_eq.has(equip_id):
+		return "尚未拥有该装备"
+	var a: Dictionary = affix_by_id.get(affix_id, {})
+	if a.is_empty():
+		return "未找到该词缀"
+	if int(affix_bag.get(affix_id, 0)) <= 0:
+		return "背包 没有 该词缀"
+	var slots := equipment_slots(equip_id)
+	if slot_pos < 0 or slot_pos >= slots:
+		return "槽位 越界 (1~%d)" % slots
+	var load: Dictionary = affix_load.get(equip_id, {})
+	if str(load.get(str(slot_pos), "")) != "":
+		return "该槽位 已装配 (先卸下 再 换装)"
+	load[str(slot_pos)] = affix_id  # 键 用 字符串 (JSON 往返 键 恒 为 字符串, 统一 口径)
+	affix_load[equip_id] = load
+	affix_bag[affix_id] = int(affix_bag[affix_id]) - 1
+	if int(affix_bag[affix_id]) <= 0:
+		affix_bag.erase(affix_id)
+	_stat_inc("affix_equip")
+	return ""
+
+# 拆卸: 槽位 词缀 无损 回背包 (数量制 不消耗). 成功 返回 "", 失败 返回 原因
+func affix_unequip(equip_id: String, slot_pos: int) -> String:
+	var load: Dictionary = affix_load.get(equip_id, {})
+	var key := str(slot_pos)
+	var aid: String = str(load.get(key, ""))
+	if aid == "":
+		return "该槽位 未装配"
+	load.erase(key)
+	if load.is_empty():
+		affix_load.erase(equip_id)
+	else:
+		affix_load[equip_id] = load
+	affix_bag[aid] = int(affix_bag.get(aid, 0)) + 1
+	return ""
+
+# 换装: 槽位 卸下 旧 词缀 回背包 后 装入 新 词缀 (一步 完成; 背包 无 新 词缀 则 失败 不 改动)
+func affix_swap(equip_id: String, slot_pos: int, affix_id: String) -> String:
+	var load: Dictionary = affix_load.get(equip_id, {})
+	var old: String = str(load.get(str(slot_pos), ""))
+	var err: String = ""
+	if old != "":
+		affix_unequip(equip_id, slot_pos)
+		err = affix_equip(equip_id, slot_pos, affix_id)
+		if err != "":
+			# 回滚: 把 刚 卸下 的 词缀 装回 (背包 此刻 必有 — 拆卸 刚 放入)
+			affix_equip(equip_id, slot_pos, old)
+		return err
+	return affix_equip(equip_id, slot_pos, affix_id)
+
+# 槽位 升级: 道祖期 解锁 3 槽 -> 4 槽 (每件 至多 1 次; 无 资源 消耗 口径, M6-4 数值 平衡 可 追加)
+func affix_slot_upgrade(equip_id: String) -> String:
+	if not owned_eq.has(equip_id):
+		return "尚未拥有该装备"
+	if int(slot_upgrades.get(equip_id, 0)) >= 1:
+		return "槽位 已 满级"
+	if not ascended or dao_level < IMMORTAL_REALMS.size() - 1:
+		return "需 道祖期 解锁 第 4 槽"
+	slot_upgrades[equip_id] = 1
+	return ""
+
+# 掉落 桶 位 (层数 -> 桶; 封顶 19; 越界 防御 0)
+func affix_drop_bucket(floor: int) -> int:
+	if _affix_buckets.is_empty():
+		return 0
+	var size := 50
+	var max_b := int(_affix_buckets.size()) - 1
+	return clampi((maxi(floor, 1) - 1) / size, 0, max_b)
+
+# 掉落 品质 判定 (确定性: roll 0..1 按 桶 权重 表 加权 抽取; 供 自测 注入 确定性 roll)
+func affix_roll_tier(bucket: int, roll: float) -> int:
+	if _affix_buckets.is_empty():
+		return 0
+	var b: Variant = _affix_buckets[clampi(bucket, 0, _affix_buckets.size() - 1)]
+	var w: Array = b if typeof(b) == TYPE_ARRAY else []
+	if w.size() != 5:
+		return 0
+	var total := 0.0
+	for x in w:
+		total += float(x)
+	if total <= 0.0:
+		return 0
+	var r := clampf(roll, 0.0, 1.0) * total
+	var acc := 0.0
+	for i in 5:
+		acc += float(w[i])
+		if r < acc:
+			return i
+	return 4
+
+# 掉落 词缀 判定 (确定性; 返回 实际 入包 词缀 id 列表, 背包满 拒绝 的 不计入).
+# source = normal/elite/boss/milestone (数据 掉落 来源 配置 口径: 掉率/件数/桶位上移).
+# rolls 口径 (供 自测 注入 确定性): [0]=掉率判定 / [1]=件数 / [2..4]=各件 品质 /
+# [5]=池 (0..5) / [6]=变体 (0..3); 缺失 项 按 0.5 兜底 (不影响 确定性)
+func affix_roll_drop(source: String, floor: int, rolls: Array) -> Array:
+	var out: Array = []
+	var src: Dictionary = _affix_sources.get(source, {})
+	if src.is_empty() or rolls.size() < 3:
+		return out
+	var chance: float = float(src.get("chance", 0.0))
+	if float(rolls[0]) >= chance:
+		return out
+	var cnt := int(src.get("count_min", 1))
+	var span := maxi(int(src.get("count_max", 1)) - cnt + 1, 1)
+	if span > 1:
+		cnt += int(clampf(float(rolls[1]), 0.0, 1.0) * float(span))
+	var bucket := affix_drop_bucket(floor) + int(src.get("bonus_buckets", 0))
+	var pool_idx := int(clampf(float(rolls[5]) if rolls.size() > 5 else 0.5, 0.0, 1.0) * 6.0)
+	var var_idx := int(clampf(float(rolls[6]) if rolls.size() > 6 else 0.5, 0.0, 1.0) * 4.0)
+	for i in cnt:
+		var tr: float = float(rolls[mini(2 + i, rolls.size() - 1)] if rolls.size() > 2 else 0.5)
+		var tier := affix_roll_tier(bucket, tr)
+		var aid := _affix_id_by_pool_tier_variant(pool_idx, tier, var_idx)
+		if aid != "" and affix_add(aid, 1) > 0:
+			out.append(aid)
+	return out
+
+# 按 池序/品质/变体 定位 词缀 id (数据 命名 恒等: af_<pool>_<tier>_<variant>, pool 顺序 = AFFIX 6 池 固定序)
+func _affix_id_by_pool_tier_variant(pool_idx: int, tier: int, var_idx: int) -> String:
+	var pools: Array = []
+	var seen: Dictionary = {}
+	for id in affix_ids:
+		var a: Dictionary = affix_by_id.get(str(id), {})
+		if a.is_empty():
+			continue
+		var p: String = str(a.get("pool", ""))
+		if not seen.has(p):
+			seen[p] = true
+			pools.append(p)
+	var p: String = pools[clampi(pool_idx, 0, maxi(pools.size() - 1, 0))]
+	return "af_%s_%d_%d" % [p, clampi(tier, 0, 4), clampi(var_idx, 0, 3)]
+
+# 玩家 攻击 (爬塔战斗用): 基础 x 成长^进度 x (1 + 功法 atk 池 + 装备 atk 池 [含词缀]) x 通关增益
 # 旧数据 无 atk 字段 时 equip_bonus 返回 0 (只读, 不改动状态)
 func player_atk() -> float:
 	var base := TOWER_BASE_ATK * pow(TOWER_POWER_GROWTH, float(tower_power_progress()))
-	return base * (1.0 + skill_atk_bonus() + equip_bonus("atk") + item_attack()) * clear_buff_mult()
+	return base * (1.0 + skill_atk_bonus() + equip_bonus("atk") + item_attack()) * clear_buff_mult() * resonance_mult()
 
 # 玩家 防御 (爬塔战斗用): 基础 x 成长^进度 x (1 + 功法 def 池 + 装备 def 池 + 法器 def 池) x 通关增益
 func player_def() -> float:
 	var base := TOWER_BASE_DEF * pow(TOWER_POWER_GROWTH, float(tower_power_progress()))
-	return base * (1.0 + skill_def_bonus() + equip_bonus("def") + item_defense()) * clear_buff_mult()
+	return base * (1.0 + skill_def_bonus() + equip_bonus("def") + item_defense()) * clear_buff_mult() * resonance_mult()
 
 # M5-4: 镇妖塔 通关 永久 增益 (通关后 玩家 atk/def +15%, 乘算 独立 项; 未通关=1.0; 只读)
 func clear_buff_mult() -> float:
@@ -509,12 +843,26 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 	var daily_bonus := 0.0
 	var clear_reward_stone := 0.0
 	var daily_date_today := _today_str()
+	# M6-2: 词缀掉落 (胜利 结算; 来源 由 层 结构 决定: 里程碑 Boss=milestone, Boss=boss,
+	# 精英=elite, 普通=normal; rolls 7 个 确定性 种子 随机 注入 (roll 已生成 时 复用))
+	var affix_drops: Array = []
 	if win:
 		reward_stone = float(mon["stone"])
 		stones += reward_stone
 		# 剧毒: 战胜 后 玩家 atk -15%, 持续 2 场 (可 刷新)
 		if bool(mon["poison"]):
 			poison_battles = TOWER_POISON_BATTLES
+		# M6-2: 词缀掉落 结算 (背包满 时 普通品质 自动入料, 高品质 拒绝 不 入包)
+		var drop_src := "normal"
+		if bool(mon["is_elite"]):
+			drop_src = "elite"
+		elif str(mon["boss_type"]) != "":
+			drop_src = "milestone" if tower == "endless" else "boss"
+		var dr: Array = []
+		for i in 7:
+			dr.append(randf())
+		affix_drops = affix_roll_drop(drop_src, next_floor, dr)
+		_stat_inc("affix_drop", float(affix_drops.size()))
 		if tower == "fixed":
 			if next_floor < 1000:
 				tower_fixed_floor = max(tower_fixed_floor, next_floor)
@@ -558,7 +906,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		"dmg": dmg, "rounds": rounds, "reward_stone": reward_stone,
 		"clear_reward_stone": clear_reward_stone,
 		"daily_bonus": daily_bonus, "clear": clear, "poison": bool(mon["poison"]),
-		"poison_battles": poison_battles,
+		"poison_battles": poison_battles, "affix_drops": affix_drops,
 		"reason": ("胜" if win else "败: 战力 不足, 停留 本层 (无 惩罚, 可 重试)"),
 	}
 
@@ -641,7 +989,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "skill_use", "item_buy", "equip_buy", "tower_win"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "skill_use", "item_buy", "equip_buy", "tower_win", "affix_drop", "affix_equip", "affix_decompose"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -916,6 +1264,10 @@ func equip_detail(id: String) -> String:
 	if e.is_empty():
 		return ""
 	var tip := "「%s」 %s · %s\n%s\n灵石 %s" % [e["name"], e["tier_name"], e["slot_name"], e["desc"], fmt(float(e["cost"]))]
+	# M6-2: 词缀槽 行 (已装 词缀 明细; 与 affix_load_text 同源)
+	tip += "\n" + affix_load_text(id)
+	if affix_slots_used(id) > 0:
+		tip += "\n" + resonance_text()
 	if str(equipped.get(str(e["slot"]), "")) == id:
 		tip += "\n状态: 已穿戴"
 	elif owned_eq.has(id):
@@ -1288,8 +1640,10 @@ func equip_swap_hint(id: String) -> Dictionary:
 	var cur: Dictionary = equipped_at(slot)
 	if cur.is_empty() or str(cur.get("id", "")) == id:
 		return {"cur": cur, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0, "text": ""}
-	var dqi: float = float(e["qi_mult"]) - float(cur.get("qi_mult", 0.0))
-	var dst: float = float(e["stone_mult"]) - float(cur.get("stone_mult", 0.0))
+	var dqi: float = (float(e["qi_mult"]) + affix_bonus_for_equipment(id, "qi_mult")) \
+		- (float(cur.get("qi_mult", 0.0)) + affix_bonus_for_equipment(str(cur.get("id", "")), "qi_mult"))
+	var dst: float = (float(e["stone_mult"]) + affix_bonus_for_equipment(id, "stone_mult")) \
+		- (float(cur.get("stone_mult", 0.0)) + affix_bonus_for_equipment(str(cur.get("id", "")), "stone_mult"))
 	var parts: Array = []
 	if absf(dqi) >= 0.0005:
 		parts.append("灵气%s%0.0f%%" % ["+" if dqi > 0.0 else "-", absf(dqi) * 100.0])
@@ -2269,6 +2623,10 @@ func save_game() -> void:
 		"tower_daily_bonus_stones": tower_daily_bonus_stones,
 		"tower_clear_reward_got": tower_clear_reward_got,  # M5-4: 通关大奖已发放标记 (旧档缺字段默认 未发放)
 		"poison_battles": poison_battles,
+		# M6-2: DIY 词缀 (库存/装配/槽位升级; 旧档缺字段 默认 空)
+		"affix_bag": affix_bag,
+		"affix_load": affix_load,
+		"slot_upgrades": slot_upgrades,
 		"ts": int(Time.get_unix_time_from_system()),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -2310,6 +2668,36 @@ func load_game() -> void:
 	tower_daily_bonus_stones = float(parsed.get("tower_daily_bonus_stones", 0.0))
 	tower_clear_reward_got = bool(parsed.get("tower_clear_reward_got", false))  # M5-4: 旧档缺字段默认 未发放 (首通 1000 层 Boss 时 正常 发放)
 	poison_battles = clampi(int(parsed.get("poison_battles", 0)), 0, TOWER_POISON_BATTLES)
+	# M6-2: DIY 词缀 (旧档缺字段 默认 空; 非法 项 丢弃 防 污染)
+	# 顺序: 先 槽位升级 (affix_load 校验 依赖 槽位 上限), 再 库存, 最后 装配
+	slot_upgrades = {}
+	var su: Dictionary = parsed.get("slot_upgrades", {})
+	if typeof(su) == TYPE_DICTIONARY:
+		for k in su:
+			if owned_eq.has(str(k)) and int(su[k]) >= 1:
+				slot_upgrades[str(k)] = 1
+	affix_bag = {}
+	var ab: Dictionary = parsed.get("affix_bag", {})
+	if typeof(ab) == TYPE_DICTIONARY:
+		for k in ab:
+			var v: int = int(ab[k])
+			if v > 0 and affix_by_id.has(str(k)):
+				affix_bag[str(k)] = v
+	affix_load = {}
+	var al: Dictionary = parsed.get("affix_load", {})
+	if typeof(al) == TYPE_DICTIONARY:
+		for k in al:
+			var slots_v: Dictionary = al[k]
+			if typeof(slots_v) != TYPE_DICTIONARY or not owned_eq.has(str(k)):
+				continue
+			var clean: Dictionary = {}
+			for pos in slots_v:
+				var aid: String = str(slots_v[pos])
+				# 键 统一 字符串 (内存 装配 键 与 JSON 往返 口径 一致)
+				if aid != "" and affix_by_id.has(aid) and int(clean.size()) < equipment_slots(str(k)) and not clean.has(str(pos)):
+					clean[str(pos)] = aid
+			if not clean.is_empty():
+				affix_load[str(k)] = clean
 	# 登天梯 一致性: 当前 层 不 低于 历史 最高+1 的 防御 (断点 续爬)
 	if tower_endless_floor < tower_endless_best + 1:
 		tower_endless_floor = tower_endless_best + 1

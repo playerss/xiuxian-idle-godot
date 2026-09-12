@@ -360,7 +360,7 @@ func _init() -> void:
 				check(tier_names.size() == 5 and tier_color.size() == 5,
 						"M6-1 品质 5 档 名称/颜色 表 齐全 (实际 %d/%d)" % [tier_names.size(), tier_color.size()])
 
-			# ---------- M5-2: 爬塔 战斗逻辑 (玩家 atk/def / 战斗判定 / 奖励 / 剧毒 / 每日首胜 / 存档) ----------
+	# ---------- M5-2: 爬塔 战斗逻辑 (玩家 atk/def / 战斗判定 / 奖励 / 剧毒 / 每日首胜 / 存档) ----------
 			# 受控基准: 此时 g 为 全新档 (境界0层1, 无 技能/装备/法器, 灵石 0) — 冻结 _process 防 挂机 累积
 			g.set_process(false)
 			g.tower_fixed_floor = 0
@@ -4894,6 +4894,261 @@ func _init() -> void:
 	g._active_cd = {}
 	g.ready_events.clear()
 	g.save_game()
+
+	# ---------- M6-2: DIY 词缀 逻辑层 (库存/装配/拆卸/分解/槽位升级/属性接入/掉落/存档) ----------
+	g.set_process(false)
+	# 受控 基准: 本段 独立 重置 全新 档态 (与 M5-2 同 口径, 防 前后 段 状态 污染; 置 于 段首 使 本段 自洽)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.ach_done.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.tower_fixed_floor = 0
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_fixed_clear = false
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.last_break_result = 0
+	g.stats = {}
+	check(g.affix_ids.size() == 120, "M6-2 词缀 120 加载 (实际 %d)" % g.affix_ids.size())
+	check(g.affix_by_id.has("af_atk_4_0"), "M6-2 词缀 id 表 可查")
+	check(g.affix_tier_names.size() == 5 and str(g.affix_tier_names[4]) == "传说", "M6-2 词缀 品质 5 档 名称 加载")
+	check(g._affix_buckets.size() == 20, "M6-2 掉落 桶 20 加载 (实际 %d)" % g._affix_buckets.size())
+	check(g._affix_cfg.has("bag_capacity") and int(g._affix_cfg["bag_capacity"]) == 30, "M6-2 背包 容量 30 加载")
+	check(g.affix_bag_used() == 0 and g.affix_bag_capacity() == 30, "M6-2 新档 背包 0/30")
+	check(g.affix_bag_full() == false, "M6-2 新档 背包 未满")
+	check(g.equipment_slots("weapon_0_0") == 3, "M6-2 基础 3 槽 (实际 %d)" % g.equipment_slots("weapon_0_0"))
+	check(g.equipment_slots("not_exist") == 3, "M6-2 未知 装备 槽位 兜底 3")
+	# 基准: 无 词缀 时 装备 加成 = 数据 基础 值 (境界0 未飞升 无 技能/法器)
+	g.stones = 1000.0
+	g.buy_equipment("weapon_0_0")
+	g.buy_equipment("robe_0_0")
+	check(str(g.equipped.get("weapon", "")) == "weapon_0_0", "M6-2 购买 自动 穿戴 武器")
+	var m62_e0: Dictionary = g.equip_by_id["weapon_0_0"]
+	var m62_er0: Dictionary = g.equip_by_id["robe_0_0"]
+	var m62_w_qi: float = float(m62_e0["qi_mult"])
+	var m62_r_qi: float = float(m62_er0["qi_mult"])
+	var m62_w_atk: float = float(m62_e0["atk"])
+	var m62_r_atk: float = float(m62_er0["atk"])
+	check(absf(g.affix_bonus_for_equipment("weapon_0_0", "qi_mult")) < 1e-9, "M6-2 无 词缀 时 词缀 加成 = 0")
+	check(absf(g.equip_bonus("qi_mult") - (m62_w_qi + m62_r_qi)) < 1e-9, "M6-2 无 词缀 时 equip_bonus = 已穿 2 部位 基础 和")
+	var m62_atk_base: float = g.player_atk()
+	check(absf(m62_atk_base - 2.0 * (1.0 + m62_w_atk + m62_r_atk)) < 1e-9, "M6-2 基准 玩家 atk = 基础 x (1 + 装备 atk 和)")
+	# 装配 (词缀 数量制: 入包 x2, 装 1 剩 1)
+	g.affix_add("af_qi_rate_0_0", 2)
+	g.affix_add("af_stone_rate_0_0", 1)
+	check(int(g.affix_bag["af_qi_rate_0_0"]) == 2 and int(g.affix_bag["af_stone_rate_0_0"]) == 1, "M6-2 入包 堆叠 计数")
+	check(g.affix_equip("weapon_0_0", 0, "af_qi_rate_0_0") == "", "M6-2 装配 槽0 成功")
+	check(int(g.affix_bag["af_qi_rate_0_0"]) == 1, "M6-2 装配 后 背包 -1 (剩 1)")
+	check(absf(g.affix_bonus_for_equipment("weapon_0_0", "qi_mult") - 0.05) < 1e-9, "M6-2 槽0 词缀 灵气 池 接入 (0.05)")
+	g.affix_equip("weapon_0_0", 1, "af_stone_rate_0_0")
+	check(absf(g.affix_bonus_for_equipment("weapon_0_0", "stone_mult") - 0.04) < 1e-9, "M6-2 槽1 词缀 灵石 池 接入 (0.04)")
+	check(g.affix_equip("weapon_0_0", 0, "af_atk_0_0") == "背包 没有 该词缀", "M6-2 背包 无 该词缀 拒绝")
+	check(g.affix_equip("weapon_0_0", 3, "af_qi_rate_0_0") == "槽位 越界 (1~3)", "M6-2 槽位 越界 拒绝")
+	check(g.affix_equip("weapon_0_1", 0, "af_qi_rate_0_0") == "尚未拥有该装备", "M6-2 未拥有 装备 拒绝")
+	check(g.affix_equip("weapon_0_0", 2, "af_atk_4_9") == "未找到该词缀", "M6-2 未知 词缀 拒绝")
+	# 属性 公式 接入: 装备 总属性 = 基础 x (1 + Σ词缀) — 词缀 进 乘算 独立 项 (与 装备 基础 同项)
+	check(absf(g.qi_per_sec() - 1.0 * (1.0 + m62_w_qi + m62_r_qi + 0.05)) < 1e-9, "M6-2 灵气速率 = 境界 x (1 + 装备 + 词缀) 同项 恒等")
+	g.affix_add("af_atk_0_0", 1)
+	g.affix_equip("weapon_0_0", 2, "af_atk_0_0")
+	var m62_atk1: float = g.player_atk()
+	var m62_exp_atk1: float = 2.0 * (1.0 + m62_w_atk + m62_r_atk + 0.08)
+	check(absf(m62_atk1 / (m62_exp_atk1 * g.resonance_mult()) - 1.0) < 1e-6, "M6-2 玩家 atk = 基础 x (1 + 装备 atk + 词缀 atk 和) x 共鸣 (实际 %s / 期望 %s)" % [g.fmt(m62_atk1), g.fmt(m62_exp_atk1)])
+	check(m62_atk1 > m62_atk_base, "M6-2 装配 atk 池 词缀 后 玩家 atk 上升")
+	var m62_ch0: float = g.breakthrough_chance()
+	g.affix_add("af_bt_chance_1_0", 1)
+	g.affix_equip("robe_0_0", 0, "af_bt_chance_1_0")
+	check(absf(g.breakthrough_chance() - (m62_ch0 + 0.036)) < 1e-9, "M6-2 突破成功率 = 基础 + 词缀 bt 池 (+%.4f)" % (g.breakthrough_chance() - m62_ch0))
+	# 卸下 无损 回背包
+	check(g.affix_unequip("weapon_0_0", 2) == "", "M6-2 卸下 槽2 成功")
+	check(int(g.affix_bag["af_atk_0_0"]) == 1, "M6-2 卸下 回 背包 (数量 不 消耗)")
+	check(absf(g.affix_bonus_for_equipment("weapon_0_0", "atk") - 0.0) < 1e-9, "M6-2 卸下 后 该 词缀 加成 归 0")
+	check(absf(g.player_atk() - m62_atk_base) < 1e-9, "M6-2 卸下 后 atk 回落 (恒等)")
+	check(g.affix_unequip("weapon_0_0", 0) == "" and int(g.affix_bag["af_qi_rate_0_0"]) == 2, "M6-2 卸下 槽0 回 背包 (堆叠 复原 2)")
+	check(g.affix_slots_used("weapon_0_0") == 1, "M6-2 剩余 已装 1 槽 (实际 %d)" % g.affix_slots_used("weapon_0_0"))
+	# 换装 (槽位 先卸后装, 背包 不足 时 回滚 不 改动)
+	g.affix_add("af_offline_rate_0_0", 1)
+	check(g.affix_swap("weapon_0_0", 1, "af_offline_rate_0_0") == "", "M6-2 换装 槽1 (灵石->离线) 成功")
+	check(str(g.affix_load["weapon_0_0"]["1"]) == "af_offline_rate_0_0" and int(g.affix_bag["af_stone_rate_0_0"]) == 1, "M6-2 换装 后 槽位 更新 + 旧词缀 回 背包")
+	check(absf(g.affix_bonus_for_equipment("weapon_0_0", "offline_rate") - 0.06) < 1e-9, "M6-2 换装 后 离线 池 接入 (0.06)")
+	check(g.affix_swap("weapon_0_0", 1, "af_atk_4_3") == "背包 没有 该词缀", "M6-2 换装 失败 回滚 (槽位 仍 离线 词缀)")
+	check(str(g.affix_load["weapon_0_0"]["1"]) == "af_offline_rate_0_0", "M6-2 换装 回滚 后 槽位 不变")
+	# 套装 共鸣 (同 品质 装配 满 3 件 触发; atk/def 乘算 独立 项)
+	# 进入 本段 时: 仅 槽1 装 离线词缀 (tier0), 共鸣 未 触发; 背包 qi=2/stone=1/atk=1
+	var m62_atk_pre_res: float = g.player_atk()
+	var m62_def_pre_res: float = g.player_def()
+	check(absf(g.resonance_mult() - 1.0) < 1e-9, "M6-2 未 满 3 件 同 品质 共鸣 = 1.0 (实际 %.4f)" % g.resonance_mult())
+	g.affix_equip("weapon_0_0", 0, "af_qi_rate_0_0")
+	g.affix_equip("weapon_0_0", 2, "af_stone_rate_0_0")
+	var m62_res_cnt: Dictionary = g.resonance_count()
+	check(int(m62_res_cnt.get(0, 0)) == 3, "M6-2 共鸣 计数 普通品质 装配 3 件 (实际 %d)" % int(m62_res_cnt.get(0, 0)))
+	check(absf(g.resonance_mult() - 1.06) < 1e-9, "M6-2 共鸣 3 件 普通 = x1.06 (实际 %.4f)" % g.resonance_mult())
+	check(absf(g.player_atk() / (m62_atk_pre_res * 1.06) - 1.0) < 1e-6, "M6-2 共鸣 触发 后 玩家 atk x1.06 (恒等)")
+	check(absf(g.player_def() / (m62_def_pre_res * 1.06) - 1.0) < 1e-6, "M6-2 共鸣 触发 后 玩家 def x1.06 (恒等)")
+	check(g.resonance_text().contains("共鸣"), "M6-2 共鸣 文案 含 触发 明细 (%s)" % g.resonance_text())
+	# 卸下 1 件 -> 2 件 不再 触发 (回落 1.0)
+	g.affix_unequip("weapon_0_0", 2)
+	check(absf(g.resonance_mult() - 1.0) < 1e-9, "M6-2 卸下 至 2 件 共鸣 回落 1.0 (实际 %.4f)" % g.resonance_mult())
+	check(absf(g.player_atk() / m62_atk_pre_res - 1.0) < 1e-6, "M6-2 共鸣 回落 后 atk 复原 (恒等)")
+	# 收尾: 复原 共鸣段 之前 状态 (仅 槽1 离线词缀; 背包 qi=2/stone=1)
+	g.affix_unequip("weapon_0_0", 0)
+	check(g.affix_slots_used("weapon_0_0") == 1, "M6-2 共鸣 段 收尾 仅 槽1 已装 (实际 %d)" % g.affix_slots_used("weapon_0_0"))
+	# 分解
+	check(g.affix_decompose("af_qi_rate_0_0", 1) == 1, "M6-2 分解 1 件 成功")
+	check(int(g.affix_bag["af_qi_rate_0_0"]) == 1, "M6-2 分解 后 剩 1")
+	check(g.affix_decompose("af_qi_rate_0_0", 99) == 1, "M6-2 分解 超量 钳制 到 库存")
+	check(not g.affix_bag.has("af_qi_rate_0_0"), "M6-2 分解 空 后 格 清空 (不占 格)")
+	check(g.affix_decompose("af_qi_rate_9_9", 1) == 0, "M6-2 分解 背包 无 此 词缀 = 0")
+	# 背包 容量 (30 格 上限; 同 词缀 堆叠 不占 格) — 清空 背包 从 0 格 起算
+	g.affix_bag = {}
+	for i in 4:
+		g.affix_add("af_atk_%d_0" % i, 1)
+	check(g.affix_bag_used() == 4, "M6-2 4 件 同 4 种 只占 4 格 (实际 %d)" % g.affix_bag_used())
+	# 再 入 26 种 不同 词缀 (取 数据表 前 26 个 id, 全 不同) -> 满 30 格
+	for i in 26:
+		g.affix_add(str(g.affix_ids[i]), 1)
+	check(g.affix_bag_used() == 30, "M6-2 背包 满 30 格 (实际 %d)" % g.affix_bag_used())
+	# 背包满: 未 入包 过 的 新 词缀 (高品质) 拒绝
+	check(g.affix_add("af_stone_rate_3_0", 1) == 0, "M6-2 背包满 新 词缀 (未 入包 过 高品质) 拒绝")
+	check(g.affix_bag_used() == 30 and not g.affix_bag.has("af_stone_rate_3_0"), "M6-2 拒绝 后 背包 不变")
+	# 背包满 时 普通品质 自动 入料 (计 分解 埋点, 不占格); 高品质 拒绝
+	var m62_dec0: int = int(g.stats.get("affix_decompose", 0.0))
+	check(g.affix_add("af_bt_chance_0_0", 1) == 0, "M6-2 背包满 时 新 普通品质 自动 入料 (不入包 不 占格)")
+	check(g.affix_bag_used() == 30 and int(g.stats.get("affix_decompose", 0.0)) > m62_dec0, "M6-2 自动 入料 走 分解 埋点 (实际 %d -> %d)" % [m62_dec0, int(g.stats.get("affix_decompose", 0.0))])
+	# 掉落 判定 (确定性 注入 roll; 背包满 时 已入包 普通品质 入料 / 高品质 拒绝, 背包 不变)
+	var m62_d0: Array = g.affix_roll_drop("normal", 10, [0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+	check(m62_d0.is_empty(), "M6-2 普通层 roll 0.9 不掉落 (掉率 5%%)")
+	# 背包满 + 掉落 出 未入包 词缀 (池=bt_chance, 不在 前 26 格) -> 拒绝 不 占 新格
+	var m62_d1: Array = g.affix_roll_drop("normal", 10, [0.01, 0.0, 0.0, 0.0, 0.0, 0.4, 0.0])
+	check(m62_d1.is_empty(), "M6-2 背包满 时 掉落 未入包 词缀 拒绝 (不 占 新格)")
+	check(g.affix_bag_used() == 30, "M6-2 掉落 后 背包 不变")
+	# 清空 背包 再 测 掉落 口径
+	g.affix_bag = {}
+	check(g.affix_bag_used() == 0, "M6-2 清空 背包 (实际 %d)" % g.affix_bag_used())
+	var m62_d2: Array = g.affix_roll_drop("normal", 10, [0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+	check(m62_d2.size() == 1 and str(m62_d2[0]) == "af_qi_rate_0_0", "M6-2 普通层 必掉 1 件 = 桶0 普通 品质 (实际 %s)" % str(m62_d2))
+	g.affix_decompose("af_qi_rate_0_0", -1)
+	var m62_d3: Array = g.affix_roll_drop("boss", 50, [0.01, 0.0, 0.7, 0.0, 0.0, 0.2, 0.0])
+	check(m62_d3.size() == 1 and str(m62_d3[0]) == "af_stone_rate_2_0", "M6-2 Boss 层50 桶7 稀有 品质 = 池序1 变体0 (实际 %s)" % str(m62_d3))
+	g.affix_decompose("af_stone_rate_2_0", -1)
+	var m62_d4: Array = g.affix_roll_drop("milestone", 100, [0.01, 0.0, 0.99, 0.0, 0.0, 0.0, 0.0])
+	check(m62_d4.size() == 1 and str(m62_d4[0]) == "af_qi_rate_4_0", "M6-2 里程碑 桶位 上移14 = 顶层 传说 品质 (实际 %s)" % str(m62_d4))
+	g.affix_decompose("af_qi_rate_4_0", -1)
+	var m62_d5: Array = g.affix_roll_drop("boss", 50, [0.01, 0.99, 0.5, 0.5, 0.5, 0.0, 0.0])
+	check(m62_d5.size() == 3, "M6-2 Boss 必掉 1~3 件 (roll 件数 上限 = 3, 实际 %d)" % m62_d5.size())
+	for aid in m62_d5:
+		g.affix_decompose(str(aid), -1)
+	check(g.affix_bag_used() == 0, "M6-2 Boss 3 件 清空 (实际 %d)" % g.affix_bag_used())
+	check(g.affix_roll_drop("not_exist", 10, [0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).is_empty(), "M6-2 未知 来源 不掉落")
+	check(g.affix_roll_drop("normal", 10, [0.01]).is_empty(), "M6-2 roll 不足 不掉落 (防御)")
+	# 塔 战斗 掉落 接入 (结果 affix_drops; 普通层 5%% 概率)
+	g.affix_bag = {}
+	var m62_t0a: int = int(g.stats.get("affix_drop", 0.0))
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	var m62_rt1: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(m62_rt1.has("affix_drops") and (m62_rt1["affix_drops"] as Array).size() <= 1, "M6-2 战斗 结果 含 affix_drops (实际 %s)" % str(m62_rt1["affix_drops"]))
+	check(int(g.stats.get("affix_drop", 0.0)) >= m62_t0a, "M6-2 战斗 掉落 统计 affix_drop 只增 (实际 %d -> %d)" % [m62_t0a, int(g.stats.get("affix_drop", 0.0))])
+	g.tower_fixed_floor = 0
+	# 槽位 升级 (道祖期 解锁 4 槽)
+	check(g.affix_slot_upgrade("weapon_0_0") == "需 道祖期 解锁 第 4 槽", "M6-2 未飞升 4 槽 拒绝")
+	g.ascended = true
+	g.dao_level = 8
+	check(g.affix_slot_upgrade("weapon_0_0") == "", "M6-2 道祖期 升级 成功")
+	check(g.equipment_slots("weapon_0_0") == 4, "M6-2 升级 后 4 槽 (实际 %d)" % g.equipment_slots("weapon_0_0"))
+	check(g.affix_slot_upgrade("weapon_0_0") == "槽位 已 满级", "M6-2 再 升级 拒绝 (幂等)")
+	check(g.affix_slot_upgrade("not_exist") == "尚未拥有该装备", "M6-2 未拥有 升级 拒绝")
+	g.ascended = false
+	g.dao_level = 0
+	# 存档 往返 (affix_bag / affix_load / slot_upgrades + 非法 项 过滤)
+	g.affix_add("af_qi_rate_2_0", 3)
+	g.affix_load["weapon_0_0"] = {1: "af_def_0_0"}
+	g.slot_upgrades["weapon_0_0"] = 1
+	g.save_game()
+	g.load_game()
+	check(int(g.affix_bag.get("af_qi_rate_2_0", 0)) == 3, "M6-2 存档 往返 词缀 堆叠 计数 (实际 %d)" % int(g.affix_bag.get("af_qi_rate_2_0", 0)))
+	check(str(g.affix_load.get("weapon_0_0", {}).get("1", "")) == "af_def_0_0", "M6-2 存档 往返 装配 槽位")
+	check(int(g.slot_upgrades.get("weapon_0_0", 0)) == 1 and g.equipment_slots("weapon_0_0") == 4, "M6-2 存档 往返 槽位 升级 (4 槽)")
+	var m62_sf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.READ)
+	var m62_sv: Variant = JSON.parse_string(m62_sf.get_as_text()) if m62_sf != null else null
+	if m62_sf != null:
+		m62_sf.close()
+	if typeof(m62_sv) == TYPE_DICTIONARY:
+		var m62_sd: Dictionary = m62_sv
+		m62_sd["affix_bag"] = {"af_not_exist": 5, "af_atk_0_0": -3}
+		m62_sd["affix_load"] = {"weapon_0_0": {0: "af_not_exist"}, "not_owned": {0: "af_atk_0_0"}}
+		m62_sd["slot_upgrades"] = {"not_owned": 1, "weapon_0_0": 1}
+		var m62_wf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+		if m62_wf != null:
+			m62_wf.store_string(JSON.stringify(m62_sd))
+			m62_wf.close()
+		g.load_game()
+	check(g.affix_bag.is_empty(), "M6-2 读档 非法 词缀 项 过滤 (背包 空, 实际 %d)" % g.affix_bag_used())
+	check(g.affix_load.is_empty(), "M6-2 读档 非法 装配 项 过滤 (含 未拥有 装备)")
+	check(int(g.slot_upgrades.get("weapon_0_0", 0)) == 1, "M6-2 读档 槽位 升级 保留 合法 项")
+	# 旧档 兼容 (缺 字段 默认 空)
+	var m62_oldf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.READ)
+	var m62_ov: Variant = JSON.parse_string(m62_oldf.get_as_text()) if m62_oldf != null else null
+	if m62_oldf != null:
+		m62_oldf.close()
+	if typeof(m62_ov) == TYPE_DICTIONARY:
+		var m62_od: Dictionary = m62_ov
+		m62_od.erase("affix_bag")
+		m62_od.erase("affix_load")
+		m62_od.erase("slot_upgrades")
+		var m62_wof: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+		if m62_wof != null:
+			m62_wof.store_string(JSON.stringify(m62_od))
+			m62_wof.close()
+		g.load_game()
+	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.slot_upgrades.is_empty(), "M6-2 旧档 缺 字段 默认 空")
+	# 收尾: 归零 全 状态 落盘 干净 存档 (本段 置于 套件 末尾, 落盘 态 供 ui_test 等 独立 进程 读档;
+	# 口径 与 既有 收尾 归零 一致: 资源/境界/塔/5 开关/词缀 全 归零)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ach_done.clear()
+	g._active_cd = {}
+	g.ready_events.clear()
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.last_break_result = 0
+	g.set_process(true)
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
