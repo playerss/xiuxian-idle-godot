@@ -250,6 +250,92 @@ func _init() -> void:
 	g.dao_level = 7
 	check(g.fmt(g.dao_break_cost()) == "2097.2兆", "fmt 末阶道行消耗 兆档 (实际 %s)" % g.fmt(g.dao_break_cost()))
 
+	# ---------- M6-4: DIY 词缀 数值平衡 (词缀曲线 vs 商店装备曲线 + 满配 20 槽 溢出检查) ----------
+	# 档态: 满修 120 技能 + 道祖 + 10 法器 (复用上方 后期溢出 段 状态); 道行 阶段 拉到 道祖 (4 槽 解锁 门槛)
+	g.dao_level = 8
+	# 1) 词缀 曲线 vs 商店 装备 曲线 (逐池 对比: 普通 词缀 不 反超 商店, 传说 词缀 上限线 不 低于 商店)
+	var pool_ids := ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]
+	for pid in pool_ids:
+		var eff: String = g.AFFIX_POOL_KEY[pid]
+		var t0: float = float(g.affix_by_id["af_%s_0_0" % pid]["value"])
+		var t4: float = float(g.affix_by_id["af_%s_4_3" % pid]["value"])
+		var shop_max := 0.0
+		for slot in g.SLOTS:
+			for id in g.equip_ids:
+				var e: Dictionary = g.equip_by_id[id]
+				if str(e["slot"]) == slot and int(e["tier"]) == 6:
+					shop_max = maxf(shop_max, float(e.get(eff, 0.0)))
+		check(t0 <= shop_max * 2.0, "M6-4 %s 普通词缀 ≤ 商店神品单件x2 (词缀%s vs 商店%s)" % [pid, t0, shop_max])
+		check(t4 >= shop_max * 0.5, "M6-4 %s 传说词缀 ≥ 商店神品单件x0.5 上限线 (词缀%s vs 商店%s)" % [pid, t4, shop_max])
+	# 2) 商店 满装 基线 (5 部位 神品 最高变体) 属性 可观
+	var shop_full_qi := 0.0
+	for slot in g.SLOTS:
+		for id in g.equip_ids:
+			var e: Dictionary = g.equip_by_id[id]
+			if str(e["slot"]) == slot and int(e["tier"]) == 6 and int(e["id"].split("_")[2]) == 3:
+				g.equipped[slot] = id
+				if not g.owned_eq.has(id):
+					g.owned_eq.append(id)
+				shop_full_qi += float(e["qi_mult"])
+				break
+	check(shop_full_qi > 3.0, "M6-4 商店满装灵气加成基线 > 3 (实际 %s)" % shop_full_qi)
+	var qi_shop: float = g.qi_per_sec()
+	# 3) 道祖期 4 槽 升级 5 件 全 成功 + 满配 20 槽 (全 传说 qi_rate v3)
+	var up_fail := 0
+	for slot in g.SLOTS:
+		var r: String = g.affix_slot_upgrade(str(g.equipped[slot]))
+		if r != "":
+			up_fail += 1
+	check(up_fail == 0, "M6-4 道祖期 4 槽升级 5 件全成功 (失败 %d)" % up_fail)
+	var eq_fail := 0
+	for slot in g.SLOTS:
+		var eid: String = g.equipped[slot]
+		for pos in 4:
+			g.affix_add("af_qi_rate_4_3", 1)
+			var r2: String = g.affix_equip(eid, pos, "af_qi_rate_4_3")
+			if r2 != "":
+				eq_fail += 1
+	check(eq_fail == 0, "M6-4 满配 20 槽 装配全成功 (失败 %d)" % eq_fail)
+	# 4) 满配 溢出 检查 (词缀 乘算 独立项 不 溢出, 与 商店路线 比值 受控)
+	var qi_full: float = g.qi_per_sec()
+	var atk_full: float = g.player_atk()
+	var def_full: float = g.player_def()
+	var bt_full: float = g.breakthrough_chance()
+	var off_full: float = g.offline_rate()
+	check(is_finite(qi_full) and qi_full < 1e19, "M6-4 满配灵气速率有限 < 1e19/s (实际 %s)" % g.fmt(qi_full))
+	check(is_finite(atk_full) and is_finite(def_full), "M6-4 满配 atk/def 有限 (atk=%s def=%s)" % [g.fmt(atk_full), g.fmt(def_full)])
+	check(g.resonance_mult() == 1.0 + 0.02 * 20.0, "M6-4 同品质 20 件共鸣 = x1.4 (实际 x%s)" % g.resonance_mult())
+	check(bt_full <= 0.99, "M6-4 满配突破成功率 clamp ≤ 0.99 (实际 %s)" % bt_full)
+	check(off_full <= 1.0, "M6-4 满配离线效率 clamp ≤ 100%% (实际 %d%%)" % int(off_full * 100.0))
+	var diy_ratio: float = qi_full / qi_shop
+	check(diy_ratio > 1.5 and diy_ratio < 3.0, "M6-4 DIY满配 vs 商店满装 放大受控 (1.5<x<3.0, 实际 x%s)" % diy_ratio)
+	check(g.fmt(qi_full).ends_with("京") or g.fmt(qi_full).ends_with("垓"), "M6-4 满配灵气展示在 京/垓 档 (实际 %s)" % g.fmt(qi_full))
+	# 5) 6 池 混合 15 槽 满配 (各池 传说 混装) 全 有限
+	g.affix_load.clear()
+	g.affix_bag.clear()
+	var mix_pools := ["af_qi_rate_4_3", "af_stone_rate_4_3", "af_bt_chance_4_3",
+		"af_offline_rate_4_3", "af_atk_4_3", "af_def_4_3"]
+	for slot in g.SLOTS:
+		var eid3: String = g.equipped[slot]
+		for pos in 3:
+			var pid2: String = mix_pools[(pos + g.SLOTS.find(slot)) % 6]
+			g.affix_add(pid2, 1)
+			g.affix_equip(eid3, pos, pid2)
+	var qi_mix: float = g.qi_per_sec()
+	check(is_finite(qi_mix) and qi_mix > qi_shop, "M6-4 6池混合15槽 灵气有限且 > 商店基线 (%s)" % g.fmt(qi_mix))
+	check(g.breakthrough_chance() <= 0.99 and g.offline_rate() <= 1.0, "M6-4 混合满配 成功率/离线 仍 clamp 受控")
+	# 6) 掉落 桶位/品质 曲线 (低层 无 传说, 顶层 高 roll 必 传说 — 高层塔 掉 高品质 口径)
+	check(g.affix_drop_bucket(1) == 0 and g.affix_drop_bucket(50) == 0 and g.affix_drop_bucket(51) == 1, "M6-4 掉落桶位 1/50/51 层 -> 0/0/1")
+	check(g.affix_drop_bucket(1000) == 19, "M6-4 1000 层 = 顶桶 19")
+	check(g.affix_roll_tier(0, 0.9999) < 4, "M6-4 首桶 无 传说 掉落 (roll 0.9999 = 品质%d)" % g.affix_roll_tier(0, 0.9999))
+	check(g.affix_roll_tier(19, 0.9999) == 4, "M6-4 顶桶 高 roll 命中 传说 (roll 0.9999 = 品质%d)" % g.affix_roll_tier(19, 0.9999))
+	# 7) 收尾 复原 (清 词缀/装备/槽位 状态, 防 污染 后续)
+	g.affix_load.clear()
+	g.affix_bag.clear()
+	g.slot_upgrades.clear()
+	g.equipped.clear()
+	g.owned_eq.clear()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

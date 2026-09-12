@@ -112,6 +112,12 @@ func _mkdir() -> void:
 func _setup_demo_state() -> void:
 	var g := GameData
 	g.set_process(false)  # 冻结挂机/成就/自动存档
+	# M6-4: 防御性清词缀 残留 态 (autoload 启动 load_game 可能 读 上轮 ui_test 残留档,
+	# 保证 演示档 词缀背包/装配/收集 计数 确定)
+	g.affix_bag.clear()
+	g.affix_load.clear()
+	g.slot_upgrades.clear()
+	g.seen_affixes.clear()
 	g.realm_idx = 2       # 金丹
 	g.layer = 2
 	g.essence = 1.02 * g.breakthrough_cost()  # 打磨-32: 资源攒够(可突破) — 展示突破按钮金边高亮 + 进度 100%
@@ -146,3 +152,8 @@ func _setup_demo_state() -> void:
 	g.auto_cast = true
 	# 打磨-80: 自动领悟 展示 开 态 (与 施展 同开, 顶栏 徽标 自动 2/4, 汇总行 两段 金)
 	g.auto_learn = true
+	# M6-4: DIY 词缀 演示态 (词缀背包抽屉 有 3 格 + 地品玉佩 装 2 词缀 chips 展示)
+	g.affix_add("af_qi_rate_1_1", 2)   # 纳灵·优秀 x2
+	g.affix_add("af_atk_1_0", 1)       # 破虚·优秀 x1
+	g.affix_equip("amulet_3_0", 0, "af_qi_rate_1_1")
+	g.affix_equip("amulet_3_0", 1, "af_atk_1_0")
