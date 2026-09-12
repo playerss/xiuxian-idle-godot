@@ -2,7 +2,8 @@ extends Node
 ## 打磨-40: 成就页进度条 UI 断言 (headless 可跑, scene 模式带 autoload GameData/Steam)
 ## 打磨-41: 技能/装备/法器 行首品质色竖条断言 (存在/首子节点/颜色与数据 tier 或价格档一致)
 ## 打磨-42: 成就页顶栏收集进度一览 mini 进度条断言 (4 条节点/0 填充/满态金/半态比例/节流缓存)
-## 打磨-43: 收集进度一览加 总计 mini 进度条断言 (5 条节点/总计=10/287 与 137/287 两态/wrap 换行布局)
+## 打磨-43: 收集进度一览加 总计 mini 进度条断言 (6 条节点/总计=10/419 与 159/419 两态/wrap 换行布局)
+## 打磨-92: 收集进度一览 加入 词缀 类 (6 条 = 5 类 + 总计; 总 287→419; 词缀 点击 直达 装备页)
 ## 打磨-44: 收集进度一览 点击直达断言 (5 条 flat Button+手型光标/tooltip/点击切 Tab 重置筛选/
 ##          法器区金边高亮+自动恢复/无存档统计副作用/总计不切页)
 ## 打磨-71: 自动系列 汇总行 点击直达断言 (3 段热区 flat Button+手型光标/tooltip 口径/点击切
@@ -66,7 +67,7 @@ func _ready() -> void:
 	g0.dao = 0.0
 	g0.dao_level = 0
 	g0.ascended = false
-	# 防御性重置 自动系列 四开关 (autoload 启动时 已从 档 load 进内存, 旧档 可能 残留 true;
+	# 防御性 重置 自动系列 四开关 (autoload 启动时 已从 档 load 进内存, 旧档 可能 残留 true;
 	# 不清会导致 打磨-69/70/71/80 初始态 错位 级联失败 — 每轮 强制 干净 基准)
 	g0.auto_break = false
 	g0.auto_buy = false
@@ -192,11 +193,12 @@ func _assert_initial() -> void:
 # 打磨-42→43: 初始态 (全新档, 成就页): 5 条收集进度条 (4 类 + 总计), 节点齐全/0 填充/青色/计数文本/tooltip + 节流缓存 (同态再刷不重写)
 func _assert_collect_bars_initial() -> void:
 	var g := GameData
-	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size()
-	check(ui._collect_items.size() == 5, "收集进度 5 条节点齐全 (4 类+总计) (实际 %d)" % ui._collect_items.size())
+	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size() + g.affix_ids.size()
+	check(ui._collect_items.size() == 6, "收集进度 6 条节点齐全 (5 类+总计, 打磨-92 加 词缀) (实际 %d)" % ui._collect_items.size())
 	check(ui._collect_wrap != null and ui._collect_box == ui._collect_wrap, "打磨-43 收集进度一览为 FlowContainer (宽不足逐条换行不截断)")
 	var expect_txt := {"skill": "技能 0/%d" % g.skill_ids.size(), "equip": "装备 0/%d" % g.equip_ids.size(),
-		"item": "法器 0/10", "ach": "成就 0/%d" % g.ach_ids.size(), "total": "总计 0/%d" % total_collect}
+		"item": "法器 0/10", "ach": "成就 0/%d" % g.ach_ids.size(), "affix": "词缀 0/%d" % g.affix_ids.size(),
+		"total": "总计 0/%d" % total_collect}
 	for k in expect_txt:
 		var it: Dictionary = ui._collect_items.get(k, {})
 		check(it.has("label") and it.has("bar_bg") and it.has("bar_fill"), "收集 %s 节点 (label/bar_bg/bar_fill) 存在" % k)
@@ -276,17 +278,17 @@ func _mutate_state() -> void:
 	check(all_ok, "排序 前 %d 行均为已解锁 (金框)" % done.size())
 
 
-# 打磨-42→43: 变化态 (2技能+2装备+1法器+5成就): 5 条同步计数 (含 总计 10/287) + 1% 档填充 + 青色 (未满);
-# 再学全技能/全法器 -> 满态金 (技能/法器 金 + 总计 137/287 仍青, 金/青混合二态)
+# 打磨-42→43→92: 变化态 (2技能+2装备+1法器+5成就+0词缀): 6 条同步计数 (含 总计 10/419) + 1% 档填充 + 青色 (未满);
+# 再学全技能/全法器 -> 满态金 (技能/法器 金 + 总计 159/419 仍青, 金/青混合二态)
 func _assert_collect_bars_mutated() -> void:
 	var g := GameData
-	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size()
+	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size() + g.affix_ids.size()
 	ui._tab.current_tab = 3
 	ui._refresh()
 	await get_tree().process_frame
-	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就", "total": "总计"}
+	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就", "affix": "词缀", "total": "总计"}
 	var expect := {"skill": [2, g.skill_ids.size()], "equip": [2, g.equip_ids.size()],
-		"item": [1, 10], "ach": [5, g.ach_ids.size()], "total": [10, total_collect]}
+		"item": [1, 10], "ach": [5, g.ach_ids.size()], "affix": [0, g.affix_ids.size()], "total": [10, total_collect]}
 	for k in expect:
 		var it: Dictionary = ui._collect_items.get(k, {})
 		if it.is_empty():
@@ -333,34 +335,37 @@ func _assert_collect_bars_mutated() -> void:
 	await _assert_collect_total_wrap()
 
 
-# 打磨-43: 顶栏宽度不足时逐条换行不截断 — 压缩 FlowContainer 宽度 -> 5 条目折到多行; 恢复宽 -> 回单行
+# 打磨-43→92: 顶栏宽度不足时逐条换行不截断 — 压缩 FlowContainer 宽度 -> 6 条目折到多行; 恢复宽 -> 回单行
 func _assert_collect_total_wrap() -> void:
 	var g := GameData
-	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size()
+	var total_collect := g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size() + g.affix_ids.size()
 	var wrap: FlowContainer = ui._collect_wrap
-	# 全收集态 (总量/总量) 下断言: 总计条 满条金色
+	# 全收集态 (总量/总量, 打磨-92 含 词缀 类) 下断言: 总计条 满条金色
 	g.owned_eq.clear()
 	for eid in g.equip_ids:
 		g.owned_eq.append(eid)
 	g.ach_done.clear()
 	for aid in g.ach_ids:
 		g.ach_done.append(str(aid))
+	g.seen_affixes = []
+	for aid in g.affix_ids:
+		g.seen_affixes.append(str(aid))
 	ui._refresh()
 	await get_tree().process_frame
 	var full_txt := "总计 %d/%d" % [total_collect, total_collect]
 	var it_all: Dictionary = ui._collect_items["total"]
 	check(str((it_all["label"] as Label).text) == full_txt, "总计条 全收集 %s (实际 %s)" % [full_txt, str((it_all["label"] as Label).text)])
 	check((it_all["bar_fill"] as ColorRect).color == ui.GOLD, "总计条 全收集=金")
-	# 宽态: 5 条目全部布局在位 (1280 窄屏下天然可能 2~3 行, 记录自然行数供 roundtrip 对比; 1920 宽屏实测单行)
+	# 宽态: 6 条目全部布局在位 (1280 窄屏下天然可能 2~3 行, 记录自然行数供 roundtrip 对比; 1920 宽屏实测单行)
 	var rows_nat := _count_rows(wrap)
-	check(wrap.get_child_count() == 5, "宽态 5 条目全在 (实际 %d, 自然 %d 行)" % [wrap.get_child_count(), rows_nat])
+	check(wrap.get_child_count() == 6, "宽态 6 条目全在 (实际 %d, 自然 %d 行)" % [wrap.get_child_count(), rows_nat])
 	# 窄态: 强制 FlowContainer 最小宽 200px -> 条目必须换行 (y 出现 2 档) 且不消失 (5 条目全在)
 	var old_min: Vector2 = wrap.custom_minimum_size
 	wrap.custom_minimum_size = Vector2(200, 0)
 	ui._refresh()
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check(wrap.get_child_count() == 5, "窄态 5 条目仍在 (未截断) (实际 %d)" % wrap.get_child_count())
+	check(wrap.get_child_count() == 6, "窄态 6 条目仍在 (未截断) (实际 %d)" % wrap.get_child_count())
 	var rows_narrow := _count_rows(wrap)
 	check(rows_narrow >= 2, "窄态 逐条换行到多行 (实际 %d 行)" % rows_narrow)
 	# 恢复宽度 -> roundtrip 行数与压缩前一致
@@ -373,6 +378,7 @@ func _assert_collect_total_wrap() -> void:
 	# 恢复受控态 (防污染后续断言)
 	g.owned_eq.clear()
 	g.ach_done.clear()
+	g.seen_affixes = []
 
 
 # 打磨-43: 统计容器子节点折成的行数 (y 坐标 2px 容差归并)
@@ -436,16 +442,17 @@ func _assert_tier_bars() -> void:
 	check(tier_seen[0] > 0 and tier_seen[2] > 0 and tier_seen[5] > 0 and tier_seen[6] > 0, "法器四档价格色标均有覆盖 (实际 %s)" % str(tier_seen))
 
 
-# 打磨-44: 收集进度一览 点击直达 — 5 条 flat Button (手型光标/tooltip), 点击切 Tab+重置筛选,
-# 法器区金边高亮+自动恢复, 无存档/统计副作用, 总计不切页
+# 打磨-44→92: 收集进度一览 点击直达 — 6 条 flat Button (手型光标/tooltip), 点击切 Tab+重置筛选,
+# 法器区金边高亮+自动恢复, 无存档/统计副作用, 总计不切页; 打磨-92 词缀 条 直达 装备页
 func _assert_collect_jump() -> void:
 	var g := GameData
 	# 回到成就页 (点击入口所在页)
 	ui._tab.current_tab = 3
-	# 5 条按钮节点 + flat + 手型光标
-	check(ui._collect_btns.size() == 5, "收集进度 5 条点击按钮齐全 (实际 %d)" % ui._collect_btns.size())
+	# 6 条按钮节点 + flat + 手型光标 (打磨-92: 5 类 + 总计)
+	check(ui._collect_btns.size() == 6, "收集进度 6 条点击按钮齐全 (打磨-92 加 词缀) (实际 %d)" % ui._collect_btns.size())
 	var expect_tip := {"skill": "点击直达 技能页", "equip": "点击直达 装备页",
-		"item": "点击直达 修行页·法器区", "ach": "已在 成就页", "total": "总计 = 四类已收集之和"}
+		"item": "点击直达 修行页·法器区", "ach": "已在 成就页", "affix": "点击直达 装备页·词缀背包",
+		"total": "总计 = 五类已收集之和"}
 	for k in expect_tip:
 		var b: Button = ui._collect_btns.get(k, null)
 		check(b != null, "收集 %s 按钮存在" % k)
@@ -504,6 +511,16 @@ func _assert_collect_jump() -> void:
 	ui._on_collect_jump("ach")
 	await get_tree().process_frame
 	check(ui._tab.current_tab == 3, "点击 成就 → 保持 成就页 (tab=3) (实际 %d)" % ui._tab.current_tab)
+	# --- 打磨-92: 点击 词缀: 切到装备页(tab2) + 部位/品质 筛选重置 + 词缀背包 消息 ---
+	ui._on_equip_filter("robe")
+	ui._on_equip_tier_filter("1")
+	check(ui._equip_filter_active == "robe" and ui._equip_tier_active == "1", "前置 装备筛选态 (robe/tier1)")
+	ui._on_collect_jump("affix")
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 2, "打磨-92 点击 词缀 → 切到 装备页 (tab=2) (实际 %d)" % ui._tab.current_tab)
+	check(ui._equip_filter_active == "" and ui._equip_tier_active == "", "打磨-92 点击 词缀 → 部位/品质 筛选重置为 全部")
+	check(str(ui._msg_label.text).find("词缀背包") >= 0, "打磨-92 点击 词缀 → 底部弹 词缀背包 提示 (实际 %s)" % ui._msg_label.text)
+	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats, "打磨-92 点击 词缀 无资源/统计副作用")
 	# --- 点击 总计: 只弹口径提示, 不切页 (保持 tab=3) ---
 	ui._tab.current_tab = 3
 	var tab_before_total: int = ui._tab.current_tab
@@ -4447,11 +4464,17 @@ func _assert_m63_diy() -> void:
 	check(ui._m63_bag_cells.has("af_qi_rate_0_0"), "M6-3 背包 格子 登记")
 	var cell_qi: Button = ui._m63_bag_cells["af_qi_rate_0_0"]
 	check(cell_qi != null and str(cell_qi.text).find("x2") >= 0, "M6-3 格子 堆叠数 x2 (实际 %s)" % cell_qi.text)
-	# 选中 词缀 -> 金边 + 选中 提示行
-	cell_qi.pressed.emit()
+	# 选中 词缀 -> 金边 + 选中 提示行 (网格 按 选中 键 重建: 先 点 旧 格 选中,
+	# 重建 后 取 新 格 断言; 旧 引用 可能 被 free — 打磨-64 同 高负载 flake 口径,
+	# is_instance_valid 防御, 失效 直接 置 选中 态 跳过 点击)
+	if is_instance_valid(cell_qi):
+		cell_qi.pressed.emit()
+	else:
+		ui._m63_sel = "af_qi_rate_0_0"
 	await get_tree().process_frame
 	check(str(ui._m63_sel) == "af_qi_rate_0_0", "M6-3 选中 词缀 记录 (实际 %s)" % str(ui._m63_sel))
-	var sel_sb: StyleBoxFlat = cell_qi.get_theme_stylebox("normal")
+	cell_qi = ui._m63_bag_cells.get("af_qi_rate_0_0", null) as Button
+	var sel_sb: Variant = (cell_qi.get_theme_stylebox("normal") if is_instance_valid(cell_qi) else null)
 	check(sel_sb != null and sel_sb.border_width_left == 2, "M6-3 选中 格子 金边 (边框宽=%d)" % (sel_sb.border_width_left if sel_sb != null else -1))
 	check(str(ui._m63_sel_hdr.text).find("已选中") >= 0 and str(ui._m63_sel_hdr.text).find("灵气速率") >= 0, "M6-3 选中 提示行 含 词缀名/池名 (实际 %s)" % ui._m63_sel_hdr.text)
 	# 空槽 chip 装配 (chip 0)

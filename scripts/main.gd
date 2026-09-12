@@ -1680,7 +1680,7 @@ func _build_ach_page(page: Panel) -> void:
 	_collect_wrap.add_theme_constant_override("v_separation", 4)
 	_collect_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_collect_wrap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_collect_wrap.tooltip_text = "全局收集进度: 领悟过的技能 / 购买过的装备 / 购置的法器 / 达成的成就。\n收集只增不减, 全数收集即为圆满。"
+	_collect_wrap.tooltip_text = "全局收集进度: 领悟过的技能 / 购买过的装备 / 购置的法器 / 达成的成就 / 曾入包的词缀。\n收集只增不减, 全数收集即为圆满。"
 	head.add_child(_collect_wrap)
 	_collect_box = _collect_wrap  # 打磨-42 旧名指向同一容器 (tooltip/断言兼容)
 	# 打磨-44: 收集进度行升级为 flat Button (点击直达对应页; 悬停淡底+金边提示可点)
@@ -1695,7 +1695,7 @@ func _build_ach_page(page: Panel) -> void:
 	_collect_sb_hover.content_margin_right = 2
 	_collect_sb_hover.content_margin_top = 1
 	_collect_sb_hover.content_margin_bottom = 1
-	for kv in [["skill", "技能"], ["equip", "装备"], ["item", "法器"], ["ach", "成就"]]:
+	for kv in [["skill", "技能"], ["equip", "装备"], ["item", "法器"], ["ach", "成就"], ["affix", "词缀"]]:
 		var ckey: String = kv[0]
 		var crow := HBoxContainer.new()
 		crow.add_theme_constant_override("separation", 5)
@@ -1725,13 +1725,14 @@ func _build_ach_page(page: Panel) -> void:
 		var ctip: String = {
 			"skill": "点击直达 技能页", "equip": "点击直达 装备页",
 			"item": "点击直达 修行页·法器区", "ach": "已在 成就页, 点击无动作",
+			"affix": "点击直达 装备页·词缀背包",
 		}[ckey]
 		cbtn.tooltip_text = ctip
 		cbtn.add_child(crow)
 		_collect_wrap.add_child(cbtn)
 		_collect_items[ckey] = {"label": cl, "bar_bg": cbar_bg, "bar_fill": cbar_fill, "text": "", "q": -1, "btn": cbtn, "row": crow}
 		_collect_btns[ckey] = cbtn
-	# 打磨-43: 第 5 条 总计 mini 进度条 (打磨-28 旧文字 "(总 N/287)" 的展示位回归; 口径=四类已收集之和/总量之和)
+	# 打磨-43→92: 总计 mini 进度条 (口径=五类已收集之和/总量之和, 含 词缀 类)
 	# 打磨-44: 总计行同样 flat Button (点击弹口径提示, 不切页)
 	var tt := _label("", 14, CYAN)
 	var trow := HBoxContainer.new()
@@ -1757,7 +1758,7 @@ func _build_ach_page(page: Panel) -> void:
 	tbtn.add_theme_stylebox_override("pressed", _collect_sb_hover)
 	tbtn.add_theme_stylebox_override("focus", _collect_sb_hover)
 	tbtn.pressed.connect(_on_collect_jump.bind("total"))
-	tbtn.tooltip_text = "总计 = 四类已收集之和 / 四类总量之和 (技能+装备+法器+成就, 各条目只收集一次)"
+	tbtn.tooltip_text = "总计 = 五类已收集之和 / 五类总量之和 (技能+装备+法器+成就+词缀, 各条目只收集一次)"
 	tbtn.add_child(trow)
 	_collect_wrap.add_child(tbtn)
 	_collect_items["total"] = {"label": tt, "bar_bg": tbg, "bar_fill": tfill, "text": "", "q": -1, "btn": tbtn, "row": trow}
@@ -2407,14 +2408,14 @@ func _apply_card_hl(row: PanelContainer, hi: bool) -> void:
 	row.add_theme_stylebox_override("panel", _card_sb_hi if hi else _card_sb_normal)
 
 
-# 打磨-42→43: 刷收集进度一览 mini 进度条 (4 类 + 总计 横排: 类别名+计数 + 6px 进度条, 满=金/未满=青)
+# 打磨-42→43→92: 刷收集进度一览 mini 进度条 (5 类 + 总计 横排: 类别名+计数 + 6px 进度条, 满=金/未满=青)
 # 计数文本或 布局宽 变化才写 (缓存键 "宽|文本", 同打磨-40 口径), 防每帧重绘;
 # 比例按 1% 量化档 (q=ceil(ratio*100)), 页面不可见时布局宽为 0 跳过填充, 切页后首帧补刷
-# 打磨-43: total 条 = 四类已收集之和/四类总量之和 (与 collect_summary_text 的 "(总 N/287)" 口径一致)
+# 打磨-43→92: total 条 = 五类已收集之和/五类总量之和 (与 collect_summary_text 的 "(总 N/419)" 口径一致)
 func _refresh_collect() -> void:
 	var g := GameData
 	var cs: Dictionary = g.collect_summary()
-	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就", "total": "总计"}
+	var names := {"skill": "技能", "equip": "装备", "item": "法器", "ach": "成就", "affix": "词缀", "total": "总计"}
 	var got_all := 0
 	var tot_all := 0
 	for k in cs:
@@ -3074,8 +3075,11 @@ func _refresh_m63_ui() -> void:
 		sel_txt = "未选中词缀 (点背包格子 选中 后 点装备槽 装配)"
 	else:
 		var sa: Dictionary = g.affix_by_id.get(_m63_sel, {})
-		sel_txt = "已选中「%s」 %s +%.2f%% (点装备行 空槽=装配 / 已装槽=换装)" % [
-			str(sa.get("name", "")), g.affix_tier_name(int(sa.get("tier", 0))), float(sa.get("value", 0.0))]
+		# 打磨-92: 提示行 补 池名 (原只有 品质 名, M6-3 自测 断言 含 池名 会 漏检 —
+		# 被 既有 布局 flake 的 错误 中止 掩盖, 错误 修复 后 暴露)
+		var sa_pool: String = str(sa.get("pool_name", ""))
+		sel_txt = "已选中「%s」 %s · %s +%.2f%% (点装备行 空槽=装配 / 已装槽=换装)" % [
+		str(sa.get("name", "")), g.affix_tier_name(int(sa.get("tier", 0))), sa_pool, float(sa.get("value", 0.0))]
 	if _m63_sel_hdr.text != sel_txt:
 		_m63_sel_hdr.text = sel_txt
 	# 背包 网格 (内容键 = 背包 排序 内容 + 选中; 变化才重建 6 列 格子)
@@ -3213,11 +3217,16 @@ func _on_collect_jump(ckey: String) -> void:
 			_tab.current_tab = 0
 			_flash_items_panel()
 			_show_msg("直达 修行页·法器区")
+		"affix":
+			_tab.current_tab = 2
+			_on_equip_filter("")
+			_on_equip_tier_filter("")
+			_show_msg("直达 装备页·词缀背包")
 		"ach":
 			_tab.current_tab = 3
 			_show_msg("已在 成就页")
 		"total":
-			_show_msg("总计 = 四类已收集之和 / 四类总量之和 (各条目只收集一次, 卸下/换装不影响)")
+			_show_msg("总计 = 五类已收集之和 / 五类总量之和 (各条目只收集一次, 卸下/换装/分解不影响)")
 
 
 # 打磨-44: 法器区金边高亮 1.2s 后自动恢复 (tween 驱动, 重入时先 kill 旧 tween)

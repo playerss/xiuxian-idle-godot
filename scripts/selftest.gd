@@ -1781,6 +1781,9 @@ func _init() -> void:
 	g.ascended = false
 	var cs28: Dictionary = g.collect_summary()
 	check(cs28.has("skill") and cs28.has("equip") and cs28.has("item") and cs28.has("ach"), "collect_summary 含 技能/装备/法器/成就 四类")
+	# 打磨-92: 新增 词缀 类 (口径 = seen_affixes 曾 入包, 总量 = affix_ids 120)
+	check(cs28.has("affix"), "打磨-92 collect_summary 含 词缀 类 (实际 %s)" % str(cs28.keys()))
+	check(int(cs28["affix"]["got"]) == g.seen_affixes.size() and int(cs28["affix"]["total"]) == g.affix_ids.size(), "打磨-92 词缀 = 曾入包数/120 (实际 %s)" % str(cs28["affix"]))
 	check(int(cs28["skill"]["got"]) == 2 and int(cs28["skill"]["total"]) == g.skill_ids.size(), "collect_summary 技能 = 已学数/总量 (实际 %s)" % str(cs28["skill"]))
 	check(int(cs28["equip"]["got"]) == 0 and int(cs28["equip"]["total"]) == g.equip_ids.size(), "collect_summary 装备 = 0/140 (实际 %s)" % str(cs28["equip"]))
 	check(int(cs28["item"]["got"]) == 0 and int(cs28["item"]["total"]) == 10, "collect_summary 法器 = 0/10 (实际 %s)" % str(cs28["item"]))
@@ -1790,13 +1793,14 @@ func _init() -> void:
 	var t28 := 0
 	for k in cs28:
 		t28 += int(cs28[k]["total"])
-	var total_collect: int = g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size()
+	var total_collect: int = g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size() + g.affix_ids.size()
 	check(t28 == total_collect, "收集总量合计 = 实际 总和 (实际 %d, 期望 %d)" % [t28, total_collect])
 	var txt28: String = g.collect_summary_text()
 	check(txt28.begins_with("收集进度"), "collect_summary_text 以 收集进度 开头 (实际 %s)" % txt28)
 	check(txt28.find("技能 2/%d" % g.skill_ids.size()) >= 0, "收集文本含 技能 2/120 (实际 %s)" % txt28)
 	check(txt28.find("装备 0/%d" % g.equip_ids.size()) >= 0, "收集文本含 装备 0/140 (实际 %s)" % txt28)
 	check(txt28.find("法器 0/10") >= 0, "收集文本含 法器 0/10")
+	check(txt28.find("词缀 %d/%d" % [g.seen_affixes.size(), g.affix_ids.size()]) >= 0, "打磨-92 收集文本含 词缀 计数 (实际 %s)" % txt28)
 	check(txt28.find("(总 %d/%d)" % [2 + g.ach_done.size(), total_collect]) >= 0, "收集文本含 总 N/总量 (实际 %s)" % txt28)
 	# 收集变化 -> 文本变化 (购买 1 件装备后)
 	g.stones = 1e12
@@ -1807,7 +1811,7 @@ func _init() -> void:
 	# 已收集类计数只增不减 (卸下/换装不影响收集数)
 	g.unequip("weapon")
 	check(int(g.collect_summary()["equip"]["got"]) == 1, "卸下装备不影响收集计数 (只增不减)")
-	# 打磨-43: 总计口径 = 四类已收集之和/四类总量之和 (与 collect_summary_text 的 "(总 N/287)" 一致)
+	# 打磨-43→92: 总计口径 = 五类已收集之和/五类总量之和 (含 词缀 类, 总 419)
 	var cs43: Dictionary = g.collect_summary()
 	var got43 := 0
 	var tot43 := 0
@@ -1816,8 +1820,16 @@ func _init() -> void:
 		tot43 += int(cs43[k]["total"])
 	var txt43: String = g.collect_summary_text()
 	check(txt43.find("(总 %d/%d)" % [got43, tot43]) >= 0, "打磨-43 总计 N/总量 = 四类之和 (总 %d/%d, 文本 %s)" % [got43, tot43, txt43])
-	check(tot43 == g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size(), "打磨-43 总计分母 = 四类 实际 总和 (实际 %d)" % tot43)
-	check(got43 == int(cs43["skill"]["got"]) + int(cs43["equip"]["got"]) + int(cs43["item"]["got"]) + int(cs43["ach"]["got"]), "打磨-43 总计分子 = 四类已收集之和 (实际 %d)" % got43)
+	check(tot43 == g.skill_ids.size() + g.equip_ids.size() + g.ITEMS.size() + g.ach_ids.size() + g.affix_ids.size(), "打磨-43→92 总计分母 = 五类 实际 总和 (实际 %d)" % tot43)
+	check(got43 == int(cs43["skill"]["got"]) + int(cs43["equip"]["got"]) + int(cs43["item"]["got"]) + int(cs43["ach"]["got"]) + int(cs43["affix"]["got"]), "打磨-43→92 总计分子 = 五类已收集之和 (实际 %d)" % got43)
+	# 打磨-92: 词缀 入包 收集 同步 + 只增不减 (分解/卸下 不 回收)
+	var m92_seen0: int = g.seen_affixes.size()
+	var m92_seen_bak: Array = g.seen_affixes.duplicate()
+	g.affix_add("af_atk_0_0", 1)
+	check(int(g.collect_summary()["affix"]["got"]) == m92_seen0 + 1, "打磨-92 词缀 入包 收集 +1 (实际 %d)" % g.seen_affixes.size())
+	g.affix_decompose("af_atk_0_0", -1)
+	check(int(g.collect_summary()["affix"]["got"]) == m92_seen0 + 1, "打磨-92 分解 后 词缀 收集 保持 (只增不减)")
+	g.seen_affixes = m92_seen_bak
 
 	# ---------- 打磨-29: 法器 一键购买 (价格升序连买买得起的, 与装备 一键购买 口径一致) ----------
 	# 受控状态: 清掉前节遗留法器, 灵石从 0 开始
