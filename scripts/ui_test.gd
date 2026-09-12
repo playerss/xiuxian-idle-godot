@@ -96,6 +96,13 @@ func _ready() -> void:
 	g0.tower_clear_reward_got = false
 	g0.poison_battles = 0
 	g0.auto_tower = false
+	# M6-3: 防御性 重置 DIY 词缀 状态 (autoload 启动 load_game 读 残留档, 词缀 背包/装配/收集 可能 非空;
+	# 残留 会 让 成就 检查 触发 DIY 成就 泄漏 [affix_legend/affix_120/diy_first/resonance_first],
+	# 致 收集 计数/只看未解锁 断言 偏多 — 每轮 强制 干净 基准, 同 打磨-71/72 自动开关/离线收益 口径)
+	g0.affix_bag = {}
+	g0.affix_load = {}
+	g0.slot_upgrades = {}
+	g0.seen_affixes = []
 	g0.set_process(false)
 	var script: GDScript = load("res://scripts/main.gd")
 	ui = Control.new()
@@ -157,6 +164,7 @@ func _ready() -> void:
 	await _assert_goalbar_jump()
 	await _assert_ach_nofilter()
 	await _assert_tower_clear()  # M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 称号 徽标
+	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	_finish()
 
 
@@ -4392,3 +4400,116 @@ func _assert_tower_clear() -> void:
 	check(not badge.visible and str(badge.text) == "", "M5-4 收尾 未通关 徽标 隐藏 (实际 visible=%s)" % str(badge.visible))
 	check(g.tower_clear_title() == "", "M5-4 收尾 称号 空串")
 
+
+# M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;
+# 装备行 槽位 chip 装配/拆卸/换装 往返 + 评分 行 + tooltip 评分 行; 收尾 恢复 干净 基准)
+func _assert_m63_diy() -> void:
+	var g := GameData
+	ui._tab.current_tab = 2
+	g.set_process(false)
+	# 受控 基准: 干净 DIY 态 + 购买 weapon_0_0 (槽位 空)
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.stones = 1e12
+	g.buy_equipment("weapon_0_0")
+	ui._refresh()
+	await get_tree().process_frame
+	# 抽屉 节点 存在
+	check(ui._m63_bag_grid != null, "M6-3 词缀背包 网格 节点 存在")
+	check(ui._m63_bag_hdr != null and ui._m63_seen_hdr != null and ui._m63_res_hdr != null, "M6-3 背包 容量/收集/共鸣 行 节点 存在")
+	check(ui._m63_best_btn != null and ui._m63_dec_btn != null, "M6-3 一键装配/分解 按钮 存在")
+	check(str(ui._m63_bag_hdr.text) == "词缀背包 0/30 格", "M6-3 初始 容量行 0/30 (实际 %s)" % ui._m63_bag_hdr.text)
+	check(str(ui._m63_seen_hdr.text) == "词缀 收集 0/120", "M6-3 初始 收集行 0/120 (实际 %s)" % ui._m63_seen_hdr.text)
+	check(str(ui._m63_res_hdr.text).find("未 触发") >= 0, "M6-3 初始 共鸣行 未 触发 (实际 %s)" % ui._m63_res_hdr.text)
+	# 未拥有 装备 行: 无 chip (延迟 构建 仅 拥有 时 建)
+	# 未拥有 装备: chip 若 存在 (前序 测试 段 拥有 过) 恒 禁用 灰显 (实际 游戏 只 增 不 减, 此处 验 语义)
+	var robe_chips: Array = ui._m63_chips.get("robe_0_0", [])
+	for rc in robe_chips:
+		check((rc as Button).disabled, "M6-3 未拥有 装备 chip 禁用 (实际 disabled=%s)" % str((rc as Button).disabled))
+	# 拥有 weapon_0_0: 3 chip 构建
+	check(ui._m63_chips.has("weapon_0_0") and (ui._m63_chips["weapon_0_0"] as Array).size() == 3, "M6-3 拥有 装备 3 chip 构建")
+	# 初始 评分 行 = 基础 6 池
+	var sc_base: float = g.equip_score("weapon_0_0")
+	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt(sc_base), "M6-3 初始 评分 行 = 基础 (实际 %s)" % ui._m63_score_labels["weapon_0_0"].text)
+	# 入包 3 词缀 -> 网格 3 格 + 容量 3/30 + 收集 3/120
+	g.affix_add("af_qi_rate_0_0", 2)
+	g.affix_add("af_atk_1_0", 1)
+	g.affix_add("af_atk_4_0", 1)
+	ui._refresh()
+	await get_tree().process_frame
+	check(ui._m63_bag_grid.get_child_count() == 3, "M6-3 背包 3 种 词缀 3 格 (实际 %d)" % ui._m63_bag_grid.get_child_count())
+	check(str(ui._m63_bag_hdr.text) == "词缀背包 3/30 格", "M6-3 容量行 3/30 (实际 %s)" % ui._m63_bag_hdr.text)
+	check(str(ui._m63_seen_hdr.text) == "词缀 收集 3/120", "M6-3 收集行 3/120 (实际 %s)" % ui._m63_seen_hdr.text)
+	check(ui._m63_bag_cells.has("af_qi_rate_0_0"), "M6-3 背包 格子 登记")
+	var cell_qi: Button = ui._m63_bag_cells["af_qi_rate_0_0"]
+	check(cell_qi != null and str(cell_qi.text).find("x2") >= 0, "M6-3 格子 堆叠数 x2 (实际 %s)" % cell_qi.text)
+	# 选中 词缀 -> 金边 + 选中 提示行
+	cell_qi.pressed.emit()
+	await get_tree().process_frame
+	check(str(ui._m63_sel) == "af_qi_rate_0_0", "M6-3 选中 词缀 记录 (实际 %s)" % str(ui._m63_sel))
+	var sel_sb: StyleBoxFlat = cell_qi.get_theme_stylebox("normal")
+	check(sel_sb != null and sel_sb.border_width_left == 2, "M6-3 选中 格子 金边 (边框宽=%d)" % (sel_sb.border_width_left if sel_sb != null else -1))
+	check(str(ui._m63_sel_hdr.text).find("已选中") >= 0 and str(ui._m63_sel_hdr.text).find("灵气速率") >= 0, "M6-3 选中 提示行 含 词缀名/池名 (实际 %s)" % ui._m63_sel_hdr.text)
+	# 空槽 chip 装配 (chip 0)
+	var chips: Array = ui._m63_chips["weapon_0_0"]
+	(chips[0] as Button).pressed.emit()
+	await get_tree().process_frame
+	check(str((g.affix_load.get("weapon_0_0", {}) as Dictionary).get("0", "")) == "af_qi_rate_0_0", "M6-3 chip 装配 成功 (槽0)")
+	check(str((chips[0] as Button).text) == str(g.affix_by_id["af_qi_rate_0_0"]["name"]), "M6-3 装配 后 chip 显示 词缀 名 (实际 %s)" % (chips[0] as Button).text)
+	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt(g.equip_score("weapon_0_0")), "M6-3 装配 后 评分 行 刷新")
+	check(g.equip_score("weapon_0_0") > sc_base, "M6-3 装配 后 评分 上升")
+	check(str(ui._m63_seen_hdr.text) == "词缀 收集 3/120", "M6-3 装配 不 改 收集 (仍 3/120)")
+	# 拆卸 (chip 0 再 点, 无 选中)
+	(chips[0] as Button).pressed.emit()
+	await get_tree().process_frame
+	check(str((g.affix_load.get("weapon_0_0", {}) as Dictionary).get("0", "")) == "", "M6-3 chip 拆卸 成功 (槽0 空)")
+	check(int(g.affix_bag.get("af_qi_rate_0_0", 0)) == 2, "M6-3 拆卸 无损 回背包 (x2)")
+	# 换装: 装配 槽0 = atk, 选中 atk_4_0, 点 槽0 = 换装
+	g.affix_equip("weapon_0_0", 0, "af_atk_1_0")
+	(ui._m63_bag_cells["af_atk_4_0"] as Button).pressed.emit()
+	await get_tree().process_frame
+	(chips[0] as Button).pressed.emit()
+	await get_tree().process_frame
+	check(str((g.affix_load.get("weapon_0_0", {}) as Dictionary).get("0", "")) == "af_atk_4_0", "M6-3 chip 换装 成功 (槽0 换 传说)")
+	check(int(g.affix_bag.get("af_atk_1_0", 0)) == 1, "M6-3 换装 旧 词缀 回背包")
+	# 评分 单调: 传说 槽 > atk_1 槽
+	var sc_leg: float = g.equip_score("weapon_0_0")
+	# 一键 最佳 装配 (槽1/2 空, 背包 有 qi_rate x2 + atk_1 x1; 装 2 件, 余 1 件)
+	ui._m63_best_btn.pressed.emit()
+	await get_tree().process_frame
+	check(g.affix_slots_used("weapon_0_0") == 3, "M6-3 一键装配 后 3 槽 满 (实际 %d)" % g.affix_slots_used("weapon_0_0"))
+	check(int(g.affix_bag.get("af_qi_rate_0_0", 0)) == 1, "M6-3 一键装配 装 2 件 余 1 件 (实际 %d)" % int(g.affix_bag.get("af_qi_rate_0_0", 0)))
+	check(g.equip_score("weapon_0_0") > sc_leg, "M6-3 一键装配 后 评分 再 升")
+	# 共鸣 行 刷新 (3 槽 装 词缀 后 若 同 品质 满 3 件 触发)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._m63_res_hdr.text) == g.resonance_text(), "M6-3 共鸣行 = 接口 同源")
+	# 分解 全部
+	ui._m63_dec_btn.pressed.emit()
+	await get_tree().process_frame
+	check(g.affix_bag.is_empty(), "M6-3 分解 全部 后 背包 空")
+	check(str(ui._m63_bag_hdr.text) == "词缀背包 0/30 格", "M6-3 分解 后 容量行 0/30 (实际 %s)" % ui._m63_bag_hdr.text)
+	check(str(ui._m63_seen_hdr.text) == "词缀 收集 3/120", "M6-3 分解 不 清 收集 (仍 3/120)")
+	check(ui._m63_bag_grid.get_child_count() == 1, "M6-3 分解 后 网格 空 提示 1 格 (实际 %d)" % ui._m63_bag_grid.get_child_count())
+	# 评分 行 未 改变 (分解 不 卸 装配)
+	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt(g.equip_score("weapon_0_0")), "M6-3 分解 后 评分 行 不变")
+	# tooltip 含 评分 行 (equip_detail 含 词缀槽 + 评分)
+	check(str((ui._equip_row_nodes["weapon_0_0"] as Node).tooltip_text).find("评分") >= 0, "M6-3 装备 tooltip 含 评分 行")
+	# 收尾: 恢复 干净 基准
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	ui._m63_sel = ""
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.seen_affixes.is_empty(), "M6-3 收尾 干净 基准")

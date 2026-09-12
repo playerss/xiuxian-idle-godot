@@ -869,12 +869,19 @@ func _init() -> void:
 	# 已解锁数 = 飞升前全部可解锁成就 (境界里程碑 8 + 飞升 + 玩法 7 = 16; dao_zuzi 需 道祖,
 	# 8 爬塔成就 需 登塔 —— 均在 本节 受控态 未 满足, 保持 未解锁; 计数 按 非爬塔 且 非道祖 动态 恒等)
 	g.check_achievements()
+	# M6-3: 本 段 受控 态 需 排除 DIY 成就 (4 项) — 清 词缀 态 使 其 保持 未 解锁,
+	# 计数 动态 恒等 口径 不变 (非爬塔/非道祖/非 DIY = 解锁数)
+	g.affix_load = {}
+	g.affix_bag = {}
+	g.seen_affixes = []
+	g.check_achievements()
 	var non_tower_ach := 0
+	var m63_diy_ids := ["diy_first", "affix_legend", "resonance_first", "affix_120"]
 	for id in g.ach_ids:
-		if not str(id).begins_with("tower_") and not str(id).begins_with("endless_") and str(id) != "first_tower" and str(id) != "dao_zuzi":
+		if not str(id).begins_with("tower_") and not str(id).begins_with("endless_") and str(id) != "first_tower" and str(id) != "dao_zuzi" and not m63_diy_ids.has(str(id)):
 			non_tower_ach += 1
-	check(g.ach_done.size() == non_tower_ach, "飞升前 %d 项 非爬塔/非道祖 成就 解锁 (实际 %d)" % [non_tower_ach, g.ach_done.size()])
-	check(g.ach_done.size() == g.ach_ids.size() - 1 - 8, "飞升前 = 总量 - dao_zuzi - 8 爬塔 (实际 %d, 总量 %d)" % [g.ach_done.size(), g.ach_ids.size()])
+	check(g.ach_done.size() == non_tower_ach, "飞升前 %d 项 非爬塔/非道祖/非DIY 成就 解锁 (实际 %d)" % [non_tower_ach, g.ach_done.size()])
+	check(g.ach_done.size() == g.ach_ids.size() - 1 - 8 - 4, "飞升前 = 总量 - dao_zuzi - 8 爬塔 - 4 DIY (实际 %d, 总量 %d)" % [g.ach_done.size(), g.ach_ids.size()])
 	g.realm_idx = 0
 	g.layer = 1
 	# 成就存档往返: 部分解锁后存/读档
@@ -2279,10 +2286,13 @@ func _init() -> void:
 	g.realm_idx = 0
 	g.layer = 1
 	g.stones = 0.0
+	g.affix_load = {}
+	g.affix_bag = {}
+	g.seen_affixes = []
 	var ord39: Array = g.ach_sort_order()
-	# 全 0 进度 -> 按 id 升序 (首个应为字典序最小 id "ascend_immortal")
-	check(ord39.size() == g.ach_ids.size(), "sort_order 数量=17 (实际 %d)" % ord39.size())
-	check(str(ord39[0]) == "ascend_immortal", "sort_order 全0进度按 id 升序首项 (实际 %s)" % ord39[0])
+	# 全 0 进度 -> 按 id 升序 (M6-3 后 字典序最小 id = "affix_120")
+	check(ord39.size() == g.ach_ids.size(), "sort_order 数量=总量 (实际 %d)" % ord39.size())
+	check(str(ord39[0]) == "affix_120", "sort_order 全0进度按 id 升序首项 (实际 %s)" % ord39[0])
 	# 部分进度: 设 金丹 境界 + 5万灵石 + 2 技能 -> 部分成就有进度
 	g.realm_idx = 2
 	g.stones = 50000.0
@@ -5119,6 +5129,214 @@ func _init() -> void:
 	g.affix_bag = {}
 	g.affix_load = {}
 	g.slot_upgrades = {}
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ach_done.clear()
+	g._active_cd = {}
+	g.ready_events.clear()
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.last_break_result = 0
+	g.set_process(true)
+	g.save_game()
+
+	# ---------- M6-3: DIY 词缀 UI 数据层 (评分/装配预览/收集成就/一键装配/分解全部/存档) ----------
+	g.set_process(false)
+	# 受控 基准: 全新 档态 (防 前后 段 污染)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.ach_done.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 1e12
+	g.dao = 0.0
+	g.tower_fixed_floor = 0
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_fixed_clear = false
+	g.last_break_result = 0
+	# 本段 前 成就 测试 段 已 解锁 部分 成就 (含 M6-3 新 4 项 前 序 触发 防 污染) — 清空 重 判定
+	check(g.ach_by_id.has("diy_first"), "M6-3 段首 ach_done 已 清 (防 前 段 污染)")
+	# 词缀 4 项 定义 齐全
+	check(g.ach_by_id.has("diy_first") and g.ach_by_id.has("affix_legend") and g.ach_by_id.has("resonance_first") and g.ach_by_id.has("affix_120"), "M6-3 DIY 成就 4 项 定义 齐全")
+	check(g.ach_ids.size() == 29, "M6-3 成就 总量 29 (实际 %d)" % g.ach_ids.size())
+	# 初始 未 触发
+	check(not g.affix_resonance_active(), "M6-3 初始 共鸣 未 触发")
+	check(not g._affix_any_diy_full(), "M6-3 初始 DIY 未 装满")
+	check(not g._affix_any_tier_seen(4), "M6-3 初始 传说 未 入包")
+	# 评分 基准 (未 装配 词缀 = 基础 6 池)
+	g.buy_equipment("weapon_0_0")
+	var sc0: float = g.equip_score("weapon_0_0")
+	var e0: Dictionary = g.equip_by_id["weapon_0_0"]
+	var expect0: float = float(e0["qi_mult"]) + float(e0["stone_mult"]) + float(e0["bt_chance"]) + float(e0["offline_rate"]) + float(e0["atk"]) + float(e0["def"])
+	check(absf(sc0 - expect0) < 1e-9, "M6-3 评分 = 基础 6 池 恒等 (实际 %s / 期望 %s)" % [g.fmt(sc0), g.fmt(expect0)])
+	# 装配 预览 = 词缀 value (线性 评分 恒等)
+	var m63_pv: float = g.affix_equip_preview("weapon_0_0", 0, "af_atk_1_0")
+	check(absf(m63_pv - float(g.affix_by_id["af_atk_1_0"]["value"])) < 1e-9, "M6-3 装配预览 = 词缀 value (实际 %s)" % str(m63_pv))
+	# 未拥有 装备/越界/已装 = 0 预览
+	check(g.affix_equip_preview("robe_0_0", 0, "af_atk_1_0") == 0.0, "M6-3 未拥有 装备 预览 0")
+	check(g.affix_equip_preview("weapon_0_0", 9, "af_atk_1_0") == 0.0, "M6-3 槽位 越界 预览 0")
+	check(g.affix_equip_preview("weapon_0_0", 0, "af_not_exist") == 0.0, "M6-3 未知 词缀 预览 0")
+	# 装配 后 评分 严格 单调 递增 (评分 delta = 预览 值 恒等)
+	g.affix_add("af_atk_1_0", 1)
+	check(g.equip_score("weapon_0_0") == sc0, "M6-3 入包 未 装配 评分 不变")
+	check(g.affix_equip("weapon_0_0", 0, "af_atk_1_0") == "", "M6-3 装配 成功")
+	var sc1: float = g.equip_score("weapon_0_0")
+	check(absf((sc1 - sc0) - m63_pv) < 1e-9, "M6-3 装配 后 评分 增量 = 预览 值 (实际 %s)" % g.fmt(sc1 - sc0))
+	check(sc1 > sc0, "M6-3 评分 单调 递增")
+	check(absf(g.equip_affix_total("weapon_0_0") - float(g.affix_by_id["af_atk_1_0"]["value"])) < 1e-9, "M6-3 装备 词缀 池 总和 = 已装 词缀 value")
+	# 槽位 已装 时 预览 = 0
+	check(g.affix_equip_preview("weapon_0_0", 0, "af_def_1_0") == 0.0, "M6-3 已装 槽位 预览 0")
+	# 拆卸 后 评分 回退 (无损 回背包)
+	g.affix_unequip("weapon_0_0", 0)
+	check(absf(g.equip_score("weapon_0_0") - sc0) < 1e-9, "M6-3 拆卸 后 评分 回退 基准")
+	check(int(g.affix_bag.get("af_atk_1_0", 0)) == 1, "M6-3 拆卸 无损 回背包")
+	# 成就: diy_first 未解锁 态 进度 口径 (3 槽 未 装满)
+	check(g.ach_progress("diy_first") == "0/1", "M6-3 diy_first 未 装满 进度 0/1 (实际 %s)" % g.ach_progress("diy_first"))
+	check(absf(g.ach_progress_ratio("diy_first") - 0.0) < 1e-9, "M6-3 diy_first 未 装满 比例 0")
+	# 一键 最佳 装配 (背包 3 词缀 -> 3 空槽 各 装 1 件, value 降序)
+	g.affix_add("af_qi_rate_2_0", 1)
+	g.affix_add("af_stone_rate_2_1", 1)
+	var auto_n: int = g.affix_auto_best()
+	check(auto_n == 3, "M6-3 一键装配 3 件 (实际 %d)" % auto_n)
+	check(g.affix_slots_used("weapon_0_0") == 3, "M6-3 一键装配 后 3 槽 满 (实际 %d)" % g.affix_slots_used("weapon_0_0"))
+	check(g.affix_bag.is_empty(), "M6-3 一键装配 后 背包 空 (词缀 不消耗 只 转移)")
+	# 幂等: 无 空槽 再 调 = 0
+	check(g.affix_auto_best() == 0, "M6-3 一键装配 幂等 0 变更")
+	# 评分 单调: 3 槽 装满 > 基础
+	check(g.equip_score("weapon_0_0") > sc0, "M6-3 3 槽 装满 评分 > 基础")
+	# 装满 态 进度 口径 (解锁 前)
+	check(g.ach_progress("diy_first") == "1/1", "M6-3 diy_first 装满 进度 1/1 (实际 %s)" % g.ach_progress("diy_first"))
+	check(absf(g.ach_progress_ratio("diy_first") - 1.0) < 1e-9, "M6-3 diy_first 装满 比例 1.0 (解锁前)")
+	var got_m63a: Array[String] = g.check_achievements()
+	check(got_m63a.has("diy_first"), "M6-3 3 槽 装满 解锁 diy_first: " + str(got_m63a))
+	check(g.ach_progress("diy_first") == "已解锁", "M6-3 diy_first 已解锁 进度 文案 (实际 %s)" % g.ach_progress("diy_first"))
+	# 成就: affix_legend (传说 入包 触发; 曾入包 只增不减)
+	check(not g.ach_done.has("affix_legend"), "M6-3 传说 未 入包 前 未 解锁")
+	check(g.ach_progress_ratio("affix_legend") == 0.0, "M6-3 affix_legend 比例 0 (未入包)")
+	g.affix_add("af_atk_4_0", 1)
+	var got_m63b: Array[String] = g.check_achievements()
+	check(got_m63b.has("affix_legend"), "M6-3 传说 入包 解锁 affix_legend: " + str(got_m63b))
+	check(g.ach_progress("affix_legend") == "已解锁", "M6-3 affix_legend 已解锁 文案 (实际 %s)" % g.ach_progress("affix_legend"))
+	# 分解 后 曾入包 保留 (只增不减)
+	check(g.affix_decompose("af_atk_4_0", -1) == 1, "M6-3 分解 传说 词缀")
+	check(g._affix_any_tier_seen(4), "M6-3 分解 后 曾入包 保留 (只增不减)")
+	check(g.ach_done.has("affix_legend"), "M6-3 分解 不 回收 已 解锁 成就")
+	# 成就: resonance_first (同品质 装配 满 3 件 触发; 重建 已知 态 保证 确定性)
+	check(not g.ach_done.has("resonance_first"), "M6-3 共鸣 未 触发 前 未 解锁")
+	# 已知 态: 3 槽 卸空, 背包 备 3 件 稀有 (tier2) 词缀
+	g.affix_unequip("weapon_0_0", 0)
+	g.affix_unequip("weapon_0_0", 1)
+	g.affix_unequip("weapon_0_0", 2)
+	g.affix_decompose_all()  # 清 背包 残留, 重新 受控
+	g.affix_add("af_qi_rate_2_0", 1)
+	g.affix_add("af_stone_rate_2_1", 1)
+	g.affix_add("af_offline_rate_2_0", 1)
+	check(g.ach_progress("resonance_first") == "0/3", "M6-3 resonance_first 未 装配 进度 0/3 (实际 %s)" % g.ach_progress("resonance_first"))
+	g.affix_equip("weapon_0_0", 0, "af_qi_rate_2_0")
+	check(g.ach_progress("resonance_first") == "1/3", "M6-3 resonance_first 1 件 进度 1/3 (实际 %s)" % g.ach_progress("resonance_first"))
+	g.affix_equip("weapon_0_0", 1, "af_stone_rate_2_1")
+	check(g.ach_progress("resonance_first") == "2/3", "M6-3 resonance_first 2 件 进度 2/3 (实际 %s)" % g.ach_progress("resonance_first"))
+	var res_before: float = g.resonance_mult()
+	check(absf(res_before - 1.0) < 1e-9, "M6-3 2 件 装配 共鸣 未 触发 (x1.0)")
+	g.affix_equip("weapon_0_0", 2, "af_offline_rate_2_0")
+	check(g.resonance_mult() > res_before, "M6-3 同品质 3 件 装配 共鸣 触发 (x%.2f)" % g.resonance_mult())
+	check(g.affix_resonance_active(), "M6-3 共鸣 激活 接口 true")
+	var got_m63c: Array[String] = g.check_achievements()
+	check(got_m63c.has("resonance_first"), "M6-3 共鸣 触发 解锁 resonance_first: " + str(got_m63c))
+	check(absf(g.ach_progress_ratio("resonance_first") - 1.0) < 1e-9, "M6-3 resonance_first 比例 1.0")
+	check(g.ach_progress("resonance_first") == "已解锁", "M6-3 resonance_first 已 解锁 文案 (实际 %s)" % g.ach_progress("resonance_first"))
+	# 拆卸 1 件 -> 共鸣 解除 但 成就 不 回收 (幂等 已 解锁)
+	g.affix_unequip("weapon_0_0", 0)
+	check(not g.affix_resonance_active(), "M6-3 拆卸 后 共鸣 解除")
+	check(g.ach_done.has("resonance_first"), "M6-3 共鸣 解除 不 回收 成就")
+	# 成就: affix_120 (集齐 120 种)
+	check(g.ach_progress("affix_120") == "%d/120" % g.seen_affixes.size(), "M6-3 affix_120 进度 N/120 (实际 %s)" % g.ach_progress("affix_120"))
+	check(g.ach_progress_ratio("affix_120") < 1.0, "M6-3 affix_120 未 集齐 比例 <1")
+	g.seen_affixes = []
+	for id in g.affix_ids:
+		g.seen_affixes.append(str(id))
+	var got_m63d: Array[String] = g.check_achievements()
+	check(got_m63d.has("affix_120"), "M6-3 集齐 120 解锁 affix_120: " + str(got_m63d))
+	check(absf(g.ach_progress_ratio("affix_120") - 1.0) < 1e-9, "M6-3 affix_120 集齐 比例 1.0")
+	# 收集 文本
+	check(g.affix_seen_text() == "词缀 收集 120/120", "M6-3 收集 文本 120/120 (实际 %s)" % g.affix_seen_text())
+	# 分解 全部
+	g.affix_add("af_qi_rate_0_0", 2)
+	check(g.affix_decompose_all() >= 2, "M6-3 分解 全部 >=2 件 (实际 %d)" % g.affix_decompose_all())
+	check(g.affix_bag.is_empty(), "M6-3 分解 全部 后 背包 空")
+	check(g.seen_affixes.size() == 120, "M6-3 分解 不 清 收集 记录")
+	# 存档 往返 (seen_affixes 持久化; 非法 id 过滤)
+	var m63_pre_seen: Array = g.seen_affixes.duplicate()
+	g.save_game()
+	g.seen_affixes = []
+	g.load_game()
+	check(g.seen_affixes.size() == m63_pre_seen.size(), "M6-3 存档 往返 收集 记录 恢复 (实际 %d / %d)" % [g.seen_affixes.size(), m63_pre_seen.size()])
+	check(g.ach_done.has("affix_120"), "M6-3 读档 后 成就 保持 解锁")
+	# 旧档 兼容 (缺 seen_affixes 字段 默认 空)
+	var m63_f: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.READ)
+	var m63_v: Variant = JSON.parse_string(m63_f.get_as_text()) if m63_f != null else null
+	if m63_f != null:
+		m63_f.close()
+	if typeof(m63_v) == TYPE_DICTIONARY:
+		var m63_d: Dictionary = m63_v
+		m63_d.erase("seen_affixes")
+		var m63_wf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+		if m63_wf != null:
+			m63_wf.store_string(JSON.stringify(m63_d))
+			m63_wf.close()
+		g.load_game()
+	check(g.seen_affixes.is_empty(), "M6-3 旧档 缺 字段 收集 默认 空 (实际 %d)" % g.seen_affixes.size())
+	# 非法 收集 id 过滤
+	g.seen_affixes = ["af_not_exist", "af_atk_4_0"]
+	g.save_game()
+	g.load_game()
+	check(g.seen_affixes.size() == 1 and g.seen_affixes.has("af_atk_4_0"), "M6-3 读档 非法 收集 id 过滤 (实际 %s)" % str(g.seen_affixes))
+	# 评分 对比 口径: 换装 预览 (equip_swap_hint 含 词缀 池 口径)
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_load = {}
+	g.stones = 1e12
+	g.buy_equipment("weapon_0_0")
+	g.buy_equipment("weapon_0_1")
+	g.equip_equipment("weapon_0_0")
+	g.affix_add("af_qi_rate_3_0", 1)
+	g.affix_equip("weapon_0_1", 0, "af_qi_rate_3_0")
+	var hint: Dictionary = g.equip_swap_hint("weapon_0_1")
+	check(str(hint["text"]).find("替换") >= 0 and str(hint["text"]).find("灵气+") >= 0, "M6-3 换装对比 含 词缀 增益 (灵气+) (实际 %s)" % str(hint["text"]))
+	# 收尾: 归零 全 状态 落盘 干净 存档 (防 污染 后续 独立 测试 进程)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
 	g.learned.clear()
 	g.owned.clear()
 	g.owned_eq.clear()

@@ -184,6 +184,22 @@ var _equip_tier_active := ""             # 打磨-21: 当前装备品质筛选 (
 var _learnable_btn: Button               # 打磨-38: 技能页"只看可学"开关 (与 类别/品质 筛选 AND 叠加)
 var _learnable_on := false               # 打磨-38: "只看可学"当前开关状态
 var _eq_states: Array = []               # 打磨-22: 上帧装备状态快照 (变化才重排)
+# ---------- M6-3: DIY 词缀 UI (装备页 词缀槽 chips + 词缀背包 抽屉 + 评分 对比) ----------
+var _m63_bag_grid: GridContainer          # 词缀背包 网格 (每 种 词缀 一个 可点 单元格)
+var _m63_bag_cells: Dictionary = {}      # 词缀 id -> Button (品质色+堆叠数, 点击 选中/取消)
+var _m63_bag_hdr: Label                  # 背包 容量 行 N/30
+var _m63_seen_hdr: Label                 # 收集 进度 行 X/120
+var _m63_res_hdr: Label                  # 套装 共鸣 行
+var _m63_best_btn: Button                # 一键 最佳 装配 (各 空槽 装 背包 最优 词缀)
+var _m63_dec_btn: Button                 # 分解 全部 (背包 -> 材料)
+var _m63_sel := ""                       # 当前 选中 的 背包 词缀 id ("" = 未 选中)
+var _m63_slot_chips: Dictionary = {}     # 装备 id -> 槽位 chips HBox (仅 拥有 时 启用)
+var _m63_chips: Dictionary = {}          # 装备 id -> [Button x 槽数]
+var _m63_score_labels: Dictionary = {}   # 装备 id -> 评分 Label
+var _m63_row_keys: Dictionary = {}       # 装备 id -> 缓存 键 (词缀 装配/拥有/选中 变化 才 刷 chips)
+var _m63_bag_key := ""                   # 背包 抽屉 缓存 键 (内容+选中 变化 才 重建 网格)
+var _m63_sel_hdr: Label                  # M6-3: 当前选中 词缀 提示 行
+var _af_box_m63: VBoxContainer           # M6-3: 词缀背包 抽屉 VBox
 var _slot_labels: Dictionary = {}
 var _card_sb_normal: StyleBoxFlat
 var _card_sb_hi: StyleBoxFlat
@@ -1337,6 +1353,47 @@ func _build_equip_page(page: Panel) -> void:
 	_equip_best_btn.tooltip_text = "各部位自动换上 已拥有 的最佳装备: 主属性 (灵气% + 灵石%) > 突破率 > 离线效率 (id 兜底, 确定性); 浮动提示追加 灵气速率 +N/秒 变化量 (换装后速率-换装前速率, 0 变化省略)。\n仅变更 尚未最佳 的槽位; 无拥有件不受影响; 已最佳 = 0 变更 (幂等), 不受 部位/品质 筛选影响 (全局口径)。\n按钮计数 = 可换上更好拥有件的部位槽位数。"
 	eq_tier_bar.add_child(_equip_best_btn)
 
+	# ---------- M6-3: 词缀背包 抽屉 (DIY 装配 交互区) ----------
+	# 容量行 + 收集行 + 共鸣行 / 一键 最佳装配+分解 全部 / 网格 (每种 词缀 一 格, 品质色+堆叠数,
+	# 点击 选中/取消; 选中 后 点 装备 行 空槽 chip = 装配, 点 已装 chip = 拆卸/换装)
+	var af_panel := PanelContainer.new()
+	af_panel.add_theme_stylebox_override("panel", _card_sb_normal)
+	af_panel.tooltip_text = "词缀背包: 塔怪 掉落 词缀 入包 (同词缀 堆叠, 30 格); 点击 单元格 选中 词缀, 再点 装备行 空槽 chip 装配 / 已装 chip 拆卸 或 换装; 评分 = 装备基础 6 池 + 已装 词缀 6 池 (列表按 评分 提示 增减)。"
+	outer.add_child(af_panel)
+	var af_box := VBoxContainer.new()
+	af_box.add_theme_constant_override("separation", 4)
+	af_panel.add_child(af_box)
+	_af_box_m63 = af_box
+	_m63_bag_hdr = _label("", 13, CYAN)
+	af_box.add_child(_m63_bag_hdr)
+	_m63_seen_hdr = _label("", 13, GOLD)
+	af_box.add_child(_m63_seen_hdr)
+	_m63_res_hdr = _label("", 12, DIM)
+	af_box.add_child(_m63_res_hdr)
+	var af_btn_bar := HBoxContainer.new()
+	af_btn_bar.add_theme_constant_override("separation", 8)
+	af_box.add_child(af_btn_bar)
+	_m63_best_btn = _make_button("一键最佳装配")
+	_m63_best_btn.custom_minimum_size = Vector2(0, 26)
+	_m63_best_btn.tooltip_text = "各装备的空词缀槽自动装入背包内 数值最高 的词缀 (value 降序, 同值按 id 确定性; 词缀不消耗只转移, 每槽至多 1 件)。\n装配后装备评分上升 (基础 6 池 + 已装词缀 6 池); 0 空槽或背包空时 0 变更 (幂等)。"
+	_m63_best_btn.pressed.connect(_on_m63_auto_best)
+	af_btn_bar.add_child(_m63_best_btn)
+	_m63_dec_btn = _make_button("分解全部")
+	_m63_dec_btn.custom_minimum_size = Vector2(0, 26)
+	_m63_dec_btn.tooltip_text = "把背包全部词缀分解成材料 (防背包溢出; 分解后不可恢复, 曾入包记录保留计入 收集 120 成就)。"
+	_m63_dec_btn.pressed.connect(_on_m63_decompose_all)
+	af_btn_bar.add_child(_m63_dec_btn)
+	var af_sp := Control.new()
+	af_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	af_btn_bar.add_child(af_sp)
+	_m63_sel_hdr = _label("", 13, WHITEISH)
+	af_btn_bar.add_child(_m63_sel_hdr)
+	_m63_bag_grid = GridContainer.new()
+	_m63_bag_grid.columns = 6
+	_m63_bag_grid.add_theme_constant_override("h_separation", 4)
+	_m63_bag_grid.add_theme_constant_override("v_separation", 4)
+	af_box.add_child(_m63_bag_grid)
+
 	# 装备列表 (已拥有=穿戴, 未拥有=购买)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1376,6 +1433,18 @@ func _add_equip_row(id: String) -> void:
 	var swap_l := _label("", 12, CYAN)
 	info.add_child(swap_l)
 	_equip_swap[id] = swap_l
+	# M6-3: 词缀槽 chips (3 个空槽 =「+」可点装配, 已装 = 品质色词缀 名 点击 拆卸/换装;
+	# 仅 拥有 该装备 时 启用, 未拥有 灰显; 评分 行 与 chips 同源 刷新)
+	var chips := HBoxContainer.new()
+	chips.add_theme_constant_override("separation", 4)
+	info.add_child(chips)
+	_m63_slot_chips[id] = chips
+	_m63_chips[id] = []  # M6-3: 延迟 构建 (仅 拥有 时 建 3 chip, 避免 140 行 x3 按钮 布局 开销)
+	_m63_ensure_chips(id)
+	var score_l := _label("", 12, GOLD)
+	info.add_child(score_l)
+	_m63_score_labels[id] = score_l
+	_m63_row_keys[id] = ""
 	var btn := _make_button("购买")
 	btn.custom_minimum_size = Vector2(76, 0)
 	btn.pressed.connect(_on_equip_btn.bind(id))
@@ -2105,6 +2174,8 @@ func _refresh() -> void:
 		_apply_card_hl(_equip_row_nodes[id], str(g.equipped.get(str(e["slot"]), "")) == id)
 	# 打磨-22: 装备列表按状态重排 (购买/穿戴/卸下 时状态快照变化才真正重排)
 	_resort_equip()
+	# M6-3: 词缀 UI (chips/背包抽屉/评分; 缓存键 节流, 挂机 恒定 无 每帧 重绘)
+	_refresh_m63_ui()
 	# 打磨-9: tooltip 状态行 (已领悟/已穿戴/已拥有 变化时才重建文本)
 	for id in _skill_row_nodes:
 		var row: Node = _skill_row_nodes[id]
@@ -2919,6 +2990,209 @@ func _on_equip_btn(id: String) -> void:
 
 func _on_unequip(slot: String) -> void:
 	_show_msg(GameData.unequip(slot))
+
+
+# ---------- M6-3: DIY 词缀 交互 (背包 选中 -> 槽位 装配 / 拆卸 / 换装 + 一键 系列) ----------
+
+# 背包 单元格 点击: 选中/取消 选中 (再次 点击 已 选中 格 = 取消)
+func _on_m63_cell(affix_id: String) -> void:
+	_m63_sel = "" if _m63_sel == affix_id else affix_id
+	_refresh_m63_ui()
+
+# 装备 槽位 chip 点击: 空槽+选中 词缀 = 装配 / 已装 = 拆卸 (有 选中 时 = 换装)
+func _on_m63_chip(equip_id: String, pos: int) -> void:
+	var g := GameData
+	var load: Dictionary = g.affix_load.get(equip_id, {})
+	var cur: String = str(load.get(str(pos), ""))
+	var msg: String
+	if cur == "":
+		if _m63_sel == "":
+			_show_msg("先在 词缀背包 点选 一个 词缀 再 点 槽位 装配")
+			return
+		msg = g.affix_equip(equip_id, pos, _m63_sel)
+		if msg == "":
+			_show_msg("装配 成功 (评分 %s)" % g.fmt(g.equip_score(equip_id)))
+	else:
+		if _m63_sel != "" and _m63_sel != cur:
+			msg = g.affix_swap(equip_id, pos, _m63_sel)
+			if msg == "":
+				_show_msg("换装 成功 (评分 %s)" % g.fmt(g.equip_score(equip_id)))
+			else:
+				_show_msg(msg)
+		else:
+			msg = g.affix_unequip(equip_id, pos)
+			if msg == "":
+				_show_msg("拆卸 成功, 词缀 已 回 背包")
+		if msg == "":
+			_m63_sel = ""
+	# 装配/换装/拆卸 后 若 背包 选中 词缀 已 无 库存 则 清除 选中
+	if _m63_sel != "" and int(g.affix_bag.get(_m63_sel, 0)) <= 0:
+		_m63_sel = ""
+	_refresh_m63_ui()
+
+# 一键 最佳 装配 (各 空槽 装 背包 最优 词缀; 复用 GameData.affix_auto_best)
+func _on_m63_auto_best() -> void:
+	var g := GameData
+	var before: int = 0
+	for eid in g.owned_eq:
+		before += g.equipment_slots(str(eid)) - g.affix_slots_used(str(eid))
+	var n: int = g.affix_auto_best()
+	if n > 0:
+		_show_msg("一键 装配 %d 件 词缀" % n)
+		_onekey_float("一键 装配 %d 件 词缀" % n)
+	else:
+		_show_msg("无 空槽 或 背包 空 (已 最佳)" if before == 0 else "背包 无 可装 词缀")
+	_refresh_m63_ui()
+
+# 分解 全部 (背包 -> 材料)
+func _on_m63_decompose_all() -> void:
+	var g := GameData
+	var n: int = g.affix_decompose_all()
+	if n > 0:
+		_show_msg("分解 %d 件 词缀 (曾入包 记录 保留, 计入 收集 成就)" % n)
+		_m63_sel = ""
+	else:
+		_show_msg("背包 空, 无 词缀 可 分解")
+	_refresh_m63_ui()
+
+# M6-3 UI 统一 刷新 (缓存键 节流: 背包内容+选中+装配+拥有 变化 才 重建 网格/chips;
+# 文本行 仅 文本 变化 才 写; 挂机 恒定 无 每帧 重绘)
+func _refresh_m63_ui() -> void:
+	var g := GameData
+	# 背包 容量/收集/共鸣 文本行 (变化才刷)
+	var bag_txt: String = "词缀背包 %d/%d 格" % [g.affix_bag_used(), g.affix_bag_capacity()]
+	if _m63_bag_hdr.text != bag_txt:
+		_m63_bag_hdr.text = bag_txt
+	var seen_txt: String = g.affix_seen_text()
+	if _m63_seen_hdr.text != seen_txt:
+		_m63_seen_hdr.text = seen_txt
+	var res_txt: String = g.resonance_text()
+	if _m63_res_hdr.text != res_txt:
+		_m63_res_hdr.text = res_txt
+	var sel_txt: String
+	if _m63_sel == "":
+		sel_txt = "未选中词缀 (点背包格子 选中 后 点装备槽 装配)"
+	else:
+		var sa: Dictionary = g.affix_by_id.get(_m63_sel, {})
+		sel_txt = "已选中「%s」 %s +%.2f%% (点装备行 空槽=装配 / 已装槽=换装)" % [
+			str(sa.get("name", "")), g.affix_tier_name(int(sa.get("tier", 0))), float(sa.get("value", 0.0))]
+	if _m63_sel_hdr.text != sel_txt:
+		_m63_sel_hdr.text = sel_txt
+	# 背包 网格 (内容键 = 背包 排序 内容 + 选中; 变化才重建 6 列 格子)
+	var bag_key: String = _m63_sel
+	for k in g.affix_bag:
+		bag_key += "|" + str(k) + str(int(g.affix_bag[k]))
+	if bag_key != _m63_bag_key:
+		_m63_bag_key = bag_key
+		_rebuild_m63_bag_grid()
+	# 装备行 chips/评分 (仅 拥有 装备 行 启用; 键 = 装配态+槽数+选中 变化才刷)
+	for eid in _m63_chips:
+		_m63_ensure_chips(str(eid))
+		var key: String = str(int(g.owned_eq.has(str(eid))))
+		for p in g.equipment_slots(str(eid)):
+			key += str((g.affix_load.get(str(eid), {}) as Dictionary).get(str(p), ""))
+		key += "|" + _m63_sel
+		if str(_m63_row_keys.get(str(eid), "")) != key:
+			_m63_row_keys[str(eid)] = key
+			_refresh_m63_equip_row(str(eid))
+
+# 重建 背包 网格 (每 种 词缀 一格; 按 品质降序+id 确定性 排序; 品质色+堆叠数; 选中 金边)
+func _rebuild_m63_bag_grid() -> void:
+	var g := GameData
+	# 清空 旧 格子
+	for c in _m63_bag_grid.get_children():
+		c.queue_free()
+	_m63_bag_cells.clear()
+	var ids: Array = g.affix_bag.keys()
+	ids.sort_custom(func(a, b) -> bool:  # 品质 降序, 同品质 value 降序, 再 id
+		var ta: int = int(g.affix_by_id.get(str(a), {}).get("tier", 0))
+		var tb: int = int(g.affix_by_id.get(str(b), {}).get("tier", 0))
+		if ta != tb:
+			return ta > tb
+		var va: float = float(g.affix_by_id.get(str(a), {}).get("value", 0.0))
+		var vb: float = float(g.affix_by_id.get(str(b), {}).get("value", 0.0))
+		if va != vb:
+			return va > vb
+		return str(a) < str(b))
+	if ids.is_empty():
+		var empty_l := _label("(背包空 — 爬塔 打怪 掉落 词缀 入包)", 12, DIM)
+		empty_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_m63_bag_grid.add_child(empty_l)
+		return
+	for aid in ids:
+		var a: Dictionary = g.affix_by_id.get(str(aid), {})
+		var cnt: int = int(g.affix_bag.get(str(aid), 0))
+		var cell := Button.new()
+		cell.flat = true
+		cell.text = "%s\nx%d" % [str(a.get("name", "")), cnt]
+		cell.add_theme_font_size_override("font_size", 11)
+		cell.add_theme_color_override("font_color", g.affix_color(str(aid)))
+		cell.custom_minimum_size = Vector2(92, 0)
+		cell.clip_text = false
+		cell.tooltip_text = "「%s」 %s · %s\n数值 +%.2f%% (装备 总属性 = 基础 x (1+Σ词缀) 同池 乘算独立项)\n点击 选中/取消; 选中后 点 装备行 槽位 chip 装配" % [
+			str(a.get("name", "")), g.affix_tier_name(int(a.get("tier", 0))), str(a.get("pool_name", "")),
+			float(a.get("value", 0.0))]
+		if _m63_sel == str(aid):
+			var sb := _make_btn_sb_gold()
+			cell.add_theme_stylebox_override("normal", sb)
+		cell.pressed.connect(_on_m63_cell.bind(str(aid)))
+		_m63_bag_grid.add_child(cell)
+		_m63_bag_cells[str(aid)] = cell
+
+# 延迟 构建 词缀槽 chips (仅 拥有 该装备 时 建 3 个; 未拥有 不 建, 避免 140 行 x3 按钮 布局 开销)
+func _m63_ensure_chips(equip_id: String) -> void:
+	var g := GameData
+	if not g.owned_eq.has(str(equip_id)):
+		return
+	if (_m63_chips.get(str(equip_id)) as Array).size() > 0:
+		return
+	var chips_box: HBoxContainer = _m63_slot_chips.get(str(equip_id))
+	if chips_box == null:
+		return
+	var chips_arr: Array = []
+	for _c in g.equipment_slots(str(equip_id)):
+		var cb := _make_button("+")
+		cb.custom_minimum_size = Vector2(0, 22)
+		cb.add_theme_font_size_override("font_size", 12)
+		cb.pressed.connect(_on_m63_chip.bind(str(equip_id), chips_arr.size()))
+		chips_box.add_child(cb)
+		chips_arr.append(cb)
+	_m63_chips[str(equip_id)] = chips_arr
+
+# 单 装备行 chips/评分 刷新 (chips 文本/颜色/禁用态 随 装配态+选中; 评分 = GameData.equip_score)
+func _refresh_m63_equip_row(equip_id: String) -> void:
+	var g := GameData
+	var chips: Array = _m63_chips.get(str(equip_id), [])
+	var owned: bool = g.owned_eq.has(str(equip_id))
+	var load: Dictionary = g.affix_load.get(str(equip_id), {})
+	for i in chips.size():
+		var cb: Button = chips[i]
+		var pos_key := str(i)
+		var cur: String = str(load.get(pos_key, ""))
+		if not owned:
+			cb.text = "·"
+			cb.disabled = true
+			cb.add_theme_color_override("font_color", DIM)
+			cb.tooltip_text = "未拥有 (购买后 可 装配 词缀)"
+			continue
+		cb.disabled = false
+		if cur == "":
+			cb.text = "+"
+			var has_sel: bool = _m63_sel != ""
+			cb.disabled = not has_sel
+			cb.add_theme_color_override("font_color", CYAN if has_sel else DIM)
+			cb.tooltip_text = ("空槽%d: %s" % [i + 1, "点选背包词缀后 装配 (评分 +%s)" % g.fmt(g.affix_equip_preview(str(equip_id), i, _m63_sel))]) if has_sel else ("空槽%d: 点选背包词缀 后 点击 装配" % (i + 1))
+		else:
+			var a: Dictionary = g.affix_by_id.get(cur, {})
+			cb.text = str(a.get("name", ""))
+			cb.add_theme_color_override("font_color", g.affix_color(cur))
+			cb.tooltip_text = "「%s」 %s +%.2f%%\n点击 拆卸 (回背包); 点选 其他词缀 后 点击 = 换装" % [
+				str(a.get("name", "")), g.affix_tier_name(int(a.get("tier", 0))), float(a.get("value", 0.0))]
+	var sl: Label = _m63_score_labels.get(str(equip_id))
+	if sl != null:
+		var sc_txt: String = "评分 %s" % g.fmt(g.equip_score(str(equip_id)))
+		if sl.text != sc_txt:
+			sl.text = sc_txt
 
 
 # 打磨-44: 收集进度一览 点击直达 — 技能→技能页 / 装备→装备页 / 法器→修行页法器区(金边高亮) /

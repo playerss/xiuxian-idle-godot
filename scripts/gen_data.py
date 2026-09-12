@@ -44,6 +44,11 @@ ACHIEVEMENTS = [
     {"id": "endless_1000",     "name": "百步穿云", "desc": "登天梯 登上 1000 层"},
     {"id": "endless_5000",     "name": "问鼎登天", "desc": "登天梯 登上 5000 层"},
     {"id": "first_tower",      "name": "初入塔门", "desc": "首次通过任意塔一层"},
+    # M6-3: DIY 装备成就 (4 项: 首件DIY/传说首获/套装共鸣首触发/词缀集齐)
+    {"id": "diy_first",        "name": "匠心独运", "desc": "DIY 打造首件 3 槽装满的装备"},
+    {"id": "affix_legend",     "name": "传说初现", "desc": "首次获得 传说 词缀"},
+    {"id": "resonance_first",  "name": "套装共鸣", "desc": "首次触发 套装共鸣 (同品质词缀装配满 3 件)"},
+    {"id": "affix_120",        "name": "词缀大全", "desc": "背包集齐 120 种词缀 (收藏向)"},
 ]
 # 境界里程碑 id 与 REALMS 索引的对应 (realm_xxx -> realm_idx)
 ACH_REALM_IDX = {"realm_zhuji": 1, "realm_jindan": 2, "realm_yuanying": 3,

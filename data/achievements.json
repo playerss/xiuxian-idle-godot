@@ -124,6 +124,26 @@
       "id": "first_tower",
       "name": "初入塔门",
       "desc": "首次通过任意塔一层"
+    },
+    {
+      "id": "diy_first",
+      "name": "匠心独运",
+      "desc": "DIY 打造首件 3 槽装满的装备"
+    },
+    {
+      "id": "affix_legend",
+      "name": "传说初现",
+      "desc": "首次获得 传说 词缀"
+    },
+    {
+      "id": "resonance_first",
+      "name": "套装共鸣",
+      "desc": "首次触发 套装共鸣 (同品质词缀装配满 3 件)"
+    },
+    {
+      "id": "affix_120",
+      "name": "词缀大全",
+      "desc": "背包集齐 120 种词缀 (收藏向)"
     }
   ]
 }
