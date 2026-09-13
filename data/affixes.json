@@ -1497,6 +1497,7 @@
     "bag_capacity": 30,
     "slots_per_equip": 3,
     "slot_max": 4,
+    "bag_expand": 10,
     "materials": {
       "decomp_base": 1,
       "decomp_per_tier": 1,

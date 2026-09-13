@@ -491,12 +491,29 @@ func resonance_text() -> String:
 func affix_bag_used() -> int:
 	return affix_bag.size()
 
+# 背包 容量 (打磨-97: 基础 30 + bag_40 成就 解锁 +10 = 40; 成就 派生 态 不 存档,
+# ach_done 由 存档 持久化, 容量 随 读档 恢复 — 旧档 无 bag_40 时 容量 30 原 口径)
 func affix_bag_capacity() -> int:
-	return int(_affix_cfg.get("bag_capacity", 30))
+	var base := int(_affix_cfg.get("bag_capacity", 30))
+	var expand := int(_affix_cfg.get("bag_expand", 10))
+	return base + (expand if ach_done.has("bag_40") else 0)
 
 # 背包 容量 是否 已满
 func affix_bag_full() -> bool:
 	return affix_bag_used() >= affix_bag_capacity()
+
+# 打磨-97: 背包 容量 扩展 提示 (容量 行 tooltip 动态 段; 只读 不 改 状态/存档/统计)
+# 未 解锁 = 还差 N 格 + 解锁 后 容量; 已 解锁 = 容量 已 扩展 30->40
+func bag_expand_tip() -> String:
+	var base := int(_affix_cfg.get("bag_capacity", 30))
+	var expand := int(_affix_cfg.get("bag_expand", 10))
+	var name := str(ach_by_id.get("bag_40", {}).get("name", "百宝囊"))
+	if ach_done.has("bag_40"):
+		return "「%s」已解锁: 词缀背包 容量 +%d (%d -> %d 格)" % [name, expand, base, base + expand]
+	var need := base
+	var left := maxi(need - seen_affixes.size(), 0)
+	return "「%s」未解锁: 词缀背包 曾 入包 满 %d 格 时 解锁 (还差 %d 种); 解锁 后 容量 +%d (%d -> %d 格)" % [
+		name, need, left, expand, base, base + expand]
 
 # 入包 (词缀掉落/分解 回退 用): 堆叠 +n; 背包 满 时 普通品质 自动 入料 (分解, 不占格),
 # 高品质 拒绝 (返回 未入包 计数, 掉落 结算 跳过). 返回 实际 入包 数.
@@ -1364,6 +1381,9 @@ func _ach_met(id: String) -> bool:
 			return affix_resonance_active()
 		"affix_120":
 			return seen_affixes.size() >= affix_ids.size()
+		# 打磨-97: 背包 容量 成就 (曾 入包 满 30 格 -> 容量 +10; seen_affixes 只增不减 口径)
+		"bag_40":
+			return seen_affixes.size() >= int(_affix_cfg.get("bag_capacity", 30))
 		_:
 			if ACH_TOWER_FIXED.has(id):
 				return tower_fixed_floor >= int(ACH_TOWER_FIXED[id])
@@ -1426,6 +1446,10 @@ func ach_progress(id: String) -> String:
 			return "%d/3" % mini(m63_best, 3)
 		"affix_120":
 			return "%d/%d" % [seen_affixes.size(), affix_ids.size()]
+		# 打磨-97: 背包 容量 成就 进度 (曾 入包 种数 / 基础 容量 30 封顶)
+		"bag_40":
+			var bag_need: int = int(_affix_cfg.get("bag_capacity", 30))
+			return "%d/%d" % [mini(seen_affixes.size(), bag_need), bag_need]
 		_:
 			if ACH_TOWER_FIXED.has(id):
 				var need: int = int(ACH_TOWER_FIXED[id])
@@ -1480,6 +1504,10 @@ func ach_progress_ratio(id: String) -> float:
 			return minf(float(m63_best2), 3.0) / 3.0
 		"affix_120":
 			return minf(float(seen_affixes.size()), float(affix_ids.size())) / float(affix_ids.size())
+		# 打磨-97: 背包 容量 成就 进度 (曾 入包 种数 / 基础 容量 30)
+		"bag_40":
+			var bag_need2: int = int(_affix_cfg.get("bag_capacity", 30))
+			return minf(float(seen_affixes.size()), float(bag_need2)) / float(bag_need2)
 		_:
 			if ACH_TOWER_FIXED.has(id):
 				var need: int = int(ACH_TOWER_FIXED[id])

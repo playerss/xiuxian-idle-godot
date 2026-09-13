@@ -878,10 +878,11 @@ func _init() -> void:
 	var non_tower_ach := 0
 	var m63_diy_ids := ["diy_first", "affix_legend", "resonance_first", "affix_120"]
 	for id in g.ach_ids:
-		if not str(id).begins_with("tower_") and not str(id).begins_with("endless_") and str(id) != "first_tower" and str(id) != "dao_zuzi" and not m63_diy_ids.has(str(id)):
+		# 打磨-97: bag_40 (背包容量成就) 同 词缀 派生 态, seen 清零 未 解锁, 一并 排除
+		if not str(id).begins_with("tower_") and not str(id).begins_with("endless_") and str(id) != "first_tower" and str(id) != "dao_zuzi" and str(id) != "bag_40" and not m63_diy_ids.has(str(id)):
 			non_tower_ach += 1
-	check(g.ach_done.size() == non_tower_ach, "飞升前 %d 项 非爬塔/非道祖/非DIY 成就 解锁 (实际 %d)" % [non_tower_ach, g.ach_done.size()])
-	check(g.ach_done.size() == g.ach_ids.size() - 1 - 8 - 4, "飞升前 = 总量 - dao_zuzi - 8 爬塔 - 4 DIY (实际 %d, 总量 %d)" % [g.ach_done.size(), g.ach_ids.size()])
+	check(g.ach_done.size() == non_tower_ach, "飞升前 %d 项 非爬塔/非道祖/非DIY/非背包 成就 解锁 (实际 %d)" % [non_tower_ach, g.ach_done.size()])
+	check(g.ach_done.size() == g.ach_ids.size() - 1 - 8 - 4 - 1, "飞升前 = 总量 - dao_zuzi - 8 爬塔 - 4 DIY - bag_40 (实际 %d, 总量 %d)" % [g.ach_done.size(), g.ach_ids.size()])
 	g.realm_idx = 0
 	g.layer = 1
 	# 成就存档往返: 部分解锁后存/读档
@@ -5344,7 +5345,7 @@ func _init() -> void:
 	check(g.ach_by_id.has("diy_first"), "M6-3 段首 ach_done 已 清 (防 前 段 污染)")
 	# 词缀 4 项 定义 齐全
 	check(g.ach_by_id.has("diy_first") and g.ach_by_id.has("affix_legend") and g.ach_by_id.has("resonance_first") and g.ach_by_id.has("affix_120"), "M6-3 DIY 成就 4 项 定义 齐全")
-	check(g.ach_ids.size() == 29, "M6-3 成就 总量 29 (实际 %d)" % g.ach_ids.size())
+	check(g.ach_ids.size() == 30, "M6-3 成就 总量 30 (打磨-97 含 bag_40, 实际 %d)" % g.ach_ids.size())
 	# 初始 未 触发
 	check(not g.affix_resonance_active(), "M6-3 初始 共鸣 未 触发")
 	check(not g._affix_any_diy_full(), "M6-3 初始 DIY 未 装满")
@@ -5771,6 +5772,117 @@ func _init() -> void:
 	g.equipped.clear()
 	g.ascended = false
 	g.dao_level = 0
+
+
+	# ---------- 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾 入包 满 30 格 -> 容量 30 -> 40; 成就 派生 态 不 存档) ----------
+	# 受控 基准 (防 前序 段 污染: 词缀 态/材料/材料/成就 归零)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.affix_materials = 0
+	g.seen_affixes = []
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ach_done.clear()
+	g.ascended = false
+	g.dao_level = 0
+	# 基础 容量 30 + 扩展 10 数据 配置
+	check(g.affix_bag_capacity() == 30, "打磨-97 未 解锁 容量 30 (实际 %d)" % g.affix_bag_capacity())
+	check(g.affix_bag_full() == false, "打磨-97 空 背包 未满")
+	check(g.bag_expand_tip() == "「百宝囊」未解锁: 词缀背包 曾 入包 满 30 格 时 解锁 (还差 30 种); 解锁 后 容量 +10 (30 -> 40 格)",
+			"打磨-97 未解锁 提示 (实际 %s)" % g.bag_expand_tip())
+	check(not g._ach_met("bag_40"), "打磨-97 初始 bag_40 未 触发")
+	check(g.ach_progress("bag_40") == "0/30", "打磨-97 bag_40 进度 0/30 (实际 %s)" % g.ach_progress("bag_40"))
+	check(absf(g.ach_progress_ratio("bag_40") - 0.0) < 1e-9, "打磨-97 bag_40 比例 0")
+	# 曾 入包 29 种 未满 (第 30 种 触发; 取 非 传说 词缀 防 affix_legend 干扰 断言)
+	var non_leg: Array = []
+	for aid in g.affix_ids:
+		if int(g.affix_by_id[str(aid)].get("tier", 0)) < 4:
+			non_leg.append(str(aid))
+	for i in 29:
+		g.affix_add(str(non_leg[i]), 1)
+	check(g.affix_bag_used() == 29, "打磨-97 入包 29 种 (实际 %d)" % g.affix_bag_used())
+	check(g.affix_bag_capacity() == 30, "打磨-97 29 种 未满 容量 仍 30")
+	check(g.ach_progress("bag_40") == "29/30", "打磨-97 29 种 进度 29/30 (实际 %s)" % g.ach_progress("bag_40"))
+	check(absf(g.ach_progress_ratio("bag_40") - 29.0 / 30.0) < 1e-9, "打磨-97 29 种 比例 29/30")
+	var tip29: String = g.bag_expand_tip()
+	check(tip29 == "「百宝囊」未解锁: 词缀背包 曾 入包 满 30 格 时 解锁 (还差 1 种); 解锁 后 容量 +10 (30 -> 40 格)", "打磨-97 还差 1 提示 (实际 %s)" % tip29)
+	var gotb40: Array[String] = g.check_achievements()
+	check(gotb40.is_empty(), "打磨-97 29 种 未 触发 (实际 %s)" % str(gotb40))
+	check(g.affix_bag_capacity() == 30, "打磨-97 未 触发 容量 30")
+	# 第 30 种 入包 -> 触发 -> 容量 30 -> 40
+	g.affix_add(str(non_leg[29]), 1)
+	check(g.affix_bag_used() == 30, "打磨-97 入包 满 30 格 (实际 %d)" % g.affix_bag_used())
+	var gotb41: Array[String] = g.check_achievements()
+	check(gotb41.has("bag_40"), "打磨-97 满 30 格 触发 bag_40 (实际 %s)" % str(gotb41))
+	check(g.affix_bag_capacity() == 40, "打磨-97 解锁 后 容量 40 (实际 %d)" % g.affix_bag_capacity())
+	check(g.affix_bag_full() == false, "打磨-97 30/40 未满")
+	check(g.bag_expand_tip() == "「百宝囊」已解锁: 词缀背包 容量 +10 (30 -> 40 格)", "打磨-97 已解锁 提示 (实际 %s)" % g.bag_expand_tip())
+	check(g.ach_progress("bag_40") == "已解锁", "打磨-97 已解锁 进度 文案")
+	check(absf(g.ach_progress_ratio("bag_40") - 1.0) < 1e-9, "打磨-97 已解锁 比例 1.0")
+	var gotb42: Array[String] = g.check_achievements()
+	check(gotb42.is_empty(), "打磨-97 bag_40 幂等 (不 重复 解锁)")
+	# 容量 40 后 再 入 10 种 才 满
+	for i in 10:
+		g.affix_add(str(non_leg[30 + i]), 1)
+	check(g.affix_bag_used() == 40, "打磨-97 容量 40 后 再 入 10 种 满 40 (实际 %d)" % g.affix_bag_used())
+	check(g.affix_bag_full(), "打磨-97 40/40 已满")
+	check(g.affix_add(str(non_leg[40]), 1) == 0, "打磨-97 40 满 后 新 词缀 拒绝")
+	check(g.affix_bag_used() == 40, "打磨-97 拒绝 后 背包 不变")
+	# 只读 接口 连读 无 副作用 (容量/提示/进度 恒等)
+	var snapb40: Dictionary = g.stats.duplicate(true)
+	var bagb40: Dictionary = g.affix_bag.duplicate(true)
+	var tipb40: String = g.bag_expand_tip()
+	for _ib40 in 3:
+		check(g.affix_bag_capacity() == 40 and g.bag_expand_tip() == tipb40 and g.ach_progress("bag_40") == "已解锁",
+				"打磨-97 只读 接口 连读 恒定 (iter %d)" % _ib40)
+	check(g.stats == snapb40 and g.affix_bag == bagb40, "打磨-97 只读 无 统计/背包 副作用")
+	# 存档 往返: bag_40 走 ach_done 持久化 (容量 派生 态, 无 独立 存档 字段)
+	g.set_process(true)
+	g.save_game()
+	var cap_before: int = g.affix_bag_capacity()
+	g.load_game()
+	check(g.ach_done.has("bag_40"), "打磨-97 存档 往返 bag_40 (ach_done 持久化)")
+	check(g.affix_bag_capacity() == cap_before and g.affix_bag_capacity() == 40, "打磨-97 读档 后 容量 40 恢复 (实际 %d)" % g.affix_bag_capacity())
+	g.set_process(false)
+	# 旧档 兼容: 无 bag_40 的 旧 成就 档 -> 容量 30 原 口径
+	g.save_game()
+	var f97 := FileAccess.open(g.SAVE_PATH, FileAccess.READ)
+	var sv97: Dictionary = {}
+	if f97 != null:
+		var pv97: Variant = JSON.parse_string(f97.get_as_text())
+		f97.close()
+		if typeof(pv97) == TYPE_DICTIONARY:
+			sv97 = pv97
+	var ach_old: Array = sv97.get("ach_done", []) as Array
+	if ach_old.has("bag_40"):
+		ach_old.erase("bag_40")
+	sv97["ach_done"] = ach_old
+	var fw97 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	fw97.store_string(JSON.stringify(sv97))
+	fw97.close()
+	g.load_game()
+	check(not g.ach_done.has("bag_40"), "打磨-97 旧档 无 bag_40")
+	check(g.affix_bag_capacity() == 30, "打磨-97 旧档 容量 30 原 口径 (实际 %d)" % g.affix_bag_capacity())
+	# 无档 (全新): 容量 30 基础
+	var sp97: String = g.SAVE_PATH
+	var fd97 := FileAccess.open(sp97, FileAccess.READ)
+	if fd97 != null:
+		fd97.close()
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(sp97))
+	g.load_game()
+	check(g.affix_bag_capacity() == 30, "打磨-97 全新档 容量 30 (实际 %d)" % g.affix_bag_capacity())
+	# 收尾: 归零 落盘 干净 档 (bag_40 不 解锁, 容量 30; 防 污染 后续 进程)
+	g.seen_affixes = []
+	g.ach_done.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.affix_materials = 0
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.set_process(true)
+	g.save_game()
 
 	# ---------- 汇报 ----------
 	print("")

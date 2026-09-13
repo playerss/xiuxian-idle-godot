@@ -111,6 +111,8 @@ func _ready() -> void:
 	g0.affix_load = {}
 	g0.slot_upgrades = {}
 	g0.seen_affixes = []
+	g0.affix_materials = 0  # 打磨-96: 防御性 重置 材料 (残留 会 让 兑换 面板 断言 偏多)
+	# 打磨-97: bag_40 成就 为 派生 态 (ach_done 已 在上方 clear), 容量 随 之 回 30; 显式 注释 口径
 	g0.set_process(false)
 	var script: GDScript = load("res://scripts/main.gd")
 	ui = Control.new()
@@ -177,6 +179,7 @@ func _ready() -> void:
 	await _assert_auto_tower_feedback()  # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行
 
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
+	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
 	_finish()
 
 
@@ -3340,6 +3343,68 @@ func _assert_auto_badge_jump() -> void:
 			"打磨-74 收尾 无 资源/统计 副作用")
 	await get_tree().process_frame
 
+
+# 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾 入包 满 30 格 -> 容量 30 -> 40; 容量 行 tooltip 动态 段)
+func _assert_bag_expand() -> void:
+	var g := GameData
+	ui._tab.current_tab = 2
+	g.set_process(false)
+	# 受控 基准: 干净 词缀 态 (M6-3 段 收尾 已 归零, 此处 再 防 断)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.seen_affixes = []
+	g.ach_done.clear()
+	ui._m63_sel = ""
+	ui._m63_bag_tip = ""
+	ui._refresh_m63_ui()
+	# 初始 30 格 + tooltip 未 解锁 口径
+	check(str(ui._m63_bag_hdr.text) == "词缀背包 0/30 格", "打磨-97 容量 行 0/30 (实际 %s)" % str(ui._m63_bag_hdr.text))
+	check(str(ui._m63_bag_hdr.tooltip_text) == g.bag_expand_tip(), "打磨-97 tooltip = 接口 (实际 %s)" % str(ui._m63_bag_hdr.tooltip_text))
+	check(str(ui._m63_bag_hdr.tooltip_text).contains("还差 30 种"), "打磨-97 tooltip 还差 30 种 (实际 %s)" % str(ui._m63_bag_hdr.tooltip_text))
+	# 入包 29 种 -> 未满, 容量 30, tooltip 还差 1
+	for i in 29:
+		g.affix_add(str(g.affix_ids[i]), 1)
+	ui._refresh_m63_ui()
+	check(str(ui._m63_bag_hdr.text) == "词缀背包 29/30 格", "打磨-97 容量 行 29/30 (实际 %s)" % str(ui._m63_bag_hdr.text))
+	check(g.affix_bag_capacity() == 30, "打磨-97 29 种 容量 仍 30 (实际 %d)" % g.affix_bag_capacity())
+	check(str(ui._m63_bag_hdr.tooltip_text).contains("还差 1 种"), "打磨-97 tooltip 还差 1 种 (实际 %s)" % str(ui._m63_bag_hdr.tooltip_text))
+	# 第 30 种 -> 触发 bag_40 -> 容量 40 + 成就 解锁 (成就 浮动 同 打磨-17 口径)
+	g.affix_add(str(g.affix_ids[29]), 1)
+	g.check_achievements()
+	ui._refresh_m63_ui()
+	check(str(ui._m63_bag_hdr.text) == "词缀背包 30/40 格", "打磨-97 容量 行 30/40 (实际 %s)" % str(ui._m63_bag_hdr.text))
+	check(g.affix_bag_capacity() == 40, "打磨-97 解锁 后 容量 40 (实际 %d)" % g.affix_bag_capacity())
+	check(g.ach_done.has("bag_40"), "打磨-97 bag_40 解锁 (ach_done)")
+	check(str(ui._m63_bag_hdr.tooltip_text) == "「百宝囊」已解锁: 词缀背包 容量 +10 (30 -> 40 格)", "打磨-97 tooltip 已 解锁 (实际 %s)" % str(ui._m63_bag_hdr.tooltip_text))
+	# 成就 页 展示: bag_40 行 金框 + 进度 0/30 -> 已解锁 (动态 接口 口径)
+	check(g.ach_progress("bag_40") == "已解锁", "打磨-97 成就 进度 已解锁")
+	check(absf(g.ach_progress_ratio("bag_40") - 1.0) < 1e-9, "打磨-97 比例 1.0")
+	# 40 满 拒绝 (容量 40 生效 于 入包 路径)
+	for i in 10:
+		g.affix_add(str(g.affix_ids[30 + i]), 1)
+	check(g.affix_bag_used() == 40 and g.affix_bag_full(), "打磨-97 40/40 已满 (实际 %d)" % g.affix_bag_used())
+	check(g.affix_add(str(g.affix_ids[40]), 1) == 0, "打磨-97 40 满 后 新 词缀 拒绝")
+	# 节流: 同 态 刷新 tooltip 不 重写 (缓存 键 稳定)
+	var tip_same: String = str(ui._m63_bag_hdr.tooltip_text)
+	ui._refresh_m63_ui()
+	check(str(ui._m63_bag_hdr.tooltip_text) == tip_same and ui._m63_bag_tip == tip_same, "打磨-97 同 态 节流 稳定")
+	# 收尾: 干净 基准 (bag_40 解锁 清掉, 容量 回 30; 防 污染 后续 段 与 落盘)
+	g.seen_affixes = []
+	g.ach_done.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.affix_materials = 0
+	ui._m63_sel = ""
+	ui._m63_bag_tip = ""
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._m63_bag_hdr.text) == "词缀背包 0/30 格", "打磨-97 收尾 容量 回 30 (实际 %s)" % str(ui._m63_bag_hdr.text))
 
 func _finish() -> void:
 	print("")

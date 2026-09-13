@@ -207,6 +207,7 @@ var _m63_chips: Dictionary = {}          # 装备 id -> [Button x 槽数]
 var _m63_score_labels: Dictionary = {}   # 装备 id -> 评分 Label
 var _m63_row_keys: Dictionary = {}       # 装备 id -> 缓存 键 (词缀 装配/拥有/选中 变化 才 刷 chips)
 var _m63_bag_key := ""                   # 背包 抽屉 缓存 键 (内容+选中 变化 才 重建 网格)
+var _m63_bag_tip := ""                   # 打磨-97: 容量 行 tooltip 动态 段 缓存 (bag_40 解锁态/还差数 变化 才 刷)
 var _m63_sel_hdr: Label                  # M6-3: 当前选中 词缀 提示 行
 var _af_box_m63: VBoxContainer           # M6-3: 词缀背包 抽屉 VBox
 # ---------- 打磨-96: 词缀 材料 兑换 面板 (M6 经济闭环: 分解 产出 材料 / 材料 兑换 特定 词缀 保底 获取) ----------
@@ -3310,6 +3311,11 @@ func _refresh_m63_ui() -> void:
 	var bag_txt: String = "词缀背包 %d/%d 格" % [g.affix_bag_used(), g.affix_bag_capacity()]
 	if _m63_bag_hdr.text != bag_txt:
 		_m63_bag_hdr.text = bag_txt
+	# 打磨-97: 背包 容量 行 tooltip 动态 段 (bag_40 成就 解锁 容量 30->40; 变化 才 刷, 挂机 恒定 无 每帧 重建)
+	var bag_tip: String = g.bag_expand_tip()
+	if _m63_bag_tip != bag_tip:
+		_m63_bag_tip = bag_tip
+		_m63_bag_hdr.tooltip_text = bag_tip
 	var seen_txt: String = g.affix_seen_text()
 	if _m63_seen_hdr.text != seen_txt:
 		_m63_seen_hdr.text = seen_txt

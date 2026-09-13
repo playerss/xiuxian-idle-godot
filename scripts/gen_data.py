@@ -48,7 +48,9 @@ ACHIEVEMENTS = [
     {"id": "diy_first",        "name": "匠心独运", "desc": "DIY 打造首件 3 槽装满的装备"},
     {"id": "affix_legend",     "name": "传说初现", "desc": "首次获得 传说 词缀"},
     {"id": "resonance_first",  "name": "套装共鸣", "desc": "首次触发 套装共鸣 (同品质词缀装配满 3 件)"},
-    {"id": "affix_120",        "name": "词缀大全", "desc": "背包集齐 120 种词缀 (收藏向)"},
+    {"id": "affix_120",      "name": "词缀大全", "desc": "背包集齐 120 种词缀 (收藏向)"},
+    # M6-3: bag capacity achievement unlock (Polish-97: bag has once held 30 different affixes -> capacity 30 -> 30+10=40 slots)
+    {"id": "bag_40",         "name": "百宝囊",   "desc": "词缀背包曾入包满 30 格 (capacity 30 -> 40)"},
 ]
 # 境界里程碑 id 与 REALMS 索引的对应 (realm_xxx -> realm_idx)
 ACH_REALM_IDX = {"realm_zhuji": 1, "realm_jindan": 2, "realm_yuanying": 3,
@@ -484,7 +486,8 @@ AFFIX_DROP_SOURCES = {
     "milestone": {"chance": 1.0,  "count_min": 1, "count_max": 2, "bonus_buckets": 14},
 }
 # M6-2 消费 的 装配/背包 配置 (数据驱动; 旧档 兼容 默认值 与 此 一致)
-AFFIX_BAG_CAPACITY = 30      # 背包 容量 (格, 可 成就 解锁 +10)
+AFFIX_BAG_CAPACITY = 30      # 背包 容量 (格, 基础值)
+AFFIX_BAG_EXPAND = 10        # 打磨-97: bag_40 成就 解锁 容量 +10 (30 -> 40; 成就 派生 态 不 存档)
 AFFIX_SLOTS_PER_EQUIP = 3    # 每件 装备 3 词缀 槽
 AFFIX_SLOT_MAX = 4           # 道祖期 强化 上限 4 槽
 # 打磨-96: 词缀 材料 系统 (M6 经济闭环: 分解 产出 材料 / 材料 兑换 特定 词缀 保底 获取 /
@@ -691,7 +694,7 @@ def main():
     assert src["elite"]["bonus_buckets"] > src["normal"]["bonus_buckets"] and \
         src["boss"]["bonus_buckets"] > src["elite"]["bonus_buckets"], "桶位 上移 须 普通<精英<Boss"
     # 装配/背包 配置
-    assert AFFIX_BAG_CAPACITY == 30 and AFFIX_SLOTS_PER_EQUIP == 3 and AFFIX_SLOT_MAX == 4, "背包 30 格 / 3 槽 / 上限 4 槽 口径"
+    assert AFFIX_BAG_CAPACITY == 30 and AFFIX_BAG_EXPAND == 10 and AFFIX_SLOTS_PER_EQUIP == 3 and AFFIX_SLOT_MAX == 4, "背包 30 格 (+10 扩展) / 3 槽 / 上限 4 槽 口径"
     # 打磨-96: 材料 系统 配置 口径 (分解 产出 递增 / 兑换 成本 递增 且 分解回买 恒亏 / 槽位 升级 成本)
     mat_cfg = {
         "decomp_base": AFFIX_DECOMP_BASE, "decomp_per_tier": AFFIX_DECOMP_PER_TIER,
@@ -740,6 +743,7 @@ def main():
             "config": {"bag_capacity": AFFIX_BAG_CAPACITY,
                        "slots_per_equip": AFFIX_SLOTS_PER_EQUIP,
                        "slot_max": AFFIX_SLOT_MAX,
+                       "bag_expand": AFFIX_BAG_EXPAND,
                        "materials": mat_cfg},
             "tier_names": AFFIX_TIERS, "tier_mult": AFFIX_TIER_MULT,
             "tier_color": AFFIX_TIER_COLOR,
@@ -766,6 +770,7 @@ def main():
         print(f"  {a['id']:20s} {a['name']:10s} {a['pool_name']}/{a['tier_name']} +{a['value']*100:.1f}%")
     print(f"  掉落桶0 = {drop['buckets'][0]}  桶19 = {drop['buckets'][19]}")
     print(f"achievements: {len(achievements)}")
+    print(f"bag config: base {AFFIX_BAG_CAPACITY} + expand {AFFIX_BAG_EXPAND} (bag_40 成就)")
     print("\n--- 技能样例 ---")
     for s in skills[:3] + [x for x in skills if x["type"] == "active"][:2]:
         print(f"  {s['id']:14s} {s['name']:10s} {s['tier_name']} {s['type']:8s} {s['desc']}")
