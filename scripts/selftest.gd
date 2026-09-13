@@ -5492,6 +5492,32 @@ func _init() -> void:
 	g.set_process(true)
 	g.save_game()
 
+	# ---------- 打磨-94: 塔战斗 词缀掉落 展示 文案 (affix_drop_text 只读 接口) ----------
+	# 空 数组 = 空串
+	check(g.affix_drop_text([]) == "", "打磨-94 空 数组 = 空串")
+	# 单 词缀 = 「名」 (数据 名 已含 品质后缀, 不重复 品质)
+	var d1: Array = ["af_qi_rate_0_0"]
+	var n1: Dictionary = g.affix_by_id.get("af_qi_rate_0_0", {})
+	check(g.affix_drop_text(d1) == "「%s」" % str(n1.get("name", "")), "打磨-94 单 词缀 = 「名」 (实际 %s)" % g.affix_drop_text(d1))
+	# 多 词缀 = 数据 名 顿号 拼接, 顺序 = 掉落 顺序
+	var d3: Array = ["af_qi_rate_0_0", "af_stone_rate_1_1", "af_def_2_2"]
+	var exp3 := "「%s」、" % str(g.affix_by_id["af_qi_rate_0_0"].get("name", ""))
+	exp3 += "「%s」、" % str(g.affix_by_id["af_stone_rate_1_1"].get("name", ""))
+	exp3 += "「%s」" % str(g.affix_by_id["af_def_2_2"].get("name", ""))
+	check(g.affix_drop_text(d3) == exp3, "打磨-94 多 词缀 顿号 拼接 顺序 (实际 %s / 期望 %s)" % [g.affix_drop_text(d3), exp3])
+	# 未知 id 原样 保留 防 脏数据 崩溃
+	var dun: Array = ["not_exist_id", "af_qi_rate_0_0"]
+	check(g.affix_drop_text(dun) == "「not_exist_id」、" + "「%s」" % str(n1.get("name", "")),
+		"打磨-94 未知 id 原样 保留 (实际 %s)" % g.affix_drop_text(dun))
+	# 只读 接口 连读 无 副作用 (资源/统计/背包 稳定)
+	var snap94: Dictionary = g.stats.duplicate(true)
+	var sto94: float = g.stones
+	var bag94: Dictionary = g.affix_bag.duplicate(true)
+	for _i94 in 3:
+		g.affix_drop_text(d3)
+		check(g.stats == snap94 and absf(g.stones - sto94) < 1e-9 and g.affix_bag == bag94,
+			"打磨-94 只读 接口 连读 无 副作用 (iter %d)" % _i94)
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

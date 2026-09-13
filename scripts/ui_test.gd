@@ -167,6 +167,7 @@ func _ready() -> void:
 	await _assert_ach_nofilter()
 	await _assert_tower_clear()  # M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 称号 徽标
 	await _assert_poison_debuff()  # 打磨-93: 剧毒 debuff 顶栏徽标 + 触发浮动
+	await _assert_tower_affix_drop()  # 打磨-94: 塔战斗 词缀掉落 底部消息 展示
 
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	_finish()
@@ -4497,6 +4498,98 @@ func _assert_poison_debuff() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g.poison_battles == 0 and g.poison_events.is_empty() and ui._poison_float_count > 0, "打磨-93 收尾 干净 基准 (徽标/事件 清零)")
+
+
+# 打磨-94: 塔战斗 词缀掉落 底部消息 展示 断言 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 词缀 段:
+# 胜 含 词缀 掉落 时 底部 胜利消息 追加 "(词缀: 「名」、…)"; 败/无掉落 不追加; 驱动 真实 处理器
+# _on_tower_challenge (roll=-1 走 randf, 但 boss 层 100% 必掉 使 掉落 ≥1 确定, 胜负 由 玩家 战力 控制 确定).
+# 基准: 镇妖塔 第 50 层 = 小 Boss (boss_type=small, 掉落 必掉 1~3 件, 数据 锚定 于 tower_monsters.json),
+# 弱 玩家 (境界0 atk 2.0) 恒败 [怪 atk ~290 阈值 246 > 2.0] 无 掉落 → 消息 无 词缀 段;
+# 强 玩家 (ascended 道祖 dao8 有效 atk ~3.4e25) 恒胜 → 消息 含 词缀 段. 冻结 g._process 防 挂机/自动 爬塔 竞争.
+# 收尾 恢复 干净 基准 + 词缀 背包/收集 清零 防 污染 后续 M6-3 段 初始 0/0 断言.
+func _assert_tower_affix_drop() -> void:
+	var g := GameData
+	# 干净 基准 (塔 归零 + 境界0 层1 无 加成 + 词缀 背包 清零 + 冻结 挂机/自动 爬塔)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.auto_tower = false
+	g.set_process(false)
+	ui._tab.current_tab = 4
+	ui._refresh()
+	await get_tree().process_frame
+	# 数据 锚定: 第 50 层 小 Boss (必掉) + 强 玩家 恒胜 / 弱 玩家 恒败
+	var rec50: Dictionary = g.get_fixed_floor(50)
+	var mon50: Dictionary = g.tower_monster_stats(rec50)
+	check(str(mon50.get("boss_type", "")) == "small", "打磨-94 第 50 层 = 小 Boss (数据 锚定, 实际 %s)" % str(mon50.get("boss_type", "")))
+	g.tower_fixed_floor = 49  # 待挑战 层 = 50
+	# 弱 玩家 (atk 2.0): 恒败 (阈值 246 > 2.0) → 无 掉落 → 败 消息 不 含 词缀 段
+	check(g.player_atk_effective() < float(mon50["atk"]) * g.TOWER_WIN_RATIO, "打磨-94 弱 玩家 第 50 层 判定=败 (数据 锚定)")
+	ui._on_tower_challenge("fixed")
+	var msg_loss: String = str(ui._msg_label.text)
+	check(msg_loss.begins_with("✖ 镇妖塔 第 50 层"), "打磨-94 败 局 消息 口径 (实际 %s)" % msg_loss.left(24))
+	check(msg_loss.find("词缀") < 0, "打磨-94 败 局 无 词缀 段 (败 无 掉落, 实际 %s)" % msg_loss)
+	# 强 玩家 (ascended 道祖): 恒胜 boss → 掉落 必掉 1~3 件 → 胜 消息 含 词缀 段
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_fixed_floor = 49
+	check(g.player_atk_effective() >= float(mon50["atk"]) * g.TOWER_WIN_RATIO, "打磨-94 强 玩家 第 50 层 判定=胜 (数据 锚定)")
+	var bag_before: int = g.affix_bag_used()
+	ui._on_tower_challenge("fixed")
+	var msg_win: String = str(ui._msg_label.text)
+	check(msg_win.begins_with("✔ 镇妖塔 第 50 层"), "打磨-94 胜 局 消息 口径 (实际 %s)" % msg_win.left(24))
+	check(msg_win.find("胜利!") >= 0, "打磨-94 胜 局 消息 含 胜利 (实际 %s)" % msg_win)
+	check(msg_win.find("(词缀: ") >= 0, "打磨-94 胜 局 boss 必掉 → 消息 含 词缀 段 (实际 %s)" % msg_win)
+	check(msg_win.find("」") >= 0, "打磨-94 词缀 段 含 词缀 名 (引号 包裹, 实际 %s)" % msg_win)
+	check(g.affix_bag_used() > bag_before, "打磨-94 词缀 入包 (背包 格数 上升, %d->%d)" % [bag_before, g.affix_bag_used()])
+	check(int(g.stats.get("tower_win", 0.0)) >= 1, "打磨-94 胜 局 统计 tower_win 计数")
+	# 收尾: 恢复 干净 基准 + 词缀 清零 (防 污染 M6-3 段 初始 0/0 断言)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g.affix_bag_used() == 0 and g.affix_bag.is_empty(), "打磨-94 收尾 词缀 背包 清零 (防 污染)")
 
 
 # M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;

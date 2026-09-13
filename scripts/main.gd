@@ -1617,6 +1617,11 @@ func _on_tower_challenge(tid: String) -> void:
 			extra = " (含每日首胜 +%s)" % g.fmt(float(r["daily_bonus"]))
 		if float(r.get("clear_reward_stone", 0.0)) > 0.0:
 			extra += g.tower_clear_reward_text(float(r["clear_reward_stone"]))
+		# 打磨-94: 词缀 掉落 展示 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 词缀 段:
+		# 词缀 静默 入包 后 由 本 消息 告知 掉 了 什么; 0 掉落 不追加; 底部消息 口径 与 灵石/每日首胜/通关大奖 并存)
+		var adrops: Array = r.get("affix_drops", [])
+		if adrops.size() > 0:
+			extra += " (词缀: %s)" % g.affix_drop_text(adrops)
 		_show_msg("✔ %s 第 %d 层「%s」胜利! 灵石 +%s%s" % [
 			tname, int(r["floor"]), str(r["monster"]), g.fmt(float(r["reward_stone"])), extra])
 	else:

@@ -2145,6 +2145,19 @@ func auto_tower_next_tip() -> String:
 		("可胜" if bool(p["endless_win"]) else "战力不足"), tower_endless_best])
 	return "\n".join(lines)
 
+# 打磨-94: 塔战斗 词缀掉落 展示 文案 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 缺 词缀 段:
+# 词缀 入包 原本 静默 无反馈, 玩家 不知 赢了 掉 了什么; 供 底部消息 追加 / 浮动 提示 复用).
+# 格式 "「名·品质」+「名·品质」…" (数据 名 已含 品质后缀 如 「聚灵·普通」, 此处 只包引号 不重复 品质,
+# 展示 顺序 = 掉落 顺序; 未知 id 原样 保留 防 脏数据 崩溃); 空 数组=空串. 只读 无 状态/存档/统计 副作用.
+func affix_drop_text(ids: Array) -> String:
+	if ids.is_empty():
+		return ""
+	var parts: Array[String] = []
+	for aid in ids:
+		var a: Dictionary = affix_by_id.get(str(aid), {})
+		parts.append("「%s」" % (str(a.get("name", str(aid))) if not a.is_empty() else str(aid)))
+	return "、".join(parts)
+
 # M5-4: 镇妖塔 通关 一次性 大奖 文案 (首通 1000 层 Boss 触发; 灵石 大奖 100 万 + 永久 atk/def +15%;
 # 称号 与 成就 tower_clear 由 check_achievements 判定, 此处 只 给 灵石 大奖 文案; 0 发放=空串)
 func tower_clear_reward_text(stone: float) -> String:
