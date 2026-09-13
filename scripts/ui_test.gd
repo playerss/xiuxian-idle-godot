@@ -96,6 +96,7 @@ func _ready() -> void:
 	g0.tower_daily_bonus_stones = 0.0
 	g0.tower_clear_reward_got = false
 	g0.poison_battles = 0
+	g0.poison_events.clear()  # 打磨-93: 防御性 清空 剧毒 事件 队列 (autoload 启动 load 残留 防 首帧 误弹)
 	g0.auto_tower = false
 	# M6-3: 防御性 重置 DIY 词缀 状态 (autoload 启动 load_game 读 残留档, 词缀 背包/装配/收集 可能 非空;
 	# 残留 会 让 成就 检查 触发 DIY 成就 泄漏 [affix_legend/affix_120/diy_first/resonance_first],
@@ -165,6 +166,8 @@ func _ready() -> void:
 	await _assert_goalbar_jump()
 	await _assert_ach_nofilter()
 	await _assert_tower_clear()  # M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 称号 徽标
+	await _assert_poison_debuff()  # 打磨-93: 剧毒 debuff 顶栏徽标 + 触发浮动
+
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	_finish()
 
@@ -4416,6 +4419,84 @@ func _assert_tower_clear() -> void:
 	await get_tree().process_frame
 	check(not badge.visible and str(badge.text) == "", "M5-4 收尾 未通关 徽标 隐藏 (实际 visible=%s)" % str(badge.visible))
 	check(g.tower_clear_title() == "", "M5-4 收尾 称号 空串")
+
+
+# 打磨-93: 剧毒 debuff 顶栏徽标 + 触发浮动 断言 (徽标 显隐/文本/tooltip/点击 直达 爬塔页+状态行紫边高亮+无副作用;
+# 触发 浮动: 手动 推 poison 事件 后 _refresh 消费 弹 紫色浮动 [计数/文案/位置]; 收尾 恢复 干净 基准)
+func _assert_poison_debuff() -> void:
+	var g := GameData
+	var badge: Button = ui._poison_badge
+	var fl: Label = ui._poison_float_label
+	var stats_b: Dictionary = g.stats.duplicate(true)
+	# 节点/初始 隐藏 (基准 无 debuff)
+	check(badge != null, "打磨-93 顶栏 剧毒 徽标 节点 存在")
+	check(badge.visible == false and str(badge.text) == "", "打磨-93 初始 无 debuff 徽标 隐藏 (实际 visible=%s)" % str(badge.visible))
+	check(fl != null and str(fl.text) == "" and ui._poison_float_count == 0, "打磨-93 初始 无 剧毒浮动 文案/计数=0")
+	# 手动 置 debuff (读档 恢复 同 路径: _refresh 场数 变化才刷) + _refresh 同步
+	g.poison_battles = 2
+	ui._refresh()
+	check(badge.visible and str(badge.text) == "剧毒 2", "打磨-93 徽标 显示 剧毒 2 (实际 %s)" % str(badge.text))
+	check(badge.tooltip_text.contains("ATK -15%"), "打磨-93 徽标 tooltip 含 口径 (实际 %s)" % str(badge.tooltip_text))
+	# 只读 连刷 节流 稳定 (同 场数 不 重写 文本)
+	var txt_b: String = str(badge.text)
+	ui._refresh()
+	check(str(badge.text) == txt_b, "打磨-93 同 场数 徽标 节流 稳定")
+	# 点击 直达 爬塔页 + 状态行 紫边 高亮 (headless 不 跑 tween, 手动 驱动 恢复 断言 终态;
+	# 无 副作用 锚定 资源/塔 状态 [stats 含 play_sec 挂机 累积 不锚定, 同 M5-3 selftest 口径])
+	var sto93c: float = g.stones
+	var fl93c: int = g.tower_fixed_floor
+	var tw93c: int = int(g.stats.get("tower_win", 0.0))
+	var pb93c: int = g.poison_battles
+	badge.pressed.emit()
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 4, "打磨-93 点击 切 爬塔页 (tab=4, 实际 %d)" % ui._tab.current_tab)
+	var psb: StyleBox = ui._tw_status_panel.get_theme_stylebox("panel")
+	check(psb != null and psb.border_width_left == 2, "打磨-93 点击 后 状态行 紫边 高亮 (边框宽=%d)" % (psb.border_width_left if psb != null else -1))
+	check(psb != null and psb.border_color == Color(0.75, 0.55, 1.0), "打磨-93 高亮 边框色=紫 (实际 %s)" % str(psb.border_color if psb != null else "null"))
+	# 恢复 终态 (手动 回调; headless 不 依赖 tween 自然 跑完, 同 M5-4 卡片 高亮 断言 口径)
+	ui._restore_poison_status()
+	var psb2: StyleBox = ui._tw_status_panel.get_theme_stylebox("panel")
+	check(psb2 != null and psb2.border_width_left == 0, "打磨-93 恢复 后 状态行 无边框 (边框宽=%d)" % (psb2.border_width_left if psb2 != null else -1))
+	# 无 资源/统计 副作用 (点击 导航 不改 存档)
+	# 无 副作用: 塔 层/胜利 统计/debuff 场数 不变 (灵石 挂机 累积 不 锚定, 同 M5-3 口径)
+	check(g.tower_fixed_floor == fl93c and int(g.stats.get("tower_win", 0.0)) == tw93c and g.poison_battles == pb93c,
+			"打磨-93 点击 无 塔/统计 副作用 (实际 层=%d 胜=%d 场=%d)" % [g.tower_fixed_floor, tw93c, g.poison_battles])
+	var _bisect_skip: bool = false
+	# 触发 浮动: 手动 推 2 个 事件 (new + refresh) 后 _refresh 消费 (计数+2, 文案=末条)
+	g.poison_battles = 1
+	var c0: int = ui._poison_float_count
+	g.poison_events.append("朽地·鹰|new")
+	g.poison_events.append("震雷·蜈蚣|refresh")
+	ui._refresh()
+	check(ui._poison_float_count == c0 + 2, "打磨-93 剧毒浮动 计数+2 (期望 %d, 实际 %d)" % [c0 + 2, ui._poison_float_count])
+	check(str(fl.text) == "☠ 剧毒 刷新: 「震雷·蜈蚣」 攻 -15% 持续 2 场", "打磨-93 浮动 文案=末条 refresh (实际 %s)" % str(fl.text))
+	check(absf(fl.position.y + 100.0) < 0.5, "打磨-93 浮动 位置 复位 y≈-100 (实际 %.2f)" % fl.position.y)
+	check(fl.modulate.a > 0.9, "打磨-93 浮动 可见 (alpha=%.2f)" % fl.modulate.a)
+	check(g.poison_events.is_empty(), "打磨-93 _refresh 消费 后 事件 队列 清空")
+	# 空 事件 不 弹 (防御)
+	var c1: int = ui._poison_float_count
+	g.poison_events.append("X|new")
+	g.poison_events.append("")
+	ui._refresh()
+	check(ui._poison_float_count == c1 + 1, "打磨-93 空 事件 串 不 弹 计数 只 +1 (实际 %d)" % ui._poison_float_count)
+	# 场数 归 0 徽标 隐藏 文本 清空
+	g.poison_battles = 0
+	ui._refresh()
+	check(badge.visible == false and str(badge.text) == "", "打磨-93 场数 归0 徽标 隐藏 (实际 visible=%s)" % str(badge.visible))
+	# 收尾: 恢复 干净 基准 + 切回 成就页 (与 _assert_tower_clear 收尾 同口径 防 后续 段 污染)
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.stones = 0.0
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g.poison_battles == 0 and g.poison_events.is_empty() and ui._poison_float_count > 0, "打磨-93 收尾 干净 基准 (徽标/事件 清零)")
 
 
 # M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;

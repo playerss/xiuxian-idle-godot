@@ -116,6 +116,12 @@ var _auto_badge_sb_hover: StyleBoxFlat  # 打磨-90: 自动 徽标 hover 样式 
 var _idle_badge: Button            # 打磨-90: 顶栏 一键挂机 状态徽标 ("挂机", 4 自动开关 全开 才 显示, 部分开/全关 隐藏; flat Button 可点击热区=切修行页+一键挂机按钮金边高亮)
 var _clear_badge: Button          # M5-4: 镇妖塔 通关 称号徽标 (通关后 恒显 "镇妖塔·通关者", 点击 直达 爬塔页)
 var _clear_badge_on := false      # M5-4: 已刷过的 通关态 缓存 (变化才刷 显隐)
+var _poison_badge: Button         # 打磨-93: 顶栏 剧毒 debuff 状态徽标 (紫色圆角 "剧毒 N", poison_battles>0 显示; 点击 直达 爬塔页)
+var _poison_badge_n := -1         # 打磨-93: 已刷过的 剧毒 剩余场数 缓存 (-1=未应用 首帧必刷, 0=无 隐藏)
+var _poison_float_label: Label    # 打磨-93: 剧毒 触发/刷新 浮动提示 (顶层 居中, 紫色)
+var _poison_float_tween: Tween
+var _poison_float_count := 0      # 打磨-93: 剧毒浮动提示次数 (自测断言用)
+var _poison_last_text := ""       # 打磨-93: 最近一次 剧毒浮动 文案 (自测断言用)
 var _idle_badge_on := false        # 打磨-90: 已刷过的 全开 态 缓存 (变化才刷 显隐; 与 按钮 全开态 同口径 auto_all_on)
 var _idle_btn_hi_tween: Tween      # 打磨-90: 一键挂机按钮 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
 var _idle_btn_sb_rest: StyleBoxFlat  # 打磨-90: 一键挂机按钮 构建时 normal 样式缓存 (高亮后 恢复 用)
@@ -145,6 +151,8 @@ var _tw_pwr_tips: Dictionary = {}    # 塔 id -> 战力对比 tooltip 缓存
 var _tw_key := ""                # 爬塔页 刷新键 (层数/怪物名/胜负/玩家 atk 变化才刷)
 var _tw_card_hi_tween: Tween      # M5-4: 爬塔 卡片 金边高亮 tween (顶栏 通关 徽标 点击直达 1.2s 自动恢复)
 var _tw_status_label: Label      # 爬塔 状态汇总行 (镇妖塔最高/登天梯纪录/剧毒提醒)
+var _tw_status_panel: Panel      # 打磨-93: 状态行 透明 Panel 外壳 (剧毒 徽标 点击直达 紫边高亮 载体, 默认 无边框)
+var _poison_status_hi_tween: Tween  # 打磨-93: 状态行 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
 var _tw_status_text := ""
 var _tw_auto_btn: Button         # M5-3: 自动爬塔开关 (toggle, 存档持久化, 一键挂机 5 开关 之 5)
 var _tw_auto_on := false         # M5-3: 上帧 自动爬塔 开关 缓存 (变化才刷 按钮态)
@@ -394,6 +402,36 @@ func _build_ui() -> void:
 	_clear_badge.pressed.connect(_on_clear_badge)
 	_clear_badge.visible = false
 	top.add_child(_clear_badge)
+	# 打磨-93: 顶栏 剧毒 debuff 状态徽标 (紫色圆角 "剧毒 N", poison_battles>0 时 显示 N=剩余场数,
+	# 0 隐藏; 与 自动/挂机/通关 徽标 同父 同风格 [但 紫色 区分 减益]; flat Button 可点击热区:
+	# 点击=切 爬塔页 (查看 剧毒 提醒 与 战力对比 减成 口径); 场数 变化 才刷 [每场 战斗 末 递减, 低频];
+	# 纯展示+导航 无 存档/统计 副作用)
+	_poison_badge = Button.new()
+	_poison_badge.flat = true
+	_poison_badge.toggle_mode = false
+	_poison_badge.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_poison_badge.text = ""
+	_poison_badge.add_theme_font_size_override("font_size", 15)
+	_poison_badge.add_theme_color_override("font_color", Color(0.78, 0.6, 0.95))
+	var psn_sb := StyleBoxFlat.new()
+	psn_sb.bg_color = Color(0.14, 0.09, 0.19)
+	psn_sb.set_border_width_all(1)
+	psn_sb.border_color = Color(0.65, 0.45, 0.9)
+	psn_sb.set_corner_radius_all(4)
+	psn_sb.content_margin_left = 6.0
+	psn_sb.content_margin_right = 6.0
+	psn_sb.content_margin_top = 2.0
+	psn_sb.content_margin_bottom = 2.0
+	_poison_badge.add_theme_stylebox_override("normal", psn_sb)
+	var psn_sb_hover := psn_sb.duplicate() as StyleBoxFlat
+	psn_sb_hover.bg_color = Color(0.22, 0.15, 0.29)
+	psn_sb_hover.border_color = Color(0.9, 0.75, 1.0)
+	_poison_badge.add_theme_stylebox_override("hover", psn_sb_hover)
+	_poison_badge.add_theme_stylebox_override("pressed", psn_sb_hover)
+	_poison_badge.add_theme_stylebox_override("focus", psn_sb_hover)
+	_poison_badge.pressed.connect(_on_poison_badge)
+	_poison_badge.visible = false
+	top.add_child(_poison_badge)
 	# 打磨-75: 顶栏 一键系列 状态汇总 徽标 (六项 可执行数 一览; 各段 可点击 热区:
 	# 领悟/神通/法器/装备/最佳 = 直达对应页 并重置 筛选 (口径 同 打磨-44 收集直达),
 	# 施展 = 直接 执行 一键施展 (核心批量 点击 反馈, 与 各页 一键 按钮 完全 同口径);
@@ -584,6 +622,18 @@ func _build_ui() -> void:
 	_auto_cast_float_label.modulate = Color(1, 1, 1, 0)
 	_auto_cast_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_auto_cast_float_label)
+
+	# 打磨-93: 剧毒 触发/刷新 浮动提示 (居中紫色, 与 其他 浮动 同 口径 上浮淡出;
+	# 位置 y=-100 最顶 与 离线(-84)/就绪(-48)/一键(-26) 错开; 事件 驱动 由 _refresh drain 触发)
+	_poison_float_label = _label("", 22, Color(0.8, 0.6, 1.0))
+	_poison_float_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_poison_float_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_poison_float_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_poison_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_poison_float_label.position = Vector2(0, -100)
+	_poison_float_label.modulate = Color(1, 1, 1, 0)
+	_poison_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_poison_float_label)
 
 
 func _make_page(title: String) -> Panel:
@@ -1469,9 +1519,17 @@ func _build_tower_page(page: Panel) -> void:
 	page.add_child(outer)
 	_tower_box = outer
 	# 状态汇总行 (镇妖塔 最高层/登天梯 纪录/剧毒 提醒; 文本变化 才刷)
+	# 打磨-93: 状态行 包 透明 Panel 外壳 (剧毒 徽标 点击直达 高亮 载体, 同 自动汇总行 模式;
+	# 默认 无边框 透明, 高亮 换 紫边 2px 样式 1.2s 自动恢复)
+	_tw_status_panel = Panel.new()
+	var tpsb := StyleBoxFlat.new()
+	tpsb.bg_color = Color(0, 0, 0, 0)
+	tpsb.set_corner_radius_all(6)
+	_tw_status_panel.add_theme_stylebox_override("panel", tpsb)
+	_tw_status_panel.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。\n顶栏 剧毒 徽标 点击 直达 本行 (紫边 高亮 1.2s)。"
+	outer.add_child(_tw_status_panel)
 	_tw_status_label = _label("", 14, CYAN)
-	_tw_status_label.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。"
-	outer.add_child(_tw_status_label)
+	_tw_status_panel.add_child(_tw_status_label)
 	# 双塔入口卡片 横排 (镇妖塔 / 登天梯)
 	var cards := HBoxContainer.new()
 	cards.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1640,7 +1698,7 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 		pwr_l.text = pwr_txt
 		pwr_l.add_theme_color_override("font_color", Color(0.6, 0.95, 0.6) if win else Color(0.98, 0.55, 0.5))
 		pwr_l.tooltip_text = ("判定口径: 玩家 有效 ATK ≥ 怪物 ATK x 0.85 即胜 (即时判定, 无死亡惩罚, 败 停留本层 可 无限重试)。\n"
-			+ ("玩家 当前 处 剧毒 debuff (ATK -15% x %d 场), 按 减成 后 口径 预测。" % g.poison_battles if g.poison_battles > 0 else "无 debuff, 按 当前 战力 预测。"))
+			+ ("玩家 当前 处 剧毒 debuff (ATK -15%% x %d 场), 按 减成 后 口径 预测。" % g.poison_battles if g.poison_battles > 0 else "无 debuff, 按 当前 战力 预测。"))
 
 
 # ---------- 成就页 ----------
@@ -2032,6 +2090,19 @@ func _refresh() -> void:
 			_clear_badge.visible = false
 			_clear_badge.text = ""
 			_clear_badge.tooltip_text = ""
+	# 打磨-93: 顶栏 剧毒 debuff 状态徽标 (poison_battles>0 显示 "剧毒 N" 紫色, 0 隐藏;
+	# 场数 变化才刷 [每场 战斗 末 递减/触发 刷新, 低频事件]; 读档恢复 同步; 纯展示 无 副作用)
+	var pn: int = g.poison_battles
+	if pn != _poison_badge_n:
+		_poison_badge_n = pn
+		if pn > 0:
+			_poison_badge.visible = true
+			_poison_badge.text = g.poison_badge_text()
+			_poison_badge.tooltip_text = g.poison_badge_tip()
+		else:
+			_poison_badge.visible = false
+			_poison_badge.text = ""
+			_poison_badge.tooltip_text = ""
 	# 打磨-88: 一键挂机 按钮 态 (全开 态 变化才刷; 读档恢复/外部 单开关 改 同步;
 	# 按压=全开, 文本 全开/全关; 纯展示 无 存档/统计 副作用)
 	var idle_on: bool = g.auto_all_on()
@@ -2286,6 +2357,12 @@ func _refresh() -> void:
 		_skill_ready_seq += 1
 		_ready_float(ready_ids)
 		_skill_ready_flash(ready_ids)
+	# 打磨-93: 剧毒 触发/刷新 浮动提示 (每帧消费 poison 事件; 同帧 多事件 逐条 弹
+	# [同 浮动 Label 后发 覆盖 先发, 计数 逐条 +1 供 断言; 同帧 多 事件 仅 自动爬塔 双塔
+	# 各 胜 剧毒 怪 时 出现, 极低频])
+	var pe: Array = g.drain_poison_events()
+	for ev in pe:
+		_poison_float(str(ev))
 
 
 # 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (居中绿色上浮淡出, 与 打磨-45 一键系列 同口径,
@@ -2378,6 +2455,25 @@ func _offline_float() -> void:
 	_offline_float_tween = create_tween()
 	_offline_float_tween.tween_property(_offline_float_label, "position:y", -122.0, 1.8).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_offline_float_tween.parallel().tween_property(_offline_float_label, "modulate:a", 0.0, 1.8).set_delay(0.6)
+
+
+# 打磨-93: 剧毒 触发/刷新 浮动提示 (紫色, 居中 y=-100 最顶, 与 离线/就绪/一键 浮动 错开;
+# 文案 由 GameData.poison_float_text 生成 [new=中毒 / refresh=剧毒 刷新]; 空串 不弹 防御;
+# 纯 展示 无 存档/统计 副作用; 计数/文案 供 自测断言)
+func _poison_float(evt: String) -> void:
+	var text: String = GameData.poison_float_text(evt)
+	if text == "":
+		return
+	_poison_float_count += 1
+	_poison_last_text = text
+	_poison_float_label.text = text
+	_poison_float_label.position = Vector2(0, -100)
+	_poison_float_label.modulate = Color(1, 1, 1, 1)
+	if _poison_float_tween != null and _poison_float_tween.is_valid():
+		_poison_float_tween.kill()
+	_poison_float_tween = create_tween()
+	_poison_float_tween.tween_property(_poison_float_label, "position:y", -138.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_poison_float_tween.parallel().tween_property(_poison_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
 
 
 # 打磨-69: 自动施展 浮动 — 自动 施展 就绪 神通 时 屏幕中央 绿色浮动 "✦ 自动施展 N 个神通 (爆发+X 灵气/道行) ✦"
@@ -3305,6 +3401,41 @@ func _on_clear_badge() -> void:
 	_tab.current_tab = 4
 	_flash_tower_card("fixed")
 	_show_msg("直达 爬塔页·镇妖塔 (守塔模式: 反复 挑战 1000 层 Boss)")
+
+
+# 打磨-93: 顶栏 剧毒 徽标 点击直达 — 点击=切 爬塔页 + 状态行 金边高亮 (查看 剧毒 提醒 与 战力对比 减成 口径;
+# 纯导航 无 存档/统计 副作用; 仅 poison_battles>0 显示 徽标, 隐藏态 无 热区)
+func _on_poison_badge() -> void:
+	_tab.current_tab = 4
+	_flash_poison_status()
+	_show_msg("直达 爬塔页·剧毒提醒 (期间 战力对比 按 ATK -15% 口径 预测)")
+
+
+# 打磨-93: 爬塔页 状态汇总行 紫边高亮 1.2s (剧毒 徽标 点击直达; 复用 自动汇总行/法器区 高亮 口径:
+# Panel 外壳 换 紫边 2px 样式, 1.2s 自动恢复; 重入 kill 旧 tween; 仅 展示 无 副作用)
+func _flash_poison_status() -> void:
+	if _tw_status_panel == null:
+		return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = Color(0.75, 0.55, 1.0)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(6)
+	_tw_status_panel.add_theme_stylebox_override("panel", sb)
+	if _poison_status_hi_tween != null and _poison_status_hi_tween.is_valid():
+		_poison_status_hi_tween.kill()
+	_poison_status_hi_tween = create_tween()
+	_poison_status_hi_tween.tween_interval(1.2)
+	_poison_status_hi_tween.tween_callback(_restore_poison_status)
+
+
+func _restore_poison_status() -> void:
+	if _tw_status_panel == null:
+		return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.set_corner_radius_all(6)
+	_tw_status_panel.add_theme_stylebox_override("panel", sb)
 
 
 # M5-4: 爬塔 卡片 金边高亮 1.2s 后自动恢复 (tween 驱动, 重入 先 kill 旧 tween, 同 法器区 口径;

@@ -5344,6 +5344,119 @@ func _init() -> void:
 	g.affix_equip("weapon_0_1", 0, "af_qi_rate_3_0")
 	var hint: Dictionary = g.equip_swap_hint("weapon_0_1")
 	check(str(hint["text"]).find("替换") >= 0 and str(hint["text"]).find("灵气+") >= 0, "M6-3 换装对比 含 词缀 增益 (灵气+) (实际 %s)" % str(hint["text"]))
+	# ---------- 打磨-93: 剧毒 debuff 触发/刷新 事件 + 顶栏 剧毒 徽标 只读接口 ----------
+	# 干净 基准 (M6-3 段 已 归零 塔 状态; 显式 再 归零 防 前序 段 残留)
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	# 基准 (境界0 无 加成): 玩家 atk=2.0; 镇妖塔 第 1 层 胜 / 第 2 层 恒败 (M5-3 口径 锚定:
+	# 第 2 层 怪 atk 3.34 x 0.85 = 2.84 > 2.0), 前 2 层 均 无 poison 特性 (第 3 层 起 才有)
+	check(absf(g.player_atk() - 2.0) < 0.001, "打磨-93 基准 玩家 atk=2.0 (实际 %s)" % str(g.player_atk()))
+	var f1n: Dictionary = g.tower_monster_stats(g.get_fixed_floor(1))
+	var f2n: Dictionary = g.tower_monster_stats(g.get_fixed_floor(2))
+	check(not bool(f1n["poison"]) and not bool(f2n["poison"]), "打磨-93 第 1/2 层 无 剧毒 特性 (数据 锚定)")
+	check(g.player_atk_effective() >= float(f1n["atk"]) * g.TOWER_WIN_RATIO, "打磨-93 基准 第 1 层 判定=胜 (数据 锚定)")
+	check(g.player_atk_effective() < float(f2n["atk"]) * g.TOWER_WIN_RATIO, "打磨-93 基准 第 2 层 判定=败 (数据 锚定)")
+	g.try_tower_challenge("fixed", 0.5)
+	check(g.tower_fixed_floor == 1, "打磨-93 第 1 层 胜 推进 (最高=1, 实际 %d)" % g.tower_fixed_floor)
+	g.try_tower_challenge("fixed", 0.5)
+	check(g.tower_fixed_floor == 1 and g.poison_battles == 0 and g.poison_events.is_empty(),
+			"打磨-93 第 2 层 败 停留 + 无 poison 事件 (层=%d 场=%d 事件=%d)" % [g.tower_fixed_floor, g.poison_battles, g.poison_events.size()])
+	check(g.poison_badge_text() == "", "打磨-93 无 debuff 徽标 文本 空串")
+	# 第 3 层 poison 怪 数据 锚定 (atk 2.3485, 基准 2.0 < 2.0 判定 边界 内 胜/败 均可, 用 境界2 恒胜)
+	var pf3: Dictionary = g.get_fixed_floor(3)
+	var f3n: Dictionary = g.tower_monster_stats(pf3)
+	check(bool(f3n["poison"]), "打磨-93 镇妖塔 第 3 层 怪物 含 剧毒 特性 (数据 锚定)")
+	# 境界2 (atk 3200) 先 清 第 2 层 (无 poison), 再 胜 第 3 层 poison 怪 -> 首次 触发
+	# (new 事件 + 场数 2->1 末 递减)
+	g.realm_idx = 2
+	g.try_tower_challenge("fixed", 0.5)
+	check(g.tower_fixed_floor == 2 and g.poison_events.is_empty(), "打磨-93 境界2 先 清 第 2 层 (无 poison 事件, 层=%d)" % g.tower_fixed_floor)
+	var st3: float = g.stones
+	g.try_tower_challenge("fixed", 0.5)
+	check(g.tower_fixed_floor == 3, "打磨-93 第 3 层 poison 怪 胜 推进 (最高=3, 实际 %d)" % g.tower_fixed_floor)
+	check(g.poison_battles == 1, "打磨-93 首次 触发 poison 2->1 (末 递减, 实际 %d)" % g.poison_battles)
+	check(g.poison_events.size() == 1, "打磨-93 触发 推 1 个 事件 (实际 %d)" % g.poison_events.size())
+	check(g.poison_badge_text() == "剧毒 1", "打磨-93 触发 后 徽标 文本 = 剧毒 1 (实际 %s)" % g.poison_badge_text())
+	var ev0: String = str(g.poison_events[0])
+	check(ev0.ends_with("|new"), "打磨-93 首次 事件 类型=new (实际 %s)" % ev0)
+	check(ev0.trim_suffix("|new") == str(f3n["name"]), "打磨-93 事件 怪物名 = 第 3 层 怪名 (实际 %s / %s)" % [ev0, str(f3n["name"])])
+	# 浮动 文案 (new/refresh 两态; 只读 接口; 含 怪物名 + 场数 口径)
+	check(g.poison_float_text(ev0) == ("☠ 中毒: 「%s」 攻 -15%% 持续 %d 场" % [str(f3n["name"]), g.TOWER_POISON_BATTLES]),
+			"打磨-93 new 事件 文案 恒等 (实际 %s)" % g.poison_float_text(ev0))
+	check(g.poison_float_text("X|refresh") == "☠ 剧毒 刷新: 「X」 攻 -15% 持续 2 场", "打磨-93 refresh 事件 文案 恒等 (实际 %s)" % g.poison_float_text("X|refresh"))
+	check(g.poison_float_text("").is_empty(), "打磨-93 空 事件 串 空 文案 (防御)")
+	check(g.poison_float_text("无名怪") == "☠ 中毒: 「无名怪」 攻 -15% 持续 2 场", "打磨-93 缺 类型 段 默认 new 口径 (实际 %s)" % g.poison_float_text("无名怪"))
+	# 胜 第 4 层 (无 poison) -> 场数 1->0 递减 无 新 事件 (徽标 隐藏 口径 由 UI 段 覆盖)
+	var f4n: Dictionary = g.tower_monster_stats(g.get_fixed_floor(4))
+	check(not bool(f4n["poison"]), "打磨-93 第 4 层 无 剧毒 特性 (数据 锚定)")
+	g.try_tower_challenge("fixed", 0.5)
+	check(g.tower_fixed_floor == 4 and g.poison_battles == 0 and g.poison_events.size() == 1,
+			"打磨-93 胜 无剧毒 怪 场数 1->0 无 新 事件 (层=%d 场=%d 事件=%d)" % [g.tower_fixed_floor, g.poison_battles, g.poison_events.size()])
+	# drain: 取出即清空 幂等 (二次 为空)
+	var de: Array = g.drain_poison_events()
+	check(de.size() == 1 and de[0] == ev0 and g.poison_events.is_empty(), "打磨-93 drain 取出 事件 清空 (实际 %d)" % de.size())
+	check(g.drain_poison_events().is_empty(), "打磨-93 二次 drain 幂等 空")
+	# 刷新 路径: 手动 置 debuff 1 场 + 胜 第 7 层 poison 怪 -> refresh 事件 (场数 恒 1: 刷新 2->1 末 递减)
+	var f7n: Dictionary = g.tower_monster_stats(g.get_fixed_floor(7))
+	check(bool(f7n["poison"]), "打磨-93 镇妖塔 第 7 层 怪物 含 剧毒 特性 (数据 锚定)")
+	while g.tower_fixed_floor < 6:  # 推进 至 第 6 层 已过 (其间 层 无 poison, 逐场 清 debuff/事件 防 干扰)
+		g.poison_battles = 0
+		g.try_tower_challenge("fixed", 0.5)
+		g.poison_events.clear()
+	check(g.tower_fixed_floor == 6, "打磨-93 推进 至 第 6 层 已过 (实际 %d)" % g.tower_fixed_floor)
+	g.poison_battles = 1
+	g.try_tower_challenge("fixed", 0.5)
+	check(g.tower_fixed_floor == 7, "打磨-93 第 7 层 poison 怪 胜 推进 (最高=7, 实际 %d)" % g.tower_fixed_floor)
+	check(g.poison_battles == 1, "打磨-93 刷新 后 场数 仍 1 (2->1 末 递减, 实际 %d)" % g.poison_battles)
+	check(g.poison_events.size() == 1 and str(g.poison_events[0]).ends_with("|refresh"), "打磨-93 已有 debuff 再 触发 = refresh 事件 (实际 %s)" % str(g.poison_events[0]))
+	check(str(g.poison_events[0]).trim_suffix("|refresh") == str(f7n["name"]), "打磨-93 refresh 事件 怪物名 = 第 7 层 怪名 (实际 %s)" % str(g.poison_events[0]))
+	g.poison_events.clear()
+	g.poison_battles = 0
+	# 登天梯 poison 路径 同源 (第 42 层 = 怪物种 轮转 含 poison; 境界2 恒胜)
+	g.tower_endless_floor = 42
+	var me42: Dictionary = g.tower_monster_stats(g.get_endless_floor(42))
+	check(bool(me42["poison"]), "打磨-93 登天梯 第 42 层 含 剧毒 特性 (数据 锚定)")
+	g.try_tower_challenge("endless", 0.5)
+	check(g.tower_endless_best >= 42 and g.tower_endless_floor >= 43 and g.poison_battles == 1 and g.poison_events.size() == 1,
+			"打磨-93 登天梯 poison 胜 触发 (最高=%d 待挑战=%d 场=%d 事件=%d)" % [g.tower_endless_best, g.tower_endless_floor, g.poison_battles, g.poison_events.size()])
+	g.poison_events.clear()
+	# 徽标 文本/tooltip 口径 (只读; 场数 2/0 两态)
+	g.poison_battles = 2
+	check(g.poison_badge_text() == "剧毒 2", "打磨-93 徽标 文本 = 剧毒 2 (实际 %s)" % g.poison_badge_text())
+	g.poison_battles = 0
+	check(g.poison_badge_text() == "", "打磨-93 无 debuff 徽标 文本 空串 (2)")
+	check(g.poison_badge_tip().contains("ATK -15%") and g.poison_badge_tip().contains("点击"), "打磨-93 徽标 tooltip 含 口径+直达 (实际 %s)" % g.poison_badge_tip())
+	# 只读 接口 连读 无 副作用 (资源/统计/塔 状态 稳定)
+	var snap93: Dictionary = g.stats.duplicate(true)
+	var sto93: float = g.stones
+	var fl93: int = g.tower_fixed_floor
+	for _i93 in 3:
+		g.poison_badge_text()
+		g.poison_badge_tip()
+		g.poison_float_text("N|new")
+		check(g.stats == snap93 and absf(g.stones - sto93) < 1e-9 and g.tower_fixed_floor == fl93, "打磨-93 只读 接口 连读 无 副作用 (iter %d)" % _i93)
+	# 存档 不 持久化 poison_events (内存 事件 队列; poison_battles 已 M5-2 覆盖 往返)
+	g.save_game()
+	g.poison_events.append("残留|new")
+	g.load_game()
+	check(g.poison_events.is_empty(), "打磨-93 poison_events 不 随档 持久化 (内存 队列)")
+	# 收尾: 恢复 干净 基准 (境界 归零 + 塔 归零 + debuff 清 + 事件 清)
+	g.realm_idx = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
 	# 收尾: 归零 全 状态 落盘 干净 存档 (防 污染 后续 独立 测试 进程)
 	g.affix_bag = {}
 	g.affix_load = {}

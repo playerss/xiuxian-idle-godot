@@ -168,6 +168,11 @@ var _ach_acc := 0.0         # 成就检测节流累计
 # UI 每帧 drain_ready_events 消费; 只读不改动 状态/存档/统计, 不持久化)
 var ready_events: Array[String] = []
 
+# 打磨-93: 剧毒 debuff 触发/刷新 事件队列 (try_tower_challenge 内 战胜 剧毒 怪 时
+# 推送, 事件串 = 怪物名 | 类型: new=首次 触发 / refresh=已有 debuff 刷新;
+# UI 每帧 drain_poison_events 消费 弹 紫色浮动 提示; 不持久化, 与 ready_events 同 口径)
+var poison_events: Array = []
+
 func _ready() -> void:
 	load_data()
 	load_game()
@@ -978,9 +983,13 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 	if win:
 		reward_stone = float(mon["stone"])
 		stones += reward_stone
-		# 剧毒: 战胜 后 玩家 atk -15%, 持续 2 场 (可 刷新)
+		# 剧毒: 战胜 后 玩家 atk -15%, 持续 2 场 (可 刷新);
+		# 打磨-93: 触发/刷新 时 推 poison_events 事件 (怪物名|new/refresh; UI drain 后 弹 紫色浮动,
+		# 玩家 不知 为何 战力 下降 的 即时 反馈; 事件 不持久化 不 改 战斗 口径)
 		if bool(mon["poison"]):
+			var was_poisoned := poison_battles > 0
 			poison_battles = TOWER_POISON_BATTLES
+			poison_events.append("%s|%s" % [str(mon["name"]), ("refresh" if was_poisoned else "new")])
 		# M6-2: 词缀掉落 结算 (背包满 时 普通品质 自动入料, 高品质 拒绝 不 入包)
 		var drop_src := "normal"
 		if bool(mon["is_elite"]):
@@ -1706,6 +1715,41 @@ func drain_ready_events() -> Array[String]:
 		out.append(id)
 	ready_events.clear()
 	return out
+
+# 打磨-93: UI 每帧消费 剧毒 事件 (取出即清空, 幂等; 返回 事件串 数组 "怪物名|new/refresh")
+# 注意: Array 取值 逐项 拷贝 (与 drain_ready_events 同 口径 防 引用 别名 坑)
+func drain_poison_events() -> Array:
+	var out: Array = []
+	for e in poison_events:
+		out.append(str(e))
+	poison_events.clear()
+	return out
+
+# 打磨-93: 剧毒 触发/刷新 浮动 文案 (只读; 由 事件串 生成; new=首次 触发 / refresh=刷新;
+# 未知 事件 串 空串 防御; 不 改 状态/存档/统计)
+func poison_float_text(evt: String) -> String:
+	var parts: PackedStringArray = str(evt).split("|")
+	var mname: String = str(parts[0]) if parts.size() > 0 else ""
+	if mname == "":
+		return ""
+	var tag: String = str(parts[1]) if parts.size() > 1 else "new"
+	if tag == "refresh":
+		return "☠ 剧毒 刷新: 「%s」 攻 -15%% 持续 %d 场" % [mname, TOWER_POISON_BATTLES]
+	return "☠ 中毒: 「%s」 攻 -15%% 持续 %d 场" % [mname, TOWER_POISON_BATTLES]
+
+# 打磨-93: 顶栏 剧毒 徽标 文本 (只读; poison_battles>0 时 "剧毒 N", 0 时 空串 隐藏;
+# N = 剩余 场数; 不 改 状态/存档/统计)
+func poison_badge_text() -> String:
+	return ("剧毒 %d" % poison_battles) if poison_battles > 0 else ""
+
+# 打磨-93: 顶栏 剧毒 徽标 tooltip (只读; 含 口径 说明 + 点击 直达 爬塔页; 不 改 状态)
+# 注意: 文案 含 字面 % (-15%), 不用 % 格式化 (拼接 口径, 防 打磨-63 字面 %% 转义 坑)
+func poison_badge_tip() -> String:
+	var txt: String = ("爬塔 战斗 中 战胜 剧毒 特性 怪物 后 触发: 玩家 ATK -15%, 持续 "
+		+ str(TOWER_POISON_BATTLES) + " 场 战斗 (每场 战斗 末 递减, 战胜 剧毒 怪 刷新)。"
+		+ "\n期间 战力对比/爬塔 判定 按 减成 后 口径 计算 (爬塔页 状态行/战力对比 同步 展示)。"
+		+ "\n点击: 直达 爬塔页 (查看 剧毒 提醒 与 战力对比)")
+	return txt
 
 func use_active_skill(id: String) -> String:
 	var s: Dictionary = skill_by_id.get(id, {})
@@ -2838,6 +2882,8 @@ func load_game() -> void:
 	tower_daily_bonus_stones = float(parsed.get("tower_daily_bonus_stones", 0.0))
 	tower_clear_reward_got = bool(parsed.get("tower_clear_reward_got", false))  # M5-4: 旧档缺字段默认 未发放 (首通 1000 层 Boss 时 正常 发放)
 	poison_battles = clampi(int(parsed.get("poison_battles", 0)), 0, TOWER_POISON_BATTLES)
+	# 打磨-93: 读档 清 内存 剧毒 事件 队列 (事件 为 触发 即时 反馈, 读档 后 旧 事件 失效, 防 误弹 浮动)
+	poison_events.clear()
 	# M6-2: DIY 词缀 (旧档缺字段 默认 空; 非法 项 丢弃 防 污染)
 	# 顺序: 先 槽位升级 (affix_load 校验 依赖 槽位 上限), 再 库存, 最后 装配
 	slot_upgrades = {}
