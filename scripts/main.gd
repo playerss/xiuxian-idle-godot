@@ -158,6 +158,7 @@ var _tw_auto_btn: Button         # M5-3: 自动爬塔开关 (toggle, 存档持�
 var _tw_auto_on := false         # M5-3: 上帧 自动爬塔 开关 缓存 (变化才刷 按钮态)
 var _tw_auto_tip := ""           # M5-3: 自动爬塔 按钮 tooltip 动态段 缓存
 var _tw_auto_tip_static := ""    # M5-3: 自动爬塔 按钮 tooltip 静态 前缀
+var _tw_auto_msg_seq := 0        # 打磨-95: 已提示过的 自动爬塔 胜局 变更事件序号 (避免重复提示; 启动=0 与 GameData 同态)
 var _tab: TabContainer
 var _skill_box: VBoxContainer
 var _skill_row_nodes: Dictionary = {}
@@ -1649,11 +1650,11 @@ func _refresh_tower() -> void:
 	var p: Dictionary = g.tower_challenge_preview()
 	var fmon: Dictionary = p["fixed_mon"]
 	var emon: Dictionary = p["endless_mon"]
-	var key: String = "%d|%d|%s|%s|%d|%d|%d" % [
+	var key: String = "%d|%d|%s|%s|%d|%d|%d|%d" % [
 		int(p["fixed_floor"]), int(p["endless_floor"]),
 		str(fmon["name"]), str(emon["name"]),
 		1 if bool(p["fixed_win"]) else 0, 1 if bool(p["endless_win"]) else 0,
-		int(g.player_atk_effective() / 0.5)]
+		int(g.player_atk_effective() / 0.5), g._auto_tower_wins]  # 打磨-95: 胜局数 入键 (守塔 模式 恒 1000 层 胜局 不 变 层数, 键 须 感知 会话 统计 变化)
 	if key == _tw_key and _tw_key != "":
 		return
 	_tw_key = key
@@ -2045,6 +2046,13 @@ func _refresh() -> void:
 	if at_tip != _tw_auto_tip:
 		_tw_auto_tip = at_tip
 		_tw_auto_btn.tooltip_text = _tw_auto_tip_static + at_tip
+	# 打磨-95: 自动爬塔 胜局 变更事件 → 节流 底部消息 (序号 变化 且 有 文案 才 提示一次,
+	# 无 屏幕浮动 防 挂机刷屏; 同 打磨-68 自动购置 变更事件 口径)
+	if g._auto_tower_seq != _tw_auto_msg_seq:
+		_tw_auto_msg_seq = g._auto_tower_seq
+		var atw_t: String = g.auto_tower_last_text()
+		if atw_t != "":
+			_show_msg(atw_t)
 	# M5-3: 爬塔页 节流 刷新 (刷新键 变化才刷; 挂机 恒定 无 每帧 重建, 手动 挑战/自动爬塔/读档 恢复 后 同步)
 	_refresh_tower()
 	# 打磨-70: 自动系列 状态汇总行 (状态键 变化才刷 文本/颜色; 读档恢复/外部改 同步)

@@ -98,6 +98,12 @@ func _ready() -> void:
 	g0.poison_battles = 0
 	g0.poison_events.clear()  # 打磨-93: 防御性 清空 剧毒 事件 队列 (autoload 启动 load 残留 防 首帧 误弹)
 	g0.auto_tower = false
+	# 打磨-95: 防御性 重置 自动爬塔 会话 统计 (autoload 启动 可能 已 跑 挂机帧 累计 会话 值;
+	# 内存态 不随 读档 清, 残留 会 让 爬塔页 状态行/底部消息 断言 看到 非零 会话 泄漏 — 每轮 强制 干净 基准)
+	g0._auto_tower_seq = 0
+	g0._auto_tower_last_txt = ""
+	g0._auto_tower_wins = 0
+	g0._auto_tower_stone = 0.0
 	# M6-3: 防御性 重置 DIY 词缀 状态 (autoload 启动 load_game 读 残留档, 词缀 背包/装配/收集 可能 非空;
 	# 残留 会 让 成就 检查 触发 DIY 成就 泄漏 [affix_legend/affix_120/diy_first/resonance_first],
 	# 致 收集 计数/只看未解锁 断言 偏多 — 每轮 强制 干净 基准, 同 打磨-71/72 自动开关/离线收益 口径)
@@ -168,6 +174,7 @@ func _ready() -> void:
 	await _assert_tower_clear()  # M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 称号 徽标
 	await _assert_poison_debuff()  # 打磨-93: 剧毒 debuff 顶栏徽标 + 触发浮动
 	await _assert_tower_affix_drop()  # 打磨-94: 塔战斗 词缀掉落 底部消息 展示
+	await _assert_auto_tower_feedback()  # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行
 
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	_finish()
@@ -4590,6 +4597,95 @@ func _assert_tower_affix_drop() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g.affix_bag_used() == 0 and g.affix_bag.is_empty(), "打磨-94 收尾 词缀 背包 清零 (防 污染)")
+
+
+# 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行 断言 (挂机 期间 自动 爬塔 胜利 静默 补位:
+# 胜局 变更事件 驱动 底部消息 "自动爬塔 胜利 N 场 (…)" 节流 提示 [无 浮动 防 刷屏] +
+# 爬塔页 状态行 追加 "· 自动 胜 N 场 (灵石 X)" 会话 统计 段. 驱动 真实 _process 帧 (同 挂机 路径),
+# 基准 同 打磨-94: realm0 层1 有效 atk 2.0, 双塔 第 1 层 恒胜; 词缀 掉落 走 randf 随机
+# 只 断言 文案 前缀/塔 明细/会话 累计, 不 锚定 掉落 件数. 收尾 恢复 干净 基准 防 污染 M6-3 段)
+func _assert_auto_tower_feedback() -> void:
+	var g := GameData
+	# 干净 基准 (塔 归零 + 境界0 层1 无 加成 + 会话 归零 + 剧毒 清)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.auto_tower = false
+	g.set_process(false)
+	ui._tab.current_tab = 4
+	ui._refresh()
+	await get_tree().process_frame
+	# 初始: 无 胜局 → 状态行 无 会话 段
+	check(str(ui._tw_status_label.text).find("自动 胜") < 0, "打磨-95 初始 状态行 无 会话 段 (实际 %s)" % str(ui._tw_status_label.text))
+	# 开 自动爬塔 + _process 一帧: 双塔 各 胜 第 1 层 → 胜局 变更事件 驱动 底部消息
+	g.auto_tower = true
+	var f1s: float = float(g.tower_monster_stats(g.get_fixed_floor(1))["stone"])
+	var e1s: float = float(g.tower_monster_stats(g.get_endless_floor(1))["stone"])
+	var seq0: int = g._auto_tower_seq
+	g._process(0.016)
+	ui._refresh()
+	await get_tree().process_frame
+	check(g._auto_tower_seq == seq0 + 1, "打磨-95 胜局 变更事件 seq+1 (实际 %d)" % g._auto_tower_seq)
+	var msg_at: String = str(ui._msg_label.text)
+	check(msg_at.begins_with("自动爬塔 胜利 2 场 ("), "打磨-95 底部消息 胜局 汇总 文案 (实际 %s)" % msg_at.left(28))
+	check(msg_at.find("镇妖塔 第 1 层 灵石 +") >= 0 and msg_at.find("登天梯 第 1 层 灵石 +") >= 0,
+			"打磨-95 底部消息 含 双塔 明细 (实际 %s)" % msg_at)
+	check(str(ui._tw_status_label.text).find("自动 胜 2 场 (灵石 ") >= 0,
+			"打磨-95 状态行 会话 统计 段 刷新 (实际 %s)" % str(ui._tw_status_label.text))
+	check(absf(g._auto_tower_stone - f1s - e1s - e1s * 0.5) < 1e-6,
+			"打磨-95 会话 灵石 累计 = 双塔 第 1 层 + 每日首胜 0.5x (实际 %s)" % g.fmt(g._auto_tower_stone))
+	# 节流: 同 会话 态 _refresh 再 跑 不 重写 底部消息 (seq 未变, 文案 稳定)
+	var msg_at2_before: String = str(ui._msg_label.text)
+	var stats_snap: Dictionary = g.stats.duplicate(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._msg_label.text) == msg_at2_before, "打磨-95 同 会话 态 节流 不 重写 底部消息")
+	# 关 开关: 全败 帧 不 增 事件 不 弹 消息
+	g.auto_tower = false
+	g.set_process(true)
+	# 收尾: 恢复 干净 基准 + 会话 清零 (防 污染 后续 M6-3 段 断言)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.essence = 0.0
+	g.stones = 0.0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g._auto_tower_wins == 0 and g._auto_tower_stone == 0.0 and g.auto_tower == false, "打磨-95 收尾 干净 基准 (会话 清零)")
 
 
 # M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;

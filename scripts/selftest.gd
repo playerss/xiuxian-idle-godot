@@ -3589,6 +3589,12 @@ func _init() -> void:
 	g.tower_daily_date = ""
 	g.tower_daily_bonus_stones = 0.0
 	g.poison_battles = 0
+	# 打磨-95: 防御性 重置 自动爬塔 会话 统计 (autoload 启动 可能 已 跑 挂机帧, 会话 值 非 0
+	# 会 污染 M5-3/打磨-95 段 基准 — 内存态 不随 读档 清, 须 手动 归零)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_last_txt = ""
 	# 门控: 关时 _process 一帧 不 触发 挑战 (冻结 状态 手动 驱动; 断言 塔 状态/统计 稳定,
 	# 灵石 不锚定 — _process 帧 含 挂机 收益 累积, 与 塔 无关)
 	var tw_floor0: int = g.tower_fixed_floor
@@ -3719,6 +3725,132 @@ func _init() -> void:
 	g.dao = 0.0
 	g.dao_level = 0
 	g.ascended = false
+	g.set_process(true)
+	g.save_game()
+	# ---------- 打磨-95: 自动爬塔 胜局 汇总 + 会话 统计 (挂机 期间 自动 爬塔 胜利 静默 补位:
+	# 变更事件 节流 文案 auto_tower_last_text + 会话 累计 auto_tower_session_text;
+	# 会话 内存态 不持久化 读档 归零; 基准 同 M5-3: realm0 层1 有效 atk 2.0,
+	# 数据 锚定: 双塔 第 1 层 恒胜 (fixed1 阈值 1.79 / endless1 阈值 1.80),
+	# 第 2 层 无 剧毒 fixed2 恒败 (阈值 2.84) 而 endless2 恒胜 (阈值 1.53, 种 偏向 低 atk);
+	# 剧毒 -15% 后 (1.7) fixed 败 + endless 仍胜; 守塔 1000 层 Boss/里程碑 Boss 恒败 0 胜局) ----------
+	g.set_process(false)
+	g.auto_tower = false
+	# 防御性 重置 (autoload 启动 + M5-3 段 已 跑 挂机帧: 会话 累计/塔 进度/剧毒 可能 残留;
+	# 内存态 不随 读档 清, 须 手动 归零 防 污染 本 段 基准)
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	check(g.auto_tower_last_text() == "", "打磨-95 初始 无 胜局 汇总 文案 空串 (seq=0)")
+	check(g.auto_tower_session_text() == "", "打磨-95 初始 会话 统计 空串 (0 胜局)")
+	check(g.tower_status_line().find("自动 胜") < 0, "打磨-95 初始 状态行 无 会话 段")
+	# 帧 1 (无 剧毒): 双塔 各 胜 第 1 层 (登天梯 首胜 新纪录 → 每日首胜 0.5x;
+	# 词缀 掉落 走 randf 随机 不入 文案 断言)
+	var f1s: float = float(g.tower_monster_stats(g.get_fixed_floor(1))["stone"])
+	var e1s: float = float(g.tower_monster_stats(g.get_endless_floor(1))["stone"])
+	g.auto_tower = true
+	var at_seq0: int = g._auto_tower_seq
+	var at_wins0: int = g._auto_tower_wins
+	var at_st0: float = g._auto_tower_stone
+	g._process(0.016)
+	check(g._auto_tower_seq == at_seq0 + 1, "打磨-95 帧 1 胜局 变更事件 seq+1 (实际 %d)" % g._auto_tower_seq)
+	check(g._auto_tower_wins == at_wins0 + 2, "打磨-95 帧 1 会话 胜局 +2 (双塔 各 1, 实际 %d)" % g._auto_tower_wins)
+	var st_exp: float = f1s + e1s + e1s * 0.5
+	check(absf(g._auto_tower_stone - at_st0 - st_exp) < 1e-6,
+			"打磨-95 帧 1 会话 灵石 = 双塔 第 1 层 + 每日首胜 0.5x (实际 %s 期望 %s)" % [g.fmt(g._auto_tower_stone - at_st0), g.fmt(st_exp)])
+	var at_txt: String = g.auto_tower_last_text()
+	check(at_txt.begins_with("自动爬塔 胜利 2 场 ("), "打磨-95 胜局 汇总 文案 前缀 (实际 %s)" % at_txt.left(24))
+	check(at_txt.find("镇妖塔 第 1 层 灵石 +") >= 0 and at_txt.find("登天梯 第 1 层 灵石 +") >= 0,
+			"打磨-95 文案 含 双塔 明细 (实际 %s)" % at_txt)
+	check(at_txt.find("每日首胜 +") >= 0, "打磨-95 文案 含 每日首胜 段 (实际 %s)" % at_txt)
+	check(g.tower_status_line().find("自动 胜 2 场 (灵石 ") >= 0,
+			"打磨-95 状态行 含 会话 统计 段 (实际 %s)" % g.tower_status_line())
+	# 只读 接口 连读 恒定 + 无 状态/存档/统计 副作用
+	var at_snap: Dictionary = g.stats.duplicate(true)
+	var at_wins1: int = g._auto_tower_wins
+	var at_st1: float = g._auto_tower_stone
+	var at_seq1: int = g._auto_tower_seq
+	var at_last1: String = g.auto_tower_last_text()
+	var at_sess1: String = g.auto_tower_session_text()
+	for _i95 in 3:
+		g.auto_tower_last_text()
+		g.auto_tower_session_text()
+		g.tower_status_line()
+	check(g.auto_tower_last_text() == at_last1 and g.auto_tower_session_text() == at_sess1
+			and g._auto_tower_wins == at_wins1 and g._auto_tower_stone == at_st1
+			and g._auto_tower_seq == at_seq1 and g.stats == at_snap,
+			"打磨-95 只读 连读 恒定 无 状态/统计 副作用")
+	# 帧 2 (手动 置 剧毒 2 场, 同 M5-3 口径): 有效 atk 1.7 → 镇妖塔 第 2 层 恒败
+	# (阈值 2.84) + 登天梯 第 2 层 恒胜 (阈值 1.53) → 1 胜局 文案 仅 登天梯 明细
+	g.poison_battles = g.TOWER_POISON_BATTLES
+	var pa95: float = g.player_atk_effective()
+	check(absf(pa95 - 2.0 * 0.85) < 0.001, "打磨-95 剧毒 有效 atk = 1.7 (实际 %s)" % str(pa95))
+	check(pa95 < float(g.tower_monster_stats(g.get_fixed_floor(2))["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-95 帧 2 剧毒 后 镇妖塔 第 2 层 判定=败 (数据 锚定)")
+	check(pa95 >= float(g.tower_monster_stats(g.get_endless_floor(2))["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-95 帧 2 剧毒 后 登天梯 第 2 层 判定=胜 (数据 锚定, 低 atk 偏向 种)")
+	var e2s: float = float(g.tower_monster_stats(g.get_endless_floor(2))["stone"])
+	var at_seq2: int = g._auto_tower_seq
+	var at_wins2: int = g._auto_tower_wins
+	g._process(0.016)
+	check(g._auto_tower_seq == at_seq2 + 1 and g._auto_tower_wins == at_wins2 + 1,
+			"打磨-95 帧 2 会话 胜局 +1 (仅 登天梯, 实际 seq=%d wins=%d)" % [g._auto_tower_seq, g._auto_tower_wins])
+	check(absf(g._auto_tower_stone - at_st1 - e2s) < 1e-6,
+			"打磨-95 帧 2 会话 灵石 = 登天梯 第 2 层 奖励 (同 日 已 发 首胜 不 重复, 实际 %s 期望 %s)" % [g.fmt(g._auto_tower_stone - at_st1), g.fmt(e2s)])
+	var at_txt2: String = g.auto_tower_last_text()
+	check(at_txt2.begins_with("自动爬塔 胜利 1 场 ("), "打磨-95 帧 2 文案 仅 1 场 (实际 %s)" % at_txt2.left(24))
+	check(at_txt2.find("登天梯 第 2 层 灵石 +") >= 0 and at_txt2.find("镇妖塔") < 0,
+			"打磨-95 帧 2 文案 仅 登天梯 明细 (实际 %s)" % at_txt2)
+	# 帧 3 (全败): 守塔 模式 (999/通关 → 恒 1000 层 Boss 阈值 ~285) + 登天梯 100 层
+	# 里程碑 Boss (阈值 ~280) 剧毒 后 atk 1.7 双 恒败 → 0 胜局 不 增 事件 不 改 文案 不 改 会话
+	g.tower_fixed_floor = 999
+	g.tower_fixed_clear = true
+	g.tower_endless_floor = 100
+	check(g.player_atk_effective() < float(g.tower_monster_stats(g.get_fixed_floor(1000))["atk"]) * g.TOWER_WIN_RATIO
+			and g.player_atk_effective() < float(g.tower_monster_stats(g.get_endless_floor(100))["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-95 帧 3 守塔 1000 层 Boss + 里程碑 Boss 双 判定=败 (数据 锚定)")
+	var at_seq3: int = g._auto_tower_seq
+	var at_wins3: int = g._auto_tower_wins
+	var at_st3: float = g._auto_tower_stone
+	var at_last3: String = g.auto_tower_last_text()
+	g._process(0.016)
+	check(g._auto_tower_seq == at_seq3 and g.auto_tower_last_text() == at_last3
+			and g._auto_tower_wins == at_wins3 and g._auto_tower_stone == at_st3,
+			"打磨-95 全败帧 不 增 事件 不 改 文案 不 改 会话 (seq 稳定 %d)" % at_seq3)
+	check(g.tower_fixed_floor == 999 and g.tower_endless_floor == 100,
+			"打磨-95 全败帧 塔 态 停留 (守塔 999 / 登天梯 100)")
+	g.auto_tower = false
+	# 会话 不 持久化: 保存 → 手动 改 会话 值 → 读档 归零 (与 poison_events 读档 清空 同口径)
+	g.poison_battles = 0
+	g.save_game()
+	g._auto_tower_wins = 7
+	g._auto_tower_stone = 123.0
+	g.load_game()
+	check(g._auto_tower_wins == 0 and g._auto_tower_stone == 0.0 and g._auto_tower_seq == 0,
+			"打磨-95 会话 统计 读档 归零 (不持久化, 实际 %d/%s)" % [g._auto_tower_wins, g.fmt(g._auto_tower_stone)])
+	check(g.auto_tower_session_text() == "" and g.auto_tower_last_text() == "",
+			"打磨-95 读档 后 会话/汇总 文案 空串")
+	# 收尾: 会话 归零 + 开关 关 + 塔 态/剧毒/每日 归零 落盘 (防 污染 后续 段)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
 	g.set_process(true)
 	g.save_game()
 	# ---------- 打磨-70: 自动系列 状态汇总 (只读接口 auto_summary_key/auto_summary_text, 纯展示无副作用;

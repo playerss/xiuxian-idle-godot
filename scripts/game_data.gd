@@ -140,6 +140,13 @@ var _auto_cast_seq := 0         # 打磨-69: 自动施展 变更事件计数 (�
 var auto_learn := false         # 打磨-80: 自动领悟 (开=境界提升后自动批量学习 可学 技能, 存档持久化)
 var _auto_learn_seq := 0        # 打磨-80: 自动领悟 变更事件计数 (每轮 实际学习 +1, 不持久化, UI 据此刷底部消息)
 var _auto_learn_last_n := 0     # 打磨-80: 上轮 学习 技能 数 (内存态, 供 auto_learn_last_text)
+# 打磨-95: 自动爬塔 胜局 汇总 (本轮 _try_auto_tower 结算明细, 内存态 不持久化;
+# 挂机 时 自动 爬塔 胜利 原本 静默 无 反馈 (手动 挑战 有 底部消息, 自动 路径 缺位),
+# 由 变更事件 驱动 节流 底部消息 告知 玩家 挂机 期间 爬塔 成果)
+var _auto_tower_seq := 0        # 自动爬塔 胜局 变更事件计数 (本轮 有 胜局 +1, UI 据此 节流 刷 底部消息)
+var _auto_tower_last_txt := ""  # 上轮 胜局 汇总 文案 (内存态, 供 auto_tower_last_text)
+var _auto_tower_wins := 0       # 本次 运行 自动 爬塔 胜局 总数 (内存态, 供 auto_tower_session_text)
+var _auto_tower_stone := 0.0    # 本次 运行 自动 爬塔 胜局 灵石 总量 (含 每日首胜/通关大奖, 内存态)
 var _auto_cast_last_n := 0      # 打磨-69: 上轮 施展 神通 数 (内存态, 供 auto_cast_last_text)
 var _auto_cast_last_burst := 0.0  # 打磨-69: 上轮 爆发 总量 (内存态, 供 auto_cast_last_text)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备/爬塔, 读档时 _load_stats 兜底)
@@ -1047,6 +1054,45 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		"poison_battles": poison_battles, "affix_drops": affix_drops,
 		"reason": ("胜" if win else "败: 战力 不足, 停留 本层 (无 惩罚, 可 重试)"),
 	}
+
+# 打磨-95: 自动爬塔 (挂机 时 双塔 自动 挑战; GameData._process 每帧驱动, 自门控于 auto_tower,
+# 关闭时直接返回 故 可直接 调用 测试; 复用 try_tower_challenge 同 口径 同 结算:
+# 镇妖塔 通关态 守塔 模式 恒打 1000 层 Boss, 登天梯 败 停留 本层, 无热循环).
+# 本轮 有 胜局 时 汇总 灵石/词缀 明细 推 变更事件 (_auto_tower_seq+1, 文案 供
+# auto_tower_last_text), 胜局 数/灵石 累计 入 内存 会话 统计 (auto_tower_session_text,
+# 读档 归零 与 poison_events 同口径 — 会话 = 本次 运行, 挂机 期间 胜局 静默 由 本 接口
+# 节流 底部消息 反馈, 防 每帧 刷屏); 全败/全冷却 0 胜局 不 增 事件 不 改 文案 (UI 不 刷)
+func _try_auto_tower() -> void:
+	if not auto_tower:
+		return
+	var wf: Dictionary = try_tower_challenge("fixed")
+	var we: Dictionary = try_tower_challenge("endless")
+	var n_win := (1 if bool(wf["win"]) else 0) + (1 if bool(we["win"]) else 0)
+	if n_win == 0:
+		return
+	_auto_tower_wins += n_win
+	var tot_stone := float(wf.get("reward_stone", 0.0)) + float(wf.get("clear_reward_stone", 0.0)) \
+			+ float(wf.get("daily_bonus", 0.0)) \
+			+ float(we.get("reward_stone", 0.0)) + float(we.get("clear_reward_stone", 0.0)) \
+			+ float(we.get("daily_bonus", 0.0))
+	_auto_tower_stone += tot_stone
+	var parts: Array = []
+	for r in [wf, we]:
+		if bool(r["win"]):
+			var tname: String = "镇妖塔" if str(r["tower"]) == "fixed" else "登天梯"
+			parts.append("%s 第 %d 层 灵石 +%s" % [tname, int(r["floor"]), fmt(float(r["reward_stone"]))])
+	var extra := ""
+	var adrops: Array = wf.get("affix_drops", []) + we.get("affix_drops", [])
+	if adrops.size() > 0:
+		extra = " · 词缀 x%d" % adrops.size()
+	var daily_t := float(wf.get("daily_bonus", 0.0)) + float(we.get("daily_bonus", 0.0))
+	if daily_t > 0.0:
+		extra += " · 每日首胜 +%s" % fmt(daily_t)
+	if float(wf.get("clear_reward_stone", 0.0)) + float(we.get("clear_reward_stone", 0.0)) > 0.0:
+		extra += " · 通关大奖"
+	_auto_tower_last_txt = "自动爬塔 胜利 %d 场 (%s) %s" % [
+		n_win, " + ".join(parts), extra]
+	_auto_tower_seq += 1
 
 func _today_str() -> String:
 	var t := Time.get_unix_time_from_system()
@@ -2075,12 +2121,6 @@ func auto_learn_last_text() -> String:
 # 复用 奖励结算/剧毒/每日首胜/统计埋点); 胜=层数推进 (灵石+奖励), 败=停留 本层 无 消耗 无 惩罚,
 # 层数 单调 推进/停留 天然 无热循环 (与 自动突破 同 门控 口径); 镇妖塔 通关态 恒 守塔 模式
 # 反复 挑战 1000 层 Boss (口径=fixed_challenge_floor); 离线期间 不触发 (离线只结算收益))
-func _try_auto_tower() -> void:
-	if not auto_tower:
-		return
-	try_tower_challenge("fixed")
-	try_tower_challenge("endless")
-
 # 爬塔 UI 只读接口 (UI 每帧 调用; 不 改 状态/存档/统计)
 # 双塔 当前 挑战 层 记录 (镇妖塔=守塔 1000 层 或 最高已过层+1; 登天梯=当前 待挑战 层;
 # 怪物 有效 属性 含 结构/偏向/特性 倍率; 供 怪物卡/战力对比 展示)
@@ -2177,7 +2217,26 @@ func tower_status_line() -> String:
 		tower_endless_floor, tower_endless_best]
 	if poison_battles > 0:
 		s += " · 剧毒 -15%% 攻 x %d 场" % poison_battles
+	# 打磨-95: 自动爬塔 会话 统计 (本次 运行 胜局 数+灵石 累计, 内存态 不持久化;
+	# 挂机 期间 自动 爬塔 成果 展示位, 与 手动 挑战 底部消息 口径 互补)
+	if _auto_tower_wins > 0:
+		s += " · 自动 胜 %d 场 (灵石 %s)" % [_auto_tower_wins, fmt(_auto_tower_stone)]
 	return s
+
+# 打磨-95: 自动爬塔 上一轮 胜局 汇总 文案 (只读; seq<=0 [从未 胜局] 返回 "";
+# 挂机 期间 自动 爬塔 胜局 静默 无 反馈 补位, UI 按 变更事件 序号 节流 刷 底部消息;
+# 不 改 状态/存档/统计)
+func auto_tower_last_text() -> String:
+	if _auto_tower_seq <= 0:
+		return ""
+	return _auto_tower_last_txt
+
+# 打磨-95: 自动爬塔 会话 统计 文案 (只读; 0 胜局 返回 ""; 格式 "自动 胜 N 场 (灵石 X)" —
+# 会话 = 本次 运行, 读档 归零; 爬塔 状态 汇总行 展示 + 自测 断言 同 口径; 不 改 状态)
+func auto_tower_session_text() -> String:
+	if _auto_tower_wins <= 0:
+		return ""
+	return "自动 胜 %d 场 (灵石 %s)" % [_auto_tower_wins, fmt(_auto_tower_stone)]
 
 # 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1|1|0" = 突破|购置|施展|领悟|爬塔, 1=开 0=关;
 # M5-3 起 5 开关: 第 5 段=自动爬塔; UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
@@ -2897,6 +2956,12 @@ func load_game() -> void:
 	poison_battles = clampi(int(parsed.get("poison_battles", 0)), 0, TOWER_POISON_BATTLES)
 	# 打磨-93: 读档 清 内存 剧毒 事件 队列 (事件 为 触发 即时 反馈, 读档 后 旧 事件 失效, 防 误弹 浮动)
 	poison_events.clear()
+	# 打磨-95: 读档 清 内存 自动爬塔 会话 统计 (会话 = 本次 运行, 不 持久化; 读档 后 旧 会话 失效,
+	# 防 顶栏/状态行 展示 跨 运行 累计; 与 poison_events 读档 清空 同口径)
+	_auto_tower_seq = 0
+	_auto_tower_last_txt = ""
+	_auto_tower_wins = 0
+	_auto_tower_stone = 0.0
 	# M6-2: DIY 词缀 (旧档缺字段 默认 空; 非法 项 丢弃 防 污染)
 	# 顺序: 先 槽位升级 (affix_load 校验 依赖 槽位 上限), 再 库存, 最后 装配
 	slot_upgrades = {}
