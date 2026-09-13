@@ -107,6 +107,7 @@ var affix_tier_names: Array = []       # M6-2: 词缀 品质 5 档 名称
 var _affix_buckets: Array = []         # M6-2: 掉落 品质 权重 20 桶
 var _affix_sources := {}               # M6-2: 掉落 来源 配置 (normal/elite/boss/milestone)
 var _affix_cfg := {}                   # M6-2: 装配/背包 配置 (bag_capacity/slots_per_equip/slot_max)
+var _affix_mat := {}                   # 打磨-96: 材料 系统 配置 (decomp_base/decomp_per_tier/exchange_base/exchange_step/slot_up_materials)
 
 # ---- 玩家状态 ----
 var realm_idx := 0          # 当前境界索引
@@ -164,6 +165,8 @@ var poison_battles := 0          # 剧毒 跨场 debuff 剩余 场数 (0=无毒;
 var affix_bag := {}             # 词缀 id -> 堆叠 数量 (数量制, 背包格数 = 非零 id 数)
 var affix_load := {}            # 装备 id -> {0,1,2,...: 词缀 id} (槽位 -> 词缀)
 var slot_upgrades := {}         # 装备 id -> 额外 槽位数 (0..1, 道祖期 上限 4 槽)
+# 打磨-96: 词缀 材料 (M6 经济闭环: 分解 产出 / 兑换 保底 获取 / 槽位 强化; 旧档缺字段 默认 0)
+var affix_materials := 0        # 材料 总量 (分解 产出, 兑换/槽位升级 消耗; 存档 持久化)
 # M5-3: 自动爬塔 (开=镇妖塔+登天梯 自动 挑战; GameData._process 每帧驱动, 自门控,
 # 胜推进/败停留 天然无热循环; 与 自动系列 4 开关 同口径: 存档持久化, 旧档缺字段默认 关, 离线期间 不触发)
 var auto_tower := false
@@ -270,6 +273,8 @@ func _load_affix_data() -> void:
 		if dp.has("sources"):
 			_affix_sources = dp["sources"]
 	_affix_cfg = af.get("config", {})
+	# 打磨-96: 材料 系统 配置 (affixes.json config.materials; 缺失 默认 口径 兜底)
+	_affix_mat = _affix_cfg.get("materials", {})
 
 # M5-2: 加载 爬塔 数据 (镇妖塔 1000 层表 / 登天梯 公式 / 145 怪物 / 18 特性)
 func _load_tower_data() -> void:
@@ -500,8 +505,10 @@ func affix_add(id: String, n: int) -> int:
 	if a.is_empty() or n <= 0:
 		return 0
 	if not affix_bag.has(id) and affix_bag_full():
-		# 背包满: 普通品质 (tier 0) 自动入料 (丢弃不占格, 计 分解 埋点), 高品质 拒绝
+		# 背包满: 普通品质 (tier 0) 自动入料 (分解, 不占格, 计 分解 埋点; 打磨-96: 产出 材料),
+		# 高品质 拒绝 (返回 未入包 计数, 掉落 结算 跳过)
 		if int(a.get("tier", 0)) == 0:
+			affix_materials += affix_decomp_gain(id) * n
 			_stat_inc("affix_decompose", n)
 			return 0
 		return 0
@@ -509,7 +516,8 @@ func affix_add(id: String, n: int) -> int:
 	_affix_seen_mark(id)  # M6-3: 收集 成就 曾 入包 标记 (只增不减)
 	return n
 
-# 分解: 词缀 -> 材料 (防 背包 溢出; 数量 上限 钳制). 返回 实际 分解 数
+# 分解: 词缀 -> 材料 (M6 经济闭环; 数量 上限 钳制). 打磨-96: 每 件 产出 1+品质档 材料
+# (普通 1 / 优秀 2 / 稀有 3 / 史诗 4 / 传说 5, 配置 兜底); 返回 实际 分解 数
 func affix_decompose(id: String, n: int = -1) -> int:
 	if not affix_bag.has(id):
 		return 0
@@ -517,12 +525,75 @@ func affix_decompose(id: String, n: int = -1) -> int:
 	var cnt := have if n < 0 else mini(n, have)
 	if cnt <= 0:
 		return 0
+	affix_materials += affix_decomp_gain(id) * cnt
 	_stat_inc("affix_decompose", cnt)
 	if have - cnt <= 0:
 		affix_bag.erase(id)
 	else:
 		affix_bag[id] = have - cnt
 	return cnt
+
+# ---------- 打磨-96: 词缀 材料 系统 (M6 经济闭环: 分解 产出 材料 / 材料 兑换 特定 词缀 保底 获取) ----------
+# 材料 产出: 分解 词缀 (affix_decompose) 每 件 得 1+品质档; 背包满 普通 自动入料 同 口径 产出.
+# 材料 消耗: ① 兑换 指定 池/品质/变体 词缀 (保底 获取, 定向 收集) ② 槽位 升级 3->4 (affix_slot_upgrade).
+# 数值 口径 (affixes.json config.materials 数据驱动, 兜底 默认 与 gen_data 一致):
+#   分解 产出 = decomp_base + decomp_per_tier x tier (1..5); 兑换 成本 = (exchange_base + exchange_step x tier)^2 (25..441);
+#   分解 回买 同品质 恒 亏 (材料 不 是 无本 套利, 兑换 = 稀缺 保底 定价).
+
+# 每 件 词缀 分解 产出 材料 数 (1+品质档; 未知 id=0; 配置 兜底 默认 1+1x tier)
+func affix_decomp_gain(id: String) -> int:
+	var a: Dictionary = affix_by_id.get(id, {})
+	if a.is_empty():
+		return 0
+	var base: int = int(_affix_mat.get("decomp_base", 1))
+	var per: int = int(_affix_mat.get("decomp_per_tier", 1))
+	return maxi(1, base + per * int(a.get("tier", 0)))
+
+# 兑换 指定 词缀 1 件 的 材料 成本 ((base + step x 品质档)^2; 未知 id = -1 表 不可 兑换)
+func affix_exchange_cost(id: String) -> int:
+	var a: Dictionary = affix_by_id.get(id, {})
+	if a.is_empty():
+		return -1
+	var base: int = int(_affix_mat.get("exchange_base", 5))
+	var step: int = int(_affix_mat.get("exchange_step", 4))
+	return (base + step * int(a.get("tier", 0))) ** 2
+
+# 兑换 指定 池/品质/变体 词缀 (保底 获取: 材料 直接 换 指定 词缀, 入包 + 收集 标记 同 affix_add 口径;
+# 背包满 时 拒绝 (兑换 不 走 自动入料 路径 — 定向 获取 应 先 腾 背包); 材料 不足 拒绝 不 扣).
+# 成功 返回 "", 失败 返回 原因
+func affix_exchange(id: String) -> String:
+	var a: Dictionary = affix_by_id.get(id, {})
+	if a.is_empty():
+		return "未找到该词缀"
+	if affix_bag_full():
+		return "背包已满 (先 分解/装配 腾 空间 再 兑换)"
+	var cost: int = affix_exchange_cost(id)
+	if affix_materials < cost:
+		return "材料不足 (需 %d, 当前 %d)" % [cost, affix_materials]
+	affix_materials -= cost
+	affix_bag[id] = int(affix_bag.get(id, 0)) + 1
+	_affix_seen_mark(id)
+	_stat_inc("affix_exchange")
+	return ""
+
+# 槽位 升级 3->4 的 材料 成本 (配置 兜底 200; 打磨-96: 道祖期 解锁 后 消耗 材料 强化)
+func affix_slot_up_cost() -> int:
+	return maxi(0, int(_affix_mat.get("slot_up_materials", 200)))
+
+# 打磨-96: 指定 池/品质 的 最高 价值 词缀 id (兑换 目标; 数据层 确定性: 同池 同品质 内
+# 数值 随 variant 递增 — 取 数值 最高 的 变体; 同值 按 id 字典序 兜底; 无 该 池/品质 返回 "")
+func affix_best_variant_id(pool: String, tier: int) -> String:
+	var best := ""
+	var best_v: float = -1.0
+	for aid in affix_by_id:
+		var a: Dictionary = affix_by_id[aid]
+		if str(a.get("pool", "")) != pool or int(a.get("tier", -1)) != tier:
+			continue
+		var v: float = float(a.get("value", 0.0))
+		if v > best_v or (v == best_v and str(aid) < best):
+			best_v = v
+			best = str(aid)
+	return best
 
 # 装配: 背包 词缀 装入 装备 槽位 (背包 -1; 词缀 不消耗, 纯 排列 组合).
 # 成功 返回 "", 失败 返回 原因 (背包 无此词缀/槽位 已满/该槽已装 同词缀 等)
@@ -580,7 +651,7 @@ func affix_swap(equip_id: String, slot_pos: int, affix_id: String) -> String:
 		return err
 	return affix_equip(equip_id, slot_pos, affix_id)
 
-# 槽位 升级: 道祖期 解锁 3 槽 -> 4 槽 (每件 至多 1 次; 无 资源 消耗 口径, M6-4 数值 平衡 可 追加)
+# 槽位 升级: 道祖期 解锁 3 槽 -> 4 槽 (每件 至多 1 次; 打磨-96: 消耗 材料 强化, 成本 200 [数据 配置])
 func affix_slot_upgrade(equip_id: String) -> String:
 	if not owned_eq.has(equip_id):
 		return "尚未拥有该装备"
@@ -588,6 +659,10 @@ func affix_slot_upgrade(equip_id: String) -> String:
 		return "槽位 已 满级"
 	if not ascended or dao_level < IMMORTAL_REALMS.size() - 1:
 		return "需 道祖期 解锁 第 4 槽"
+	var mat_cost: int = affix_slot_up_cost()
+	if affix_materials < mat_cost:
+		return "材料不足 (需 %d, 当前 %d)" % [mat_cost, affix_materials]
+	affix_materials -= mat_cost
 	slot_upgrades[equip_id] = 1
 	return ""
 
@@ -1173,7 +1248,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "skill_use", "item_buy", "equip_buy", "tower_win", "affix_drop", "affix_equip", "affix_decompose"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "skill_use", "item_buy", "equip_buy", "tower_win", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -2912,6 +2987,7 @@ func save_game() -> void:
 		"affix_bag": affix_bag,
 		"affix_load": affix_load,
 		"slot_upgrades": slot_upgrades,
+		"affix_materials": affix_materials,  # 打磨-96: 词缀 材料 (旧档缺字段 默认 0)
 		"seen_affixes": seen_affixes,  # M6-3: 词缀 收集 (曾 入包; 旧档缺字段 默认 空)
 		"ts": int(Time.get_unix_time_from_system()),
 	}
@@ -2970,6 +3046,8 @@ func load_game() -> void:
 		for k in su:
 			if owned_eq.has(str(k)) and int(su[k]) >= 1:
 				slot_upgrades[str(k)] = 1
+	# 打磨-96: 词缀 材料 (旧档缺字段 默认 0; 负值 钳制 0 防 脏数据)
+	affix_materials = maxi(0, int(parsed.get("affix_materials", 0)))
 	affix_bag = {}
 	var ab: Dictionary = parsed.get("affix_bag", {})
 	if typeof(ab) == TYPE_DICTIONARY:

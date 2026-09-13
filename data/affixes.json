@@ -1496,7 +1496,14 @@
   "config": {
     "bag_capacity": 30,
     "slots_per_equip": 3,
-    "slot_max": 4
+    "slot_max": 4,
+    "materials": {
+      "decomp_base": 1,
+      "decomp_per_tier": 1,
+      "exchange_base": 5,
+      "exchange_step": 4,
+      "slot_up_materials": 200
+    }
   },
   "tier_names": [
     "普通",

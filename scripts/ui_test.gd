@@ -4700,6 +4700,7 @@ func _assert_m63_diy() -> void:
 	g.affix_bag = {}
 	g.affix_load = {}
 	g.slot_upgrades = {}
+	g.affix_materials = 0  # 打磨-96: 材料 归零 (防 前序 段 污染, 断言 材料 恒等)
 	g.seen_affixes = []
 	g.stones = 1e12
 	g.buy_equipment("weapon_0_0")
@@ -4792,12 +4793,62 @@ func _assert_m63_diy() -> void:
 	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt(g.equip_score("weapon_0_0")), "M6-3 分解 后 评分 行 不变")
 	# tooltip 含 评分 行 (equip_detail 含 词缀槽 + 评分)
 	check(str((ui._equip_row_nodes["weapon_0_0"] as Node).tooltip_text).find("评分") >= 0, "M6-3 装备 tooltip 含 评分 行")
+	# ---------- 打磨-96: 词缀 材料 兑换 面板 (UI 断言; 分解 全部 时 背包 仅 qi 普通 x1 -> 材料 +1) ----------
+	ui._refresh_m96_ui()  # 材料行 同步 刷新 (主循环 刷新 口径)
+	check(ui._m96_mat_hdr != null and ui._m96_exch_btn != null, "打磨-96 材料行/兑换 按钮 节点 存在")
+	check(str(ui._m96_mat_hdr.text) == "词缀 材料 1 (分解 产出; 兑换/强化 槽位 消耗)", "打磨-96 分解 全部 后 材料行 显示 1 (实际 %s)" % ui._m96_mat_hdr.text)
+	check(ui._m96_pool_btns.size() == 6 and ui._m96_tier_btns.size() == 5, "打磨-96 池 6 档/品质 5 档 按钮 齐全 (实际 %d/%d)" % [ui._m96_pool_btns.size(), ui._m96_tier_btns.size()])
+	check(str(ui._m96_pool) == "" and int(ui._m96_tier) == -1, "打磨-96 初始 池/品质 未 选中")
+	for p in ui._m96_pool_btns:
+		check((ui._m96_pool_btns[p] as Button).button_pressed == false, "打磨-96 池 按钮 初始 未 点亮 (%s)" % str(p))
+	# 选 池 + 品质 -> 按钮 点亮 + 文案 (材料 9 < 成本 25 = 不足)
+	ui._on_m96_pool("qi_rate")
+	ui._on_m96_tier(0)
+	check(str(ui._m96_pool) == "qi_rate" and int(ui._m96_tier) == 0, "打磨-96 选中 池/品质 记录")
+	check((ui._m96_pool_btns["qi_rate"] as Button).button_pressed and (ui._m96_tier_btns["0"] as Button).button_pressed, "打磨-96 选中 按钮 点亮")
+	check(str(ui._m96_exch_btn.text) == "兑换 (材料不足)", "打磨-96 材料不足 文案 (实际 %s)" % ui._m96_exch_btn.text)
+	# 材料 补足 25 -> 文案 x1
+	g.affix_materials = 25
+	ui._refresh_m96_exchange()
+	check(str(ui._m96_exch_btn.text) == "兑换 x1 (25 材料/件)", "打磨-96 可兑换 计数 文案 (实际 %s)" % ui._m96_exch_btn.text)
+	# 兑换 -> 入包 最高 价值 变体 (qi_rate 普通 = af_qi_rate_0_3) + 材料 归 0 + 收集 标记
+	ui._on_m96_exchange()
+	var after96: int = int(g.affix_bag.get("af_qi_rate_0_3", 0))
+	check(after96 == 1, "打磨-96 兑换 入包 最高 变体 词缀 (实际 %d)" % after96)
+	check(g.affix_materials == 0, "打磨-96 兑换 扣 25 材料 (实际 %d)" % g.affix_materials)
+	check(int(g.stats.get("affix_exchange", 0.0)) >= 1, "打磨-96 兑换 统计 affix_exchange 计数")
+	ui._refresh_m96_ui()  # 材料行 同步 刷新 (主循环 刷新 口径)
+	check(str(ui._m96_mat_hdr.text) == "词缀 材料 0 (分解 产出; 兑换/强化 槽位 消耗)", "打磨-96 兑换 后 材料行 0 (实际 %s)" % ui._m96_mat_hdr.text)
+	# 材料 不足 拒绝 (不 扣 不 入包)
+	ui._on_m96_exchange()
+	check(int(g.affix_bag.get("af_qi_rate_0_3", 0)) == 1 and g.affix_materials == 0, "打磨-96 材料不足 拒绝 无 副作用")
+	# 背包满 拒绝 (填 30 格 后 兑换 拒绝, 材料/背包 不变)
+	var ex_pools: Array = ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]
+	g.affix_bag = {}
+	var filled96 := 0
+	for pi in ex_pools.size():
+		for v in 4:
+			g.affix_bag["af_%s_0_%d" % [ex_pools[pi], v]] = 1
+			filled96 += 1
+		g.affix_bag["af_%s_1_0" % ex_pools[pi]] = 1
+		filled96 += 1
+	check(g.affix_bag_full(), "打磨-96 背包 30 格 填满 (实际 %d 格)" % g.affix_bag_used())
+	g.affix_materials = 50
+	ui._on_m96_exchange()
+	check(str(ui._msg_label.text).find("背包已满") >= 0, "打磨-96 背包满 兑换 拒绝 提示 (实际 %s)" % ui._msg_label.text)
+	check(int(g.affix_bag.size()) == 30 and g.affix_materials == 50, "打磨-96 背包满 拒绝 无 副作用 (背包 %d 材料 %d)" % [g.affix_bag.size(), g.affix_materials])
+	# 池 按钮 再 点 取消 选中 (toggle)
+	ui._on_m96_pool("qi_rate")
+	check(str(ui._m96_pool) == "" and (ui._m96_pool_btns["qi_rate"] as Button).button_pressed == false, "打磨-96 池 按钮 再 点 取消 选中")
 	# 收尾: 恢复 干净 基准
 	g.affix_bag = {}
 	g.affix_load = {}
 	g.slot_upgrades = {}
+	g.affix_materials = 0
 	g.seen_affixes = []
 	ui._m63_sel = ""
+	ui._m96_pool = ""
+	ui._m96_tier = -1
 	g.owned_eq.clear()
 	g.equipped.clear()
 	g.stones = 0.0
@@ -4805,4 +4856,4 @@ func _assert_m63_diy() -> void:
 	ui._tab.current_tab = 3
 	ui._refresh()
 	await get_tree().process_frame
-	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.seen_affixes.is_empty(), "M6-3 收尾 干净 基准")
+	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.seen_affixes.is_empty() and g.affix_materials == 0, "M6-3 收尾 干净 基准")

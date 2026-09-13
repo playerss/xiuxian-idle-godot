@@ -487,6 +487,18 @@ AFFIX_DROP_SOURCES = {
 AFFIX_BAG_CAPACITY = 30      # 背包 容量 (格, 可 成就 解锁 +10)
 AFFIX_SLOTS_PER_EQUIP = 3    # 每件 装备 3 词缀 槽
 AFFIX_SLOT_MAX = 4           # 道祖期 强化 上限 4 槽
+# 打磨-96: 词缀 材料 系统 (M6 经济闭环: 分解 产出 材料 / 材料 兑换 特定 词缀 保底 获取 /
+# 材料 强化 词缀槽 3->4). 数值 设计:
+#   分解 产出: 每 件 词缀 = 1 + tier 个 材料 (普通 1 / 优秀 2 / 稀有 3 / 史诗 4 / 传说 5)
+#   兑换: 品质 t 词缀 1 件 = (5 + 4*t)^2 材料 (普通 25 / 优秀 81 / 稀有 169 / 史诗 289 / 传说 441)
+#     -> 分解 回买 同品质 恒 亏 (t=4: 分解 得 5, 回买 需 441/5=88.2 件), 材料 不 是 刷 词缀 的 无本 套利;
+#     兑换 定位 = 保底 获取 指定 池/品质 (定向 收集), 成本 高于 分解 回收 = 材料 稀缺 定价.
+#   槽位 升级: 道祖期 3->4 槽 消耗 200 材料 (5 部位 全升 = 1000 材料, 长线 消耗 出口)
+AFFIX_DECOMP_BASE = 1        # 分解 产出 基数 (件 数)
+AFFIX_DECOMP_PER_TIER = 1    # 每 品质档 追加 材料 数
+AFFIX_EXCHANGE_BASE = 5      # 兑换 成本 基数 (成本 = (5 + 4*t)^2)
+AFFIX_EXCHANGE_STEP = 4      # 兑换 成本 每档 追加
+AFFIX_SLOT_UP_MAT = 200      # 槽位 升级 3->4 材料 消耗
 
 def _affix_tier_weights(b):
     """桶 b (0..19) 的品质 权重 [普通,优秀,稀有,史诗,传说] (整数, 滚动时 归一化)"""
@@ -680,6 +692,18 @@ def main():
         src["boss"]["bonus_buckets"] > src["elite"]["bonus_buckets"], "桶位 上移 须 普通<精英<Boss"
     # 装配/背包 配置
     assert AFFIX_BAG_CAPACITY == 30 and AFFIX_SLOTS_PER_EQUIP == 3 and AFFIX_SLOT_MAX == 4, "背包 30 格 / 3 槽 / 上限 4 槽 口径"
+    # 打磨-96: 材料 系统 配置 口径 (分解 产出 递增 / 兑换 成本 递增 且 分解回买 恒亏 / 槽位 升级 成本)
+    mat_cfg = {
+        "decomp_base": AFFIX_DECOMP_BASE, "decomp_per_tier": AFFIX_DECOMP_PER_TIER,
+        "exchange_base": AFFIX_EXCHANGE_BASE, "exchange_step": AFFIX_EXCHANGE_STEP,
+        "slot_up_materials": AFFIX_SLOT_UP_MAT,
+    }
+    for t in range(len(AFFIX_TIERS)):
+        decomp = AFFIX_DECOMP_BASE + AFFIX_DECOMP_PER_TIER * t
+        exch = (AFFIX_EXCHANGE_BASE + AFFIX_EXCHANGE_STEP * t) ** 2
+        assert decomp >= 1, f"分解 产出 须 >=1 (tier{t}={decomp})"
+        assert exch >= 5 * decomp, f"兑换 成本 须 >= 分解 产出 x5 防 无本 套利 (tier{t}: 兑换{exch} 分解{decomp})"
+    assert AFFIX_SLOT_UP_MAT >= 200, "槽位 升级 材料 成本 口径"
     with open(os.path.join(DATA, "skills.json"), "w", encoding="utf-8") as f:
         json.dump({"skills": skills}, f, ensure_ascii=False, indent=2)
     with open(os.path.join(DATA, "equipment.json"), "w", encoding="utf-8") as f:
@@ -715,7 +739,8 @@ def main():
             "drop": drop,
             "config": {"bag_capacity": AFFIX_BAG_CAPACITY,
                        "slots_per_equip": AFFIX_SLOTS_PER_EQUIP,
-                       "slot_max": AFFIX_SLOT_MAX},
+                       "slot_max": AFFIX_SLOT_MAX,
+                       "materials": mat_cfg},
             "tier_names": AFFIX_TIERS, "tier_mult": AFFIX_TIER_MULT,
             "tier_color": AFFIX_TIER_COLOR,
         }, f, ensure_ascii=False, indent=2)

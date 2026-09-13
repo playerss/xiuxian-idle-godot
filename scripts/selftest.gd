@@ -5216,25 +5216,32 @@ func _init() -> void:
 	check(m62_rt1.has("affix_drops") and (m62_rt1["affix_drops"] as Array).size() <= 1, "M6-2 战斗 结果 含 affix_drops (实际 %s)" % str(m62_rt1["affix_drops"]))
 	check(int(g.stats.get("affix_drop", 0.0)) >= m62_t0a, "M6-2 战斗 掉落 统计 affix_drop 只增 (实际 %d -> %d)" % [m62_t0a, int(g.stats.get("affix_drop", 0.0))])
 	g.tower_fixed_floor = 0
-	# 槽位 升级 (道祖期 解锁 4 槽)
+	# 槽位 升级 (道祖期 解锁 4 槽; 打磨-96: 消耗 200 材料 — 先 测 材料不足 拒绝)
+	g.affix_bag = {}
+	g.affix_materials = 0  # 打磨-96: 显式 归零 (本段 前序 掉落 测试 分解 产出 材料 累积, 防 污染)
 	check(g.affix_slot_upgrade("weapon_0_0") == "需 道祖期 解锁 第 4 槽", "M6-2 未飞升 4 槽 拒绝")
 	g.ascended = true
 	g.dao_level = 8
-	check(g.affix_slot_upgrade("weapon_0_0") == "", "M6-2 道祖期 升级 成功")
+	check(g.affix_slot_upgrade("weapon_0_0") == "材料不足 (需 200, 当前 0)", "M6-2 道祖期 材料不足 拒绝 (打磨-96, 实际 %s)" % g.affix_slot_upgrade("weapon_0_0"))
+	g.affix_materials = 200
+	check(g.affix_slot_upgrade("weapon_0_0") == "", "M6-2 道祖期 升级 成功 (材料 200->0)")
+	check(g.affix_materials == 0, "M6-2 升级 扣 200 材料 (实际 %d)" % g.affix_materials)
 	check(g.equipment_slots("weapon_0_0") == 4, "M6-2 升级 后 4 槽 (实际 %d)" % g.equipment_slots("weapon_0_0"))
 	check(g.affix_slot_upgrade("weapon_0_0") == "槽位 已 满级", "M6-2 再 升级 拒绝 (幂等)")
 	check(g.affix_slot_upgrade("not_exist") == "尚未拥有该装备", "M6-2 未拥有 升级 拒绝")
 	g.ascended = false
 	g.dao_level = 0
-	# 存档 往返 (affix_bag / affix_load / slot_upgrades + 非法 项 过滤)
+	# 存档 往返 (affix_bag / affix_load / slot_upgrades / affix_materials + 非法 项 过滤)
 	g.affix_add("af_qi_rate_2_0", 3)
 	g.affix_load["weapon_0_0"] = {1: "af_def_0_0"}
 	g.slot_upgrades["weapon_0_0"] = 1
+	g.affix_materials = 333
 	g.save_game()
 	g.load_game()
 	check(int(g.affix_bag.get("af_qi_rate_2_0", 0)) == 3, "M6-2 存档 往返 词缀 堆叠 计数 (实际 %d)" % int(g.affix_bag.get("af_qi_rate_2_0", 0)))
 	check(str(g.affix_load.get("weapon_0_0", {}).get("1", "")) == "af_def_0_0", "M6-2 存档 往返 装配 槽位")
 	check(int(g.slot_upgrades.get("weapon_0_0", 0)) == 1 and g.equipment_slots("weapon_0_0") == 4, "M6-2 存档 往返 槽位 升级 (4 槽)")
+	check(g.affix_materials == 333, "M6-2 存档 往返 材料 (打磨-96, 实际 %d)" % g.affix_materials)
 	var m62_sf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.READ)
 	var m62_sv: Variant = JSON.parse_string(m62_sf.get_as_text()) if m62_sf != null else null
 	if m62_sf != null:
@@ -5244,6 +5251,7 @@ func _init() -> void:
 		m62_sd["affix_bag"] = {"af_not_exist": 5, "af_atk_0_0": -3}
 		m62_sd["affix_load"] = {"weapon_0_0": {0: "af_not_exist"}, "not_owned": {0: "af_atk_0_0"}}
 		m62_sd["slot_upgrades"] = {"not_owned": 1, "weapon_0_0": 1}
+		m62_sd["affix_materials"] = -5  # 打磨-96: 非法 负值 材料
 		var m62_wf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
 		if m62_wf != null:
 			m62_wf.store_string(JSON.stringify(m62_sd))
@@ -5252,7 +5260,8 @@ func _init() -> void:
 	check(g.affix_bag.is_empty(), "M6-2 读档 非法 词缀 项 过滤 (背包 空, 实际 %d)" % g.affix_bag_used())
 	check(g.affix_load.is_empty(), "M6-2 读档 非法 装配 项 过滤 (含 未拥有 装备)")
 	check(int(g.slot_upgrades.get("weapon_0_0", 0)) == 1, "M6-2 读档 槽位 升级 保留 合法 项")
-	# 旧档 兼容 (缺 字段 默认 空)
+	check(g.affix_materials == 0, "M6-2 读档 负值 材料 钳制 0 (打磨-96, 实际 %d)" % g.affix_materials)
+	# 旧档 兼容 (缺 字段 默认 空/0)
 	var m62_oldf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.READ)
 	var m62_ov: Variant = JSON.parse_string(m62_oldf.get_as_text()) if m62_oldf != null else null
 	if m62_oldf != null:
@@ -5262,17 +5271,20 @@ func _init() -> void:
 		m62_od.erase("affix_bag")
 		m62_od.erase("affix_load")
 		m62_od.erase("slot_upgrades")
+		m62_od.erase("affix_materials")
 		var m62_wof: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
 		if m62_wof != null:
 			m62_wof.store_string(JSON.stringify(m62_od))
 			m62_wof.close()
 		g.load_game()
 	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.slot_upgrades.is_empty(), "M6-2 旧档 缺 字段 默认 空")
+	check(g.affix_materials == 0, "M6-2 旧档 缺 材料 字段 默认 0 (打磨-96, 实际 %d)" % g.affix_materials)
 	# 收尾: 归零 全 状态 落盘 干净 存档 (本段 置于 套件 末尾, 落盘 态 供 ui_test 等 独立 进程 读档;
 	# 口径 与 既有 收尾 归零 一致: 资源/境界/塔/5 开关/词缀 全 归零)
 	g.affix_bag = {}
 	g.affix_load = {}
 	g.slot_upgrades = {}
+	g.affix_materials = 0  # 打磨-96: 材料 归零 (本段 升级 测试 消耗 200 后 余 0, 显式 归零 落盘 干净 档)
 	g.learned.clear()
 	g.owned.clear()
 	g.owned_eq.clear()
@@ -5313,6 +5325,7 @@ func _init() -> void:
 	g.affix_bag = {}
 	g.affix_load = {}
 	g.slot_upgrades = {}
+	g.affix_materials = 0  # 打磨-96: 材料 归零 (防 前序 段 污染)
 	g.seen_affixes = []
 	g.ach_done.clear()
 	g.realm_idx = 0
@@ -5648,7 +5661,116 @@ func _init() -> void:
 	for _i94 in 3:
 		g.affix_drop_text(d3)
 		check(g.stats == snap94 and absf(g.stones - sto94) < 1e-9 and g.affix_bag == bag94,
-			"打磨-94 只读 接口 连读 无 副作用 (iter %d)" % _i94)
+				"打磨-94 只读 接口 连读 无 副作用 (iter %d)" % _i94)
+
+	# ---------- 打磨-96: 词缀 材料 系统 (M6 经济闭环: 分解 产出 材料 / 材料 兑换 特定 词缀 保底 获取 /
+	# 槽位 升级 消耗 材料; 存档 往返 已在 M6-2 段 覆盖, 本段 聚焦 分解产出/兑换/套利 恒亏/槽位升级) ----------
+	# 受控 基准 (防 前序 段 污染: 背包/材料/收集 归零)
+	g.affix_bag = {}
+	g.affix_materials = 0
+	g.seen_affixes = []
+	# 1) 分解 产出 恒等 (每 件 = 1 + 品质档: 普通 1 / 优秀 2 / 稀有 3 / 史诗 4 / 传说 5; 配置 数据驱动)
+	check(g.affix_decomp_gain("af_qi_rate_0_0") == 1, "打磨-96 普通 分解 产出 = 1 (实际 %d)" % g.affix_decomp_gain("af_qi_rate_0_0"))
+	check(g.affix_decomp_gain("af_qi_rate_1_0") == 2, "打磨-96 优秀 分解 产出 = 2 (实际 %d)" % g.affix_decomp_gain("af_qi_rate_1_0"))
+	check(g.affix_decomp_gain("af_qi_rate_2_0") == 3, "打磨-96 稀有 分解 产出 = 3 (实际 %d)" % g.affix_decomp_gain("af_qi_rate_2_0"))
+	check(g.affix_decomp_gain("af_qi_rate_3_0") == 4, "打磨-96 史诗 分解 产出 = 4 (实际 %d)" % g.affix_decomp_gain("af_qi_rate_3_0"))
+	check(g.affix_decomp_gain("af_qi_rate_4_0") == 5, "打磨-96 传说 分解 产出 = 5 (实际 %d)" % g.affix_decomp_gain("af_qi_rate_4_0"))
+	check(g.affix_decomp_gain("not_exist_id") == 0, "打磨-96 未知 id 分解 产出 0 (防御)")
+	g.affix_add("af_qi_rate_0_0", 3)
+	check(g.affix_decompose("af_qi_rate_0_0", 2) == 2 and g.affix_materials == 2, "打磨-96 分解 2 件 普通 得 2 材料 (实际 %d)" % g.affix_materials)
+	check(g.affix_decompose("af_qi_rate_0_0", -1) == 1 and g.affix_materials == 3, "打磨-96 分解 余 1 件 得 3 材料 (实际 %d)" % g.affix_materials)
+	check(g.affix_bag.is_empty(), "打磨-96 分解 后 背包 空")
+	# 高品质 分解 产出 递增 (稀有 3 x 2 件 = 6; 累计 3+6=9)
+	g.affix_add("af_atk_2_0", 2)
+	check(g.affix_decompose("af_atk_2_0", -1) == 2 and g.affix_materials == 9, "打磨-96 稀有 2 件 分解 累计 9 材料 (实际 %d)" % g.affix_materials)
+	# 2) 兑换 成本 恒等 ((5 + 4 x 品质档)^2: 普通 25 / 优秀 81 / 稀有 169 / 史诗 289 / 传说 441)
+	check(g.affix_exchange_cost("af_qi_rate_0_0") == 25, "打磨-96 普通 兑换 成本 25 (实际 %d)" % g.affix_exchange_cost("af_qi_rate_0_0"))
+	check(g.affix_exchange_cost("af_qi_rate_1_0") == 81, "打磨-96 优秀 兑换 成本 81 (实际 %d)" % g.affix_exchange_cost("af_qi_rate_1_0"))
+	check(g.affix_exchange_cost("af_qi_rate_2_0") == 169, "打磨-96 稀有 兑换 成本 169 (实际 %d)" % g.affix_exchange_cost("af_qi_rate_2_0"))
+	check(g.affix_exchange_cost("af_qi_rate_3_0") == 289, "打磨-96 史诗 兑换 成本 289 (实际 %d)" % g.affix_exchange_cost("af_qi_rate_3_0"))
+	check(g.affix_exchange_cost("af_qi_rate_4_0") == 441, "打磨-96 传说 兑换 成本 441 (实际 %d)" % g.affix_exchange_cost("af_qi_rate_4_0"))
+	check(g.affix_exchange_cost("not_exist_id") == -1, "打磨-96 未知 id 兑换 成本 -1 (防御)")
+	# 分解 回买 同品质 恒 亏 (材料 不 是 无本 套利: 每 品质档 兑换 成本 / 分解 产出 >= 5)
+	for t in 5:
+		var decomp: int = g.affix_decomp_gain("af_qi_rate_%d_0" % t)
+		var exch: int = g.affix_exchange_cost("af_qi_rate_%d_0" % t)
+		check(exch >= 5 * decomp, "打磨-96 品质 %d 兑换 成本 %d >= 分解 产出 %d x5 (防 套利)" % [t, exch, decomp])
+	# 3) 兑换 保底 获取 (材料 换 指定 词缀: 扣 材料 + 入包 + 收集 标记 + 埋点; 定向 获取 指定 池/品质)
+	g.affix_materials = 500
+	g.stones = 0.0
+	var ex0: int = int(g.stats.get("affix_exchange", 0.0))
+	check(g.affix_exchange("af_qi_rate_1_1") == "", "打磨-96 兑换 优秀 成功 (材料 500->419)")
+	check(g.affix_materials == 500 - 81, "打磨-96 兑换 扣 81 材料 (实际 %d)" % g.affix_materials)
+	check(int(g.affix_bag.get("af_qi_rate_1_1", 0)) == 1, "打磨-96 兑换 词缀 入包 x1")
+	check(g.seen_affixes.has("af_qi_rate_1_1"), "打磨-96 兑换 词缀 收集 标记 (只增不减)")
+	check(int(g.stats.get("affix_exchange", 0.0)) == ex0 + 1, "打磨-96 兑换 埋点 affix_exchange +1 (实际 %d -> %d)" % [ex0, int(g.stats.get("affix_exchange", 0.0))])
+	check(g.affix_exchange("af_qi_rate_1_1") == "", "打磨-96 再 兑换 同 词缀 成功 (材料 419->338)")
+	check(int(g.affix_bag.get("af_qi_rate_1_1", 0)) == 2, "打磨-96 兑换 堆叠 x2")
+	# 材料 不足 拒绝 不 扣 (定向 兑换 传说 441 需 441, 当前 338 不足)
+	check(g.affix_exchange("af_qi_rate_4_0") == "材料不足 (需 441, 当前 338)", "打磨-96 材料 不足 兑换 拒绝 (实际 %s)" % g.affix_exchange("af_qi_rate_4_0"))
+	check(g.affix_materials == 338, "打磨-96 兑换 失败 不 扣 材料 (实际 %d)" % g.affix_materials)
+	check(int(g.affix_bag.get("af_qi_rate_4_0", 0)) == 0, "打磨-96 兑换 失败 不 入包")
+	# 未知 id 兑换 拒绝
+	check(g.affix_exchange("not_exist_id") == "未找到该词缀", "打磨-96 未知 id 兑换 拒绝 (实际 %s)" % g.affix_exchange("not_exist_id"))
+	# 4) 槽位 升级 消耗 材料 (道祖期 解锁 后 扣 200; 材料 不足 拒绝)
+	g.ascended = true
+	g.dao_level = 8
+	g.owned_eq.clear()
+	g.owned_eq.append("robe_0_0")
+	g.equipped.clear()
+	g.affix_materials = 100
+	check(g.affix_slot_upgrade("robe_0_0") == "材料不足 (需 200, 当前 100)", "打磨-96 槽位升级 材料 不足 拒绝 (实际 %s)" % g.affix_slot_upgrade("robe_0_0"))
+	check(g.equipment_slots("robe_0_0") == 3, "打磨-96 升级 失败 槽位 不变 (实际 %d)" % g.equipment_slots("robe_0_0"))
+	g.affix_materials = 300
+	check(g.affix_slot_upgrade("robe_0_0") == "", "打磨-96 道祖期 槽位 升级 成功 (材料 300->100)")
+	check(g.affix_materials == 100, "打磨-96 升级 扣 200 材料 (实际 %d)" % g.affix_materials)
+	check(g.equipment_slots("robe_0_0") == 4, "打磨-96 升级 后 4 槽 (实际 %d)" % g.equipment_slots("robe_0_0"))
+	check(g.affix_slot_up_cost() == 200, "打磨-96 槽位升级 成本 接口 200 (实际 %d)" % g.affix_slot_up_cost())
+	g.ascended = false
+	g.dao_level = 0
+	# 5) 背包满 普通 自动入料 产出 材料 (背包满 时 普通 词缀 自动 分解 产出 材料, 不占 格;
+	# 堆叠 不占 格 — 须 30 种 不同 id 填满 30 格: 跨 6 池 x 5 品质 组合 取 30 个 唯一 id)
+	g.affix_bag = {}
+	g.affix_materials = 0
+	var pools96: Array = ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]
+	for i in g.affix_bag_capacity():
+		g.affix_add("af_%s_%d_0" % [pools96[i / 5], i % 5], 1)  # 6 池 x 5 品质 = 30 唯一 id
+	check(g.affix_bag_used() == g.affix_bag_capacity(), "打磨-96 背包 填满 %d 格 (实际 %d)" % [g.affix_bag_capacity(), g.affix_bag_used()])
+	g.affix_add("af_qi_rate_0_1", 1)  # 第 31 种 普通 词缀 (不在 已填 30 种 内) -> 背包满 自动 入料
+	check(g.affix_bag_used() == g.affix_bag_capacity(), "打磨-96 背包满 新 词缀 不 占 格 (仍 %d)" % g.affix_bag_used())
+	check(g.affix_materials == 1, "打磨-96 背包满 普通 自动入料 产出 1 材料 (实际 %d)" % g.affix_materials)
+	check(int(g.affix_bag.get("af_qi_rate_0_1", 0)) == 0, "打磨-96 背包满 新 词缀 未 入包")
+	# 6) 材料 兑换 指定 池/品质 定向 收集 (材料 换 指定 池 指定 品质 词缀; 史诗 离线 289 > 200 材料不足 拒绝)
+	g.affix_bag = {}
+	g.affix_materials = 200
+	check(g.affix_exchange("af_offline_rate_3_0") == "材料不足 (需 289, 当前 200)", "打磨-96 定向 兑换 史诗 材料 不足 拒绝 (实际 %s)" % g.affix_exchange("af_offline_rate_3_0"))
+	check(g.affix_materials == 200, "打磨-96 定向 兑换 失败 不 扣 材料 (实际 %d)" % g.affix_materials)
+	check(int(g.affix_bag.get("af_offline_rate_3_0", 0)) == 0, "打磨-96 定向 兑换 材料 不足 不 入包")
+	g.affix_materials = 400
+	check(g.affix_exchange("af_offline_rate_3_0") == "", "打磨-96 定向 兑换 史诗 离线 词缀 成功 (材料 400->111)")
+	check(g.affix_materials == 400 - 289, "打磨-96 定向 兑换 扣 289 材料 (实际 %d)" % g.affix_materials)
+	check(int(g.affix_bag.get("af_offline_rate_3_0", 0)) == 1 and g.seen_affixes.has("af_offline_rate_3_0"),
+			"打磨-96 定向 兑换 指定 池/品质 入包 + 收集 标记")
+	# 7) 只读 接口 连读 无 副作用 (成本/产出 只读 不 改 状态)
+	var snap96: Dictionary = g.stats.duplicate(true)
+	var mat96: int = g.affix_materials
+	var bag96: Dictionary = g.affix_bag.duplicate(true)
+	for _i96 in 3:
+		g.affix_exchange_cost("af_qi_rate_4_0")
+		g.affix_decomp_gain("af_qi_rate_0_0")
+		g.affix_slot_up_cost()
+		check(g.stats == snap96 and g.affix_materials == mat96 and g.affix_bag == bag96,
+				"打磨-96 只读 接口 连读 无 副作用 (iter %d)" % _i96)
+	# 收尾: 材料/背包/收集 归零 (防 污染 后续 段 与 落盘 档)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.affix_materials = 0
+	g.seen_affixes = []
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ascended = false
+	g.dao_level = 0
 
 	# ---------- 汇报 ----------
 	print("")

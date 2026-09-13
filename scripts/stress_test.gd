@@ -280,13 +280,17 @@ func _init() -> void:
 				break
 	check(shop_full_qi > 3.0, "M6-4 商店满装灵气加成基线 > 3 (实际 %s)" % shop_full_qi)
 	var qi_shop: float = g.qi_per_sec()
-	# 3) 道祖期 4 槽 升级 5 件 全 成功 + 满配 20 槽 (全 传说 qi_rate v3)
+	# 3) 道祖期 4 槽 升级 5 件 全 成功 + 满配 20 槽 (全 传说 qi_rate v3; 打磨-96: 升级 消耗 材料, 5 件 x 200)
 	var up_fail := 0
+	g.affix_materials = 5 * g.affix_slot_up_cost()  # 打磨-96: 备足 5 件 升级 材料 (防 前序 段 污染, 显式 置)
 	for slot in g.SLOTS:
+		if not g.owned_eq.has(str(g.equipped[slot])):
+			g.owned_eq.append(str(g.equipped[slot]))
 		var r: String = g.affix_slot_upgrade(str(g.equipped[slot]))
 		if r != "":
 			up_fail += 1
 	check(up_fail == 0, "M6-4 道祖期 4 槽升级 5 件全成功 (失败 %d)" % up_fail)
+	check(g.affix_materials == 0, "M6-4 5 件 升级 扣完 全部 材料 (打磨-96, 实际 %d)" % g.affix_materials)
 	var eq_fail := 0
 	for slot in g.SLOTS:
 		var eid: String = g.equipped[slot]

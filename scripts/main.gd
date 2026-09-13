@@ -209,6 +209,14 @@ var _m63_row_keys: Dictionary = {}       # 装备 id -> 缓存 键 (词缀 装�
 var _m63_bag_key := ""                   # 背包 抽屉 缓存 键 (内容+选中 变化 才 重建 网格)
 var _m63_sel_hdr: Label                  # M6-3: 当前选中 词缀 提示 行
 var _af_box_m63: VBoxContainer           # M6-3: 词缀背包 抽屉 VBox
+# ---------- 打磨-96: 词缀 材料 兑换 面板 (M6 经济闭环: 分解 产出 材料 / 材料 兑换 特定 词缀 保底 获取) ----------
+var _m96_mat_hdr: Label                 # 材料 行 (材料 X · 分解 产出/兑换 消耗 口径)
+var _m96_pool_btns: Dictionary = {}     # 池 id -> Button (6 池 筛选, toggle; 初始 无 选中)
+var _m96_tier_btns: Dictionary = {}     # 品质档 (0..4) -> Button (5 档, toggle; 默认 档 0)
+var _m96_pool := ""                     # 当前 选中 池 ("" = 未 选中)
+var _m96_tier := -1                     # 当前 选中 品质档 (-1 = 未 选中)
+var _m96_exch_btn: Button               # 兑换 按钮 (材料 换 当前 选中 池/品质 的 最高 变体 词缀)
+var _m96_exch_key := ""                 # 兑换 按钮 文案 缓存 键 (材料/池/档 变化 才 刷)
 var _slot_labels: Dictionary = {}
 var _card_sb_normal: StyleBoxFlat
 var _card_sb_hi: StyleBoxFlat
@@ -1445,6 +1453,60 @@ func _build_equip_page(page: Panel) -> void:
 	_m63_bag_grid.add_theme_constant_override("v_separation", 4)
 	af_box.add_child(_m63_bag_grid)
 
+	# ---------- 打磨-96: 词缀 材料 兑换 面板 (M6 经济闭环: 分解 产出 材料 -> 材料 兑换 指定 池/品质 词缀 保底 获取) ----------
+	# 材料 行 (材料 X) + 6 池 筛选 + 5 品质 筛选 + 兑换 按钮 (定向 获取 指定 池/品质 最高 变体 词缀)
+	var ex_panel := PanelContainer.new()
+	ex_panel.add_theme_stylebox_override("panel", _card_sb_normal)
+	ex_panel.tooltip_text = "词缀 材料 兑换 (M6 经济闭环): 分解 词缀 产出 材料 (每 件 1+品质档: 普通 1/优秀 2/稀有 3/史诗 4/传说 5; 背包满 时 普通 词缀 自动入料 同 产出 口径), 材料 可 兑换 指定 池/品质 词缀 (保底 定向 获取, 定向 收集 指定 池 指定 品质) 或 道祖期 强化 词缀槽 3->4 (消耗 200 材料/件)。\n兑换 成本 = (5 + 4 x 品质档)^2: 普通 25/优秀 81/稀有 169/史诗 289/传说 441 材料/件; 分解 回买 同品质 恒 亏 (材料 不 是 无本 套利, 兑换 = 稀缺 保底 定价)。\n兑换 入口 不 消耗 已装配 词缀 (纯 新增 入包), 背包满 时 拒绝 (先 分解/装配 腾 空间)。"
+	outer.add_child(ex_panel)
+	var ex_box := VBoxContainer.new()
+	ex_box.add_theme_constant_override("separation", 4)
+	ex_panel.add_child(ex_box)
+	# 材料 行 (材料 X · 分解/兑换 口径 说明; 文本变化才刷)
+	_m96_mat_hdr = _label("", 13, CYAN)
+	_m96_mat_hdr.tooltip_text = "词缀 材料 总量 (分解 词缀 产出, 每 件 1+品质档; 兑换 词缀/强化 槽位 消耗, 存档 持久化)。\n· 分解 产出: 每 件 = 1 + 品质档 (普通 1/优秀 2/稀有 3/史诗 4/传说 5)\n· 兑换 成本: (5 + 4 x 品质档)^2 (普通 25/优秀 81/稀有 169/史诗 289/传说 441)\n· 槽位 强化: 道祖期 解锁 4 槽 消耗 200 材料/件 (5 部位 全升 = 1000)"
+	ex_box.add_child(_m96_mat_hdr)
+	# 6 池 筛选 行 (与 装备页 部位/品质 筛选 同 风格; 单选 toggle, 初始 无 选中)
+	var ex_pool_bar := HBoxContainer.new()
+	ex_pool_bar.add_theme_constant_override("separation", 6)
+	ex_box.add_child(ex_pool_bar)
+	var pl_hint := _label("兑换 池:", 12, DIM)
+	ex_pool_bar.add_child(pl_hint)
+	# 池 id 顺序 固定 (数据 6 池; 中文名 取自 数据 同 口径)
+	var ex_pools: Array = ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]
+	for pid in ex_pools:
+		var pb := _make_button(_affix_pool_name(pid))
+		pb.toggle_mode = true
+		pb.custom_minimum_size = Vector2(0, 24)
+		pb.pressed.connect(_on_m96_pool.bind(pid))
+		ex_pool_bar.add_child(pb)
+		_m96_pool_btns[pid] = pb
+	# 5 品质 筛选 行 (与 词缀 品质 档 同 口径; 单选 toggle, 默认 档 0 普通)
+	var ex_tier_bar := HBoxContainer.new()
+	ex_tier_bar.add_theme_constant_override("separation", 6)
+	ex_box.add_child(ex_tier_bar)
+	var tt_hint := _label("兑换 品质:", 12, DIM)
+	ex_tier_bar.add_child(tt_hint)
+	for t in 5:
+		var tb := _make_button(GameData.affix_tier_name(t))
+		tb.toggle_mode = true
+		tb.custom_minimum_size = Vector2(0, 24)
+		tb.pressed.connect(_on_m96_tier.bind(t))
+		ex_tier_bar.add_child(tb)
+		_m96_tier_btns[str(t)] = tb
+	# 兑换 按钮 (材料 换 当前 选中 池/品质 的 最高 变体 词缀; 文案 随 材料/池/档 变化 才 刷)
+	var ex_btn_bar := HBoxContainer.new()
+	ex_btn_bar.add_theme_constant_override("separation", 8)
+	ex_box.add_child(ex_btn_bar)
+	_m96_exch_btn = _make_button("兑换")
+	_m96_exch_btn.custom_minimum_size = Vector2(0, 26)
+	_m96_exch_btn.pressed.connect(_on_m96_exchange)
+	ex_btn_bar.add_child(_m96_exch_btn)
+	var ex_sp := Control.new()
+	ex_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ex_btn_bar.add_child(ex_sp)
+	_m96_exch_btn.tooltip_text = "用 材料 兑换 当前 选中 池/品质 的 最高 变体 词缀 1 件 (保底 定向 获取, 定向 收集 指定 池 指定 品质)。\n成本 = (5 + 4 x 品质档)^2 材料/件: 普通 25/优秀 81/稀有 169/史诗 289/传说 441; 分解 回买 同品质 恒 亏 (材料 不 是 无本 套利)。\n兑换 = 纯 新增 入包 (不 消耗 已装配 词缀); 背包满 时 拒绝 (先 分解/装配 腾 空间); 材料 不足 时 拒绝 不 扣。\n按钮 计数 = 当前 材料 可 兑换 本 池/品质 词缀 件数 (材料 // 成本)。"
+
 	# 装备列表 (已拥有=穿戴, 未拥有=购买)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -2261,6 +2323,8 @@ func _refresh() -> void:
 	_resort_equip()
 	# M6-3: 词缀 UI (chips/背包抽屉/评分; 缓存键 节流, 挂机 恒定 无 每帧 重绘)
 	_refresh_m63_ui()
+	# 打磨-96: 词缀 材料 兑换 面板 (材料行/兑换按钮 文案; 缓存键 节流 同 M6-3 口径)
+	_refresh_m96_ui()
 	# 打磨-9: tooltip 状态行 (已领悟/已穿戴/已拥有 变化时才重建文本)
 	for id in _skill_row_nodes:
 		var row: Node = _skill_row_nodes[id]
@@ -3164,6 +3228,79 @@ func _on_m63_decompose_all() -> void:
 	else:
 		_show_msg("背包 空, 无 词缀 可 分解")
 	_refresh_m63_ui()
+
+# ---------- 打磨-96: 词缀 材料 兑换 UI 回调 (M6 经济闭环: 材料 兑换 指定 池/品质 词缀 保底 获取) ----------
+
+# 池 名 (数据 口径: 同池 任一词缀 的 pool_name; 未知 池 回显 池 id)
+func _affix_pool_name(pool: String) -> String:
+	for aid in GameData.affix_by_id:
+		var a: Dictionary = GameData.affix_by_id[aid]
+		if str(a.get("pool", "")) == pool:
+			return str(a.get("pool_name", pool))
+	return pool
+
+# 池 筛选 (单选 toggle; 同池 再 点 取消; 初始 无 选中)
+func _on_m96_pool(pid: String) -> void:
+	_m96_pool = pid if _m96_pool != pid else ""
+	for p in _m96_pool_btns:
+		_m96_pool_btns[p].button_pressed = (str(p) == _m96_pool)
+	_refresh_m96_exchange()
+
+# 品质 筛选 (单选 toggle; 同档 再 点 取消; 默认 档 0)
+func _on_m96_tier(t: int) -> void:
+	_m96_tier = t if _m96_tier != t else -1
+	for k in _m96_tier_btns:
+		_m96_tier_btns[k].button_pressed = (int(k) == _m96_tier)
+	_refresh_m96_exchange()
+
+# 兑换 按钮 文案 刷新 (缓存 键 节流: 材料/池/档/背包 变化 才 写; 挂机 恒定 无 每帧 重绘)
+func _refresh_m96_exchange() -> void:
+	if _m96_exch_btn == null:
+		return
+	var g := GameData
+	var key: String = "%d|%s|%d|%d" % [g.affix_materials, _m96_pool, _m96_tier, g.affix_bag_used()]
+	if key == _m96_exch_key:
+		return
+	_m96_exch_key = key
+	var txt: String
+	if _m96_pool == "" or _m96_tier < 0:
+		txt = "兑换 (先选 池 与 品质)"
+	elif not g.affix_bag_full() and g.affix_materials >= g.affix_exchange_cost(g.affix_best_variant_id(_m96_pool, _m96_tier)):
+		var can: int = g.affix_materials / g.affix_exchange_cost(g.affix_best_variant_id(_m96_pool, _m96_tier))
+		txt = "兑换 x%d (%d 材料/件)" % [can, g.affix_exchange_cost(g.affix_best_variant_id(_m96_pool, _m96_tier))]
+	else:
+		txt = "兑换 (材料不足)"
+	_m96_exch_btn.text = txt
+
+# 打磨-96: 材料 面板 主循环 刷新 (材料行 文本 变化 才 写; 兑换 按钮 走 缓存 键 节流 同 口径)
+func _refresh_m96_ui() -> void:
+	if _m96_mat_hdr == null:
+		return
+	var g := GameData
+	var mat_txt: String = "词缀 材料 %d (分解 产出; 兑换/强化 槽位 消耗)" % g.affix_materials
+	if _m96_mat_hdr.text != mat_txt:
+		_m96_mat_hdr.text = mat_txt
+	_refresh_m96_exchange()
+
+# 兑换 (材料 换 当前 选中 池/品质 的 最高 价值 词缀 1 件; 保底 定向 获取)
+func _on_m96_exchange() -> void:
+	var g := GameData
+	if _m96_pool == "" or _m96_tier < 0:
+		_show_msg("先选 兑换 池 与 品质")
+		return
+	var aid: String = g.affix_best_variant_id(_m96_pool, _m96_tier)
+	if aid == "":
+		_show_msg("该 池/品质 无 可兑换 词缀")
+		return
+	var r: String = g.affix_exchange(aid)
+	if r == "":
+		var a: Dictionary = g.affix_by_id.get(aid, {})
+		_show_msg("兑换 成功: 「%s」 %s +%.2f%%" % [str(a.get("name", "")), g.affix_tier_name(int(a.get("tier", 0))), float(a.get("value", 0.0))])
+		_onekey_float("兑换 成功 「%s」" % str(a.get("name", "")))
+	else:
+		_show_msg(r)
+	_refresh_m63_ui()
+	_refresh_m96_exchange()
 
 # M6-3 UI 统一 刷新 (缓存键 节流: 背包内容+选中+装配+拥有 变化 才 重建 网格/chips;
 # 文本行 仅 文本 变化 才 写; 挂机 恒定 无 每帧 重绘)
