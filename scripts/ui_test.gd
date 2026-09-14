@@ -104,6 +104,7 @@ func _ready() -> void:
 	g0._auto_tower_last_txt = ""
 	g0._auto_tower_wins = 0
 	g0._auto_tower_stone = 0.0
+	g0._auto_tower_mats = 0  # 打磨-100: 防御性 重置 会话 材料 累计
 	# M6-3: 防御性 重置 DIY 词缀 状态 (autoload 启动 load_game 读 残留档, 词缀 背包/装配/收集 可能 非空;
 	# 残留 会 让 成就 检查 触发 DIY 成就 泄漏 [affix_legend/affix_120/diy_first/resonance_first],
 	# 致 收集 计数/只看未解锁 断言 偏多 — 每轮 强制 干净 基准, 同 打磨-71/72 自动开关/离线收益 口径)
@@ -4779,6 +4780,7 @@ func _assert_auto_tower_feedback() -> void:
 	g._auto_tower_last_txt = ""
 	g._auto_tower_wins = 0
 	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0  # 打磨-100: 会话 材料 归零 (防 污染 后续 段)
 	g.realm_idx = 0
 	g.layer = 1
 	g.essence = 0.0
@@ -4822,6 +4824,7 @@ func _assert_auto_tower_feedback() -> void:
 	g._auto_tower_seq = 0
 	g._auto_tower_wins = 0
 	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0  # 打磨-100: 会话 材料 归零 (防 污染 后续 段)
 	g._auto_tower_last_txt = ""
 	g.auto_tower = false
 	g.tower_fixed_floor = 0

@@ -148,6 +148,7 @@ var _auto_tower_seq := 0        # 自动爬塔 胜局 变更事件计数 (本轮
 var _auto_tower_last_txt := ""  # 上轮 胜局 汇总 文案 (内存态, 供 auto_tower_last_text)
 var _auto_tower_wins := 0       # 本次 运行 自动 爬塔 胜局 总数 (内存态, 供 auto_tower_session_text)
 var _auto_tower_stone := 0.0    # 本次 运行 自动 爬塔 胜局 灵石 总量 (含 每日首胜/通关大奖, 内存态)
+var _auto_tower_mats := 0       # 打磨-100: 本次 运行 自动 爬塔 胜局 材料 总量 (内存态, 读档 归零 同 灵石 口径)
 var _auto_cast_last_n := 0      # 打磨-69: 上轮 施展 神通 数 (内存态, 供 auto_cast_last_text)
 var _auto_cast_last_burst := 0.0  # 打磨-69: 上轮 爆发 总量 (内存态, 供 auto_cast_last_text)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备/爬塔, 读档时 _load_stats 兜底)
@@ -734,12 +735,13 @@ func affix_roll_tier(bucket: int, roll: float) -> int:
 # source = normal/elite/boss/milestone (数据 掉落 来源 配置 口径: 掉率/件数/桶位上移).
 # rolls 口径 (供 自测 注入 确定性): [0]=掉率判定 / [1]=件数 / [2..4]=各件 品质 /
 # [5]=池 (0..5) / [6]=变体 (0..3); 缺失 项 按 0.5 兜底 (不影响 确定性)
-func affix_roll_drop(source: String, floor: int, rolls: Array) -> Array:
+func affix_roll_drop(source: String, floor: int, rolls: Array, bonus_chance: float = 0.0) -> Array:
 	var out: Array = []
 	var src: Dictionary = _affix_sources.get(source, {})
 	if src.is_empty() or rolls.size() < 3:
 		return out
-	var chance: float = float(src.get("chance", 0.0))
+	# 打磨-100: 词缀袋 affix_bag 掉率加成 (monster 特性 传入 bonus_chance; clamp 0..1 防 溢出)
+	var chance: float = clampf(float(src.get("chance", 0.0)) + bonus_chance, 0.0, 1.0)
 	if float(rolls[0]) >= chance:
 		return out
 	var cnt := int(src.get("count_min", 1))
@@ -1074,7 +1076,9 @@ func get_endless_floor(floor: int) -> Dictionary:
 	}
 
 # 怪物 有效 属性 (层数公式 x 结构 x 偏向 x 特性倍率; 特性 mult 逐条 应用)
-# 返回 {hp, atk, def, stone, name, traits, is_elite, boss_type, reward_mult, poison}
+# 返回 {hp, atk, def, stone, mats, name, traits, is_elite, boss_type, reward_mult, poison}
+# 打磨-100: 材料 掉落 mats = (1 + 怪物种 reward.mat_w) 基础 x 特性 mat 倍率 (mat_bag x2;
+# Boss 层 无 种 weight = 基础 1.0; 数据 缺 字段 兜底 0.8)
 func tower_monster_stats(rec: Dictionary) -> Dictionary:
 	var hp := float(rec.get("hp", 0.0))
 	var atk := float(rec.get("atk", 0.0))
@@ -1082,6 +1086,14 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 	var stone := float(rec.get("reward_stone", 0.0))
 	var has_poison := false
 	var tlist: Array = rec.get("traits", [])
+	var mats := 0.0
+	var sp: Dictionary = monster_by_id.get(str(rec.get("species", "")), {})
+	if not sp.is_empty():
+		var sp_rw: Variant = sp.get("reward", {})
+		var mat_w := 0.8
+		if typeof(sp_rw) == TYPE_DICTIONARY:
+			mat_w = float((sp_rw as Dictionary).get("mat_w", 0.8))
+		mats = 1.0 + mat_w
 	for tid in tlist:
 		var td: Dictionary = trait_by_id.get(str(tid), {})
 		if td.is_empty():
@@ -1092,11 +1104,12 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 		dfn *= float(mult.get("def", 1.0))
 		dfn += float(mult.get("shield_add", 0.0))
 		stone *= float(mult.get("stone", 1.0))
+		mats *= float(mult.get("mat", 1.0))
 		if mult.has("atk_debuff"):
 			has_poison = true
 	# 天怨: 仅无尽塔生效 (层数 未知 时 =1; 由 调用方 通过 rec 传 floor 已含 结构, 此处 保守 不放大)
 	return {
-		"hp": hp, "atk": atk, "def": dfn, "stone": stone,
+		"hp": hp, "atk": atk, "def": dfn, "stone": stone, "mats": mats,
 		"name": str(rec.get("name", "")), "traits": tlist,
 		"is_elite": bool(rec.get("is_elite", false)),
 		"boss_type": str(rec.get("boss_type", "")),
@@ -1133,19 +1146,56 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		roll = randf()
 	var dmg := maxf(1.0, p_atk - m_def) * (0.9 + 0.2 * roll)
 	var rounds := int(ceil(m_hp / dmg)) if dmg > 0.0 else 999999
-	# 结算 (胜 = 推进 + 灵石; 败 = 停留 本层 无 消耗, 无 惩罚)
+	# 结算 (胜 = 推进 + 灵石/材料; 败 = 停留 本层 无 消耗, 无 惩罚)
 	var reward_stone := 0.0
+	var reward_mat := 0
+	var lucky_hit := false
+	var indomit_hit := false
 	var new_floor := next_floor
 	var clear := tower_fixed_clear
 	var daily_bonus := 0.0
 	var clear_reward_stone := 0.0
 	var daily_date_today := _today_str()
 	# M6-2: 词缀掉落 (胜利 结算; 来源 由 层 结构 决定: 里程碑 Boss=milestone, Boss=boss,
-	# 精英=elite, 普通=normal; rolls 7 个 确定性 种子 随机 注入 (roll 已生成 时 复用))
+	# 精英=elite, 普通=normal; rolls 前 7 个 确定性 种子 随机 注入 (roll 已生成 时 复用),
+	# 打磨-100: 第 8 个 (rolls[7]) 为 幸运 lucky 的 50% 判定 专用)
 	var affix_drops: Array = []
 	if win:
-		reward_stone = float(mon["stone"])
+		# 打磨-100: 奖励类 特性 结算 (M5 规格 18 特性 全量 接入 — 强化/削弱 组 已 在
+		# tower_monster_stats 有效属性 体现, 奖励 组 在 结算 确定性 表达):
+		#   材料囊 mat_bag: 材料 x2 (tower_monster_stats mats 已 含)
+		#   幸运 lucky: 50% 概率 全奖励 x2 (灵石/材料; rolls[7] 注入 确定性)
+		#   不屈 indomit: 全奖励 x1.2 (灵石/材料)
+		#   词缀袋 affix_bag: 词缀 掉率 +10% (传入 affix_roll_drop bonus_chance)
+		#   富矿 rich_ore: 灵石 x2 (tower_monster_stats stone 已 含)
+		var dr: Array = []
+		for i in 8:
+			dr.append(randf())
+		var affix_bonus_chance := 0.0
+		for tid in mon["traits"]:
+			var td: Dictionary = trait_by_id.get(str(tid), {})
+			if td.is_empty():
+				continue
+			var mult: Dictionary = td.get("mult", {})
+			# lucky 特性 同时 含 all_reward(=2.0) + lucky_chance — 须 排除 之 (未命中 时 全奖励 不 生效);
+			# indomit 只 含 all_reward(=1.2) 无 lucky_chance, 恒 生效; affix_bag 只 含 affix_drop
+			if mult.has("lucky_chance"):
+				if float(dr[7]) < float(mult["lucky_chance"]):
+					lucky_hit = true
+			elif mult.has("all_reward"):
+				indomit_hit = true
+			elif mult.has("affix_drop"):
+				affix_bonus_chance += float(mult["affix_drop"])
+		var stone_mult_tr := 1.0
+		if lucky_hit:
+			stone_mult_tr = 2.0
+		if indomit_hit:
+			stone_mult_tr *= 1.2
+		reward_stone = float(mon["stone"]) * stone_mult_tr
 		stones += reward_stone
+		# 材料 入账 (基础 = 1+怪物种 mat_w, 材料囊 x2 已含; 幸运/不屈 叠乘; 向上取整 整件入账)
+		reward_mat = int(ceil(float(mon["mats"]) * stone_mult_tr))
+		affix_materials += reward_mat
 		# 剧毒: 战胜 后 玩家 atk -15%, 持续 2 场 (可 刷新);
 		# 打磨-93: 触发/刷新 时 推 poison_events 事件 (怪物名|new/refresh; UI drain 后 弹 紫色浮动,
 		# 玩家 不知 为何 战力 下降 的 即时 反馈; 事件 不持久化 不 改 战斗 口径)
@@ -1159,10 +1209,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 			drop_src = "elite"
 		elif str(mon["boss_type"]) != "":
 			drop_src = "milestone" if tower == "endless" else "boss"
-		var dr: Array = []
-		for i in 7:
-			dr.append(randf())
-		affix_drops = affix_roll_drop(drop_src, next_floor, dr)
+		affix_drops = affix_roll_drop(drop_src, next_floor, dr, affix_bonus_chance)
 		_stat_inc("affix_drop", float(affix_drops.size()))
 		if tower == "fixed":
 			if next_floor < 1000:
@@ -1205,6 +1252,9 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		"mon_hp": m_hp, "mon_atk": m_atk, "mon_def": m_def,
 		"player_atk": p_atk, "player_def": p_def,
 		"dmg": dmg, "rounds": rounds, "reward_stone": reward_stone,
+		# 打磨-100: 材料 掉落 + 奖励类 特性 命中 标记 (lucky 50% 全奖励x2 / indomit 全奖励x1.2;
+		# 未命中 = 0/false; UI 消息 与 自测 断言 同源)
+		"reward_mat": reward_mat, "lucky_hit": lucky_hit, "indomit_hit": indomit_hit,
 		"clear_reward_stone": clear_reward_stone,
 		"daily_bonus": daily_bonus, "clear": clear, "poison": bool(mon["poison"]),
 		"poison_battles": poison_battles, "affix_drops": affix_drops,
@@ -1232,11 +1282,16 @@ func _try_auto_tower() -> void:
 			+ float(we.get("reward_stone", 0.0)) + float(we.get("clear_reward_stone", 0.0)) \
 			+ float(we.get("daily_bonus", 0.0))
 	_auto_tower_stone += tot_stone
+	# 打磨-100: 会话 材料 累计 (内存态 不持久化, 读档 归零 同 灵石 口径)
+	_auto_tower_mats += int(wf.get("reward_mat", 0)) + int(we.get("reward_mat", 0))
 	var parts: Array = []
 	for r in [wf, we]:
 		if bool(r["win"]):
 			var tname: String = "镇妖塔" if str(r["tower"]) == "fixed" else "登天梯"
-			parts.append("%s 第 %d 层 灵石 +%s" % [tname, int(r["floor"]), fmt(float(r["reward_stone"]))])
+			var mat_t := ""
+			if int(r.get("reward_mat", 0)) > 0:
+				mat_t = " + 材料 %d" % int(r["reward_mat"])
+			parts.append("%s 第 %d 层 灵石 +%s%s" % [tname, int(r["floor"]), fmt(float(r["reward_stone"])), mat_t])
 	var extra := ""
 	var adrops: Array = wf.get("affix_drops", []) + we.get("affix_drops", [])
 	if adrops.size() > 0:
@@ -2386,8 +2441,12 @@ func tower_status_line() -> String:
 		s += " · 剧毒 -15%% 攻 x %d 场" % poison_battles
 	# 打磨-95: 自动爬塔 会话 统计 (本次 运行 胜局 数+灵石 累计, 内存态 不持久化;
 	# 挂机 期间 自动 爬塔 成果 展示位, 与 手动 挑战 底部消息 口径 互补)
+	# 打磨-100: 会话 含 材料 累计 段 (材料 来源 奖励类 特性 结算; 0 材料 不追加 段)
 	if _auto_tower_wins > 0:
-		s += " · 自动 胜 %d 场 (灵石 %s)" % [_auto_tower_wins, fmt(_auto_tower_stone)]
+		var mat_s := ""
+		if _auto_tower_mats > 0:
+			mat_s = " · 材料 %d" % _auto_tower_mats
+		s += " · 自动 胜 %d 场 (灵石 %s)%s" % [_auto_tower_wins, fmt(_auto_tower_stone), mat_s]
 	return s
 
 # 打磨-95: 自动爬塔 上一轮 胜局 汇总 文案 (只读; seq<=0 [从未 胜局] 返回 "";
@@ -2400,10 +2459,14 @@ func auto_tower_last_text() -> String:
 
 # 打磨-95: 自动爬塔 会话 统计 文案 (只读; 0 胜局 返回 ""; 格式 "自动 胜 N 场 (灵石 X)" —
 # 会话 = 本次 运行, 读档 归零; 爬塔 状态 汇总行 展示 + 自测 断言 同 口径; 不 改 状态)
+# 打磨-100: 追加 材料 累计 段 (0 材料 时 仅 灵石 段, 口径 与 状态行 一致)
 func auto_tower_session_text() -> String:
 	if _auto_tower_wins <= 0:
 		return ""
-	return "自动 胜 %d 场 (灵石 %s)" % [_auto_tower_wins, fmt(_auto_tower_stone)]
+	var mat_s := ""
+	if _auto_tower_mats > 0:
+		mat_s = " · 材料 %d" % _auto_tower_mats
+	return "自动 胜 %d 场 (灵石 %s)%s" % [_auto_tower_wins, fmt(_auto_tower_stone), mat_s]
 
 # 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1|1|0" = 突破|购置|施展|领悟|爬塔, 1=开 0=关;
 # M5-3 起 5 开关: 第 5 段=自动爬塔; UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
@@ -3130,6 +3193,7 @@ func load_game() -> void:
 	_auto_tower_last_txt = ""
 	_auto_tower_wins = 0
 	_auto_tower_stone = 0.0
+	_auto_tower_mats = 0  # 打磨-100: 会话 材料 累计 读档 归零 (同 灵石 口径)
 	# M6-2: DIY 词缀 (旧档缺字段 默认 空; 非法 项 丢弃 防 污染)
 	# 顺序: 先 槽位升级 (affix_load 校验 依赖 槽位 上限), 再 库存, 最后 装配
 	slot_upgrades = {}

@@ -1473,7 +1473,7 @@ func _build_equip_page(page: Panel) -> void:
 	ex_panel.add_child(ex_box)
 	# 材料 行 (材料 X · 分解/兑换 口径 说明; 文本变化才刷)
 	_m96_mat_hdr = _label("", 13, CYAN)
-	_m96_mat_hdr.tooltip_text = "词缀 材料 总量 (分解 词缀 产出, 每 件 1+品质档; 兑换 词缀/强化 槽位 消耗, 存档 持久化)。\n· 分解 产出: 每 件 = 1 + 品质档 (普通 1/优秀 2/稀有 3/史诗 4/传说 5)\n· 兑换 成本: (5 + 4 x 品质档)^2 (普通 25/优秀 81/稀有 169/史诗 289/传说 441)\n· 槽位 强化: 道祖期 解锁 4 槽 消耗 200 材料/件 (5 部位 全升 = 1000)"
+	_m96_mat_hdr.tooltip_text = "词缀 材料 总量 (分解 词缀 产出, 每 件 1+品质档; 兑换 词缀/强化 槽位 消耗, 存档 持久化)。\n· 分解 产出: 每 件 = 1 + 品质档 (普通 1/优秀 2/稀有 3/史诗 4/传说 5)\n· 爬塔 掉落: 胜局 材料 = 1 + 怪物种 mat_w (材料囊 x2 / 幸运 x2 / 不屈 x1.2 叠乘, 整件 入账)\n· 兑换 成本: (5 + 4 x 品质档)^2 (普通 25/优秀 81/稀有 169/史诗 289/传说 441)\n· 槽位 强化: 道祖期 解锁 4 槽 消耗 200 材料/件 (5 部位 全升 = 1000)"
 	ex_box.add_child(_m96_mat_hdr)
 	# 6 池 筛选 行 (与 装备页 部位/品质 筛选 同 风格; 单选 toggle, 初始 无 选中)
 	var ex_pool_bar := HBoxContainer.new()
@@ -1691,8 +1691,17 @@ func _on_tower_challenge(tid: String) -> void:
 	var tname: String = "镇妖塔" if tid == "fixed" else "登天梯"
 	if bool(r["win"]):
 		var extra := ""
+		# 打磨-100: 材料 掉落 展示 (M5 规格 奖励 展示 灵石/材料/词缀 补齐 材料 段;
+		# 材料 = 1+怪物种 mat_w 基础 x 材料囊x2 x 幸运/不屈 叠乘, 整件入账; 0 材料 不追加)
+		if int(r.get("reward_mat", 0)) > 0:
+			extra += " (材料 +%d)" % int(r["reward_mat"])
+		# 打磨-100: 奖励类 特性 命中 反馈 (幸运 = 50%% 全奖励x2 / 不屈 = 全奖励x1.2, 确定性 判定)
+		if bool(r.get("lucky_hit", false)):
+			extra += " (幸运 全奖励x2)"
+		if bool(r.get("indomit_hit", false)):
+			extra += " (不屈 全奖励x1.2)"
 		if float(r["daily_bonus"]) > 0.0:
-			extra = " (含每日首胜 +%s)" % g.fmt(float(r["daily_bonus"]))
+			extra += " (含每日首胜 +%s)" % g.fmt(float(r["daily_bonus"]))
 		if float(r.get("clear_reward_stone", 0.0)) > 0.0:
 			extra += g.tower_clear_reward_text(float(r["clear_reward_stone"]))
 		# 打磨-94: 词缀 掉落 展示 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 词缀 段:

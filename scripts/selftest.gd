@@ -6011,6 +6011,159 @@ func _init() -> void:
 	g.dao_level = 0
 	g.save_game()
 
+	# ---------- 打磨-100: 奖励类 特性 结算接入 (M5 规格 18 特性 全量: 材料囊/幸运/不屈/词缀袋/富矿) ----------
+	# 口径: 强化/削弱 组 已 在 tower_monster_stats 有效属性 体现 (stone 含 富矿 x2), 奖励 组 在 结算 确定性 表达:
+	#   材料囊 mat_bag 材料 x2 (tower_monster_stats mats) / 幸运 lucky 50%% 全奖励 x2 (rolls[7] 内部随机)
+	#   / 不屈 indomit 全奖励 x1.2 / 词缀袋 affix_bag 掉率 +10%% / 富矿 rich_ore 灵石 x2 (tower_monster_stats).
+	# 材料 掉落 = (1 + 怪物种 mat_w) x 材料囊 x2 x 幸运/不屈 叠乘, 向上取整 整件 入账 (affix_materials).
+	# 确定性 基准: 道祖期 (ascended+dao8+全 atk/def 功法) 恒胜 低层; 用 无 幸运 层 精确 断言,
+	# 幸运 层 断言 双值 边界 (rolls[7] 内部 randf 不 可注入, 仅 验 命中/未命中 两 档).
+	g.set_process(false)
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.ascended = true
+	g.dao_level = 8
+	g.learned.clear()
+	for id in g.skill_ids:
+		var s6: Dictionary = g.skill_by_id[id]
+		if str(s6.get("type", "")) == "passive" and str(s6.get("effect", "")) in ["atk", "def", "all_mult"]:
+			g.learned.append(id)
+	check(g.player_atk() > 0.0, "打磨-100 道祖 基准 玩家 atk > 0")
+	# 1) 材料 基础: tower_monster_stats mats = 1 + 怪物种 mat_w (无 奖励 特性 层)
+	var f1100: Dictionary = g.get_fixed_floor(1)
+	var m1100: Dictionary = g.tower_monster_stats(f1100)
+	check(float(m1100["mats"]) > 1.0, "打磨-100 第 1 层 mats = 1 + mat_w > 1 (实际 %s)" % str(m1100["mats"]))
+	# 2) 无 幸运/不屈 层 (heavy): reward_stone = 层表 值, reward_mat = ceil(mats)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.affix_materials = 0
+	var rw1: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rw1["win"]), "打磨-100 道祖 胜 第 1 层")
+	check(absf(float(rw1["reward_stone"]) - float(f1100["reward_stone"])) < 1e-6,
+			"打磨-100 无 奖励 特性 灵石 = 层表 值 (实际 %s / 表 %s)" % [g.fmt(float(rw1["reward_stone"])), g.fmt(float(f1100["reward_stone"]))])
+	check(int(rw1["reward_mat"]) == int(ceil(float(m1100["mats"]))) and int(rw1["reward_mat"]) >= 1,
+			"打磨-100 无 奖励 特性 材料 = ceil(mats) (实际 %d / 期望 %d)" % [int(rw1["reward_mat"]), int(ceil(float(m1100["mats"])))])
+	check(g.affix_materials == int(rw1["reward_mat"]), "打磨-100 材料 入账 affix_materials (实际 %d)" % g.affix_materials)
+	check(not bool(rw1["lucky_hit"]) and not bool(rw1["indomit_hit"]), "打磨-100 无 奖励 特性 双 命中 标记 false")
+	g.tower_fixed_floor = 0
+	# 3) 不屈 indomit (第 5 层 affix_bag+indomit): 灵石 x1.2, 材料 x1.2 叠乘
+	var f5100: Dictionary = g.get_fixed_floor(5)
+	var m5100: Dictionary = g.tower_monster_stats(f5100)
+	g.tower_fixed_floor = 4
+	g.affix_materials = 0
+	var rw5: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rw5["win"]), "打磨-100 道祖 胜 第 5 层 (不屈)")
+	check(bool(rw5["indomit_hit"]), "打磨-100 不屈 命中 标记 true")
+	check(absf(float(rw5["reward_stone"]) - float(f5100["reward_stone"]) * 1.2) < 1e-6,
+			"打磨-100 不屈 灵石 x1.2 (实际 %s / 期望 %s)" % [g.fmt(float(rw5["reward_stone"])), g.fmt(float(f5100["reward_stone"]) * 1.2)])
+	check(int(rw5["reward_mat"]) == int(ceil(float(m5100["mats"]) * 1.2)),
+			"打磨-100 不屈 材料 = ceil(mats x1.2) (实际 %d / 期望 %d)" % [int(rw5["reward_mat"]), int(ceil(float(m5100["mats"]) * 1.2))])
+	check(g.affix_materials == int(rw5["reward_mat"]), "打磨-100 不屈 材料 入账 (实际 %d)" % g.affix_materials)
+	g.tower_fixed_floor = 0
+	# 4) 材料囊 mat_bag (第 12 层 poison+mat_bag): 材料 x2 (mat 倍率 已 入 tower_monster_stats mats)
+	var f12100: Dictionary = g.get_fixed_floor(12)
+	var m12100: Dictionary = g.tower_monster_stats(f12100)
+	g.tower_fixed_floor = 11
+	g.affix_materials = 0
+	var rw12: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rw12["win"]), "打磨-100 道祖 胜 第 12 层 (材料囊)")
+	check(not bool(rw12["indomit_hit"]) and not bool(rw12["lucky_hit"]), "打磨-100 第 12 层 无 幸运/不屈 标记")
+	check(int(rw12["reward_mat"]) == int(ceil(float(m12100["mats"]))) and int(rw12["reward_mat"]) >= 4,
+			"打磨-100 材料囊 材料 = ceil(mats x2 已含) >= 4 (实际 %d / mats %s)" % [int(rw12["reward_mat"]), str(m12100["mats"])])
+	check(g.affix_materials == int(rw12["reward_mat"]), "打磨-100 材料囊 材料 入账 (实际 %d)" % g.affix_materials)
+	g.tower_fixed_floor = 0
+	# 5) 幸运 lucky (第 8 层): 50%% 全奖励 x2 — rolls[7] 内部 randf 不 可注入, 断言 双值 边界
+	var f8100: Dictionary = g.get_fixed_floor(8)
+	var m8100: Dictionary = g.tower_monster_stats(f8100)
+	var st_no_lucky: float = float(f8100["reward_stone"])
+	var st_lucky: float = float(f8100["reward_stone"]) * 2.0
+	var mat_no_lucky: int = int(ceil(float(m8100["mats"])))
+	var mat_lucky: int = int(ceil(float(m8100["mats"]) * 2.0))
+	g.tower_fixed_floor = 7
+	g.affix_materials = 0
+	var rw8: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rw8["win"]), "打磨-100 道祖 胜 第 8 层 (幸运)")
+	check(absf(float(rw8["reward_stone"]) - st_no_lucky) < 1e-6 or absf(float(rw8["reward_stone"]) - st_lucky) < 1e-6,
+			"打磨-100 幸运 灵石 = 层表 值 或 x2 (实际 %s / 两档 %s / %s)" % [g.fmt(float(rw8["reward_stone"])), g.fmt(st_no_lucky), g.fmt(st_lucky)])
+	check(int(rw8["reward_mat"]) == mat_no_lucky or int(rw8["reward_mat"]) == mat_lucky,
+			"打磨-100 幸运 材料 = 未命中 或 x2 (实际 %d / 两档 %d / %d)" % [int(rw8["reward_mat"]), mat_no_lucky, mat_lucky])
+	if bool(rw8["lucky_hit"]):
+		check(absf(float(rw8["reward_stone"]) - st_lucky) < 1e-6, "打磨-100 幸运 命中 灵石 = x2 (实际 %s)" % g.fmt(float(rw8["reward_stone"])))
+	else:
+		check(absf(float(rw8["reward_stone"]) - st_no_lucky) < 1e-6, "打磨-100 幸运 未命中 灵石 = 层表 值 (实际 %s)" % g.fmt(float(rw8["reward_stone"])))
+	g.tower_fixed_floor = 0
+	# 6) 富矿 rich_ore (stone x2 已 入 tower_monster_stats): 找 含 rich_ore 的 层 验 stone 双 层表
+	var rich_floor := -1
+	var rich_rec: Dictionary = {}
+	for flr in range(1, 1000):
+		var fr: Dictionary = g.get_fixed_floor(flr)
+		if "rich_ore" in (fr["traits"] as Array):
+			rich_floor = flr
+			rich_rec = fr
+			break
+	check(rich_floor > 0 and not rich_rec.is_empty(), "打磨-100 镇妖塔 存在 rich_ore 层 (实际 层 %d)" % rich_floor)
+	var mrich: Dictionary = g.tower_monster_stats(rich_rec)
+	check(absf(float(mrich["stone"]) - float(rich_rec["reward_stone"]) * 2.0) < 1e-6,
+			"打磨-100 富矿 stone = 层表 x2 (tower_monster_stats 已含, 实际 %s / 期望 %s)" % [g.fmt(float(mrich["stone"])), g.fmt(float(rich_rec["reward_stone"]) * 2.0)])
+	# 7) 词缀袋 affix_bag 掉率 加成: affix_roll_drop bonus_chance 提升 命中 (掉率 判定 rolls[0])
+	var f_ab: Dictionary = g.get_fixed_floor(27)  # 第 27 层 = 单 affix_bag (数据 锚定)
+	check("affix_bag" in (f_ab["traits"] as Array), "打磨-100 第 27 层 = affix_bag (数据 锚定, 实际 %s)" % str(f_ab["traits"]))
+	var src_norm: Dictionary = g._affix_sources.get("normal", {})
+	var chance0: float = float(src_norm.get("chance", 0.0))
+	# 掉率 判定 用 rolls[0]: base normal 掉率 %s, 词缀袋 +10%% 后 = base + 0.1;
+	# 取 roll 0.10 区分: 无 bonus (chance=base=0.05) 不命中, 有 bonus (chance=0.15) 命中
+	check(g.affix_roll_drop("normal", 27, [0.99, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0).is_empty(),
+			"打磨-100 掉率 roll 0.99 超 上限 不掉落 (bonus 0)")
+	check(g.affix_roll_drop("normal", 27, [0.10, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0).is_empty(),
+			"打磨-100 roll 0.10 超 base 掉率 0.05 不掉落 (bonus 0)")
+	check(g.affix_roll_drop("normal", 27, [0.10, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.10).size() > 0,
+			"打磨-100 词缀袋 +10%% 掉率 roll 0.10 命中 (base %s + 0.1 = 0.15 > 0.10)" % str(chance0))
+	check(g.affix_roll_drop("normal", 27, [0.99, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.10).is_empty(),
+			"打磨-100 词缀袋 +10%% 仍 不 越 roll 0.99 上限")
+	# 8) 会话 材料 累计 + 文案 材料 段 (内存态, 读档 归零)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.auto_tower = true
+	var mats0: int = g._auto_tower_mats
+	g._process(0.016)
+	check(g._auto_tower_mats > mats0, "打磨-100 自动 胜局 会话 材料 累计 上升 (实际 %d)" % g._auto_tower_mats)
+	check(g.auto_tower_session_text().find("材料 ") >= 0, "打磨-100 会话 文案 含 材料 段 (实际 %s)" % g.auto_tower_session_text())
+	check(g.tower_status_line().find("材料 ") >= 0, "打磨-100 状态行 含 材料 段 (实际 %s)" % g.tower_status_line())
+	# 会话 读档 归零 (材料 段 同 灵石 口径)
+	g.auto_tower = false
+	g.save_game()
+	g._auto_tower_mats = 99
+	g.load_game()
+	check(g._auto_tower_mats == 0, "打磨-100 会话 材料 读档 归零 (不持久化, 实际 %d)" % g._auto_tower_mats)
+	check(g.auto_tower_session_text() == "", "打磨-100 读档 后 会话 文案 空串")
+	# 收尾: 恢复 干净 基准 落盘
+	g.auto_tower = false
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g.affix_materials = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
