@@ -6164,6 +6164,70 @@ func _init() -> void:
 	g.learned.clear()
 	g.save_game()
 
+	# ---------- 打磨-101: 一键 兑换 批量 接口 affix_exchange_all (材料 连兑 买不起 为止, 复用 affix_exchange 真实 路径) ----------
+	# 受控 基准: 干净 词缀 态 + 池 qi_rate 品质 普通 (成本 25 数据 锚定)
+	var ex_pool: String = "qi_rate"
+	var ex_tier: int = 0
+	var ex_aid: String = g.affix_best_variant_id(ex_pool, ex_tier)
+	check(ex_aid != "", "打磨-101 qi_rate/普通 有 最高 变体 词缀 (实际 %s)" % ex_aid)
+	var ex_cost: int = g.affix_exchange_cost(ex_aid)
+	check(ex_cost > 0, "打磨-101 兑换 成本 > 0 (实际 %d)" % ex_cost)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	# 1) 材料 200 = 连兑 200//cost 件, 材料 花到 买不起, 背包 入 count 件 目标 词缀
+	g.affix_materials = 200
+	var mx1: Dictionary = g.affix_exchange_all(ex_pool, ex_tier)
+	var exp1: int = 200 / ex_cost
+	check(int(mx1.get("count", -1)) == exp1, "打磨-101 材料 200 连兑 %d 件 (实际 %d)" % [exp1, int(mx1.get("count", -1))])
+	check(int(mx1.get("materials_before", -1)) == 200 and int(mx1.get("materials_after", -1)) == 200 - exp1 * ex_cost, "打磨-101 材料 前 200 后 %d (实际 前 %d 后 %d)" % [200 - exp1 * ex_cost, int(mx1.get("materials_before", -1)), int(mx1.get("materials_after", -1))])
+	check(g.affix_materials == 200 - exp1 * ex_cost, "打磨-101 实际 材料 = 200 - 件数 x 成本 (实际 %d)" % g.affix_materials)
+	check(int(g.affix_bag.get(ex_aid, 0)) == exp1, "打磨-101 背包 入 %d 件 目标 词缀 (实际 %d)" % [exp1, int(g.affix_bag.get(ex_aid, 0))])
+	check(str(mx1.get("id", "")) == ex_aid and int(mx1.get("cost", -1)) == ex_cost, "打磨-101 结果 含 id/cost 口径 (实际 id=%s cost=%d)" % [str(mx1.get("id", "")), int(mx1.get("cost", -1))])
+	# 2) 幂等: 材料 已 花到 买不起, 再 兑 0 件 不 改动
+	var mx2: Dictionary = g.affix_exchange_all(ex_pool, ex_tier)
+	check(int(mx2.get("count", -1)) == 0 and int(g.affix_bag.get(ex_aid, 0)) == exp1, "打磨-101 材料 买不起 再兑 0 件 幂等 (实际 count=%d 背包 %d)" % [int(mx2.get("count", -1)), int(g.affix_bag.get(ex_aid, 0))])
+	# 3) 材料 不足 (cost-1) = 0 件 不 消耗
+	g.affix_materials = ex_cost - 1
+	var mx3: Dictionary = g.affix_exchange_all(ex_pool, ex_tier)
+	check(int(mx3.get("count", -1)) == 0 and g.affix_materials == ex_cost - 1, "打磨-101 材料 不足 0 件 不 消耗 (实际 count=%d 材料 %d)" % [int(mx3.get("count", -1)), g.affix_materials])
+	# 4) 背包满 中途 停止: 背包 占满 后 连兑 0 件 (兑换 不 走 自动入料, 满 即 拒绝)
+	var cap4: int = g.affix_bag_capacity()
+	g.affix_bag = {}
+	for i in cap4:
+		var filler: String = str(g.affix_ids[i])
+		g.affix_bag[filler] = 1
+	g.affix_materials = 1000
+	check(g.affix_bag_full(), "打磨-101 背包 已 占满 前提 成立 (容量 %d)" % cap4)
+	var mx4: Dictionary = g.affix_exchange_all(ex_pool, ex_tier)
+	check(int(mx4.get("count", -1)) == 0 and g.affix_materials == 1000, "打磨-101 背包满 0 件 不 消耗 (实际 count=%d 材料 %d)" % [int(mx4.get("count", -1)), g.affix_materials])
+	# 5) 未 选 池/品质 (空 池) = 0 件, 结构 完整 不 崩溃
+	var mx5: Dictionary = g.affix_exchange_all("", 0)
+	check(int(mx5.get("count", -1)) == 0 and str(mx5.get("id", "")) == "" and mx5.has("cost") and mx5.has("materials_before") and mx5.has("materials_after"), "打磨-101 空 池 0 件 结构 完整 (实际 count=%d id=%s)" % [int(mx5.get("count", -1)), str(mx5.get("id", ""))])
+	# 6) 背包 空格 封顶: 占 容量-1 格 (留 1 空, 填 非 目标 词缀 防 与 ex_aid 撞), 材料 够 多 件 但 只 能 兑 1 件 (满 即 停)
+	var cap6: int = g.affix_bag_capacity()
+	g.affix_bag = {}
+	var n_fill := 0
+	for aid6 in g.affix_ids:
+		if str(aid6) == ex_aid:
+			continue
+		g.affix_bag[str(aid6)] = 1
+		n_fill += 1
+		if n_fill >= cap6 - 1:
+			break
+	g.affix_materials = 1000
+	check(g.affix_bag_used() == cap6 - 1, "打磨-101 背包 占 容量-1 格 前提 (容量 %d 实际 %d)" % [cap6, g.affix_bag_used()])
+	var mx6: Dictionary = g.affix_exchange_all(ex_pool, ex_tier)
+	check(int(mx6.get("count", -1)) == 1, "打磨-101 背包 留 1 空 只 兑 1 件 即 停 (容量 %d, 实际 %d)" % [cap6, int(mx6.get("count", -1))])
+	check(int(g.affix_bag.get(ex_aid, 0)) == 1, "打磨-101 封顶 后 目标 词缀 入 1 件 (实际 %d)" % int(g.affix_bag.get(ex_aid, 0)))
+	# 收尾: 归零 干净 档
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

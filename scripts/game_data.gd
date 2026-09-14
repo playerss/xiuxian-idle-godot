@@ -594,6 +594,22 @@ func affix_exchange(id: String) -> String:
 	_stat_inc("affix_exchange")
 	return ""
 
+# 打磨-101: 批量 兑换 当前 池/品质 的 最高 变体 词缀 (复用 affix_exchange 单件 真实 路径,
+# 连 兑换 到 买不起 或 背包满 为止 — 与 一键购买 连买 买得起 的 口径 一致, 定向 收集 无需 逐件 点击).
+# 背包满 中途 停止 (兑换 不 走 自动入料 路径, 同 affix_exchange 口径); 材料 花到 买不起 为止 幂等.
+# 返回 {count, id, cost, materials_before, materials_after}; id = 兑换 目标 ("" = 无 该 池/品质).
+func affix_exchange_all(pool: String, tier: int) -> Dictionary:
+	var aid: String = affix_best_variant_id(pool, tier)
+	var before: int = affix_materials
+	var count := 0
+	while true:
+		var r: String = affix_exchange(aid)
+		if r != "":
+			break
+		count += 1
+	return {"count": count, "id": aid, "cost": affix_exchange_cost(aid),
+			"materials_before": before, "materials_after": affix_materials}
+
 # 槽位 升级 3->4 的 材料 成本 (配置 兜底 200; 打磨-96: 道祖期 解锁 后 消耗 材料 强化)
 func affix_slot_up_cost() -> int:
 	return maxi(0, int(_affix_mat.get("slot_up_materials", 200)))

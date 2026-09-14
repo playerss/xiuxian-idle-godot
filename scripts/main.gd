@@ -220,6 +220,8 @@ var _m96_pool := ""                     # 当前 选中 池 ("" = 未 选中)
 var _m96_tier := -1                     # 当前 选中 品质档 (-1 = 未 选中)
 var _m96_exch_btn: Button               # 兑换 按钮 (材料 换 当前 选中 池/品质 的 最高 变体 词缀)
 var _m96_exch_key := ""                 # 兑换 按钮 文案 缓存 键 (材料/池/档 变化 才 刷)
+var _m101_exch_all_btn: Button          # 打磨-101: 一键 兑换 按钮 (材料 连兑 买得起 的 最高 变体 词缀)
+var _m101_exch_all_key := ""            # 打磨-101: 一键 兑换 按钮 文案 缓存 键 (材料/池/档/背包 变化 才 刷)
 var _m99_up_btn: Button                 # 打磨-99: 一键 强化 槽位 按钮 (道祖期 3->4 槽, 200 材料/件)
 var _m99_up_key := ""                   # 打磨-99: 强化 按钮 文案 缓存 键 (道祖期/材料/拥有/满级数 变化 才 刷)
 var _slot_labels: Dictionary = {}
@@ -1511,6 +1513,12 @@ func _build_equip_page(page: Panel) -> void:
 	_m96_exch_btn.custom_minimum_size = Vector2(0, 26)
 	_m96_exch_btn.pressed.connect(_on_m96_exchange)
 	ex_btn_bar.add_child(_m96_exch_btn)
+	# 打磨-101: 一键 兑换 按钮 (材料 连兑 买得起 的 最高 变体 词缀; 与 一键购买 连买 口径 一致)
+	_m101_exch_all_btn = _make_button("一键兑换")
+	_m101_exch_all_btn.custom_minimum_size = Vector2(0, 26)
+	_m101_exch_all_btn.tooltip_text = "用 材料 一键 兑换 当前 选中 池/品质 的 最高 变体 词缀, 连兑 到 买不起 或 背包满 为止 (与 一键购买 连买 买得起 的 口径 一致, 定向 收集 无需 逐件 点击).\n单件 兑换 按钮 只 兑 1 件, 本 按钮 = 批量 兑 满 材料 预算 (同 成本 每件 25/81/169/289/441 材料).\n背包满 时 拒绝 (先 分解/装配 腾 空间); 材料 不足 时 拒绝 不 扣; 0 可兑 幂等 不 消耗.\n按钮 计数 = 当前 材料 可 兑换 本 池/品质 词缀 件数 (材料 // 成本, 封顶 背包 空格)."
+	_m101_exch_all_btn.pressed.connect(_on_m101_exchange_all)
+	ex_btn_bar.add_child(_m101_exch_all_btn)
 	# 打磨-99: 一键 强化 槽位 按钮 (道祖期 3->4 槽 批量 入口; M6 规格 "强化 词缀槽 [槽 3→4, 道祖期解锁]" 的 UI 落地)
 	_m99_up_btn = _make_button("一键强化槽位")
 	_m99_up_btn.custom_minimum_size = Vector2(0, 26)
@@ -3295,6 +3303,31 @@ func _refresh_m96_exchange() -> void:
 	else:
 		txt = "兑换 (材料不足)"
 	_m96_exch_btn.text = txt
+	_refresh_m101_exchange_all()
+
+# 打磨-101: 一键 兑换 按钮 文案 刷新 (缓存 键 节流: 材料/池/档/背包 变化 才 写, 同 _refresh_m96_exchange 口径;
+# 计数 = 材料 // 成本, 背包满 封顶 0 [兑换 不 走 自动入料, 满 即 拒绝])
+func _refresh_m101_exchange_all() -> void:
+	if _m101_exch_all_btn == null:
+		return
+	var g := GameData
+	var key: String = "%d|%s|%d|%d" % [g.affix_materials, _m96_pool, _m96_tier, g.affix_bag_used()]
+	if key == _m101_exch_all_key:
+		return
+	_m101_exch_all_key = key
+	var txt: String
+	if _m96_pool == "" or _m96_tier < 0:
+		txt = "一键兑换 (先选 池 与 品质)"
+	elif g.affix_bag_full():
+		txt = "一键兑换 (背包满)"
+	else:
+		var aid: String = g.affix_best_variant_id(_m96_pool, _m96_tier)
+		var cost: int = g.affix_exchange_cost(aid)
+		if g.affix_materials >= cost:
+			txt = "一键兑换 x%d (%d 材料/件)" % [g.affix_materials / cost, cost]
+		else:
+			txt = "一键兑换 (材料不足 %d/%d)" % [g.affix_materials, cost]
+	_m101_exch_all_btn.text = txt
 
 # 打磨-99: 一键 强化 槽位 按钮 文案 刷新 (缓存 键 节流: 道祖期/材料/拥有/满级数 变化 才 写)
 func _refresh_m99_upgrade() -> void:
@@ -3367,6 +3400,25 @@ func _on_m96_exchange() -> void:
 		_onekey_float("兑换 成功 「%s」" % str(a.get("name", "")))
 	else:
 		_show_msg(r)
+	_refresh_m63_ui()
+	_refresh_m96_exchange()
+
+# 打磨-101: 一键 兑换 (材料 连兑 买得起 的 最高 变体 词缀; 复用 GameData.affix_exchange_all = affix_exchange 真实 路径)
+func _on_m101_exchange_all() -> void:
+	var g := GameData
+	if _m96_pool == "" or _m96_tier < 0:
+		_show_msg("先选 兑换 池 与 品质")
+		return
+	var r: Dictionary = g.affix_exchange_all(_m96_pool, _m96_tier)
+	var n: int = int(r.get("count", 0))
+	if n > 0:
+		var spent: int = int(r.get("materials_before", 0)) - int(r.get("materials_after", 0))
+		var aid: String = str(r.get("id", ""))
+		var a: Dictionary = g.affix_by_id.get(aid, {})
+		_show_msg("一键兑换 %d 件 「%s」, 花费 %d 材料" % [n, str(a.get("name", "")), spent])
+		_onekey_float("一键兑换 %d 件 「%s」" % [n, str(a.get("name", ""))])
+	else:
+		_show_msg("一键兑换 0 件 (背包满 或 材料不足, 需 先 分解/装配 腾 空间 或 攒 材料)")
 	_refresh_m63_ui()
 	_refresh_m96_exchange()
 

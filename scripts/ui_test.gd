@@ -182,6 +182,7 @@ func _ready() -> void:
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
 	await _assert_m99_upgrade()  # 打磨-99: 一键 强化 槽位 按钮 (道祖期 批量 3->4, 200 材料/件)
+	await _assert_m101_exchange_all()  # 打磨-101: 一键 兑换 按钮 (材料 连兑 买不起 的 最高 变体 词缀)
 	_finish()
 
 
@@ -3496,6 +3497,96 @@ func _assert_m99_upgrade() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.seen_affixes.is_empty() and g.affix_materials == 0, "打磨-99 收尾 干净 基准")
+
+func _assert_m101_exchange_all() -> void:
+	var g := GameData
+	ui._tab.current_tab = 2
+	g.set_process(false)
+	# 受控 基准: 干净 词缀 态 + 选中 池 qi_rate 品质 0 (成本 25 数据 锚定)
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.affix_materials = 0
+	g.seen_affixes = []
+	ui._m63_sel = ""
+	ui._on_m96_pool("qi_rate")
+	ui._on_m96_tier(0)
+	var btn: Button = ui._m101_exch_all_btn
+	check(btn != null, "打磨-101 一键 兑换 按钮 节点 存在")
+	if btn == null:
+		return
+	check(str(btn.tooltip_text).find("连兑") >= 0 and str(btn.tooltip_text).find("背包满") >= 0
+			and str(btn.tooltip_text).find("幂等") >= 0, "打磨-101 按钮 tooltip 含 连兑/背包满/幂等 口径 (实际 %s)" % str(btn.tooltip_text).left(40))
+	# 材料 0 = 不足 文案
+	g.affix_materials = 0
+	ui._refresh_m101_exchange_all()
+	check(str(btn.text) == "一键兑换 (材料不足 0/25)", "打磨-101 材料 0 不足 文案 (实际 %s)" % str(btn.text))
+	# 材料 70 = x2 (70//25)
+	g.affix_materials = 70
+	ui._refresh_m101_exchange_all()
+	check(str(btn.text) == "一键兑换 x2 (25 材料/件)", "打磨-101 材料 70 可兑 x2 文案 (实际 %s)" % str(btn.text))
+	# 点击 = 批量 兑 2 件 最高 变体 + 扣 50 + 入包 2 + 底部 消息 + 浮动
+	var flt_before: int = ui._onekey_float_count
+	var before_bag: int = int(g.affix_bag.get("af_qi_rate_0_3", 0))
+	btn.pressed.emit()
+	await get_tree().process_frame
+	check(int(g.affix_bag.get("af_qi_rate_0_3", 0)) == before_bag + 2, "打磨-101 点击 兑 2 件 入包 (实际 %d)" % int(g.affix_bag.get("af_qi_rate_0_3", 0)))
+	check(g.affix_materials == 20, "打磨-101 点击 扣 50 材料 余 20 (实际 %d)" % g.affix_materials)
+	check(str(ui._msg_label.text).find("一键兑换 2 件") >= 0, "打磨-101 底部 消息 含 件数 (实际 %s)" % str(ui._msg_label.text))
+	check(ui._onekey_float_count == flt_before + 1, "打磨-101 成功 浮动 +1 (实际 %d -> %d)" % [flt_before, ui._onekey_float_count])
+	check(str(ui._onekey_last_text).find("2 件") >= 0, "打磨-101 浮动 文案 含 件数 (实际 %s)" % ui._onekey_last_text)
+	check(str(btn.text) == "一键兑换 (材料不足 20/25)", "打磨-101 兑后 文案 同步 材料不足 (实际 %s)" % str(btn.text))
+	# 材料 补足 25 -> 文案 x1 (20+25=45 仍 不足? 不, 现 20; 设 25)
+	g.affix_materials = 25
+	ui._refresh_m101_exchange_all()
+	check(str(btn.text) == "一键兑换 x1 (25 材料/件)", "打磨-101 材料 25 x1 文案 (实际 %s)" % str(btn.text))
+	# 背包满 = 拒绝 文案 + 点击 0 件 无 副作用 (动态 容量: 打磨-97 bag_40 可能 已 解锁 40 格, 清 成就 取 基础 30 格 基准)
+	g.ach_done.erase("bag_40")
+	var cap96: int = g.affix_bag_capacity()
+	g.affix_bag = {}
+	var filled96 := 0
+	for aidf in g.affix_ids:
+		g.affix_bag[str(aidf)] = 1
+		filled96 += 1
+		if filled96 >= cap96:
+			break
+	check(g.affix_bag_full(), "打磨-101 背包 占满 前提 成立 (容量 %d 实际 %d 格)" % [cap96, g.affix_bag_used()])
+	g.affix_materials = 200
+	ui._refresh_m101_exchange_all()
+	check(str(btn.text) == "一键兑换 (背包满)", "打磨-101 背包满 文案 (实际 %s)" % str(btn.text))
+	var flt_full: int = ui._onekey_float_count
+	btn.pressed.emit()
+	await get_tree().process_frame
+	check(g.affix_materials == 200 and ui._onekey_float_count == flt_full, "打磨-101 背包满 0 件 不 扣 不 浮动 (材料 %d)" % g.affix_materials)
+	check(str(ui._msg_label.text).find("0 件") >= 0, "打磨-101 背包满 点击 0 件 底部 消息 (实际 %s)" % str(ui._msg_label.text))
+	# 未 选 池 文案
+	g.affix_bag = {}
+	g.affix_materials = 100
+	ui._m96_pool = ""
+	ui._m96_tier = -1
+	ui._refresh_m101_exchange_all()
+	check(str(btn.text) == "一键兑换 (先选 池 与 品质)", "打磨-101 未 选 池 文案 (实际 %s)" % str(btn.text))
+	# 收尾: 归零 干净 基准
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	ui._m63_sel = ""
+	ui._m96_pool = ""
+	ui._m96_tier = -1
+	for p in ui._m96_pool_btns:
+		(ui._m96_pool_btns[p] as Button).button_pressed = false
+	for t in ui._m96_tier_btns:
+		(ui._m96_tier_btns[t] as Button).button_pressed = false
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.seen_affixes.is_empty() and g.affix_materials == 0, "打磨-101 收尾 干净 基准")
 
 
 func _finish() -> void:
