@@ -180,6 +180,7 @@ func _ready() -> void:
 
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
+	await _assert_m99_upgrade()  # 打磨-99: 一键 强化 槽位 按钮 (道祖期 批量 3->4, 200 材料/件)
 	_finish()
 
 
@@ -3405,6 +3406,96 @@ func _assert_bag_expand() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(ui._m63_bag_hdr.text) == "词缀背包 0/30 格", "打磨-97 收尾 容量 回 30 (实际 %s)" % str(ui._m63_bag_hdr.text))
+
+# 打磨-99: 一键 强化 槽位 按钮 (装备页 词缀 材料 兑换 面板 内; 道祖期 批量 3->4, 200 材料/件)
+# 断言: 按钮 节点/tooltip 口径/未 飞升 与 无 拥有 文案/材料 不足/可 强化 计数/点击 批量 升级
+# (材料 扣减+槽数 3->4+chips 重建 4+底部 消息+浮动)/全 满级 幂等/主循环 文案 刷新 同步/收尾 归零
+func _assert_m99_upgrade() -> void:
+	var g := GameData
+	ui._tab.current_tab = 2
+	g.set_process(false)
+	# 受控 基准: 干净 DIY 态 + 购买 weapon_0_0 (3 槽)
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.affix_materials = 0
+	g.seen_affixes = []
+	g.ascended = false
+	g.dao_level = 0
+	g.stones = 1e12
+	g.buy_equipment("weapon_0_0")
+	ui._refresh()
+	await get_tree().process_frame
+	# 按钮 节点 存在 (兑换 按钮 行 第 2 个) + 金色 字体 + tooltip 口径 (成本/道祖期/幂等)
+	var btn: Button = ui._m99_up_btn
+	check(btn != null, "打磨-99 强化 按钮 节点 存在")
+	if btn == null:
+		return
+	check(str(btn.text) != "", "打磨-99 按钮 有 初始 文案")
+	check(str(btn.tooltip_text).find("200 材料") >= 0 and str(btn.tooltip_text).find("道祖期") >= 0
+			and str(btn.tooltip_text).find("幂等") >= 0, "打磨-99 按钮 tooltip 含 成本/道祖期/幂等 口径 (实际 %s)" % str(btn.tooltip_text).left(40))
+	# 未 飞升 = 需道祖期 文案
+	check(str(btn.text) == "一键强化槽位 (需道祖期)", "打磨-99 未 飞升 文案 (实际 %s)" % str(btn.text))
+	# 飞升 道祖期 + 拥有 1 件 未 满级 + 材料 0 = 材料 不足 文案
+	g.ascended = true
+	g.dao_level = 8
+	g.affix_materials = 0
+	ui._refresh_m99_upgrade()
+	check(str(btn.text) == "一键强化槽位 (材料不足 0/200)", "打磨-99 材料 不足 文案 (实际 %s)" % str(btn.text))
+	# 材料 100 = 不足 文案 带 当前数
+	g.affix_materials = 100
+	ui._refresh_m99_upgrade()
+	check(str(btn.text) == "一键强化槽位 (材料不足 100/200)", "打磨-99 材料 100 不足 文案 (实际 %s)" % str(btn.text))
+	# 材料 500 = 可 强化 x1 文案 (min(500//200=2, 未 满级 1 件)=1)
+	g.affix_materials = 500
+	ui._refresh_m99_upgrade()
+	check(str(btn.text) == "一键强化槽位 x1 (200 材料/件)", "打磨-99 可 强化 x1 文案 (实际 %s)" % str(btn.text))
+	# 点击 = 批量 升级 成功: 材料 扣 200 + 槽数 4 + chips 重建 4 + 底部 消息 + 浮动
+	var flt_before: int = ui._onekey_float_count
+	var chips_before: int = (ui._m63_chips.get("weapon_0_0", []) as Array).size()
+	btn.pressed.emit()
+	await get_tree().process_frame
+	check(g.equipment_slots("weapon_0_0") == 4, "打磨-99 点击 后 4 槽 (实际 %d)" % g.equipment_slots("weapon_0_0"))
+	check(g.affix_materials == 300, "打磨-99 点击 扣 200 材料 (实际 %d)" % g.affix_materials)
+	check((ui._m63_chips.get("weapon_0_0", []) as Array).size() == 4, "打磨-99 chips 重建 4 个 (实际 %d, 前 %d)" % [(ui._m63_chips.get("weapon_0_0", []) as Array).size(), chips_before])
+	check(str(ui._msg_label.text).find("强化 槽位 1 件") >= 0, "打磨-99 底部 消息 确认 (实际 %s)" % str(ui._msg_label.text))
+	check(ui._onekey_float_count == flt_before + 1, "打磨-99 成功 浮动 +1 (实际 %d -> %d)" % [flt_before, ui._onekey_float_count])
+	check(str(ui._onekey_last_text).find("强化 槽位 1 件") >= 0, "打磨-99 浮动 文案 含 件数 (实际 %s)" % ui._onekey_last_text)
+	# 文案 同步: 已 全 满级
+	check(str(btn.text) == "一键强化槽位 (已全满级/无拥有)", "打磨-99 满级 后 文案 同步 (实际 %s)" % str(btn.text))
+	# 再 点 = 幂等 0 变更 (不 扣 材料 不 再 浮动, 0 变更 走 底部 消息)
+	var flt_after: int = ui._onekey_float_count
+	btn.pressed.emit()
+	await get_tree().process_frame
+	check(g.affix_materials == 300 and g.equipment_slots("weapon_0_0") == 4, "打磨-99 幂等 0 变更 (材料 %d 槽 %d)" % [g.affix_materials, g.equipment_slots("weapon_0_0")])
+	check(ui._onekey_float_count == flt_after, "打磨-99 幂等 不 再 浮动 (实际 %d)" % ui._onekey_float_count)
+	check(str(ui._msg_label.text).find("0 件") >= 0, "打磨-99 幂等 底部 消息 0 件 (实际 %s)" % str(ui._msg_label.text))
+	# 主循环 文案 刷新 同步: 未 拥有 态 文案 (拥有 清空 后 _refresh 路径)
+	g.owned_eq.clear()
+	g.slot_upgrades = {}
+	g.ascended = false
+	g.dao_level = 0
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(btn.text) == "一键强化槽位 (需道祖期)", "打磨-99 未 飞升 恢复 文案 (实际 %s)" % str(btn.text))
+	# 收尾: 归零 干净 基准
+	g.affix_materials = 0
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.affix_decompose_all()
+	g.seen_affixes = []
+	ui._m63_sel = ""
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.seen_affixes.is_empty() and g.affix_materials == 0, "打磨-99 收尾 干净 基准")
+
 
 func _finish() -> void:
 	print("")

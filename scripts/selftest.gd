@@ -5944,6 +5944,73 @@ func _init() -> void:
 	g.stones = 0.0
 	g.save_game()
 
+	# ---------- 打磨-99: 批量 强化 槽位 affix_upgrade_all (道祖期 3->4 批量 接口; UI 入口 = 装备页 一键强化槽位 按钮) ----------
+	# 1) 未 飞升 = 0 变更 (不 消耗 材料)
+	g.ascended = false
+	g.dao_level = 0
+	g.owned_eq.clear()
+	g.slot_upgrades = {}
+	g.owned_eq.append("weapon_0_0")
+	g.owned_eq.append("robe_0_0")
+	g.owned_eq.append("amulet_0_0")
+	g.affix_materials = 500
+	var r99a: Dictionary = g.affix_upgrade_all()
+	check(int(r99a.get("count", -1)) == 0, "打磨-99 未 飞升 0 变更 (实际 %d)" % int(r99a.get("count", -1)))
+	check(g.affix_materials == 500, "打磨-99 未 飞升 不 消耗 材料 (实际 %d)" % g.affix_materials)
+	check(g.equipment_slots("weapon_0_0") == 3, "打磨-99 未 飞升 槽位 不变 (实际 %d)" % g.equipment_slots("weapon_0_0"))
+	# 2) 飞升 但 非 道祖期 = 0 变更
+	g.ascended = true
+	g.dao_level = 1
+	var r99b: Dictionary = g.affix_upgrade_all()
+	check(int(r99b.get("count", -1)) == 0 and g.affix_materials == 500, "打磨-99 非 道祖期 0 变更 不 消耗 (实际 count=%d 材料 %d)" % [int(r99b.get("count", -1)), g.affix_materials])
+	# 3) 道祖期 材料 不足 = 0 变更 (199 < 200)
+	g.dao_level = 8
+	g.affix_materials = 199
+	var r99c: Dictionary = g.affix_upgrade_all()
+	check(int(r99c.get("count", -1)) == 0 and g.affix_materials == 199, "打磨-99 材料 不足 199 0 变更 (实际 count=%d 材料 %d)" % [int(r99c.get("count", -1)), g.affix_materials])
+	# 4) 道祖期 + 500 材料 + 3 件 未 满级 = 升 2 件 (owned_eq 数据序 weapon>robe, 材料 花到 买不起)
+	g.affix_materials = 500
+	var r99d: Dictionary = g.affix_upgrade_all()
+	check(int(r99d.get("count", -1)) == 2, "打磨-99 500 材料 升 2 件 (实际 %d)" % int(r99d.get("count", -1)))
+	check((r99d.get("upgraded", []) as Array) == ["weapon_0_0", "robe_0_0"], "打磨-99 升级 顺序 = owned_eq 数据序 (实际 %s)" % str(r99d.get("upgraded", [])))
+	check(int(r99d.get("materials_before", -1)) == 500 and int(r99d.get("materials_after", -1)) == 100 and g.affix_materials == 100, "打磨-99 材料 500->100 (实际 前 %d 后 %d)" % [int(r99d.get("materials_before", -1)), int(r99d.get("materials_after", -1))])
+	check(g.equipment_slots("weapon_0_0") == 4 and g.equipment_slots("robe_0_0") == 4, "打磨-99 已升 件 4 槽 (实际 %d/%d)" % [g.equipment_slots("weapon_0_0"), g.equipment_slots("robe_0_0")])
+	check(g.equipment_slots("amulet_0_0") == 3, "打磨-99 未升 件 仍 3 槽 (实际 %d)" % g.equipment_slots("amulet_0_0"))
+	check(int(r99d.get("cost", -1)) == 200, "打磨-99 结果 含 cost=200 (实际 %d)" % int(r99d.get("cost", -1)))
+	# 5) 剩余 100 材料 (< 200) = 0 变更 (买不起 即 停, 不 扣 不 升)
+	var r99e: Dictionary = g.affix_upgrade_all()
+	check(int(r99e.get("count", -1)) == 0 and g.affix_materials == 100, "打磨-99 剩余 100 材料 0 变更 (实际 count=%d 材料 %d)" % [int(r99e.get("count", -1)), g.affix_materials])
+	check(g.equipment_slots("amulet_0_0") == 3, "打磨-99 材料 不足 未升 件 仍 3 槽 (实际 %d)" % g.equipment_slots("amulet_0_0"))
+	# 6) 补足 300 材料 = 升 第 3 件 (amulet), 3 件 全 满级
+	g.affix_materials = 300
+	var r99f: Dictionary = g.affix_upgrade_all()
+	check(int(r99f.get("count", -1)) == 1 and g.affix_materials == 100, "打磨-99 补足 300 升 第 3 件 (实际 count=%d 材料 %d)" % [int(r99f.get("count", -1)), g.affix_materials])
+	check(g.equipment_slots("amulet_0_0") == 4, "打磨-99 第 3 件 4 槽 (实际 %d)" % g.equipment_slots("amulet_0_0"))
+	# 7) 全 满级 = 0 变更 (幂等 不 消耗)
+	g.affix_materials = 999
+	var r99g: Dictionary = g.affix_upgrade_all()
+	check(int(r99g.get("count", -1)) == 0 and g.affix_materials == 999 and (r99g.get("upgraded", []) as Array).is_empty(), "打磨-99 全 满级 幂等 0 变更 不 消耗 (实际 count=%d 材料 %d)" % [int(r99g.get("count", -1)), g.affix_materials])
+	# 8) 无 拥有 = 0 变更 (空结果 结构 仍 完整)
+	g.owned_eq.clear()
+	var r99h: Dictionary = g.affix_upgrade_all()
+	check(int(r99h.get("count", -1)) == 0 and g.affix_materials == 999
+			and r99h.has("cost") and r99h.has("materials_before") and r99h.has("materials_after"), "打磨-99 无 拥有 0 变更 结构 完整 (实际 count=%d)" % int(r99h.get("count", -1)))
+	# 9) 单件 真实 路径 恒等: 批量 = 逐件 affix_slot_upgrade 同 口径 (材料 精确 扣 200/件)
+	g.owned_eq.append("boot_0_0")
+	g.owned_eq.append("bead_0_0")
+	g.affix_materials = 600
+	var r99i: Dictionary = g.affix_upgrade_all()
+	check(int(r99i.get("count", -1)) == 2 and g.affix_materials == 200, "打磨-99 新 拥有 2 件 升 2 件 扣 400 (实际 count=%d 材料 %d)" % [int(r99i.get("count", -1)), g.affix_materials])
+	check(g.equipment_slots("boot_0_0") == 4 and g.equipment_slots("bead_0_0") == 4, "打磨-99 新 2 件 4 槽 (实际 %d/%d)" % [g.equipment_slots("boot_0_0"), g.equipment_slots("bead_0_0")])
+	# 收尾: 归零 落盘 干净 档
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.slot_upgrades = {}
+	g.affix_materials = 0
+	g.ascended = false
+	g.dao_level = 0
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

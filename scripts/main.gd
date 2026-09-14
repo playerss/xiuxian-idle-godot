@@ -220,6 +220,8 @@ var _m96_pool := ""                     # 当前 选中 池 ("" = 未 选中)
 var _m96_tier := -1                     # 当前 选中 品质档 (-1 = 未 选中)
 var _m96_exch_btn: Button               # 兑换 按钮 (材料 换 当前 选中 池/品质 的 最高 变体 词缀)
 var _m96_exch_key := ""                 # 兑换 按钮 文案 缓存 键 (材料/池/档 变化 才 刷)
+var _m99_up_btn: Button                 # 打磨-99: 一键 强化 槽位 按钮 (道祖期 3->4 槽, 200 材料/件)
+var _m99_up_key := ""                   # 打磨-99: 强化 按钮 文案 缓存 键 (道祖期/材料/拥有/满级数 变化 才 刷)
 var _slot_labels: Dictionary = {}
 var _card_sb_normal: StyleBoxFlat
 var _card_sb_hi: StyleBoxFlat
@@ -1509,6 +1511,12 @@ func _build_equip_page(page: Panel) -> void:
 	_m96_exch_btn.custom_minimum_size = Vector2(0, 26)
 	_m96_exch_btn.pressed.connect(_on_m96_exchange)
 	ex_btn_bar.add_child(_m96_exch_btn)
+	# 打磨-99: 一键 强化 槽位 按钮 (道祖期 3->4 槽 批量 入口; M6 规格 "强化 词缀槽 [槽 3→4, 道祖期解锁]" 的 UI 落地)
+	_m99_up_btn = _make_button("一键强化槽位")
+	_m99_up_btn.custom_minimum_size = Vector2(0, 26)
+	_m99_up_btn.tooltip_text = "道祖期 批量 强化 拥有 装备 的 词缀槽 3->4 (每件 消耗 200 材料, 5 部位 全升 = 1000 材料).\n按 装备 数据序 逐件 升级 未 满级 件, 材料 花到 买不起 或 全 满级 为止; 升级 后 该装备 多出 1 个 词缀槽 可 装配 词缀 (属性 上限 提升).\n未 道祖期 / 材料 不足 / 全 满级 / 无 拥有 装备 时 0 变更 (幂等 不 消耗).\n按钮 计数 = 当前 材料 可 强化 件数 (min(材料 // 200, 未 满级 拥有件数))."
+	_m99_up_btn.pressed.connect(_on_m99_upgrade_all)
+	ex_btn_bar.add_child(_m99_up_btn)
 	var ex_sp := Control.new()
 	ex_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ex_btn_bar.add_child(ex_sp)
@@ -3279,6 +3287,49 @@ func _refresh_m96_exchange() -> void:
 		txt = "兑换 (材料不足)"
 	_m96_exch_btn.text = txt
 
+# 打磨-99: 一键 强化 槽位 按钮 文案 刷新 (缓存 键 节流: 道祖期/材料/拥有/满级数 变化 才 写)
+func _refresh_m99_upgrade() -> void:
+	if _m99_up_btn == null:
+		return
+	var g := GameData
+	var dao_ready: bool = g.ascended and g.dao_level >= g.IMMORTAL_REALMS.size() - 1
+	var count_pending := 0
+	for eid in g.owned_eq:
+		if int(g.slot_upgrades.get(str(eid), 0)) < 1:
+			count_pending += 1
+	var key: String = "%d|%d|%d|%d" % [1 if dao_ready else 0, g.affix_materials, g.owned_eq.size(), count_pending]
+	if key == _m99_up_key:
+		return
+	_m99_up_key = key
+	var txt: String
+	if not dao_ready:
+		txt = "一键强化槽位 (需道祖期)"
+	elif count_pending == 0:
+		txt = "一键强化槽位 (已全满级/无拥有)"
+	elif g.affix_materials >= g.affix_slot_up_cost():
+		var can: int = mini(g.affix_materials / g.affix_slot_up_cost(), count_pending)
+		txt = "一键强化槽位 x%d (%d 材料/件)" % [can, g.affix_slot_up_cost()]
+	else:
+		txt = "一键强化槽位 (材料不足 %d/%d)" % [g.affix_materials, g.affix_slot_up_cost()]
+	_m99_up_btn.text = txt
+
+# 打磨-99: 一键 强化 槽位 (道祖期 批量 3->4; 复用 GameData.affix_upgrade_all = affix_slot_upgrade 真实 路径)
+func _on_m99_upgrade_all() -> void:
+	var g := GameData
+	var r: Dictionary = g.affix_upgrade_all()
+	var n: int = int(r.get("count", 0))
+	if n > 0:
+		var spent: int = int(r.get("materials_before", 0)) - int(r.get("materials_after", 0))
+		_show_msg("强化 槽位 %d 件 (3->4 槽), 花费 %d 材料" % [n, spent])
+		_onekey_float("强化 槽位 %d 件 (3->4)" % n)
+	else:
+		_show_msg("一键强化 0 件 (需 道祖期 + 200 材料/件 + 拥有 未 满级 装备)")
+	# 升级 后 槽数 变化: 强制 重建 拥有 装备 的 chips (清 芯片 缓存, 键 变化 触发 4 chip 构建)
+	for eid in (r.get("upgraded", []) as Array):
+		(_m63_chips.get(str(eid), []) as Array).clear()
+	_refresh_m63_ui()
+	_refresh_m99_upgrade()
+
 # 打磨-96: 材料 面板 主循环 刷新 (材料行 文本 变化 才 写; 兑换 按钮 走 缓存 键 节流 同 口径)
 func _refresh_m96_ui() -> void:
 	if _m96_mat_hdr == null:
@@ -3288,6 +3339,7 @@ func _refresh_m96_ui() -> void:
 	if _m96_mat_hdr.text != mat_txt:
 		_m96_mat_hdr.text = mat_txt
 	_refresh_m96_exchange()
+	_refresh_m99_upgrade()  # 打磨-99: 强化 按钮 文案 同 主循环 节流 刷新
 
 # 兑换 (材料 换 当前 选中 池/品质 的 最高 价值 词缀 1 件; 保底 定向 获取)
 func _on_m96_exchange() -> void:

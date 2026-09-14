@@ -683,6 +683,24 @@ func affix_slot_upgrade(equip_id: String) -> String:
 	slot_upgrades[equip_id] = 1
 	return ""
 
+# 打磨-99: 批量 强化 槽位 3->4 (复用 affix_slot_upgrade 单件 口径: 道祖期 + 200 材料/件).
+# 按 owned_eq 数据序 逐件 升级 未 满级 件, 材料 花到 买不起 或 全 满级 为止;
+# 0 变更 = 幂等 (未 道祖期/材料 不足/全 满级/无 拥有 均 不 消耗 不 改动).
+# 返回 {count, upgraded: Array[String], cost, materials_before, materials_after}; 只经
+# affix_slot_upgrade 真实 路径 (无 额外 统计 埋点, 与 手动 单件 升级 同 口径).
+func affix_upgrade_all() -> Dictionary:
+	var cost: int = affix_slot_up_cost()
+	var count := 0
+	var upgraded: Array = []
+	var before: int = affix_materials
+	for eid in owned_eq:
+		var r: String = affix_slot_upgrade(str(eid))
+		if r == "":
+			count += 1
+			upgraded.append(str(eid))
+	return {"count": count, "upgraded": upgraded, "cost": cost,
+			"materials_before": before, "materials_after": affix_materials}
+
 # 掉落 桶 位 (层数 -> 桶; 封顶 19; 越界 防御 0)
 func affix_drop_bucket(floor: int) -> int:
 	if _affix_buckets.is_empty():
