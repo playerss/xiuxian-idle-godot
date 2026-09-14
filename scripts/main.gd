@@ -1622,7 +1622,7 @@ func _build_tower_page(page: Panel) -> void:
 	cards.add_theme_constant_override("separation", 12)
 	outer.add_child(cards)
 	_build_tower_card(cards, "fixed", "镇妖塔", "固定 1000 层 · 每 10 层 精英 · 每 50 层 Boss · 通关后 守塔 模式 反复挑战 1000 层 Boss")
-	_build_tower_card(cards, "endless", "登天梯", "无尽 塔 · 无 层数 上限 · 每 100 层 里程碑 Boss · 每日首胜 额外 灵石")
+	_build_tower_card(cards, "endless", "登天梯", "无尽 塔 · 无 层数 上限 · 每 100 层 里程碑 Boss · 500 层后 全部 魔化 · 每日首胜 额外 灵石")
 	# 双塔 卡片 均 构建完 后 强制 全量 刷新 一次 (清 刷新键 绕过 节流, 确保 首帧 非空;
 	# 构建期 单卡 首刷 会 因 另一塔 _tw_cards 未登记 而 报 无效键, 故 统一 收尾 刷)
 	_tw_key = ""

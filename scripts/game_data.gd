@@ -29,6 +29,9 @@ const TOWER_CLEAR_BONUS_STONE := 1000000.0  # 通关 一次性 灵石 大奖
 const TOWER_CLEAR_BUFF := 0.15              # 通关 永久 增益: 玩家 atk/def +15% (乘算 独立 项)
 const ENDLESS_ELITE_MULT := 3.0      # 登天梯 精英层 (每 10 层) 数值 x3
 const ENDLESS_BOSS_MULT := 10.0      # 登天梯 里程碑 Boss (每 100 层) 数值 x10
+# 打磨-102: 登天梯 500 层后 全部 普通 怪物 默认 魔化 (M5 规格 "500 层后所有怪物默认魔化"):
+# 魔化 口径 同 精英层 = 数值 x3 + 追加 1 额外特性 + 「魔化·」前缀; Boss 层 独立 结构 (x10) 不叠魔化
+const ENDLESS_DEMON_FLOOR := 500     # 登天梯 魔化 起点 层 (>= 此层 非 Boss 怪物 恒 魔化)
 
 # 境界表: 每个境界有若干层, 逐层突破
 const REALMS := [
@@ -1067,16 +1070,17 @@ func get_endless_floor(floor: int) -> Dictionary:
 				bias_hp = 1.0
 				bias_atk = 1.0
 				bias_def = 1.0
-		elif is_elite:
+		elif is_elite or floor >= ENDLESS_DEMON_FLOOR:
+			# 魔化 口径 (M5 规格 "500 层后所有怪物默认魔化"): 数值 x3 + 追加 1 额外特性 + 「魔化·」前缀,
+			# 与 精英层 同结构 (精英 = 魔化 特例); 层 取模 特性表 确定性, 追加 特性 与 已有 不重复
 			struct = ENDLESS_ELITE_MULT
 			reward_mult = 2
-			# 精英: 追加 1 个 确定性 特性 (层数 取模 特性表, 不重复)
 			var extra: String = str(_trait_ids[int(floor % _trait_ids.size())]) if _trait_ids.size() > 0 else ""
 			if extra != "" and extra not in traits:
 				traits.append(extra)
 		if name == "":
 			name = str(sp.get("name", ""))
-			if is_elite:
+			if is_elite or floor >= ENDLESS_DEMON_FLOOR:
 				name = "魔化·" + name
 		# 偏向 与 结构 相乘 (与 镇妖塔 落表 同口径: 基础 x 结构 x 偏向)
 		base_hp *= bias_hp

@@ -540,6 +540,66 @@ func _init() -> void:
 			var hp_fe: Array = g.tower_fixed["formulas"]["hp"]
 			var hp_ee: Array = g.tower_endless["formulas"]["hp"]
 			check(float(hp_ee[1]) > float(hp_fe[1]), "无尽 hp 底数 高于 镇妖塔 (%s > %s)" % [str(hp_ee[1]), str(hp_fe[1])])
+			# 打磨-102: 登天梯 500 层后 全部 普通 怪物 默认 魔化 (M5 规格落地: 数值 x3 + 追加 1 额外特性 + 「魔化·」前缀,
+			# 与 精英层 同口径; Boss 层 独立 x10 结构 不叠魔化; 500 前 普通层 不魔化 旧口径 不变;
+			# 特性 倍率 (如 汲取 hp x1.25) 在 结构倍率 之上 叠乘, 恒等 断言 须 含 特性 乘积)
+			var e499: Dictionary = g.get_endless_floor(499)
+			check(not bool(e499["is_elite"]) and not str(e499["name"]).begins_with("魔化·"),
+					"打磨-102 第 499 层 普通 非 魔化 (旧 口径 不变; 实际 %s)" % str(e499["name"]))
+			check(int(e499["reward_mult"]) == 1, "打磨-102 第 499 层 奖励 倍率 1 (非 魔化, 实际 %d)" % int(e499["reward_mult"]))
+			var e500: Dictionary = g.get_endless_floor(500)
+			check(str(e500["boss_type"]) == "boss" and not str(e500["name"]).begins_with("魔化·") and int(e500["reward_mult"]) == 5,
+					"打磨-102 第 500 层 里程碑 Boss 独立 结构 不叠魔化 (实际 %s x%d)" % [str(e500["name"]), int(e500["reward_mult"])])
+			# 特性 倍率 乘积 助手 (恒等 断言 用: 结构 x3 之上 再 乘 各 特性 hp/atk/def 倍率)
+			var trm: Dictionary = {}
+			for t in g._trait_ids:
+				var td0: Dictionary = g.trait_by_id.get(str(t), {})
+				trm[str(t)] = td0.get("mult", {})
+			var e501: Dictionary = g.get_endless_floor(501)
+			var m501: Dictionary = g.tower_monster_stats(e501)
+			var hpm: float = 1.0
+			var atm: float = 1.0
+			var dsm: float = 1.0
+			for t501 in m501["traits"]:
+				var tm: Dictionary = trm.get(str(t501), {})
+				hpm *= float(tm.get("hp", 1.0))
+				atm *= float(tm.get("atk", 1.0))
+				dsm *= float(tm.get("def", 1.0))
+			check(str(e501["name"]).begins_with("魔化·") and int(e501["reward_mult"]) == 2,
+					"打磨-102 第 501 层 普通 层 魔化 前缀+奖励x2 (实际 %s x%d)" % [str(e501["name"]), int(e501["reward_mult"])])
+			check(float(m501["hp"]) == float(e501["base_hp"]) * g.ENDLESS_ELITE_MULT * hpm
+					and float(m501["atk"]) == float(e501["base_atk"]) * g.ENDLESS_ELITE_MULT * atm
+					and float(m501["def"]) == float(e501["base_def"]) * g.ENDLESS_ELITE_MULT * dsm,
+					"打磨-102 第 501 层 魔化 数值 = 基础 x 偏向 x3 x 特性乘积 恒等 (hp %s)" % g.fmt(float(m501["hp"])))
+			check(float(m501["hp"]) >= float(e501["base_hp"]) * g.ENDLESS_ELITE_MULT,
+					"打磨-102 第 501 层 魔化 后 数值 不低于 基础x3 (x3 结构 生效, hp %s)" % g.fmt(float(m501["hp"])))
+			check(int(m501["traits"].size()) >= 2, "打磨-102 第 501 层 魔化 追加 特性 (种 1 + 额外 1, 实际 %d)" % int(m501["traits"].size()))
+			# 魔化 追加 特性 确定性 (层 取模 特性表) 且 与 种 特性 不重复
+			var tids: Array = []
+			for t in g._trait_ids:
+				tids.append(str(t))
+			var extra501: String = tids[int(501 % tids.size())]
+			check(str(m501["traits"][int(m501["traits"].size()) - 1]) == extra501
+					and m501["traits"].count(extra501) == 1,
+					"打磨-102 魔化 追加 特性 = 层取模 特性表 且不重复 (实际 %s)" % extra501)
+			# 500+ 抽样: 全部 非 Boss 层 恒 魔化 (520..529 共 10 层 无 Boss 层), 499 恒 非 魔化
+			var demon_ok := true
+			for fl in range(520, 530):
+				var efl: Dictionary = g.get_endless_floor(fl)
+				if not str(efl["name"]).begins_with("魔化·") or int(efl["reward_mult"]) != 2:
+					demon_ok = false
+			check(demon_ok, "打磨-102 520..529 层 全部 非 Boss 普通 层 恒 魔化 (抽样 10 层)")
+			# Boss 层 (500 层之上) 独立 x10 结构 不叠魔化 前缀 (里程碑 Boss 名字 来自 Boss 记录)
+			var e600: Dictionary = g.get_endless_floor(600)
+			var m600b: Dictionary = g.tower_monster_stats(e600)
+			var hpb: float = 1.0
+			for t600 in m600b["traits"]:
+				var tmb: Dictionary = trm.get(str(t600), {})
+				hpb *= float(tmb.get("hp", 1.0))
+			check(str(e600["boss_type"]) == "boss" and not str(e600["name"]).begins_with("魔化·") and int(e600["reward_mult"]) == 5,
+					"打磨-102 第 600 层 里程碑 Boss 不叠魔化 (x5 掉落 + 无 魔化 前缀, 实际 %s)" % str(e600["name"]))
+			check(float(m600b["hp"]) == float(e600["base_hp"]) * g.ENDLESS_BOSS_MULT * hpb,
+					"打磨-102 第 600 层 Boss 数值 = 基础 x x10 x 特性乘积 (魔化 不叠乘, 实际 %s)" % g.fmt(float(m600b["hp"])))
 			# 爬塔 成就 (受控: 清空 已解锁 + 全部 塔 状态, 逐项 设 塔 状态 验证 解锁)
 			g.ach_done.clear()
 			g.realm_idx = 0

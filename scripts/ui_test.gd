@@ -178,6 +178,7 @@ func _ready() -> void:
 	await _assert_poison_debuff()  # 打磨-93: 剧毒 debuff 顶栏徽标 + 触发浮动
 	await _assert_tower_affix_drop()  # 打磨-94: 塔战斗 词缀掉落 底部消息 展示
 	await _assert_auto_tower_feedback()  # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行
+	await _assert_endless_demon()  # 打磨-102: 登天梯 500 层后 全部 默认 魔化 (怪物卡 前缀/战力对比/胜局 消息)
 
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
@@ -4936,6 +4937,99 @@ func _assert_auto_tower_feedback() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g._auto_tower_wins == 0 and g._auto_tower_stone == 0.0 and g.auto_tower == false, "打磨-95 收尾 干净 基准 (会话 清零)")
+
+
+# 打磨-102: 登天梯 500 层后 全部 怪物 默认 魔化 (M5 规格落地: 数值 x3 + 追加 1 特性 + 「魔化·」前缀,
+# 与 精英层 同口径; Boss 层 独立 x10 不叠魔化). UI 断言: 登天梯 卡片 副标题 魔化 口径/怪物卡 魔化 前缀/
+# 战力对比 按 魔化 数值/弱玩家 恒败 停留 本层/强玩家 胜局 消息 含 层数 推进 (收尾 干净 基准 防 污染)
+func _assert_endless_demon() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 (待挑战 499, 最高 498) + 剧毒 归零 防 跨段 污染
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 499
+	g.tower_endless_best = 498
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 卡片 副标题 含 魔化 口径 (500 层后 全部 魔化)
+	var sub499: String = str((ui._tw_cards["endless"]["panel"] as PanelContainer).get_child(0).get_child(1).text)
+	check(sub499.find("500 层后") >= 0 and sub499.find("魔化") >= 0,
+			"打磨-102 登天梯 卡片 副标题 含 魔化 口径 (实际 %s)" % sub499)
+	# 第 499 层 (未 达 魔化 线): 怪物卡 无 魔化 前缀
+	var mon499: String = str(ui._tw_mon_labels["endless"].text)
+	check(mon499.find("第 499 层") >= 0 and mon499.find("魔化·") < 0,
+			"打磨-102 第 499 层 怪物卡 无 魔化 前缀 (实际 %s)" % mon499)
+	# 推进 至 500 层 (里程碑 Boss 层): 怪物卡 Boss 标记 (Boss 层 独立 结构, 无 魔化 前缀)
+	g.tower_endless_floor = 500
+	g.tower_endless_best = 499
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon500: String = str(ui._tw_mon_labels["endless"].text)
+	check(mon500.find("第 500 层") >= 0 and mon500.find("⚑Boss") >= 0 and mon500.find("魔化·") < 0,
+			"打磨-102 第 500 层 怪物卡 Boss 标记 (实际 %s)" % mon500)
+	# 推进 至 501 层 (普通 层, 魔化 新口径): 怪物卡 名 含 魔化· 前缀 + 无 Boss/精英 标记
+	g.tower_endless_floor = 501
+	g.tower_endless_best = 500
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon501: String = str(ui._tw_mon_labels["endless"].text)
+	check(mon501.find("第 501 层") >= 0 and mon501.find("魔化·") >= 0 and mon501.find("⚑Boss") < 0,
+			"打磨-102 第 501 层 普通 层 怪物卡 含 魔化· 前缀 (实际 %s)" % mon501)
+	# 战力对比 按 魔化 数值 (501 层 有效 atk = 基础 x3; 弱玩家 atk 恒 < 阈值 → 败 预测)
+	var m501: Dictionary = g.tower_monster_stats(g.get_endless_floor(501))
+	var pa: float = g.player_atk_effective()
+	check(pa < float(m501["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-102 501 层 魔化 后 弱玩家 (基准 atk %s) 判定=败 (数据 锚定, 阈值 %s)" % [g.fmt(pa), g.fmt(float(m501["atk"]) * g.TOWER_WIN_RATIO)])
+	var pwr501: String = str(ui._tw_pwr_labels["endless"].text)
+	check(pwr501.find("败") >= 0 and pwr501.find("vs 怪物 ATK %s" % g.fmt(float(m501["atk"]))) >= 0,
+			"打磨-102 501 层 战力对比 含 魔化 数值 且 预测 败 (实际 %s)" % pwr501)
+	# 弱玩家 手动 挑战 501 层 = 败 (停留 本层, 无 消耗 无 惩罚)
+	var sto501: float = g.stones
+	var r_lose: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r_lose["win"]) == false and int(g.tower_endless_floor) == 501 and absf(g.stones - sto501) < 1e-9,
+			"打磨-102 弱玩家 501 层 败 停留 本层 无 消耗 (实际 win=%s 层=%d)" % [str(r_lose["win"]), int(g.tower_endless_floor)])
+	# 强玩家 (飞升 道祖) 恒胜: 挑战 501 层 胜 → 层数 推进 502 + 最高 纪录 501 + 奖励 入账
+	var snap501: Dictionary = g.stats.duplicate(true)
+	g.ascended = true
+	g.dao_level = 8
+	g.learned.clear()
+	var r_win: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r_win["win"]) and int(g.tower_endless_floor) == 502 and int(g.tower_endless_best) == 501,
+			"打磨-102 强玩家 501 层 魔化 层 胜 推进 (实际 win=%s 层=%d 最高=%d)" % [str(r_win["win"]), int(g.tower_endless_floor), int(g.tower_endless_best)])
+	check(float(r_win["reward_stone"]) > 0.0, "打磨-102 魔化 层 胜 奖励 灵石 >0 (实际 %s)" % g.fmt(float(r_win["reward_stone"])))
+	# 升层 后 怪物卡 切 502 层 (普通 层 恒 魔化, 502 层 抽样 同 口径)
+	g.tower_endless_floor = 502
+	g.tower_endless_best = 501
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon502: String = str(ui._tw_mon_labels["endless"].text)
+	check(mon502.find("第 502 层") >= 0 and mon502.find("魔化·") >= 0,
+			"打磨-102 502 层 怪物卡 恒 魔化 (实际 %s)" % mon502)
+	check(int(g.stats.get("tower_win", 0.0)) == int(snap501.get("tower_win", 0.0)) + 1,
+			"打磨-102 魔化 层 胜 tower_win 统计 +1")
+	# 收尾: 恢复 干净 基准 (塔 态/飞升/剧毒 归零, 防 污染 M6-3 段)
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.learned.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_endless_floor) == 1 and int(g.tower_endless_best) == 0 and g.poison_battles == 0,
+			"打磨-102 收尾 干净 基准 (塔 态 归零)")
 
 
 # M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;
