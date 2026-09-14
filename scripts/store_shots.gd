@@ -65,6 +65,10 @@ func _take_next() -> void:
 	elif _idx == 1:
 		# 技能页: 触发一次筛选, 已学技能排到列表顶部
 		ui._on_filter("")
+	elif _idx == 2:
+		# 装备页: 打磨-98 选中 词缀 评分 Δ 预览 行 展示 (选中 纳灵·优秀 2 件 余 1, 4 件 拥有 装备 空槽 增益 预览)
+		ui._m63_sel = "af_qi_rate_1_1"
+		ui._refresh_m63_ui()
 	# 等该帧渲染完成后再读帧缓冲
 	await get_tree().process_frame
 	await get_tree().process_frame

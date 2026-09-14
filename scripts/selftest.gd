@@ -5884,6 +5884,66 @@ func _init() -> void:
 	g.set_process(true)
 	g.save_game()
 
+	# ---------- 打磨-98: 评分 小数 显示 修复 + 选中 词缀 评分 Δ 汇总 (M6-3 规格 「换装 后 评分 Δ」) ----------
+	# 1) fmt_score 档位 (评分 值域 0.1~2.2, fmt() 万档 前 int 截断 会 显 0)
+	check(g.fmt_score(0.14) == "0.14", "打磨-98 fmt_score 0.14 (实际 %s)" % g.fmt_score(0.14))
+	check(g.fmt_score(0.094) == "0.09", "打磨-98 fmt_score 0.094 舍入 2 位 (实际 %s)" % g.fmt_score(0.094))
+	check(g.fmt_score(9999.0) == "9999.00", "打磨-98 fmt_score 万档 下 仍 小数 (实际 %s)" % g.fmt_score(9999.0))
+	check(g.fmt_score(1e4) == "1.0万", "打磨-98 fmt_score 万档 走 fmt 口径 (实际 %s)" % g.fmt_score(1e4))
+	check(g.fmt_score(0.0) == "0.00", "打磨-98 fmt_score 0 (实际 %s)" % g.fmt_score(0.0))
+	check(g.fmt_score(0.96) == "0.96", "打磨-98 fmt_score 0.96 (实际 %s)" % g.fmt_score(0.96))
+	# equip_detail 评分 行 走 fmt_score (不再 显 0)
+	var det98: String = g.equip_detail("weapon_0_0")
+	check(det98.find("评分 %s" % g.fmt_score(g.equip_score("weapon_0_0"))) >= 0,
+			"打磨-98 equip_detail 评分 行 小数 (实际 %s)" % det98.split("\n")[3])
+	# 2) affix_sel_delta_text: 未 选中/未知 id = 空串
+	check(g.affix_sel_delta_text("") == "", "打磨-98 未 选中 词缀 空串")
+	check(g.affix_sel_delta_text("not_exist") == "", "打磨-98 未知 词缀 id 空串 (防御)")
+	# 3) 无 拥有 装备 = 空串 (收尾 已 清 owned_eq)
+	g.affix_add("af_qi_rate_4_0", 1)
+	check(g.affix_sel_delta_text("af_qi_rate_4_0") == "", "打磨-98 无 拥有 装备 Δ 空串")
+	# 4) 空槽 增益: 拥有 weapon_0_0 (3 空槽) 选中 传说 qi (0.6) -> 「木剑」 +0.60
+	g.stones = 1e12
+	g.buy_equipment("weapon_0_0")
+	check(g.affix_sel_delta_text("af_qi_rate_4_0") == "可 增益: 「%s」 +0.60" % str(g.equip_by_id["weapon_0_0"]["name"]),
+			"打磨-98 空槽 增益 Δ (实际 %s)" % g.affix_sel_delta_text("af_qi_rate_4_0"))
+	# 5) 已装 槽 换装 参与 比较: 槽0 装 普通 qi (0.05) 后 选中 传说 -> 槽0 换装 0.6-0.05=0.55, 空槽 0.6 取 最大 0.60
+	g.affix_add("af_qi_rate_0_0", 1)
+	check(g.affix_equip("weapon_0_0", 0, "af_qi_rate_0_0") == "", "打磨-98 受控 装配 槽0 成功")
+	check(g.affix_sel_delta_text("af_qi_rate_4_0") == "可 增益: 「%s」 +0.60" % str(g.equip_by_id["weapon_0_0"]["name"]),
+			"打磨-98 换装 与 空槽 取 最大 0.60 (实际 %s)" % g.affix_sel_delta_text("af_qi_rate_4_0"))
+	# 6) 已装 槽 换装 正 增益: 填满 空槽 (槽1/2 装 atk_1 0.144) 后 选中 atk_1 -> 槽0 换装 0.144-0.05=0.094 唯一 正
+	g.affix_add("af_atk_1_0", 2)
+	g.affix_equip("weapon_0_0", 1, "af_atk_1_0")
+	g.affix_equip("weapon_0_0", 2, "af_atk_1_0")
+	check(g.affix_sel_delta_text("af_atk_1_0") == "可 增益: 「%s」 +0.09" % str(g.equip_by_id["weapon_0_0"]["name"]),
+			"打磨-98 已装槽 换装 净增益 0.094->0.09 (实际 %s)" % g.affix_sel_delta_text("af_atk_1_0"))
+	# 7) 全 负 无 正增益 = 空串 (3 槽 全满 qi/atk_1/atk_1 后 选中 最低档 0.02: 全 槽 换装 负, 无 空槽)
+	g.affix_unequip("weapon_0_0", 0)
+	check(g.affix_equip("weapon_0_0", 0, "af_qi_rate_0_0") == "", "打磨-98 重新 装配 槽0 成功")
+	var low98: String = "af_bt_chance_0_0"
+	check(absf(float(g.affix_by_id[low98].get("value", 0.0)) - 0.02) < 1e-9, "打磨-98 低值 词缀 锚定 0.02 (实际 %s)" % str(float(g.affix_by_id[low98].get("value", 0.0))))
+	g.affix_add(low98, 1)
+	check(g.affix_sel_delta_text(low98) == "", "打磨-98 全 负 无 正增益 空串 (实际 %s)" % g.affix_sel_delta_text(low98))
+	# 8) 只读 无 副作用 (连读 恒定 + 装配/背包/统计 不变)
+	var d98a: String = g.affix_sel_delta_text("af_qi_rate_4_0")
+	var load98j: String = JSON.stringify(g.affix_load)
+	var bag98j: String = JSON.stringify(g.affix_bag)
+	var stats98: Dictionary = g.stats.duplicate()
+	var d98b: String = g.affix_sel_delta_text("af_qi_rate_4_0")
+	check(d98a == d98b and JSON.stringify(g.affix_load) == load98j
+			and JSON.stringify(g.affix_bag) == bag98j and g.stats == stats98,
+			"打磨-98 Δ 接口 只读 连读 恒定 无 副作用")
+	# 9) 收尾: 归零 落盘 干净 档
+	for k in g.affix_load.keys():
+		for pk in (g.affix_load[k] as Dictionary).keys():
+			g.affix_unequip(str(k), int(pk))
+	g.affix_decompose_all()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

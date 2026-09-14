@@ -4787,7 +4787,7 @@ func _assert_m63_diy() -> void:
 	check(ui._m63_chips.has("weapon_0_0") and (ui._m63_chips["weapon_0_0"] as Array).size() == 3, "M6-3 拥有 装备 3 chip 构建")
 	# 初始 评分 行 = 基础 6 池
 	var sc_base: float = g.equip_score("weapon_0_0")
-	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt(sc_base), "M6-3 初始 评分 行 = 基础 (实际 %s)" % ui._m63_score_labels["weapon_0_0"].text)
+	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt_score(sc_base), "M6-3 初始 评分 行 = 基础 (打磨-98 fmt_score, 实际 %s)" % ui._m63_score_labels["weapon_0_0"].text)
 	# 入包 3 词缀 -> 网格 3 格 + 容量 3/30 + 收集 3/120
 	g.affix_add("af_qi_rate_0_0", 2)
 	g.affix_add("af_atk_1_0", 1)
@@ -4819,7 +4819,7 @@ func _assert_m63_diy() -> void:
 	await get_tree().process_frame
 	check(str((g.affix_load.get("weapon_0_0", {}) as Dictionary).get("0", "")) == "af_qi_rate_0_0", "M6-3 chip 装配 成功 (槽0)")
 	check(str((chips[0] as Button).text) == str(g.affix_by_id["af_qi_rate_0_0"]["name"]), "M6-3 装配 后 chip 显示 词缀 名 (实际 %s)" % (chips[0] as Button).text)
-	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt(g.equip_score("weapon_0_0")), "M6-3 装配 后 评分 行 刷新")
+	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt_score(g.equip_score("weapon_0_0")), "M6-3 装配 后 评分 行 刷新 (打磨-98 fmt_score)")
 	check(g.equip_score("weapon_0_0") > sc_base, "M6-3 装配 后 评分 上升")
 	check(str(ui._m63_seen_hdr.text) == "词缀 收集 3/120", "M6-3 装配 不 改 收集 (仍 3/120)")
 	# 拆卸 (chip 0 再 点, 无 选中)
@@ -4855,9 +4855,74 @@ func _assert_m63_diy() -> void:
 	check(str(ui._m63_seen_hdr.text) == "词缀 收集 3/120", "M6-3 分解 不 清 收集 (仍 3/120)")
 	check(ui._m63_bag_grid.get_child_count() == 1, "M6-3 分解 后 网格 空 提示 1 格 (实际 %d)" % ui._m63_bag_grid.get_child_count())
 	# 评分 行 未 改变 (分解 不 卸 装配)
-	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt(g.equip_score("weapon_0_0")), "M6-3 分解 后 评分 行 不变")
+	check(str(ui._m63_score_labels["weapon_0_0"].text) == "评分 %s" % g.fmt_score(g.equip_score("weapon_0_0")), "M6-3 分解 后 评分 行 不变 (打磨-98 fmt_score)")
 	# tooltip 含 评分 行 (equip_detail 含 词缀槽 + 评分)
 	check(str((ui._equip_row_nodes["weapon_0_0"] as Node).tooltip_text).find("评分") >= 0, "M6-3 装备 tooltip 含 评分 行")
+
+	# ---------- 打磨-98: 选中 词缀 评分 Δ 汇总 行 (M6-3 规格 「槽位下方 实时 预览 换装 后 评分 Δ」) ----------
+	# 前置: 一键装配 后 weapon_0_0 3 槽 全满 (槽0=atk_4_0 0.96 / 槽1=atk_1_0 0.144 / 槽2=qi_rate_0_0 0.05),
+	# 背包 已 分解 空, 未 选中 -> Δ 行 隐藏
+	check(str(ui._m63_delta_hdr.text) == "" and not ui._m63_delta_hdr.visible,
+			"打磨-98 未 选中 词缀 Δ 行 隐藏 (实际 %s)" % str(ui._m63_delta_hdr.text))
+	# 受控 态: 拆 空 3 槽 后 背包 = {qi x2, atk_1 x2, def_4_0 x1}, 槽 全 空
+	g.affix_unequip("weapon_0_0", 0)
+	g.affix_unequip("weapon_0_0", 1)
+	g.affix_unequip("weapon_0_0", 2)
+	g.affix_decompose("af_atk_4_0", -1)  # 拆 出 的 传说 分解 掉 (防 污染 Δ 取 最大)
+	g.affix_add("af_qi_rate_0_0", 1)
+	g.affix_add("af_atk_1_0", 1)
+	g.affix_add("af_def_4_0", 1)
+	check(int(g.affix_bag.get("af_qi_rate_0_0", 0)) == 2 and int(g.affix_bag.get("af_atk_1_0", 0)) == 2
+			and int(g.affix_bag.get("af_def_4_0", 0)) == 1, "打磨-98 受控 背包 态 (qi2/atk1x2/def4x1)")
+	# 空槽 增益: 选中 qi 普通 (0.05) -> 3 空槽 增益 均 0.05, 行 = 「木剑」 +0.05
+	ui._m63_sel = "af_qi_rate_0_0"
+	ui._refresh_m63_ui()
+	check(str(ui._m63_delta_hdr.text) == "可 增益: 「%s」 +%s" % [str(g.equip_by_id["weapon_0_0"]["name"]), g.fmt_score(0.05)],
+			"打磨-98 选中 普通 词缀 Δ 行 空槽 增益 0.05 (实际 %s)" % str(ui._m63_delta_hdr.text))
+	check(ui._m63_delta_hdr.visible, "打磨-98 Δ 行 可见 (选中 态)")
+	# 空槽 增益 随 词缀 数值: 选中 传说 def (0.96) -> 取 最大 0.96
+	ui._m63_sel = "af_def_4_0"
+	ui._refresh_m63_ui()
+	check(str(ui._m63_delta_hdr.text).find(g.fmt_score(0.96)) >= 0,
+			"打磨-98 传说 词缀 空槽 增益 0.96 (实际 %s)" % str(ui._m63_delta_hdr.text))
+	# 换装 与 空槽 取 最大: 槽0 装 qi 后 选中 atk_1 (0.144): 槽0 换装 0.094 < 空槽 0.144 -> 取 0.144
+	g.affix_equip("weapon_0_0", 0, "af_qi_rate_0_0")
+	ui._m63_sel = "af_atk_1_0"
+	ui._refresh_m63_ui()
+	check(str(ui._m63_delta_hdr.text) == "可 增益: 「%s」 +%s" % [str(g.equip_by_id["weapon_0_0"]["name"]), g.fmt_score(0.144)],
+			"打磨-98 空槽 0.144 与 换装 0.094 取 最大 (实际 %s)" % str(ui._m63_delta_hdr.text))
+	# 已装槽 换装 净增益 精确: 3 槽 全满 (qi/atk_1/qi) 后 选中 atk_1: 槽0 0.094 / 槽1 0 / 槽2 0.094 -> 0.094
+	g.affix_equip("weapon_0_0", 1, "af_atk_1_0")
+	g.affix_equip("weapon_0_0", 2, "af_qi_rate_0_0")
+	ui._refresh_m63_ui()
+	check(str(ui._m63_delta_hdr.text) == "可 增益: 「%s」 +%s" % [str(g.equip_by_id["weapon_0_0"]["name"]), g.fmt_score(0.094)],
+			"打磨-98 已装槽 换装 净增益 0.094 精确 (实际 %s)" % str(ui._m63_delta_hdr.text))
+	# 无 正增益 隐藏: 槽 全满 时 选中 同槽 词缀 (qi 0.05: 槽0/槽2 平 0, 槽1 负) -> 隐藏
+	ui._m63_sel = "af_qi_rate_0_0"
+	ui._refresh_m63_ui()
+	check(str(ui._m63_delta_hdr.text) == "" and not ui._m63_delta_hdr.visible,
+			"打磨-98 全 平/负 无 正增益 Δ 行 隐藏 (实际 %s)" % str(ui._m63_delta_hdr.text))
+	# 同 态 节流: 再刷 文本/显隐 不变
+	ui._refresh_m63_ui()
+	check(str(ui._m63_delta_hdr.text) == "", "打磨-98 同 态 刷新 Δ 行 稳定")
+	# 只读 无 副作用: Δ 行 刷新 不 改 装配/背包/统计
+	var snap_load98j: String = JSON.stringify(g.affix_load)
+	var snap_bag98j: String = JSON.stringify(g.affix_bag)
+	var snap_stats98: Dictionary = g.stats.duplicate()
+	ui._refresh_m63_ui()
+	check(JSON.stringify(g.affix_load) == snap_load98j
+			and JSON.stringify(g.affix_bag) == snap_bag98j and g.stats == snap_stats98,
+			"打磨-98 Δ 预览 只读 无 装配/背包/统计 副作用")
+	# 收尾: 拆 空 3 槽 + 分解 背包, 材料 复原 1 (M6-3 段 分解 口径, 防 打磨-96 段 基准 错位)
+	for k in g.affix_load.keys():
+		for pk in (g.affix_load[k] as Dictionary).keys():
+			g.affix_unequip(str(k), int(pk))
+	g.affix_decompose_all()
+	g.affix_materials = 1
+	ui._m63_sel = ""
+	ui._refresh_m63_ui()
+	check(str(ui._m63_delta_hdr.text) == "", "打磨-98 收尾 Δ 行 隐藏")
+
 	# ---------- 打磨-96: 词缀 材料 兑换 面板 (UI 断言; 分解 全部 时 背包 仅 qi 普通 x1 -> 材料 +1) ----------
 	ui._refresh_m96_ui()  # 材料行 同步 刷新 (主循环 刷新 口径)
 	check(ui._m96_mat_hdr != null and ui._m96_exch_btn != null, "打磨-96 材料行/兑换 按钮 节点 存在")

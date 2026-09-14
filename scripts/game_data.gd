@@ -803,6 +803,52 @@ func affix_equip_preview(equip_id: String, slot_pos: int, affix_id: String) -> f
 		return 0.0
 	return float(a.get("value", 0.0))
 
+# 打磨-98: 选中 词缀 「评分 Δ」 汇总 预览 (M6-3 规格 「槽位下方 实时 预览 换装 后 评分 Δ」 落地).
+# 选中 背包 词缀 时 装备页 词缀 抽屉 显示 全部 拥有 装备 的 单件 最大 Δ (空槽 装 / 已装 槽 换装 的 净 增益):
+#   空槽 Δ = 词缀 value (与 affix_equip_preview 同口径)
+#   已装 槽 换装 Δ = 词缀 value - 槽内 词缀 value (可负 = 降级, 0 = 平 换)
+#   未拥有 装备 / 未选中 / 无 拥有 装备 = 空串 (UI 隐藏 该行)
+# 逐 装备 取 各槽 最大 Δ (只 计 有 增益 或 玩家 主动 换 的 槽; 取 全槽 最大 含 负值 时 若 无 正增益 段 省略 该 装备),
+# 装备 按 id 确定性 排序, 取 前 3 件 展示, 其余 汇总 「等 N 件 可 增益」; 纯 只读 (不 改 装配/背包/统计).
+func affix_sel_delta_text(affix_id: String) -> String:
+	var a: Dictionary = affix_by_id.get(affix_id, {})
+	if a.is_empty():
+		return ""
+	var v: float = float(a.get("value", 0.0))
+	var lines: Array = []
+	var extra := 0
+	var eids: Array = []
+	for eid in owned_eq:
+		eids.append(str(eid))
+	eids.sort()
+	for eid in eids:
+		var load: Dictionary = affix_load.get(str(eid), {})
+		var best := 0.0
+		var has_gain := false
+		for p in equipment_slots(str(eid)):
+			var cur: String = str(load.get(str(p), ""))
+			var d: float
+			if cur == "":
+				d = v
+			else:
+				d = v - float(affix_by_id.get(cur, {}).get("value", 0.0))
+			if d > best:
+				best = d
+			if d > 0.0:
+				has_gain = true
+		if best <= 0.0 or not has_gain:
+			continue
+		if lines.size() < 3:
+			lines.append("「%s」 +%s" % [str(equip_by_id.get(str(eid), {}).get("name", str(eid))), fmt_score(best)])
+		else:
+			extra += 1
+	if lines.is_empty():
+		return ""
+	var out: String = "可 增益: " + " · ".join(lines)
+	if extra > 0:
+		out += " · 等 %d 件" % extra
+	return out
+
 # 词缀 收集 (曾 入包 过的 词缀 id 集合; 卸下/分解 不 移除, 只增不减).
 # 背包 集齐 120 成就 判 此 集合; 存档 seen_affixes 字段 (旧档 缺 默认 空).
 var seen_affixes: Array = []
@@ -1589,7 +1635,7 @@ func equip_detail(id: String) -> String:
 	# M6-2: 词缀槽 行 (已装 词缀 明细; 与 affix_load_text 同源)
 	tip += "\n" + affix_load_text(id)
 	# M6-3: 评分 (装备 基础 6 池 + 已装 词缀 6 池; 列表/对比 排序 口径)
-	tip += "\n评分 %s" % fmt(equip_score(id))
+	tip += "\n评分 %s" % fmt_score(equip_score(id))  # 打磨-98: 评分 值域 <1 须 小数 档 (fmt 截断 显 0)
 	if affix_slots_used(id) > 0:
 		tip += "\n" + resonance_text()
 	if str(equipped.get(str(e["slot"]), "")) == id:
@@ -3180,6 +3226,14 @@ func fmt(v: float) -> String:
 	if v >= 1e4:
 		return "%.1f万" % (v / 1e4)
 	return str(int(v))
+
+# 装备 评分 专用 格式化 (打磨-98): 评分 值域 0.1~2.2 (基础 6 池 和 <1),
+# fmt() 万档 之前 是 int 截断 -> 评分 全显 "0" 误导; 小数值 显示 2 位 小数,
+# >=1e4 走 fmt() 万/亿 档 口径 (与 资源 展示 一致, 防 词缀 满配 长线 溢出 时 位数 失控)
+func fmt_score(v: float) -> String:
+	if v >= 1e4:
+		return fmt(v)
+	return "%.2f" % v
 
 func fmt_time(sec: float) -> String:
 	var h := int(sec) / 3600

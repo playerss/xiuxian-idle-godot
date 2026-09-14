@@ -208,6 +208,8 @@ var _m63_score_labels: Dictionary = {}   # 装备 id -> 评分 Label
 var _m63_row_keys: Dictionary = {}       # 装备 id -> 缓存 键 (词缀 装配/拥有/选中 变化 才 刷 chips)
 var _m63_bag_key := ""                   # 背包 抽屉 缓存 键 (内容+选中 变化 才 重建 网格)
 var _m63_bag_tip := ""                   # 打磨-97: 容量 行 tooltip 动态 段 缓存 (bag_40 解锁态/还差数 变化 才 刷)
+var _m63_delta_hdr: Label                 # 打磨-98: 选中 词缀 评分 Δ 汇总 行 (可 增益: 「X」 +0.05 · …)
+var _m63_delta_tip := ""               # 打磨-98: Δ 行 文本 缓存 (选中/装配态 变化 才 刷)
 var _m63_sel_hdr: Label                  # M6-3: 当前选中 词缀 提示 行
 var _af_box_m63: VBoxContainer           # M6-3: 词缀背包 抽屉 VBox
 # ---------- 打磨-96: 词缀 材料 兑换 面板 (M6 经济闭环: 分解 产出 材料 / 材料 兑换 特定 词缀 保底 获取) ----------
@@ -1430,6 +1432,10 @@ func _build_equip_page(page: Panel) -> void:
 	af_box.add_child(_m63_seen_hdr)
 	_m63_res_hdr = _label("", 12, DIM)
 	af_box.add_child(_m63_res_hdr)
+	# 打磨-98: 选中 词缀 「评分 Δ」 实时 预览 行 (M6-3 规格: 换装 后 评分 Δ; 未 选中/无 可 增益 隐藏)
+	_m63_delta_hdr = _label("", 12, GOLD)
+	_m63_delta_hdr.tooltip_text = "选中 词缀 装配 后 各 拥有 装备 的 评分 增益 预览 (只读): 空槽 = 词缀 数值; 已装槽 换装 = 新词缀 - 槽内词缀 (负值 降级 不 展示)。\n装备 评分 = 基础 6 池 + 已装 词缀 6 池 (乘算 独立项 汇总 前 的 线性 和); 取 前 3 件 增益 最高 装备, 其余 汇总 件数。"
+	af_box.add_child(_m63_delta_hdr)
 	var af_btn_bar := HBoxContainer.new()
 	af_btn_bar.add_theme_constant_override("separation", 8)
 	af_box.add_child(af_btn_bar)
@@ -3186,12 +3192,12 @@ func _on_m63_chip(equip_id: String, pos: int) -> void:
 			return
 		msg = g.affix_equip(equip_id, pos, _m63_sel)
 		if msg == "":
-			_show_msg("装配 成功 (评分 %s)" % g.fmt(g.equip_score(equip_id)))
+			_show_msg("装配 成功 (评分 %s)" % g.fmt_score(g.equip_score(equip_id)))
 	else:
 		if _m63_sel != "" and _m63_sel != cur:
 			msg = g.affix_swap(equip_id, pos, _m63_sel)
 			if msg == "":
-				_show_msg("换装 成功 (评分 %s)" % g.fmt(g.equip_score(equip_id)))
+				_show_msg("换装 成功 (评分 %s)" % g.fmt_score(g.equip_score(equip_id)))
 			else:
 				_show_msg(msg)
 		else:
@@ -3322,6 +3328,11 @@ func _refresh_m63_ui() -> void:
 	var res_txt: String = g.resonance_text()
 	if _m63_res_hdr.text != res_txt:
 		_m63_res_hdr.text = res_txt
+	# 打磨-98: 选中 词缀 评分 Δ 汇总 行 (文本 变化 才 刷, 挂机 恒定 无 每帧 重绘)
+	var delta_txt: String = g.affix_sel_delta_text(_m63_sel)
+	if _m63_delta_hdr.text != delta_txt:
+		_m63_delta_hdr.text = delta_txt
+		_m63_delta_hdr.visible = delta_txt != ""
 	var sel_txt: String
 	if _m63_sel == "":
 		sel_txt = "未选中词缀 (点背包格子 选中 后 点装备槽 装配)"
@@ -3437,7 +3448,7 @@ func _refresh_m63_equip_row(equip_id: String) -> void:
 			var has_sel: bool = _m63_sel != ""
 			cb.disabled = not has_sel
 			cb.add_theme_color_override("font_color", CYAN if has_sel else DIM)
-			cb.tooltip_text = ("空槽%d: %s" % [i + 1, "点选背包词缀后 装配 (评分 +%s)" % g.fmt(g.affix_equip_preview(str(equip_id), i, _m63_sel))]) if has_sel else ("空槽%d: 点选背包词缀 后 点击 装配" % (i + 1))
+			cb.tooltip_text = ("空槽%d: %s" % [i + 1, "点选背包词缀后 装配 (评分 +%s)" % g.fmt_score(g.affix_equip_preview(str(equip_id), i, _m63_sel))]) if has_sel else ("空槽%d: 点选背包词缀 后 点击 装配" % (i + 1))
 		else:
 			var a: Dictionary = g.affix_by_id.get(cur, {})
 			cb.text = str(a.get("name", ""))
@@ -3446,7 +3457,7 @@ func _refresh_m63_equip_row(equip_id: String) -> void:
 				str(a.get("name", "")), g.affix_tier_name(int(a.get("tier", 0))), float(a.get("value", 0.0))]
 	var sl: Label = _m63_score_labels.get(str(equip_id))
 	if sl != null:
-		var sc_txt: String = "评分 %s" % g.fmt(g.equip_score(str(equip_id)))
+		var sc_txt: String = "评分 %s" % g.fmt_score(g.equip_score(str(equip_id)))
 		if sl.text != sc_txt:
 			sl.text = sc_txt
 
