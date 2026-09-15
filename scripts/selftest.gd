@@ -6544,6 +6544,38 @@ func _init() -> void:
 	g.tower_monster_tip(rec106, "fixed")
 	check(r106a == tip106a and g.stats == snap106, "打磨-106 tooltip 只读 连读 恒定 (无 统计 副作用)")
 
+	# ---------- 打磨-107: 塔战斗 胜利 浮动提示 文案 (tower_win_float_text 只读 接口) ----------
+	# 败 局/缺 win 字段 = 空串 (UI 不 弹 防御)
+	check(g.tower_win_float_text({"win": false}) == "", "打磨-107 败 局 = 空串")
+	check(g.tower_win_float_text({}) == "", "打磨-107 缺 win 字段 = 空串")
+	# 镇妖塔 胜局 基础 文案 (塔名/层/怪名/灵石 段)
+	var r107: Dictionary = {"win": true, "tower": "fixed", "floor": 12, "monster": "黑风·狼", "reward_stone": 64.0}
+	var t107a: String = g.tower_win_float_text(r107)
+	check(t107a.begins_with("镇妖塔 第 12 层「黑风·狼」胜利"), "打磨-107 镇妖塔 基础 文案 (实际 %s)" % t107a)
+	check(t107a.find("(灵石 +64)") >= 0, "打磨-107 灵石 段 (实际 %s)" % t107a)
+	# 登天梯 胜局 (tower != fixed → 登天梯) + 材料/特性 段
+	var r107b: Dictionary = {"win": true, "tower": "endless", "floor": 321, "monster": "魔化·九幽·蛇",
+			"reward_stone": 1024.0, "reward_mat": 3, "lucky_hit": true, "indomit_hit": true}
+	var t107b: String = g.tower_win_float_text(r107b)
+	check(t107b.begins_with("登天梯 第 321 层"), "打磨-107 登天梯 塔名 (实际 %s)" % t107b)
+	check(t107b.find("材料 +3") >= 0 and t107b.find("幸运 全奖励x2") >= 0 and t107b.find("不屈 全奖励x1.2") >= 0,
+			"打磨-107 材料/幸运/不屈 段 (实际 %s)" % t107b)
+	# 每日首胜 + 词缀 件数 段
+	var r107c: Dictionary = {"win": true, "tower": "endless", "floor": 100, "monster": "里程碑·守关",
+			"reward_stone": 512.0, "daily_bonus": 256.0, "affix_drops": ["affix_a_1", "affix_b_2"]}
+	var t107c: String = g.tower_win_float_text(r107c)
+	check(t107c.find("每日首胜 +256") >= 0, "打磨-107 每日首胜 段 (实际 %s)" % t107c)
+	check(t107c.find("词缀 x2") >= 0, "打磨-107 词缀 件数 段 (实际 %s)" % t107c)
+	# 0 灵石/0 材料/无 词缀 = 无 对应 段 (不 追加)
+	var r107d: Dictionary = {"win": true, "tower": "fixed", "floor": 1, "monster": "空", "reward_stone": 0.0, "reward_mat": 0}
+	var t107d: String = g.tower_win_float_text(r107d)
+	check(t107d.find("灵石") < 0 and t107d.find("材料") < 0 and t107d.find("词缀") < 0,
+			"打磨-107 零 奖励 无 对应 段 (实际 %s)" % t107d)
+	# 只读: 连读 恒定 无 状态/统计 副作用
+	var snap107: Dictionary = g.stats.duplicate(true)
+	check(g.tower_win_float_text(r107b) == t107b and g.stats == snap107,
+			"打磨-107 只读 连读 恒定 (无 统计 副作用)")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

@@ -177,6 +177,7 @@ func _ready() -> void:
 	await _assert_tower_clear()  # M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 称号 徽标
 	await _assert_poison_debuff()  # 打磨-93: 剧毒 debuff 顶栏徽标 + 触发浮动
 	await _assert_tower_affix_drop()  # 打磨-94: 塔战斗 词缀掉落 底部消息 展示
+	await _assert_tower_win_float()  # 打磨-107: 塔战斗 胜利 浮动提示 (M5-3 规格 浮动 段)
 	await _assert_auto_tower_feedback()  # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行
 	await _assert_endless_demon()  # 打磨-102: 登天梯 500 层后 全部 默认 魔化 (怪物卡 前缀/战力对比/胜局 消息)
 	await _assert_tower_rounds()  # 打磨-105: 战斗时长 预估 行 (M5 数值 模型 rounds 仅 展示: 双塔 卡片 文案/恒等 口径/败 预测 追加/剧毒 联动/节流)
@@ -4849,6 +4850,105 @@ func _assert_tower_affix_drop() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g.affix_bag_used() == 0 and g.affix_bag.is_empty(), "打磨-94 收尾 词缀 背包 清零 (防 污染)")
+
+
+# 打磨-107: 塔战斗 胜利 浮动提示 断言 (M5-3 规格 "掉落展示 底部消息 + 浮动提示" 浮动 段:
+# 手动 挑战 胜利 → 屏幕中央 绿色 浮动 "✦ 塔名 第 N 层「怪名」胜利 (…) ✦", 败 局 不 弹,
+# 与 底部 消息 并存; 自动爬塔 路径 不 弹 浮动 口径 不变. 驱动 真实 _on_tower_challenge 处理器,
+# 基准 同 打磨-94: 镇妖塔 第 50 层 小 Boss 数据 锚定, 弱 玩家 (境界0 atk 2.0) 恒败 /
+# 强 玩家 (ascended 道祖) 恒胜. 收尾 恢复 干净 基准 + 词缀 清零 防 污染 M6-3 段.)
+func _assert_tower_win_float() -> void:
+	var g := GameData
+	# 干净 基准 (塔 归零 + 境界0 层1 无 加成 + 词缀 背包 清零 + 冻结 挂机/自动 爬塔)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.auto_tower = false
+	g.set_process(false)
+	# 浮动 计数 归零 (打磨-94 胜局 已 弹 过 1 次, 本段 独立 断言)
+	ui._tower_win_float_count = 0
+	ui._tower_win_last_text = ""
+	ui._tab.current_tab = 4
+	ui._refresh()
+	await get_tree().process_frame
+	var fl: Label = ui._tower_win_float_label
+	check(fl != null, "打磨-107 浮动 标签 节点 存在")
+	check(ui._tower_win_float_count == 0, "打磨-107 归零 后 浮动 计数=0 (实际 %d)" % ui._tower_win_float_count)
+	# 数据 锚定: 第 50 层 小 Boss, 弱 玩家 恒败 / 强 玩家 恒胜
+	var rec50: Dictionary = g.get_fixed_floor(50)
+	var mon50: Dictionary = g.tower_monster_stats(rec50)
+	check(str(mon50.get("boss_type", "")) == "small", "打磨-107 第 50 层 = 小 Boss (数据 锚定, 实际 %s)" % str(mon50.get("boss_type", "")))
+	g.tower_fixed_floor = 49  # 待挑战 层 = 50
+	# 弱 玩家 (atk 2.0): 恒败 → 不 弹 浮动
+	check(g.player_atk_effective() < float(mon50["atk"]) * g.TOWER_WIN_RATIO, "打磨-107 弱 玩家 第 50 层 判定=败 (数据 锚定)")
+	ui._on_tower_challenge("fixed")
+	check(ui._tower_win_float_count == 0, "打磨-107 败 局 不 弹 浮动 (实际 %d)" % ui._tower_win_float_count)
+	check(str(ui._msg_label.text).begins_with("✖ 镇妖塔 第 50 层"), "打磨-107 败 局 底部 消息 仍 保留 (实际 %s)" % str(ui._msg_label.text).left(24))
+	# 强 玩家 (ascended 道祖): 恒胜 → 弹 绿色 浮动
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_fixed_floor = 49
+	check(g.player_atk_effective() >= float(mon50["atk"]) * g.TOWER_WIN_RATIO, "打磨-107 强 玩家 第 50 层 判定=胜 (数据 锚定)")
+	ui._on_tower_challenge("fixed")
+	check(ui._tower_win_float_count == 1, "打磨-107 胜 局 浮动 计数 +1 (实际 %d)" % ui._tower_win_float_count)
+	var ftxt: String = str(fl.text)
+	check(ftxt.begins_with("✦ 镇妖塔 第 50 层「"), "打磨-107 浮动 文案 前缀 塔名/层 (实际 %s)" % ftxt.left(28))
+	check(ftxt.find("胜利") >= 0 and ftxt.ends_with("✦"), "打磨-107 浮动 文案 含 胜利+收尾 符号 (实际 %s)" % ftxt)
+	check(ftxt.find("(灵石 +") >= 0, "打磨-107 浮动 文案 含 灵石 段 (实际 %s)" % ftxt)
+	check(fl.visible, "打磨-107 浮动 标签 可见")
+	var pos_y: float = fl.position.y
+	check(pos_y > -70.0 and pos_y < -20.0, "打磨-107 浮动 位置 居中 段 (实际 y=%.0f)" % pos_y)
+	# 文案 结构: Boss 层 必掉 词缀 1~3 件 (M6-2 口径) → 浮动 含 词缀 件数 段;
+	# Boss 层 无 怪物种 → mats=0 → 无 材料 段 (与 结算 reward_mat=0 同源 口径)
+	check(ftxt.find("词缀 x") >= 0, "打磨-107 浮动 文案 含 词缀 件数 段 (实际 %s)" % ftxt)
+	check(ftxt.find("材料") < 0, "打磨-107 Boss 层 无 怪物种 → 无 材料 段 (实际 %s)" % ftxt)
+	# 收尾: 恢复 干净 基准 + 词缀 清零 (防 污染 M6-3 段)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g.affix_bag_used() == 0 and g.affix_bag.is_empty(), "打磨-107 收尾 词缀 背包 清零 (防 污染)")
 
 
 # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行 断言 (挂机 期间 自动 爬塔 胜利 静默 补位:

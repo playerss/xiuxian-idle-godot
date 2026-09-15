@@ -2519,6 +2519,32 @@ func tower_clear_reward_text(stone: float) -> String:
 func tower_clear_title() -> String:
 	return "镇妖塔·通关者" if tower_fixed_clear else ""
 
+# 打磨-107: 塔战斗 胜利 浮动提示 文案 (M5-3 规格 "掉落展示 底部消息 + 浮动提示" 浮动 段 落地:
+# 原 手动 挑战 胜利 仅 底部 消息 [自动爬塔 无 浮动 防 刷屏 口径 不变], 胜利 瞬间 缺 居中 浮动 反馈;
+# 由 手动 挑战 UI 调用, 入参 = try_tower_challenge 结算 字典 (win=false/缺字段 返回 空串 防御);
+# 只读 不 改 状态/存档/统计)
+func tower_win_float_text(r: Dictionary) -> String:
+	if not bool(r.get("win", false)):
+		return ""
+	var tname: String = "镇妖塔" if str(r.get("tower", "")) == "fixed" else "登天梯"
+	var s: String = "%s 第 %d 层「%s」胜利" % [tname, int(r.get("floor", 0)), str(r.get("monster", ""))]
+	var stone: float = float(r.get("reward_stone", 0.0))
+	if stone > 0.0:
+		s += " (灵石 +%s)" % fmt(stone)
+	var mat_n: int = int(r.get("reward_mat", 0))
+	if mat_n > 0:
+		s += " 材料 +%d" % mat_n
+	if bool(r.get("lucky_hit", false)):
+		s += " 幸运 全奖励x2"
+	if bool(r.get("indomit_hit", false)):
+		s += " 不屈 全奖励x1.2"
+	if float(r.get("daily_bonus", 0.0)) > 0.0:
+		s += " 每日首胜 +%s" % fmt(float(r["daily_bonus"]))
+	var adrops: Array = r.get("affix_drops", [])
+	if adrops.size() > 0:
+		s += " 词缀 x%d" % adrops.size()
+	return s
+
 # M5-3: 爬塔 状态汇总 文案 (只读; 修行页 爬塔区 展示; 含 剧毒 debuff 提醒; 不 改 状态)
 func tower_status_line() -> String:
 	var s: String = "镇妖塔 最高 %d/1000 层%s · 登天梯 待挑战 第 %d 层 (最高 %d)" % [

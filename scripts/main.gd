@@ -98,6 +98,10 @@ var _ach_float_count := 0          # 打磨-17: 成就浮动提示次数 (自测
 var _onekey_float_label: Label     # 打磨-45: 一键系列浮动反馈 (顶层, 居中)
 var _onekey_float_tween: Tween
 var _onekey_float_count := 0       # 打磨-45: 浮动提示次数 (自测断言用)
+var _tower_win_float_label: Label  # 打磨-107: 塔战斗 胜利 浮动提示 (顶层, 居中, 绿色)
+var _tower_win_float_tween: Tween
+var _tower_win_float_count := 0    # 打磨-107: 胜利 浮动提示次数 (自测断言用)
+var _tower_win_last_text := ""     # 打磨-107: 最近一次 胜利 浮动文案 (自测断言用)
 var _onekey_last_text := ""        # 打磨-45: 最近一次浮动文案 (自测断言用)
 var _ready_float_label: Label      # 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (顶层, 居中)
 var _ready_float_tween: Tween
@@ -606,6 +610,18 @@ func _build_ui() -> void:
 	_onekey_float_label.modulate = Color(1, 1, 1, 0)
 	_onekey_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_onekey_float_label)
+
+	# 打磨-107: 塔战斗 胜利 浮动提示 (居中绿色, 与 一键系列 同口径; y=-26 同位 — 仅 手动 挑战
+	# 触发, 与 一键/突破 浮动 不同时并发; 败 不弹, 底部 消息 口径 不变 两者 并存)
+	_tower_win_float_label = _label("", 22, Color(0.55, 0.95, 0.55))
+	_tower_win_float_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_tower_win_float_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_tower_win_float_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_tower_win_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tower_win_float_label.position = Vector2(0, -26)
+	_tower_win_float_label.modulate = Color(1, 1, 1, 0)
+	_tower_win_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_tower_win_float_label)
 
 	# 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (居中绿色, 与 一键系列 同口径, 位置错开)
 	_ready_float_label = _label("", 22, Color(0.55, 0.95, 0.55))
@@ -1724,6 +1740,9 @@ func _on_tower_challenge(tid: String) -> void:
 			extra += " (词缀: %s)" % g.affix_drop_text(adrops)
 		_show_msg("✔ %s 第 %d 层「%s」胜利! 灵石 +%s%s" % [
 			tname, int(r["floor"]), str(r["monster"]), g.fmt(float(r["reward_stone"])), extra])
+		# 打磨-107: 胜利 居中 绿色 浮动 提示 (M5-3 规格 浮动 段; 文案 = 塔名/层/怪名/灵石+材料/幸运/不屈/首胜/词缀 件数,
+		# 与 底部 消息 口径 一致; 仅 手动 挑战 路径 触发 [自动爬塔 每帧 批量 结算 不 弹 浮动 防 刷屏], 败 局 不 弹)
+		_tower_win_float("✦ %s ✦" % g.tower_win_float_text(r))
 	else:
 		_show_msg("✖ %s 第 %d 层「%s」战力不足, 停留本层 (无惩罚, 可重试)" % [
 			tname, int(r["floor"]), str(r["monster"])])
@@ -2559,6 +2578,24 @@ func _onekey_float(text: String) -> void:
 	_onekey_float_tween = create_tween()
 	_onekey_float_tween.tween_property(_onekey_float_label, "position:y", -64.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_onekey_float_tween.parallel().tween_property(_onekey_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
+
+
+# 打磨-107: 塔战斗 胜利 浮动提示 (居中绿色, 与 一键系列 同 口径; 由 手动 挑战 处理器 在
+# 胜利 分支 调用, 文案 = "✦ 塔名 第 N 层「怪名」胜利 (…) ✦" [灵石/材料/幸运/不屈/首胜/词缀 件数];
+# 败 局 不 弹, 空串 不 弹 防御; 无 存档/统计 副作用; 计数/文案 供 自测 断言)
+func _tower_win_float(text: String) -> void:
+	if text == "" or text == "✦ ✦":
+		return
+	_tower_win_float_count += 1
+	_tower_win_last_text = text
+	_tower_win_float_label.text = text
+	_tower_win_float_label.position = Vector2(0, -26)
+	_tower_win_float_label.modulate = Color(1, 1, 1, 1)
+	if _tower_win_float_tween != null and _tower_win_float_tween.is_valid():
+		_tower_win_float_tween.kill()
+	_tower_win_float_tween = create_tween()
+	_tower_win_float_tween.tween_property(_tower_win_float_label, "position:y", -64.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_tower_win_float_tween.parallel().tween_property(_tower_win_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
 
 
 # 打磨-66: 离线收益 启动浮动 — 启动读档结算离线收益后, 屏幕中央金色浮动 (仅一次, 底部消息并存);
