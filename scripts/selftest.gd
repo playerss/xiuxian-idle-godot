@@ -678,7 +678,61 @@ func _init() -> void:
 					"打磨-104 登天梯 32 层 tooltip 含 天怨 x1.08 段")
 			var tip130: String = g.tower_monster_tip(g.tower_monster_stats(f130), "fixed")
 			check(tip130.find("天怨 生效") < 0, "打磨-104 镇妖塔 tooltip 无 天怨 生效 段")
+			# ---------- 打磨-105: 战斗时长 预估 行 (M5 数值 模型 rounds 仅 展示: ceil(怪 HP/预估伤害)) ----------
+			# 受控 基准 (沿用 M5-3 剧毒 段 收尾 态: 基准 玩家 realm0/层1 无 功法, 剧毒 归零,
+			# 镇妖塔 tower_fixed_clear=false 已 读档 恢复, 塔 层 残留 不影响 只读 接口)
+			var pv105: Dictionary = g.tower_challenge_preview()
+			var f105: Dictionary = pv105["fixed_mon"]
+			e1 = g.get_endless_floor(1)
+			var me105: Dictionary = g.tower_monster_stats(e1)
+			var pa105: float = g.player_atk_effective()
+			var pd105: float = g.player_def()
+			var dmg105: float = maxf(1.0, pa105 - float(f105["def"])) * 0.9
+			var dmg_txt105: String = g.fmt(dmg105) if dmg105 >= 1e4 else ("%.2f" % dmg105)
+			var rd105: int = int(ceil(float(f105["hp"]) / dmg105))
+			var rl105: String = g.tower_rounds_line(float(f105["hp"]), float(f105["def"]), bool(pv105["fixed_win"]))
+			check(rl105.begins_with("约 %d 回合 击败 (伤害 预估 %s/回合)" % [rd105, dmg_txt105]),
+					"打磨-105 战斗时长 行 = ceil(怪 HP / 预估伤害) 恒等 口径 (实际 %s)" % rl105)
+			check(rl105.find("本层 战力 不足") == (0 if not bool(pv105["fixed_win"]) else -1),
+					"打磨-105 败 预测 追加 口径 说明 / 胜 预测 无 (实际 %s, win=%s)" % [rl105, str(pv105["fixed_win"])])
+			var dmg105e: float = maxf(1.0, pa105 - float(me105["def"])) * 0.9
+			var rd105e: int = int(ceil(float(me105["hp"]) / dmg105e))
+			var rl105e: String = g.tower_rounds_line(float(me105["hp"]), float(me105["def"]), bool(pv105["endless_win"]))
+			check(rl105e.begins_with("约 %d 回合 击败" % rd105e), "打磨-105 登天梯 第 1 层 回合 预估 恒等 (实际 %s)" % rl105e)
+			# 强 战力 (道祖 进度 17): 1000 层 Boss 伤害 >> 单回合 基数, 回合 数 大幅 下降
+			var atk105_before: float = g.player_atk()
+			g.ascended = true
+			g.dao_level = 8
+			g.learned.clear()
+			g.tower_fixed_clear = true  # 守塔 模式: preview 恒 1000 层 Boss
+			var pv105s: Dictionary = g.tower_challenge_preview()
+			var f105s: Dictionary = pv105s["fixed_mon"]
+			var pa105s: float = g.player_atk_effective()
+			var dmg105s: float = maxf(1.0, pa105s - float(f105s["def"])) * 0.9
+			var rd105s: int = int(ceil(float(f105s["hp"]) / dmg105s))
+			check(bool(pv105s["fixed_win"]) and rd105s >= 1,
+					"打磨-105 道祖 打 1000 层 Boss 判胜 且 回合 预估 >=1 (win=%s 回合 %d)" % [str(pv105s["fixed_win"]), rd105s])
+			check(g.tower_rounds_line(float(f105s["hp"]), float(f105s["def"]), true).begins_with("约 %d 回合 击败" % rd105s),
+					"打磨-105 道祖 1000 层 回合 预估 恒等 口径 (实际 %s)" % g.tower_rounds_line(float(f105s["hp"]), float(f105s["def"]), true))
+			check(pa105s > 1e6 and dmg105s > float(f105s["hp"]) / 10.0,
+					"打磨-105 道祖 伤害 量级 锚定 (atk %s, 单回合 伤害 %s vs 怪 HP %s)" % [g.fmt(pa105s), g.fmt(dmg105s), g.fmt(float(f105s["hp"]))])
+			# 剧毒 -15% 联动: 强玩家 atk 恒 > 怪 def, 有效 atk 降 -> 预估 伤害 降 -> 回合 行 必变
+			g.poison_battles = 0
+			var rl105s_nop: String = g.tower_rounds_line(float(f105s["hp"]), float(f105s["def"]), true)
+			g.poison_battles = g.TOWER_POISON_BATTLES
+			var rl105s_poi: String = g.tower_rounds_line(float(f105s["hp"]), float(f105s["def"]), true)
+			check(rl105s_poi != rl105s_nop, "打磨-105 剧毒 后 回合 行 变化 (强玩家 有效 atk -15%%, 剧毒 %s / 无剧毒 %s)" % [rl105s_poi, rl105s_nop])
+			g.poison_battles = 0
+			# 只读: 连读 无 状态/统计 副作用
+			var snap105: Dictionary = g.stats.duplicate(true)
+			g.tower_rounds_line(100.0, 5.0, true)
+			g.tower_rounds_line(1e14, 1e9, false)
+			check(g.stats == snap105, "打磨-105 tower_rounds_line 只读 连读 无 统计 副作用")
 			# 收尾: 恢复 干净 基准 (塔 态 归零 防 污染 后续 段)
+			g.ascended = false
+			g.dao_level = 0
+			g.learned.clear()
+			g.tower_fixed_clear = false
 			g.tower_endless_floor = 1
 			g.tower_endless_best = 0
 			# 爬塔 成就 (受控: 清空 已解锁 + 全部 塔 状态, 逐项 设 塔 状态 验证 解锁)

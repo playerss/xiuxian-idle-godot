@@ -2448,6 +2448,25 @@ func tower_power_line(mon_atk: float) -> String:
 		" (剧毒 -15%% x %d 场)" % poison_battles if poison_battles > 0 else "",
 		fmt(mon_atk), ("胜" if ok else "败"), TOWER_WIN_RATIO]
 
+# 打磨-105: 战斗时长 预估 行 文案 (M5 战斗 数值 模型: rounds = ceil(mon_hp / dmg) 决定
+# "战斗时长" 仅 展示, 判定 仍 是 即时). 只读 接口: 按 当前 玩家 有效 atk/def 预估
+# 对 怪物 HP 的 回合数 (dmg = max(1, 有效 atk - 怪 def), 取 最 不利 0.9 浮动档
+# 口径 与 try_tower_challenge roll=0.0 一致; rounds = ceil(hp/dmg), 伤害 封顶 1
+# 恒 >= 1 不 崩溃; 回合 数 >1e12 时 走 fmt 万/亿/兆/京/垓 档 展示 (防 int64 溢出,
+# 极端 存档/残档 态 下 弱玩家 对 高层 怪 伤害 恒 =1 时 回合 数 可 达 1e24+).
+# 败 预测 时 追加 " (本层 战力 不足)" 与 胜负 着色 呼应;
+# 无 状态/存档/统计 副作用, 爬塔页 怪物卡/tooltip/战力对比 同源
+func tower_rounds_line(mon_hp: float, mon_def: float, win: bool) -> String:
+	var dmg := maxf(1.0, player_atk_effective() - mon_def) * 0.9
+	var rounds_f: float = ceil(mon_hp / dmg) if dmg > 0.0 else 999999.0
+	var rounds_txt: String = str(int(rounds_f)) if rounds_f <= 1e12 else fmt(rounds_f)
+	# 伤害 展示: <1e4 两位小数 (防 fmt int 截断 0.9 -> "0" 误导, 同 打磨-98 fmt_score 口径)
+	var dmg_txt: String = fmt(dmg) if dmg >= 1e4 else ("%.2f" % dmg)
+	var txt: String = "约 %s 回合 击败 (伤害 预估 %s/回合)" % [rounds_txt, dmg_txt]
+	if not win:
+		txt += " (本层 战力 不足)"
+	return txt
+
 # M5-3: 自动爬塔按钮 tooltip 动态段 (只读; 双塔 当前 挑战 层 + 胜负 预测 + 层数进度;
 # 口径 与 爬塔页 怪物卡/战力对比 同源; 不 改 状态/存档/统计; 供 按钮 悬停 动态 刷新, 同 打磨-84/85/86)
 func auto_tower_next_tip() -> String:
