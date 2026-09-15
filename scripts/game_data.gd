@@ -32,6 +32,8 @@ const ENDLESS_BOSS_MULT := 10.0      # 登天梯 里程碑 Boss (每 100 层) �
 # 打磨-102: 登天梯 500 层后 全部 普通 怪物 默认 魔化 (M5 规格 "500 层后所有怪物默认魔化"):
 # 魔化 口径 同 精英层 = 数值 x3 + 追加 1 额外特性 + 「魔化·」前缀; Boss 层 独立 结构 (x10) 不叠魔化
 const ENDLESS_DEMON_FLOOR := 500     # 登天梯 魔化 起点 层 (>= 此层 非 Boss 怪物 恒 魔化)
+# 打磨-104: 天怨 特性 生效 层数 底数 (M5 规格: 仅 无尽塔 HP x (1 + 层数/400))
+const GRUDGE_FLOOR_DIV := 400
 
 # 境界表: 每个境界有若干层, 逐层突破
 const REALMS := [
@@ -1093,6 +1095,7 @@ func get_endless_floor(floor: int) -> Dictionary:
 	return {
 		"floor": floor, "name": name, "species": species_id, "traits": traits,
 		"is_elite": is_elite, "boss_type": ("boss" if is_boss else ""),
+		"tower": "endless",
 		"b_hp": 1.0, "b_atk": 1.0, "b_def": 1.0,
 		"base_hp": base_hp, "base_atk": base_atk, "base_def": base_def,
 		"hp": base_hp * struct, "atk": base_atk * struct, "def": base_def * struct,
@@ -1100,14 +1103,18 @@ func get_endless_floor(floor: int) -> Dictionary:
 	}
 
 # 怪物 有效 属性 (层数公式 x 结构 x 偏向 x 特性倍率; 特性 mult 逐条 应用)
-# 返回 {hp, atk, def, stone, mats, name, traits, is_elite, boss_type, reward_mult, poison}
+# 返回 {hp, atk, def, stone, mats, name, traits, is_elite, boss_type, reward_mult, poison, floor, grudge_mult}
 # 打磨-100: 材料 掉落 mats = (1 + 怪物种 reward.mat_w) 基础 x 特性 mat 倍率 (mat_bag x2;
 # Boss 层 无 种 weight = 基础 1.0; 数据 缺 字段 兜底 0.8)
+# 打磨-104: ① 天怨 heaven_grudge 仅 登天梯 生效 HP x (1 + 层数/GRUDGE_FLOOR_DIV) (M5 规格;
+#   镇妖塔/未带 floor 层数 保守 不放大 旧 口径 恒等); ② 幂等: 已 计算过 (带 grudge_mult 键)
+#   的 stats 字典 再 过一遍 恒等 不 叠乘 (UI 怪物卡 tooltip 走 该路径, 顺带 修复 既有 特性
+#   倍率 在 tooltip 内 二次 放大 的 显示 偏差, 灵石 行 口径 不变 [stats 字典 无 reward_stone 键])
 func tower_monster_stats(rec: Dictionary) -> Dictionary:
 	var hp := float(rec.get("hp", 0.0))
 	var atk := float(rec.get("atk", 0.0))
 	var dfn := float(rec.get("def", 0.0))
-	var stone := float(rec.get("reward_stone", 0.0))
+	var stone := float(rec.get("stone", rec.get("reward_stone", 0.0)))
 	var has_poison := false
 	var tlist: Array = rec.get("traits", [])
 	var mats := 0.0
@@ -1118,20 +1125,29 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 		if typeof(sp_rw) == TYPE_DICTIONARY:
 			mat_w = float((sp_rw as Dictionary).get("mat_w", 0.8))
 		mats = 1.0 + mat_w
+	var grudge_mult := 1.0
+	var is_stats: bool = rec.has("grudge_mult")  # stats 字典 再 过一遍 = 幂等 (不 叠乘 已 结算 倍率)
 	for tid in tlist:
 		var td: Dictionary = trait_by_id.get(str(tid), {})
 		if td.is_empty():
 			continue
 		var mult: Dictionary = td.get("mult", {})
-		hp *= float(mult.get("hp", 1.0))
-		atk *= float(mult.get("atk", 1.0))
-		dfn *= float(mult.get("def", 1.0))
-		dfn += float(mult.get("shield_add", 0.0))
-		stone *= float(mult.get("stone", 1.0))
-		mats *= float(mult.get("mat", 1.0))
+		if str(tid) == "heaven_grudge":
+			# 天怨: 仅 无尽塔 (rec.tower = "endless" 由 get_endless_floor 标记; 镇妖塔 层表
+			# 无 该 键 恒 不生效); 层数 未知 (<1) 时 保守 =1 不放大 (与 旧 注释 口径 一致)
+			if str(rec.get("tower", "")) == "endless" and int(rec.get("floor", 0)) >= 1:
+				grudge_mult = 1.0 + float(int(rec["floor"])) / float(GRUDGE_FLOOR_DIV)
+		elif not is_stats:
+			hp *= float(mult.get("hp", 1.0))
+			atk *= float(mult.get("atk", 1.0))
+			dfn *= float(mult.get("def", 1.0))
+			dfn += float(mult.get("shield_add", 0.0))
+			stone *= float(mult.get("stone", 1.0))
+			mats *= float(mult.get("mat", 1.0))
 		if mult.has("atk_debuff"):
 			has_poison = true
-	# 天怨: 仅无尽塔生效 (层数 未知 时 =1; 由 调用方 通过 rec 传 floor 已含 结构, 此处 保守 不放大)
+	if not is_stats:
+		hp *= grudge_mult
 	return {
 		"hp": hp, "atk": atk, "def": dfn, "stone": stone, "mats": mats,
 		"name": str(rec.get("name", "")), "traits": tlist,
@@ -1140,6 +1156,9 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 		"reward_mult": int(rec.get("reward_mult", 1)),
 		"poison": has_poison,
 		"floor": int(rec.get("floor", 0)),
+		# 打磨-104: tower 随 stats 传递 (stats 字典 再 过 tower_monster_stats 幂等 时 天怨 重算 需 同 口径)
+		"tower": str(rec.get("tower", "")),
+		"grudge_mult": grudge_mult,
 	}
 
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
@@ -2408,6 +2427,11 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 			lines.append("· %s — %s" % [str(td.get("name", "")), str(td.get("desc", ""))])
 	lines.append("HP %s · ATK %s · DEF %s" % [fmt(float(mon["hp"])), fmt(float(mon["atk"])), fmt(float(mon["def"]))])
 	lines.append("奖励 灵石 %s" % fmt(float(mon["stone"])))
+	# 打磨-104: 天怨 生效 提示 (仅 登天梯 且 含 天怨 特性; HP 行 已 含 放大, 此处 给 口径 说明;
+	# 与 数值 恒等 同源 grudge_mult = 1 + 层数/GRUDGE_FLOOR_DIV)
+	if tower == "endless" and float(mon["grudge_mult"]) > 1.0:
+		lines.append("天怨 生效: 无尽塔 HP x%.2f (层数 %d, 口径 1 + 层数/%d)" % [
+			float(mon["grudge_mult"]), int(mon["floor"]), GRUDGE_FLOOR_DIV])
 	# 打磨-103: 里程碑 宝箱 保底 提示 (M5 规格 "登天梯 每 100 层 里程碑 Boss + 里程碑 宝箱 [保底 高级词缀]";
 	# 数据 口径 = 来源 配置 min_tier [稀有+], 与 affix_roll_drop 保底 钳制 同源; 只 登天梯 里程碑 Boss 层 展示)
 	if tower == "endless" and str(mon["boss_type"]) != "" and int(rec.get("floor", 0)) % 100 == 0:

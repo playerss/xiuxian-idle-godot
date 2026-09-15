@@ -600,6 +600,87 @@ func _init() -> void:
 					"打磨-102 第 600 层 里程碑 Boss 不叠魔化 (x5 掉落 + 无 魔化 前缀, 实际 %s)" % str(e600["name"]))
 			check(float(m600b["hp"]) == float(e600["base_hp"]) * g.ENDLESS_BOSS_MULT * hpb,
 					"打磨-102 第 600 层 Boss 数值 = 基础 x x10 x 特性乘积 (魔化 不叠乘, 实际 %s)" % g.fmt(float(m600b["hp"])))
+			# ---------- 打磨-104: 天怨 heaven_grudge 仅 登天梯 HP x (1 + 层数/400) ----------
+			# 锚定 数据: 登天梯 第 500 层 里程碑 Boss 「沸血铁牛」 特性 = [enrage, heaven_grudge]
+			# (enrage hp x0.9 在 结构 x10 之上; 天怨 层数 500 -> HP x1.25); 第 32 层 普通层
+			# 鬼焰·煞 种 特性 = [heaven_grudge, mat_bag] (32 层 非 精英 非 Boss 非 魔化)
+			var e500g: Dictionary = g.get_endless_floor(500)
+			check(str(e500g["traits"]).find("heaven_grudge") >= 0,
+					"打磨-104 第 500 层 Boss 含 天怨 特性 (数据 锚定, 实际 %s)" % str(e500g["traits"]))
+			var m500g: Dictionary = g.tower_monster_stats(e500g)
+			var hpb500: float = 1.0
+			for t500 in e500g["traits"]:
+				var tmg: Dictionary = trm.get(str(t500), {})
+				if str(t500) != "heaven_grudge":
+					hpb500 *= float(tmg.get("hp", 1.0))
+			# 天怨 倍率 = 1 + 500/400 = 2.25 (500/400 = 1.25, 加 基础 1.0)
+			var exp500: float = float(e500g["base_hp"]) * g.ENDLESS_BOSS_MULT * hpb500 * 2.25
+			check(float(m500g["grudge_mult"]) == 2.25,
+					"打磨-104 第 500 层 天怨 倍率 = 1 + 500/400 = 2.25 (实际 %s)" % str(m500g["grudge_mult"]))
+			check(float(m500g["hp"]) == exp500,
+					"打磨-104 第 500 层 HP = 基础 x 结构 x10 x enrage0.9 x 天怨2.25 恒等 (实际 %s / 期望 %s)" % [g.fmt(float(m500g["hp"])), g.fmt(exp500)])
+			# 普通 层: 第 32 层 (非 精英/Boss/魔化) 种 特性 含 天怨
+			var e32: Dictionary = g.get_endless_floor(32)
+			check(str(e32["traits"]).find("heaven_grudge") >= 0 and str(e32["boss_type"]) == "" and not bool(e32["is_elite"]),
+					"打磨-104 第 32 层 普通层 含 天怨 (数据 锚定, 实际 %s)" % str(e32["traits"]))
+			var m32: Dictionary = g.tower_monster_stats(e32)
+			check(float(m32["grudge_mult"]) == 1.08,
+					"打磨-104 第 32 层 天怨 倍率 = 1 + 32/400 = 1.08 (实际 %s)" % str(m32["grudge_mult"]))
+			var hpb32: float = 1.0
+			for t32 in e32["traits"]:
+				var tm32: Dictionary = trm.get(str(t32), {})
+				if str(t32) != "heaven_grudge":
+					hpb32 *= float(tm32.get("hp", 1.0))
+			check(float(m32["hp"]) == float(e32["base_hp"]) * hpb32 * 1.08,
+					"打磨-104 第 32 层 HP = 基础 x 特性 x 天怨1.08 恒等 (无 结构 倍率, 实际 %s)" % g.fmt(float(m32["hp"])))
+			# 层数 单调: 天怨 随层数 线性 放大 (100 层 1.25 < 400 层 2.0 < 800 层 3.0)
+			var mono_ok := true
+			for fm in [100, 200, 300, 400, 600, 800, 1000]:
+				var egm: Dictionary = g.get_endless_floor(fm)
+				if str(egm["traits"]).find("heaven_grudge") >= 0:
+					var mgm: Dictionary = g.tower_monster_stats(egm)
+					if float(mgm["grudge_mult"]) != 1.0 + float(fm) / 400.0:
+						mono_ok = false
+			check(mono_ok, "打磨-104 含 天怨 的 登天梯 层 倍率 恒 = 1 + 层/400 (100~1000 抽样)")
+			# 镇妖塔 不 生效: 镇妖塔 53 层 含 天怨 (数据 锚定 130 层), tower_monster_stats 无 tower 键 = 恒 不 放大
+			var f130: Dictionary = g.get_fixed_floor(130)
+			if str(f130.get("traits", "")).find("heaven_grudge") >= 0:
+				var mf130: Dictionary = g.tower_monster_stats(f130)
+				var hpb130: float = 1.0
+				for t130 in f130["traits"]:
+					if str(t130) != "heaven_grudge":
+						hpb130 *= float(trm.get(str(t130), {}).get("hp", 1.0))
+				check(float(mf130["grudge_mult"]) == 1.0 and float(mf130["hp"]) == float(f130["hp"]) * hpb130,
+						"打磨-104 镇妖塔 第 130 层 天怨 不生效 (倍率 1.0, HP = 层表 值 x 非天怨 特性, 实际 倍率 %s)" % str(mf130["grudge_mult"]))
+			else:
+				check(true, "打磨-104 镇妖塔 第 130 层 无 天怨 特性 (数据 变动 跳过 恒等 断言)")
+			# 层数 缺失 保守: rec 无 floor (<1) 时 恒 不 放大
+			var nofl: Dictionary = {"hp": 100.0, "atk": 10.0, "def": 5.0, "traits": ["heaven_grudge"], "name": "test"}
+			var mnofl: Dictionary = g.tower_monster_stats(nofl)
+			check(float(mnofl["grudge_mult"]) == 1.0 and float(mnofl["hp"]) == 100.0,
+					"打磨-104 无 层数 时 天怨 保守 =1 不放大 (实际 倍率 %s)" % str(mnofl["grudge_mult"]))
+			# 幂等: stats 字典 再 过一遍 恒等 (UI tooltip 路径; 既有 特性 倍率 不 二次 叠乘)
+			var m500b: Dictionary = g.tower_monster_stats(e500)
+			var m500r: Dictionary = g.tower_monster_stats(m500b)
+			check(float(m500r["hp"]) == float(m500b["hp"]) and float(m500r["atk"]) == float(m500b["atk"])
+					and float(m500r["def"]) == float(m500b["def"]),
+					"打磨-104 stats 字典 幂等 再算 恒等 (无 二次 叠乘, 实际 hp %s)" % g.fmt(float(m500r["hp"])))
+			var e32s: Dictionary = g.tower_monster_stats(e32)
+			var e32r: Dictionary = g.tower_monster_stats(e32s)
+			check(float(e32r["hp"]) == float(e32s["hp"]),
+					"打磨-104 含 天怨 普通层 stats 幂等 恒等 (hp 不 二次 放大, 实际 %s)" % g.fmt(float(e32r["hp"])))
+			# tooltip: 登天梯 天怨 层 含 生效 段; 镇妖塔/普通 无
+			var tip500: String = g.tower_monster_tip(m500b, "endless")
+			check(tip500.find("天怨 生效") >= 0 and tip500.find("HP x2.25") >= 0,
+					"打磨-104 登天梯 500 层 怪物卡 tooltip 含 天怨 生效 段 (x2.25)")
+			var tip32: String = g.tower_monster_tip(e32s, "endless")
+			check(tip32.find("天怨 生效") >= 0 and tip32.find("HP x1.08") >= 0,
+					"打磨-104 登天梯 32 层 tooltip 含 天怨 x1.08 段")
+			var tip130: String = g.tower_monster_tip(g.tower_monster_stats(f130), "fixed")
+			check(tip130.find("天怨 生效") < 0, "打磨-104 镇妖塔 tooltip 无 天怨 生效 段")
+			# 收尾: 恢复 干净 基准 (塔 态 归零 防 污染 后续 段)
+			g.tower_endless_floor = 1
+			g.tower_endless_best = 0
 			# 爬塔 成就 (受控: 清空 已解锁 + 全部 塔 状态, 逐项 设 塔 状态 验证 解锁)
 			g.ach_done.clear()
 			g.realm_idx = 0
