@@ -6494,6 +6494,56 @@ func _init() -> void:
 	g.learned.clear()
 	g.save_game()
 
+	# ---------- 打磨-106: 怪物卡 tooltip 材料掉落预估 + 修 tower_monster_stats 幂等 丢 mats ----------
+	# 逻辑层: stats 字典 保留 species 键 — 幂等 再算 (stats 字典 再 过 tower_monster_stats,
+	# UI 怪物卡 tooltip 走 该 路径) 时 怪物种 基础 mats (1+mat_w) 可 重解 恒等 不 丢 归零
+	# (修复 前 再算 mats=0, tooltip 经 UI 路径 对 有 怪物种 的 层 无 材料 预估)
+	var rec106: Dictionary = g.get_fixed_floor(1)
+	var sp106: Dictionary = g.monster_by_id.get(str(rec106.get("species", "")), {})
+	var rw106: Dictionary = sp106.get("reward", {}) if not sp106.is_empty() else {}
+	var mw106: float = float(rw106.get("mat_w", 0.8))
+	var s106a: Dictionary = g.tower_monster_stats(rec106)
+	var s106b: Dictionary = g.tower_monster_stats(s106a)
+	var s106c: Dictionary = g.tower_monster_stats(s106b)
+	check(float(s106a["mats"]) == 1.0 + mw106, "打磨-106 首算 mats = 1+mat_w (种 %s, 期望 %.3f, 实际 %s)" % [
+			str(rec106.get("species", "")), 1.0 + mw106, g.fmt(float(s106a["mats"]))])
+	check(float(s106b["mats"]) == float(s106a["mats"]) and float(s106c["mats"]) == float(s106a["mats"]),
+			"打磨-106 幂等 再算 mats 恒等 不 丢 归零 (首算 %s 再算 %s 三算 %s)" % [
+				g.fmt(float(s106a["mats"])), g.fmt(float(s106b["mats"])), g.fmt(float(s106c["mats"]))])
+	check(str(s106b.get("species", "")) == str(rec106.get("species", "")), "打磨-106 stats 字典 携带 species 键 (再算 同 源)")
+	# 材料囊 mat_bag 层 (12 层 普通 层, 特性 mat x2 + 有 怪物种 基础): mats = 基础 x2, 幂等 恒等
+	# (Boss 层 species 为空 基础 1.0, 不 作 锚点; 只 用 有 种 的 普通 层)
+	var rec50: Dictionary = g.get_fixed_floor(12)
+	var s50a: Dictionary = g.tower_monster_stats(rec50)
+	var s50b: Dictionary = g.tower_monster_stats(s50a)
+	check(str(s50a["traits"]).find("mat_bag") >= 0, "打磨-106 12 层 含 材料囊 特性 (数据 锚定)")
+	check(float(s50a["mats"]) > 1.0 + 0.8 and float(s50b["mats"]) == float(s50a["mats"]),
+			"打磨-106 材料囊 mats = 基础 x2 且 幂等 恒等 (实际 %s)" % g.fmt(float(s50a["mats"])))
+	# 登天梯 精英层 (种 带 reward + 精英 结构): 幂等 恒等
+	var re10: Dictionary = g.get_endless_floor(10)
+	var se10a: Dictionary = g.tower_monster_stats(re10)
+	var se10b: Dictionary = g.tower_monster_stats(se10a)
+	check(float(se10a["mats"]) > 0.0 and float(se10b["mats"]) == float(se10a["mats"]),
+			"打磨-106 登天梯 精英层 mats 幂等 恒等 (实际 %s)" % g.fmt(float(se10a["mats"])))
+	# UI 层: 怪物卡 tooltip 追加 材料 预估 行 (与 stats mats 同源, 向上取整 口径 同 战斗 结算 reward_mat)
+	var tip106a: String = g.tower_monster_tip(rec106, "fixed")
+	check(tip106a.find("奖励 材料 %d" % int(ceil(1.0 + mw106))) >= 0,
+			"打磨-106 镇妖塔 第 1 层 tooltip 含 材料 预估 行 (期望 %d, 实际 %s)" % [
+				int(ceil(1.0 + mw106)), tip106a.left(80)])
+	var tip106b: String = g.tower_monster_tip(s106a, "fixed")
+	check(tip106b == tip106a, "打磨-106 tooltip stats 字典 路径 = 原始 记录 路径 (同 输入 恒等, 材料 行 不 丢)")
+	var tip50: String = g.tower_monster_tip(rec50, "fixed")
+	check(tip50.find("奖励 材料 %d" % int(ceil(float(s50a["mats"])))) >= 0,
+			"打磨-106 12 层 tooltip 材料 预估 行 (材料囊 x2, 期望 %d)" % int(ceil(float(s50a["mats"]))))
+	# 防御: 空 记录 (无 species/无 种) mats=0, tooltip 无 材料 行 不 崩溃
+	var tip106d: String = g.tower_monster_tip({"hp": 10.0, "atk": 2.0, "def": 1.0, "stone": 5.0, "traits": [], "floor": 1, "name": "空 记录"}, "fixed")
+	check(tip106d.find("奖励 材料") < 0, "打磨-106 空 记录 (无 种) tooltip 无 材料 行 (mats=0 防御)")
+	# 只读: 连读 恒定 无 状态/统计 副作用
+	var snap106: Dictionary = g.stats.duplicate(true)
+	var r106a: String = g.tower_monster_tip(rec106, "fixed")
+	g.tower_monster_tip(rec106, "fixed")
+	check(r106a == tip106a and g.stats == snap106, "打磨-106 tooltip 只读 连读 恒定 (无 统计 副作用)")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

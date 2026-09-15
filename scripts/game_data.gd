@@ -1117,16 +1117,20 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 	var stone := float(rec.get("stone", rec.get("reward_stone", 0.0)))
 	var has_poison := false
 	var tlist: Array = rec.get("traits", [])
-	var mats := 0.0
-	var sp: Dictionary = monster_by_id.get(str(rec.get("species", "")), {})
-	if not sp.is_empty():
-		var sp_rw: Variant = sp.get("reward", {})
-		var mat_w := 0.8
-		if typeof(sp_rw) == TYPE_DICTIONARY:
-			mat_w = float((sp_rw as Dictionary).get("mat_w", 0.8))
-		mats = 1.0 + mat_w
 	var grudge_mult := 1.0
 	var is_stats: bool = rec.has("grudge_mult")  # stats 字典 再 过一遍 = 幂等 (不 叠乘 已 结算 倍率)
+	# 打磨-106: mats 幂等 — stats 字典 (带 grudge_mult 键) 携带 已 结算 mats (首算 时
+	# 种 基础 x 特性 mat 倍率 已 叠完), 再 算 直接 沿用 恒等; 原始 层 记录 (无 mats 键)
+	# 按 怪物种 基础 1+mat_w 解析 (Boss 层 无 种 = 0)
+	var mats := float(rec["mats"]) if is_stats else 0.0
+	if not is_stats:
+		var sp: Dictionary = monster_by_id.get(str(rec.get("species", "")), {})
+		if not sp.is_empty():
+			var sp_rw: Variant = sp.get("reward", {})
+			var mat_w := 0.8
+			if typeof(sp_rw) == TYPE_DICTIONARY:
+				mat_w = float((sp_rw as Dictionary).get("mat_w", 0.8))
+			mats = 1.0 + mat_w
 	for tid in tlist:
 		var td: Dictionary = trait_by_id.get(str(tid), {})
 		if td.is_empty():
@@ -1159,6 +1163,9 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 		# 打磨-104: tower 随 stats 传递 (stats 字典 再 过 tower_monster_stats 幂等 时 天怨 重算 需 同 口径)
 		"tower": str(rec.get("tower", "")),
 		"grudge_mult": grudge_mult,
+		# 打磨-106: species 随 stats 传递 — 幂等 再算 时 怪物种 基础 mats (1+mat_w) 可 重解 恒等;
+		# 缺 该 键 时 再算 mats 归零 (UI tooltip 走 stats 字典 路径 的 隐性 缺口, 本轮 修复)
+		"species": str(rec.get("species", "")),
 	}
 
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
@@ -2427,6 +2434,11 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 			lines.append("· %s — %s" % [str(td.get("name", "")), str(td.get("desc", ""))])
 	lines.append("HP %s · ATK %s · DEF %s" % [fmt(float(mon["hp"])), fmt(float(mon["atk"])), fmt(float(mon["def"]))])
 	lines.append("奖励 灵石 %s" % fmt(float(mon["stone"])))
+	# 打磨-106: 材料 掉落 预估 (M5 规格 掉落展示 灵石/材料/词缀 材料 段 展示 位; 与 战斗 结算 同源
+	# = stats mats [基础 1+怪物种 mat_w x 材料囊x2, 幸运/不屈 叠乘 属 结算 时 随机 判定 不 入 预估],
+	# 向上取整 口径 与 reward_mat 一致; mats=0 防御 不 展示 该行)
+	if float(mon["mats"]) > 0.0:
+		lines.append("奖励 材料 %d" % int(ceil(float(mon["mats"]))))
 	# 打磨-104: 天怨 生效 提示 (仅 登天梯 且 含 天怨 特性; HP 行 已 含 放大, 此处 给 口径 说明;
 	# 与 数值 恒等 同源 grudge_mult = 1 + 层数/GRUDGE_FLOOR_DIV)
 	if tower == "endless" and float(mon["grudge_mult"]) > 1.0:
