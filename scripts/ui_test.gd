@@ -179,6 +179,7 @@ func _ready() -> void:
 	await _assert_tower_affix_drop()  # 打磨-94: 塔战斗 词缀掉落 底部消息 展示
 	await _assert_auto_tower_feedback()  # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行
 	await _assert_endless_demon()  # 打磨-102: 登天梯 500 层后 全部 默认 魔化 (怪物卡 前缀/战力对比/胜局 消息)
+	await _assert_milestone_chest()  # 打磨-103: 登天梯 里程碑 宝箱 保底 高品质 词缀 (tooltip 保底 段/卡片 口径/胜局 掉落 品质)
 
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
@@ -5030,6 +5031,103 @@ func _assert_endless_demon() -> void:
 	await get_tree().process_frame
 	check(int(g.tower_endless_floor) == 1 and int(g.tower_endless_best) == 0 and g.poison_battles == 0,
 			"打磨-102 收尾 干净 基准 (塔 态 归零)")
+
+
+# 打磨-103: 登天梯 里程碑 宝箱 保底 高品质 词缀 (M5 规格 "每 100 层 里程碑 Boss + 里程碑 宝箱 [保底 高级词缀]" 落地:
+# 词缀 来源 配置 min_tier=稀有+, affix_roll_drop 钳制 只升不降). UI 断言: 登天梯 卡片 副标题 宝箱 口径/
+# 里程碑 Boss 层 怪物卡 tooltip 含 保底 段 (精英层/镇妖塔 不 含)/强玩家 胜局 词缀 品质 恒 >= 稀有
+# (数据 锚定 100 层 里程碑 Boss, rolls 随机 但 保底 钳制 确定性 下限; 收尾 干净 基准 防 污染)
+func _assert_milestone_chest() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 + 词缀 清零 + 待挑战 100 层 (里程碑 Boss 层)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.auto_tower = false
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 卡片 副标题 含 宝箱 保底 口径 (UI 入口 提示)
+	var sub103: String = str((ui._tw_cards["endless"]["panel"] as PanelContainer).get_child(0).get_child(1).text)
+	check(sub103.find("宝箱") >= 0 and sub103.find("保底 稀有+") >= 0,
+			"打磨-103 登天梯 卡片 副标题 含 宝箱保底 口径 (实际 %s)" % sub103)
+	# 里程碑 Boss 层 怪物卡 tooltip 含 保底 段 (与 数据 接口 同源 断言 恒等)
+	var rec100: Dictionary = g.get_endless_floor(100)
+	check(str(g.tower_monster_stats(rec100).get("boss_type", "")) == "boss", "打磨-103 第 100 层 = 里程碑 Boss (数据 锚定)")
+	var mon_tip100: String = str(ui._tw_mon_labels["endless"].tooltip_text)
+	# 口径: UI 传入 的是 preview 的 stats 字典 (tower_monster_tip 内部 再走 tower_monster_stats),
+	# 期望 值 须 用 同 输入 计算 (stats 字典 无 reward_stone 键, 灵石 行 = 0 为 既有 口径, 本 段 不 改)
+	var exp_tip100: String = g.tower_monster_tip(g.tower_monster_stats(rec100), "endless")
+	check(mon_tip100 == exp_tip100, "打磨-103 怪物卡 tooltip = 接口 (同 输入 口径)")
+	check(mon_tip100.find("里程碑 宝箱") >= 0 and mon_tip100.find("保底 稀有+") >= 0,
+			"打磨-103 里程碑 Boss 层 tooltip 含 宝箱保底 段 (实际 %s)" % mon_tip100.get_slice("\n", mon_tip100.count("\n")))
+	# 精英层 (非 里程碑): tooltip 无 宝箱 段
+	g.tower_endless_floor = 20
+	g.tower_endless_best = 19
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon_tip20: String = str(ui._tw_mon_labels["endless"].tooltip_text)
+	check(str(g.tower_monster_stats(g.get_endless_floor(20)).get("is_elite", false)) and mon_tip20.find("里程碑 宝箱") < 0,
+			"打磨-103 精英层 tooltip 无 宝箱段 (实际 %s)" % mon_tip20.left(30))
+	# 强玩家 (飞升 道祖) 恒胜 100 层 里程碑 Boss → 词缀 必掉 且 品质 恒 >= 稀有 (保底 钳制 确定性 下限)
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	g.ascended = true
+	g.dao_level = 8
+	g.learned.clear()
+	var mon100: Dictionary = g.tower_monster_stats(g.get_endless_floor(100))
+	check(g.player_atk_effective() >= float(mon100["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-103 强玩家 100 层 里程碑 Boss 判定=胜 (数据 锚定)")
+	var bag0: int = g.affix_bag_used()
+	ui._on_tower_challenge("endless")
+	var msg103: String = str(ui._msg_label.text)
+	check(msg103.begins_with("✔ 登天梯 第 100 层"), "打磨-103 胜局 消息 口径 (实际 %s)" % msg103.left(20))
+	check(msg103.find("(词缀: ") >= 0, "打磨-103 里程碑 必掉 → 消息 含 词缀 段 (实际 %s)" % msg103)
+	check(g.affix_bag_used() > bag0, "打磨-103 里程碑 词缀 入包 (背包 %d->%d)" % [bag0, g.affix_bag_used()])
+	var tiers_ok := true
+	for aid103 in g.affix_bag:
+		if int(g.affix_by_id.get(str(aid103), {}).get("tier", -1)) < 2:
+			tiers_ok = false
+	check(tiers_ok, "打磨-103 入包 词缀 品质 恒 >= 稀有 (保底 生效, 背包 %s)" % str(g.affix_bag.keys()))
+	# 收尾: 恢复 干净 基准 (词缀/塔 态/飞升 归零, 防 污染 M6-3 段 0/0 断言)
+	g.ascended = false
+	g.dao_level = 0
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.learned.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_endless_floor) == 1 and g.affix_bag_used() == 0,
+			"打磨-103 收尾 干净 基准 (塔 态/词缀 归零)")
 
 
 # M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;

@@ -1327,25 +1327,29 @@
         "chance": 0.05,
         "count_min": 1,
         "count_max": 1,
-        "bonus_buckets": 0
+        "bonus_buckets": 0,
+        "min_tier": 0
       },
       "elite": {
         "chance": 0.2,
         "count_min": 1,
         "count_max": 1,
-        "bonus_buckets": 3
+        "bonus_buckets": 3,
+        "min_tier": 0
       },
       "boss": {
         "chance": 1.0,
         "count_min": 1,
         "count_max": 3,
-        "bonus_buckets": 7
+        "bonus_buckets": 7,
+        "min_tier": 0
       },
       "milestone": {
         "chance": 1.0,
         "count_min": 1,
         "count_max": 2,
-        "bonus_buckets": 14
+        "bonus_buckets": 14,
+        "min_tier": 2
       }
     },
     "bucket_size": 50,

@@ -6288,6 +6288,77 @@ func _init() -> void:
 	g.affix_materials = 0
 	g.save_game()
 
+	# ---------- 打磨-103: 登天梯 里程碑 宝箱 保底 高品质 词缀 (M5 规格 "里程碑 宝箱 [保底 高级词缀]" 落地:
+	# 数据 层 来源 配置 min_tier=稀有+; 逻辑 层 affix_roll_drop 钳制 只升不降; 其余 来源 无 保底 旧 口径;
+	# 怪物卡 tooltip 登天梯 里程碑 Boss 层 展示 保底 提示) ----------
+	# 数据 层: 来源 配置 min_tier 口径
+	var ms103: Dictionary = g._affix_sources.get("milestone", {})
+	check(int(ms103.get("min_tier", -1)) == 2, "打磨-103 数据 里程碑 来源 保底 min_tier=2 (稀有, 实际 %s)" % str(ms103.get("min_tier", "")))
+	for s103 in ["normal", "elite", "boss"]:
+		var ss: Dictionary = g._affix_sources.get(s103, {})
+		check(int(ss.get("min_tier", -1)) == 0, "打磨-103 数据 %s 来源 无 保底 min_tier=0 (实际 %s)" % [s103, str(ss.get("min_tier", ""))])
+	# 逻辑 层: 保底 钳制 (确定性 注入 roll; 桶0 权重 [70,22,6,2,0] 数据 锚定)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.seen_affixes = []
+	var d103a: Array = g.affix_roll_drop("milestone", 100, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+	check(d103a.size() == 1 and str(d103a[0]) == "af_qi_rate_2_0", "打磨-103 低 roll 品质 0.0 钳制 至 稀有 = 池序0 变体0 (实际 %s)" % str(d103a[0] if d103a.size() > 0 else "-"))
+	g.affix_decompose("af_qi_rate_2_0", -1)
+	check(g.affix_bag_used() == 0, "打磨-103 清理 词缀 背包 (实际 %d)" % g.affix_bag_used())
+	var d103b: Array = g.affix_roll_drop("milestone", 100, [0.0, 0.0, 0.48, 0.0, 0.0, 0.0, 0.0])
+	check(d103b.size() == 1 and str(d103b[0]) == "af_qi_rate_2_0", "打磨-103 低 roll 品质 0.48 钳制 至 稀有 (实际 %s)" % str(d103b[0] if d103b.size() > 0 else "-"))
+	g.affix_decompose("af_qi_rate_2_0", -1)
+	var d103c: Array = g.affix_roll_drop("milestone", 100, [0.0, 0.0, 0.99, 0.0, 0.0, 0.0, 0.0])
+	check(d103c.size() == 1 and str(d103c[0]) == "af_qi_rate_4_0", "打磨-103 高 roll 品质 0.99 = 传说 不 降 (实际 %s)" % str(d103c[0] if d103c.size() > 0 else "-"))
+	g.affix_decompose("af_qi_rate_4_0", -1)
+	# 只升不降: 里程碑 各 桶 低 roll 恒 >= 稀有 (桶 0..5: bonus 后 桶 14..19, 史诗/传说 权重 恒 >0,
+	# 低 roll 必 命中 稀有 段; 钳制 生效 = tier 2)
+	var cl_ok := true
+	for fl103 in [100, 200, 300, 400, 500, 600]:
+		var dc: Array = g.affix_roll_drop("milestone", fl103, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		var mt: int = int(g.affix_by_id.get(str(dc[0]), {}).get("tier", -1)) if dc.size() > 0 else -1
+		if mt < 2:
+			cl_ok = false
+		for aidc in dc:
+			g.affix_decompose(str(aidc), -1)
+	check(cl_ok and g.affix_bag_used() == 0, "打磨-103 里程碑 100~600 层 低 roll 品质 恒 >= 稀有 (逐桶 钳制 生效)")
+	# 保底 只 里程碑: boss/normal/elite 同 桶 同 roll 不 钳制 (旧 口径 恒等)
+	var d103d: Array = g.affix_roll_drop("boss", 100, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+	var d103e: Array = g.affix_roll_drop("normal", 10, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+	check(d103d.size() == 1 and int(g.affix_by_id.get(str(d103d[0]), {}).get("tier", 9)) == 0
+			and d103e.size() == 1 and int(g.affix_by_id.get(str(d103e[0]), {}).get("tier", 9)) == 0,
+		"打磨-103 boss/normal 来源 低 roll 仍 普通 品质 不 钳制 (实际 %s/%s)" % [str(d103d[0] if d103d.size() > 0 else "-"), str(d103e[0] if d103e.size() > 0 else "-")])
+	for aid in [d103d[0], d103e[0]]:
+		g.affix_decompose(str(aid), -1)
+	check(g.affix_bag_used() == 0, "打磨-103 清理 词缀 背包 (实际 %d)" % g.affix_bag_used())
+	# tooltip 段: 登天梯 里程碑 Boss 层 展示 保底 提示 / 非 里程碑 / 镇妖塔 / 缺省 不 展示
+	g.tower_endless_floor = 100
+	var tip103a: String = g.tower_monster_tip(g.get_endless_floor(100), "endless")
+	check(tip103a.find("里程碑 宝箱") >= 0 and tip103a.find("保底 稀有+") >= 0, "打磨-103 登天梯 里程碑 Boss tooltip 含 宝箱保底 段 (实际 %s)" % tip103a.get_slice("\n", tip103a.count("\n")))
+	var tip103b: String = g.tower_monster_tip(g.get_endless_floor(20), "endless")
+	check(tip103b.find("里程碑 宝箱") < 0, "打磨-103 登天梯 精英层 (非里程碑) tooltip 无 宝箱段")
+	var tip103c: String = g.tower_monster_tip(g.get_fixed_floor(50), "fixed")
+	check(tip103c.find("里程碑 宝箱") < 0, "打磨-103 镇妖塔 Boss tooltip 无 宝箱段 (宝箱 只 登天梯)")
+	var tip103d: String = g.tower_monster_tip(g.get_endless_floor(100))
+	check(tip103d.find("里程碑 宝箱") < 0, "打磨-103 tower 缺省 旧 调用 兼容 无 宝箱段")
+	# 收尾: 恢复 干净 基准 落盘 (词缀/塔 态 归零 防 污染 后续 段)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

@@ -479,11 +479,13 @@ AFFIX_VARIANT_STEP = 0.15   # 变体 0..3: 数值 x(1 + 0.15 x v)
 AFFIX_BUCKET_SIZE = 50
 AFFIX_MAX_BUCKET = 19
 # 掉落 来源: 掉率 / 件数范围 / 桶位 上移 (精英 +3, Boss +7, 里程碑 宝箱 +14 保底 高级)
+# min_tier (打磨-103): 品质 保底 下限 — 里程碑 宝箱 必掉 稀有+ (M5 规格 "里程碑 宝箱 [保底 高级词缀]");
+#   其余 来源 0 = 无保底 (旧 口径 不变); 钳制 在 game_data.affix_roll_drop 单点 生效 (数据 驱动)
 AFFIX_DROP_SOURCES = {
-    "normal":    {"chance": 0.05, "count_min": 1, "count_max": 1, "bonus_buckets": 0},
-    "elite":     {"chance": 0.20, "count_min": 1, "count_max": 1, "bonus_buckets": 3},
-    "boss":      {"chance": 1.0,  "count_min": 1, "count_max": 3, "bonus_buckets": 7},
-    "milestone": {"chance": 1.0,  "count_min": 1, "count_max": 2, "bonus_buckets": 14},
+    "normal":    {"chance": 0.05, "count_min": 1, "count_max": 1, "bonus_buckets": 0, "min_tier": 0},
+    "elite":     {"chance": 0.20, "count_min": 1, "count_max": 1, "bonus_buckets": 3, "min_tier": 0},
+    "boss":      {"chance": 1.0,  "count_min": 1, "count_max": 3, "bonus_buckets": 7, "min_tier": 0},
+    "milestone": {"chance": 1.0,  "count_min": 1, "count_max": 2, "bonus_buckets": 14, "min_tier": 2},
 }
 # M6-2 消费 的 装配/背包 配置 (数据驱动; 旧档 兼容 默认值 与 此 一致)
 AFFIX_BAG_CAPACITY = 30      # 背包 容量 (格, 基础值)
@@ -691,6 +693,8 @@ def main():
     assert abs(src["normal"]["chance"] - 0.05) < 1e-9 and abs(src["elite"]["chance"] - 0.20) < 1e-9, "普通/精英 掉率 口径 5%/20%"
     assert src["boss"]["chance"] == 1.0 and src["boss"]["count_min"] == 1 and src["boss"]["count_max"] == 3, "Boss 必掉 1~3 件"
     assert src["milestone"]["chance"] == 1.0 and src["milestone"]["bonus_buckets"] == 14, "里程碑 宝箱 必掉 且 桶位 上移 14"
+    assert src["milestone"]["min_tier"] == 2, "里程碑 宝箱 品质 保底 稀有+ (打磨-103)"
+    assert all(src[k].get("min_tier", 0) == 0 for k in ("normal", "elite", "boss")), "普通/精英/Boss 来源 无 品质 保底 (旧 口径)"
     assert src["elite"]["bonus_buckets"] > src["normal"]["bonus_buckets"] and \
         src["boss"]["bonus_buckets"] > src["elite"]["bonus_buckets"], "桶位 上移 须 普通<精英<Boss"
     # 装配/背包 配置

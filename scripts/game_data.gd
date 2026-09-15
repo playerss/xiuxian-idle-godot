@@ -754,6 +754,8 @@ func affix_roll_tier(bucket: int, roll: float) -> int:
 # source = normal/elite/boss/milestone (数据 掉落 来源 配置 口径: 掉率/件数/桶位上移).
 # rolls 口径 (供 自测 注入 确定性): [0]=掉率判定 / [1]=件数 / [2..4]=各件 品质 /
 # [5]=池 (0..5) / [6]=变体 (0..3); 缺失 项 按 0.5 兜底 (不影响 确定性)
+# 打磨-103: 品质 保底 (来源 配置 min_tier, 数据驱动; 里程碑 宝箱 = 稀有+ [M5 规格 保底 高级词缀],
+# 其余 来源 min_tier=0 旧 口径 不变): roll 出 品质 < min_tier 时 钳制 至 min_tier (只升不降)
 func affix_roll_drop(source: String, floor: int, rolls: Array, bonus_chance: float = 0.0) -> Array:
 	var out: Array = []
 	var src: Dictionary = _affix_sources.get(source, {})
@@ -770,9 +772,11 @@ func affix_roll_drop(source: String, floor: int, rolls: Array, bonus_chance: flo
 	var bucket := affix_drop_bucket(floor) + int(src.get("bonus_buckets", 0))
 	var pool_idx := int(clampf(float(rolls[5]) if rolls.size() > 5 else 0.5, 0.0, 1.0) * 6.0)
 	var var_idx := int(clampf(float(rolls[6]) if rolls.size() > 6 else 0.5, 0.0, 1.0) * 4.0)
+	# 打磨-103: 保底 下限 (clampi 越界 防御; 无 该 键/旧数据 = 0 不 钳制)
+	var min_tier := clampi(int(src.get("min_tier", 0)), 0, 4)
 	for i in cnt:
 		var tr: float = float(rolls[mini(2 + i, rolls.size() - 1)] if rolls.size() > 2 else 0.5)
-		var tier := affix_roll_tier(bucket, tr)
+		var tier := maxi(affix_roll_tier(bucket, tr), min_tier)
 		var aid := _affix_id_by_pool_tier_variant(pool_idx, tier, var_idx)
 		if aid != "" and affix_add(aid, 1) > 0:
 			out.append(aid)
@@ -2389,7 +2393,9 @@ func _trait_names(traits: Array) -> String:
 	return "、".join(names)
 
 # 怪物卡 tooltip (名/特性说明/数值 构成; 与 M5-1 数据表 同口径)
-func tower_monster_tip(rec: Dictionary) -> String:
+# 打磨-103: tower = "fixed"/"endless" (登天梯 里程碑 Boss 层 追加 里程碑宝箱 保底 稀有+ 词缀 提示;
+# 缺省 = 不 展示 该 段, 旧 调用 兼容)
+func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 	var mon: Dictionary = tower_monster_stats(rec)
 	var lines: Array[String] = []
 	lines.append(str(mon["name"]) + (" (精英)" if bool(mon["is_elite"]) else "") + (" (Boss)" if str(mon["boss_type"]) != "" else ""))
@@ -2402,6 +2408,12 @@ func tower_monster_tip(rec: Dictionary) -> String:
 			lines.append("· %s — %s" % [str(td.get("name", "")), str(td.get("desc", ""))])
 	lines.append("HP %s · ATK %s · DEF %s" % [fmt(float(mon["hp"])), fmt(float(mon["atk"])), fmt(float(mon["def"]))])
 	lines.append("奖励 灵石 %s" % fmt(float(mon["stone"])))
+	# 打磨-103: 里程碑 宝箱 保底 提示 (M5 规格 "登天梯 每 100 层 里程碑 Boss + 里程碑 宝箱 [保底 高级词缀]";
+	# 数据 口径 = 来源 配置 min_tier [稀有+], 与 affix_roll_drop 保底 钳制 同源; 只 登天梯 里程碑 Boss 层 展示)
+	if tower == "endless" and str(mon["boss_type"]) != "" and int(rec.get("floor", 0)) % 100 == 0:
+		var mts: Dictionary = _affix_sources.get("milestone", {})
+		var mtn: int = clampi(int(mts.get("min_tier", 2)), 0, 4)
+		lines.append("里程碑 宝箱: 必掉 1~2 件 词缀, 品质 保底 %s+ (桶位上移, 高层 更高 品质 概率)" % affix_tier_name(mtn))
 	return "\n".join(lines)
 
 # 战力对比 行 文案 (玩家 atk/def 有效 vs 怪物 atk; 胜=绿/败=红 由 UI 着色, 此处 只给 文本)
