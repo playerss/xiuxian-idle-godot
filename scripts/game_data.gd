@@ -2234,6 +2234,23 @@ func equip_sort_cmp(a: String, b: String) -> bool:
 		return int(ea["tier"]) < int(eb["tier"])
 	return str(a) < str(b)
 
+# 打磨-109: 装备 按评分 排序 (M6 规格 "装备列表按评分排序" 落地: 评分 = 基础 6 池 + 已装 词缀 6 池,
+# 与 equip_score 同口径 数值降序, 同分 id 升序 确定性; 只 在 装备页 "按评分排序" 开关 开启 时 生效,
+# 默认 状态序 (打磨-22) 口径 不变; 只读 不 改 状态/存档/统计)
+func equip_score_sort_order() -> Array:
+	var out: Array = []
+	for id in equip_ids:
+		out.append(id)
+	out.sort_custom(_equip_score_sort_cmp)
+	return out
+
+func _equip_score_sort_cmp(a: String, b: String) -> bool:
+	var sa: float = equip_score(a)
+	var sb: float = equip_score(b)
+	if sa != sb:
+		return sa > sb
+	return str(a) < str(b)
+
 # ---------- 打磨-26: 一键最佳穿戴 (各槽位自动穿上拥有的最佳件) ----------
 
 # 最佳穿戴排序键: [主属性(灵气+灵石), 突破, 离线, id] (最终按 id 兜底, 确定性)

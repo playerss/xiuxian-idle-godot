@@ -185,6 +185,8 @@ func _ready() -> void:
 	await _assert_tower_mats_tip()  # 打磨-106: 怪物卡 tooltip 材料 掉落 预估 (双塔 材料 行/接口 恒等/节流; 修 stats 幂等 丢 mats)
 	await _assert_tower_reward_weights()  # 打磨-108: 怪物种 reward 权重 stone_w/affix_w (tooltip 权重 行/接口 恒等/Boss 层 无 行/节流)
 
+	await _assert_equip_score_sort()  # 打磨-109: 装备页 按评分排序 开关 (M6 规格 装备列表按评分排序: 开关/降序/同分/筛选叠加/装配联动/节流/收尾)
+
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
 	await _assert_m99_upgrade()  # 打磨-99: 一键 强化 槽位 按钮 (道祖期 批量 3->4, 200 材料/件)
@@ -5469,6 +5471,116 @@ func _assert_tower_reward_weights() -> void:
 
 # M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;
 # 装备行 槽位 chip 装配/拆卸/换装 往返 + 评分 行 + tooltip 评分 行; 收尾 恢复 干净 基准)
+# 打磨-109: 装备页 按评分排序 开关 (M6 规格 "装备列表按评分排序") — 140 件 现 按 状态序 平铺 [打磨-22],
+# 买齐/装配 词缀 后 不知 哪件 评分 高; "按评分排序" 开关 (装备页 品质 筛选行尾, 与 一键购买/一键最佳 同 行):
+# 开启 = 列表 改 按 装备 评分 降序 (评分 = 基础 6 池 + 已装 词缀 6 池, equip_score 同口径, 同分 id 升序),
+# 与 部位/品质 筛选 AND 叠加 (排序 在 筛选 内 生效); 快照 (模式标记+值) 变化 才 重排, 挂机 恒定 无 每帧 重绘;
+# 不 存档 不 计 统计 (与 只看可学/筛选 同 定位), 切换 按钮 无 拥有/穿戴/资源 副作用.
+# 断言 (手动驱动 确定性): 按钮 节点/toggle/tooltip 口径/默认 关 态 (状态序 = 数据序 首行)/
+# 点击 开 (按压+文本+底部消息) + 列表 改 评分 降序 (首行 amulet_6_3 同分 id 升序/次行 weapon_6_3/末行 boot_0_0/
+# 全表 非增 单调)/再点 关 恢复 状态序/筛选 叠加 (武器 部位 首 可见行 weapon_6_3)/
+# 词缀 装配 评分 升 行 位 上升 (snapshot 变化 重排)/同态 节流 无 统计 副作用/开关 切换 无 拥有 副作用/
+# 收尾 关 态 干净 基准 (防 M6-3 段 污染)
+func _assert_equip_score_sort() -> void:
+	var g := GameData
+	ui._tab.current_tab = 2
+	g.set_process(false)
+	# 受控 基准: 干净 拥有/穿戴/词缀 态 (前 段 可能 残留, 全清 保 基准 纯净)
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_load = {}
+	g.affix_decompose_all()
+	g.seen_affixes = []
+	var stats109: Dictionary = g.stats.duplicate(true)
+	var owned109: int = g.owned_eq.size()
+	ui._refresh()
+	await get_tree().process_frame
+	var btn: Button = ui._equip_score_btn
+	check(btn != null, "打磨-109 装备页 按评分排序 按钮 存在")
+	if btn == null:
+		return
+	check(btn.toggle_mode, "打磨-109 开关按钮 toggle_mode")
+	check(str(btn.tooltip_text).find("评分 降序") >= 0 and str(btn.tooltip_text).find("不 存档") >= 0
+			and str(btn.tooltip_text).find("状态序") >= 0, "打磨-109 tooltip 含 评分降序/不存档/状态序 口径 (实际 %s)" % str(btn.tooltip_text).left(40))
+	check(not btn.button_pressed and str(btn.text) == "按评分排序: 关", "打磨-109 默认 关 态 (文本/按压 一致)")
+	# 基准: 全 未拥有 状态序 = 数据序 (首行 = 数据 首行 weapon_0_0, 打磨-22 口径)
+	check(ui._equip_box.get_child(0) == ui._equip_row_nodes[g.equip_ids[0]], "打磨-109 基准 状态序 首行 = 数据序 首行 (实际 %s)" % str(ui._equip_box.get_child(0)))
+	# 点击 开: 按钮态 + 底部 消息 + 列表 改 评分 降序
+	ui._on_equip_score_sort()
+	check(btn.button_pressed and str(btn.text) == "按评分排序: 开", "打磨-109 点击后 按压+文本 开")
+	check(str(ui._msg_label.text).find("按评分 降序") >= 0, "打磨-109 开启 底部 消息 (实际 %s)" % str(ui._msg_label.text))
+	await get_tree().process_frame
+	check(ui._equip_box.get_child(0) == ui._equip_row_nodes["amulet_6_3"], "打磨-109 评分序 首行 = amulet_6_3 (同分 2.153 id 升序)")
+	check(ui._equip_box.get_child(1) == ui._equip_row_nodes["weapon_6_3"], "打磨-109 评分序 次行 = weapon_6_3 (同分 2.153)")
+	check(ui._equip_box.get_child(ui._equip_box.get_child_count() - 1) == ui._equip_row_nodes["boot_0_0"], "打磨-109 评分序 末行 = boot_0_0 (最低 0.13)")
+	# 全表 单调: 140 行 逐行 评分 非增 (行 顺序 ↔ 评分 降序 恒等)
+	var mono109 := true
+	var prev109 := 1e18
+	for c in ui._equip_box.get_children():
+		var c_id := ""
+		for k in ui._equip_row_nodes:
+			if ui._equip_row_nodes[k] == c:
+				c_id = str(k)
+				break
+		var s109: float = g.equip_score(c_id)
+		if s109 > prev109 + 1e-12:
+			mono109 = false
+		prev109 = s109
+	check(mono109, "打磨-109 评分序 全表 非增 (140 行 逐行 单调 降序)")
+	# 同态 节流: 重复 _refresh 同 快照 不 重排 (首行 恒定), 无 统计 副作用
+	var stats109b: Dictionary = g.stats.duplicate(true)
+	ui._refresh()
+	ui._refresh()
+	await get_tree().process_frame
+	check(ui._equip_box.get_child(0) == ui._equip_row_nodes["amulet_6_3"], "打磨-109 同态 节流 首行 恒定")
+	check(g.stats == stats109b, "打磨-109 同态 重复 刷新 无 统计 副作用")
+	# 开关 切换 (再点 开 再点 关) 无 统计 副作用 (排序 纯 展示, 不 走 装配/分解 埋点路径)
+	var stats109c: Dictionary = g.stats.duplicate(true)
+	ui._on_equip_score_sort()
+	ui._on_equip_score_sort()
+	check(g.stats == stats109c, "打磨-109 开关 切换 无 统计 副作用")
+	ui._refresh()
+	await get_tree().process_frame
+	# 筛选 叠加: 武器 部位 筛选 内 首 可见行 = weapon_6_3 (武器 最高 评分)
+	ui._on_equip_filter("weapon")
+	await get_tree().process_frame
+	var vis_first109: Node = null
+	for c in ui._equip_box.get_children():
+		if (c as Control).visible:
+			vis_first109 = c
+			break
+	check(vis_first109 == ui._equip_row_nodes["weapon_6_3"], "打磨-109 筛选 叠加 评分序 (武器 首 可见行 weapon_6_3, 实际 %s)" % str(vis_first109))
+	ui._on_equip_filter("")
+	# 词缀 装配 评分 联动: weapon_0_0 装 高值 词缀 后 评分 升, 行位 上升 (snapshot 变化 触发 重排)
+	g.owned_eq.append("weapon_0_0")
+	ui._refresh()
+	await get_tree().process_frame
+	var idx109_before: int = (ui._equip_box.get_children() as Array).find(ui._equip_row_nodes["weapon_0_0"])
+	g.affix_add("af_def_3_0", 1)
+	g.affix_equip("weapon_0_0", 0, "af_def_3_0")
+	ui._refresh()
+	await get_tree().process_frame
+	var idx109_after: int = (ui._equip_box.get_children() as Array).find(ui._equip_row_nodes["weapon_0_0"])
+	check(idx109_after < idx109_before, "打磨-109 词缀 装配 评分 升 行位 上升 (实际 %d -> %d)" % [idx109_before, idx109_after])
+	# 再点 关: 恢复 状态序 (weapon_0_0 已 拥有 → 状态序 首行 = weapon_0_0); 开关 切换 本身 无 统计 副作用
+	var stats109d: Dictionary = g.stats.duplicate(true)
+	ui._on_equip_score_sort()
+	check(not btn.button_pressed and str(btn.text) == "按评分排序: 关", "打磨-109 再点 关 态")
+	await get_tree().process_frame
+	check(ui._equip_box.get_child(0) == ui._equip_row_nodes["weapon_0_0"], "打磨-109 关 后 恢复 状态序 (已拥有 weapon_0_0 排 首)")
+	check(g.owned_eq.size() == owned109 + 1 and g.owned_eq.has("weapon_0_0") and g.stats == stats109d, "打磨-109 开关 切换 无 资源/统计 副作用")
+	# 收尾: 关 态 + 干净 基准 (防 M6-3 段 污染)
+	g.affix_load = {}
+	g.affix_decompose_all()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.seen_affixes = []
+	g.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(ui._equip_score_sort_on == false and g.owned_eq.is_empty() and g.equipped.is_empty() and g.affix_load.is_empty(), "打磨-109 收尾 关 态 干净 基准")
+
+
 func _assert_m63_diy() -> void:
 	var g := GameData
 	ui._tab.current_tab = 2

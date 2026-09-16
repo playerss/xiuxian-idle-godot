@@ -6656,6 +6656,62 @@ func _init() -> void:
 	g.learned.clear()
 	g.set_process(true)
 
+	# ---------- 打磨-109: 装备 按评分 排序 (M6 规格 "装备列表按评分排序": 评分 降序, 同分 id 确定性) ----------
+	# 受控 基准: 干净 拥有/穿戴/词缀装配 态 (前 段 可能 残留 拥有/词缀 装配, 全清 保 基准 纯净;
+	# 状态序 = 数据序 基准, 防 前 段 污染)
+	g.set_process(false)
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_load = {}
+	g.affix_decompose_all()  # 清 词缀 背包 残留 (装配 评分 恒等 断言 不 被 污染)
+	# 数据 锚定: 评分 降序 首项 = amulet_6_3 (2.153, 与 weapon_6_3 同分, id 升序 在 前), 末项 = boot_0_0 (0.13, 全表 唯一 最低)
+	var so109: Array = g.equip_score_sort_order()
+	check(so109.size() == g.equip_ids.size(), "打磨-109 评分序 覆盖 全部 140 件 (实际 %d)" % so109.size())
+	check(str(so109[0]) == "amulet_6_3", "打磨-109 评分序 首项 = amulet_6_3 (同分 2.153 id 升序, 实际 %s)" % str(so109[0]))
+	check(str(so109[1]) == "weapon_6_3", "打磨-109 评分序 次项 = weapon_6_3 (同分 2.153, 实际 %s)" % str(so109[1]))
+	check(str(so109[so109.size() - 1]) == "boot_0_0", "打磨-109 评分序 末项 = boot_0_0 (数据 锚定 最低 0.13, 实际 %s)" % str(so109[so109.size() - 1]))
+	# 单调性: 全表 评分 非增 (同分 不 扰动)
+	var mono109 := true
+	for i109 in so109.size() - 1:
+		if g.equip_score(str(so109[i109])) < g.equip_score(str(so109[i109 + 1])):
+			mono109 = false
+	check(mono109, "打磨-109 评分序 全表 非增 (单调 降序)")
+	# 同分 确定性: 同 分 段 内 id 升序 (amulet_6_3/weapon_6_3 同分 2.153, 字典序 amulet < weapon)
+	var tie109_a: float = g.equip_score("weapon_6_3")
+	var tie109_b: float = g.equip_score("amulet_6_3")
+	if absf(tie109_a - tie109_b) < 1e-9:
+		var ia109: int = so109.find("amulet_6_3")
+		var ib109: int = so109.find("weapon_6_3")
+		check(ia109 >= 0 and ib109 >= 0 and ia109 < ib109, "打磨-109 同分 段 内 id 升序 (amulet_6_3 在 weapon_6_3 前, 实际 %d/%d)" % [ia109, ib109])
+	# 默认 状态序 口径 不 变 (打磨-22: 已穿戴 > 已拥有 > 未拥有; 全 未拥有 时 = 数据序)
+	check(g.equip_sort_order() == g.equip_ids, "打磨-109 默认 状态序 = 数据序 (全 未拥有 基准, 打磨-22 口径 不变)")
+	# 词缀 装配 评分 联动: weapon_0_0 基础 0.14 (与 robe_0_0/amulet_0_0 同分, id 升序 最末 → pos 137),
+	# 装 af_atk_2_0 (0.256) 后 升至 0.396 (全表 无 同分, 123 件 评分 更高 在 前 → pos 123)
+	g.owned_eq.append("weapon_0_0")  # 直置 拥有 (ui_test 同 惯例, 不 走 购买 灵石 路径 保 确定性)
+	check(absf(g.equip_score("weapon_0_0") - 0.14) < 1e-9, "打磨-109 weapon_0_0 基础 评分 0.14 锚定 (实际 %s)" % str(g.equip_score("weapon_0_0")))
+	var pos109_before: int = g.equip_score_sort_order().find("weapon_0_0")
+	check(pos109_before == 137, "打磨-109 基础 态 位置 137 (135 件 更高 + 2 件 同分 id 在 前, 实际 %d)" % pos109_before)
+	g.affix_add("af_atk_2_0", 1)
+	g.affix_equip("weapon_0_0", 0, "af_atk_2_0")
+	var pos109_after: int = g.equip_score_sort_order().find("weapon_0_0")
+	check(absf(g.equip_score("weapon_0_0") - 0.396) < 1e-9, "打磨-109 装配 后 评分 0.396 (基础 0.14 + 词缀 0.256, 实际 %s)" % str(g.equip_score("weapon_0_0")))
+	check(pos109_after == 123, "打磨-109 评分 变化 重排 位置 升 (123 件 评分 更高 在 前, 实际 idx %d -> %d)" % [pos109_before, pos109_after])
+	# 拆卸 回退: 评分 回 基准 位置 (幂等 恢复)
+	g.affix_unequip("weapon_0_0", 0)
+	check(g.equip_score_sort_order().find("weapon_0_0") == pos109_before, "打磨-109 拆卸 后 评分序 位置 回退 (实际 %d, 期望 %d)" % [g.equip_score_sort_order().find("weapon_0_0"), pos109_before])
+	# 只读: 连读 恒定 无 状态/统计 副作用 (排序 不 改 拥有/穿戴/评分)
+	var snap109: Dictionary = g.stats.duplicate(true)
+	var owned109: Array[String] = g.owned_eq.duplicate()
+	var eq109: Dictionary = g.equipped.duplicate()
+	check(g.equip_score_sort_order() == so109 and g.stats == snap109 and g.owned_eq == owned109 and g.equipped == eq109,
+			"打磨-109 equip_score_sort_order 只读 连读 恒定 (无 状态/统计 副作用)")
+	# 收尾: 归零 落盘 (防 污染 汇报/后续)
+	g.affix_load = {}
+	g.affix_decompose_all()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.set_process(true)
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

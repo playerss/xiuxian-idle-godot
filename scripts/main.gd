@@ -197,7 +197,9 @@ var _equip_tier_btns: Dictionary = {}    # 打磨-21: 装备品质筛选按钮 (
 var _equip_tier_active := ""             # 打磨-21: 当前装备品质筛选 ("" = 全部)
 var _learnable_btn: Button               # 打磨-38: 技能页"只看可学"开关 (与 类别/品质 筛选 AND 叠加)
 var _learnable_on := false               # 打磨-38: "只看可学"当前开关状态
-var _eq_states: Array = []               # 打磨-22: 上帧装备状态快照 (变化才重排)
+var _eq_snap: Array = []                   # 打磨-22/109: 装备排序快照 (首元素 = 模式标记 0 状态序/1 评分序, 余 = 状态/评分值; 变化才重排, 防 模式切换 同 值 假 稳定)
+var _equip_score_btn: Button             # 打磨-109: 装备页 "按评分排序" 开关 (M6 规格 装备列表按评分排序)
+var _equip_score_sort_on := false        # 打磨-109: 按评分排序 当前开关态 (默认 关 = 状态序 打磨-22 口径)
 # ---------- M6-3: DIY 词缀 UI (装备页 词缀槽 chips + 词缀背包 抽屉 + 评分 对比) ----------
 var _m63_bag_grid: GridContainer          # 词缀背包 网格 (每 种 词缀 一个 可点 单元格)
 var _m63_bag_cells: Dictionary = {}      # 词缀 id -> Button (品质色+堆叠数, 点击 选中/取消)
@@ -1435,6 +1437,15 @@ func _build_equip_page(page: Panel) -> void:
 	# 打磨-46: 统一口径 tooltip (最佳判定 / 作用范围 / 计数口径)
 	_equip_best_btn.tooltip_text = "各部位自动换上 已拥有 的最佳装备: 主属性 (灵气% + 灵石%) > 突破率 > 离线效率 (id 兜底, 确定性); 浮动提示追加 灵气速率 +N/秒 变化量 (换装后速率-换装前速率, 0 变化省略)。\n仅变更 尚未最佳 的槽位; 无拥有件不受影响; 已最佳 = 0 变更 (幂等), 不受 部位/品质 筛选影响 (全局口径)。\n按钮计数 = 可换上更好拥有件的部位槽位数。"
 	eq_tier_bar.add_child(_equip_best_btn)
+	# 打磨-109: 按评分排序 开关 (M6 规格 "装备列表按评分排序": 140 件 现 按 状态序 平铺 [打磨-22],
+	# 买齐/装配 词缀 后 不知 哪件 评分 高 要 逐行 扫 评分; 开启 后 列表 改 按 装备 评分 降序
+	# (评分 = 基础 6 池 + 已装 词缀 6 池, equip_score 同口径), 同分 按 id 确定性;
+	# 与 部位/品质 筛选 AND 叠加 (排序 在 筛选 内 生效), 不 存档 (与 只看可学/筛选 同 定位)
+	_equip_score_btn = _make_button("按评分排序: 关")
+	_equip_score_btn.toggle_mode = true
+	_equip_score_btn.pressed.connect(_on_equip_score_sort)
+	_equip_score_btn.tooltip_text = "开启 后 装备 列表 按 评分 降序 排列 (评分 = 装备 基础 6 池 + 已装 词缀 6 池, 与 行内 评分 标签/tooltip 同口径); 默认 关闭 = 状态序 (已穿戴 > 已拥有 > 未拥有, 打磨-22 口径)。\n评分 随 词缀 装配/拆卸/分解/槽位升级 实时 变化, 评分 变化 才 重排 (挂机 恒定 无 每帧 重绘); 与 部位/品质 筛选 叠加 生效。\n纯 展示 排序 (不 改 拥有/穿戴 状态, 不 存档, 不 计 统计)。"
+	eq_tier_bar.add_child(_equip_score_btn)
 
 	# ---------- M6-3: 词缀背包 抽屉 (DIY 装配 交互区) ----------
 	# 容量行 + 收集行 + 共鸣行 / 一键 最佳装配+分解 全部 / 网格 (每种 词缀 一 格, 品质色+堆叠数,
@@ -2369,6 +2380,10 @@ func _refresh() -> void:
 	var eb_txt := ("一键最佳 x%d" % best_n) if best_n > 0 else "已最佳"
 	if _equip_best_btn.text != eb_txt:
 		_equip_best_btn.text = eb_txt
+	# 打磨-109: 按评分排序 开关 (开关态 变化才刷 文本; 外部 改 开关态 读档/自测 也 经本路径 同步)
+	var ss_txt := "按评分排序: 开" if _equip_score_sort_on else "按评分排序: 关"
+	if _equip_score_btn != null and _equip_score_btn.text != ss_txt:
+		_equip_score_btn.text = ss_txt
 	# 打磨-29: 法器 一键购买 (可买数变化时才刷, 与 一键购买/一键最佳 按可执行数计 口径一致)
 	var ib_avail: int = g.item_affordable_count()
 	var ib_txt := ("一键购买 x%d" % ib_avail) if ib_avail > 0 else "灵石不足"
@@ -3880,8 +3895,18 @@ func _on_equip_tier_filter(tier: String) -> void:
 	_apply_equip_filter()
 
 
+# 打磨-109: 按评分排序 开关 (M6 规格 装备列表按评分排序; 不 存档 不 计 统计, 纯 展示 定位)
+func _on_equip_score_sort() -> void:
+	_equip_score_sort_on = not _equip_score_sort_on
+	_equip_score_btn.set_pressed_no_signal(_equip_score_sort_on)
+	_equip_score_btn.text = ("按评分排序: 开" if _equip_score_sort_on else "按评分排序: 关")
+	_resort_equip()
+	_show_msg("装备排序: " + ("按评分 降序 (评分 = 基础 + 已装词缀)" if _equip_score_sort_on else "恢复 状态序 (已穿戴 > 已拥有 > 未拥有)"))
+
+
 # 打磨-21: 应用 部位×品质 叠加筛选 (显示/隐藏 + 提示)
 # 打磨-22: 顺带按状态重排 (已穿戴 > 已拥有 > 未拥有), 避免买到的装备沉在长列表底部
+# 打磨-109: 排序模式 双态 (默认 状态序 / 按评分 降序), 快照 变化 才 真正 重排
 func _apply_equip_filter() -> void:
 	_resort_equip()
 	for id in _equip_row_nodes:
@@ -3895,23 +3920,35 @@ func _apply_equip_filter() -> void:
 
 
 # 打磨-22: 状态快照变化时才重排 (购买/穿戴/卸下/读档触发, 避免每帧重排 140 行)
+# 打磨-109: 排序 双模式 (默认 状态序 / 按评分 降序) — 快照 首元素 = 模式标记 0/1, 切换 模式 恒 重排;
+# 评分序 评分 随 词缀 装配/拆卸/升级 变化 才 重排 (挂机 恒定 无 每帧 重绘)
 func _resort_equip() -> void:
-	var cur: Array = []
+	var cur: Array = [1 if _equip_score_sort_on else 0]
 	for id in GameData.equip_ids:
-		cur.append(GameData.equip_state(id))
-	if cur.size() != _eq_states.size() or _states_diff(cur):
-		_eq_states = cur
-		var order: Array = GameData.equip_sort_order()
-		for idx in order.size():
-			var row: Node = _equip_row_nodes[order[idx]]
-			_equip_box.move_child(row, _equip_box.get_child_count() - 1)
+		if _equip_score_sort_on:
+			cur.append(GameData.equip_score(str(id)))
+		else:
+			cur.append(GameData.equip_state(id))
+	if _snap_diff(cur):
+		_eq_snap = cur
+		_apply_equip_order(GameData.equip_score_sort_order() if _equip_score_sort_on else GameData.equip_sort_order())
 
 
-func _states_diff(cur: Array) -> bool:
+# 打磨-109: 快照 差异 (数值 逐位 比较, 含 模式标记 首元素)
+func _snap_diff(cur: Array) -> bool:
+	if cur.size() != _eq_snap.size():
+		return true
 	for i in cur.size():
-		if int(cur[i]) != int(_eq_states[i]):
+		if float(cur[i]) != float(_eq_snap[i]):
 			return true
 	return false
+
+
+# 打磨-109: 按 给定 顺序 把 140 行 移到 _equip_box 底部 (保持 相对 顺序, 不 重建 节点)
+func _apply_equip_order(order: Array) -> void:
+	for idx in order.size():
+		var row: Node = _equip_row_nodes[order[idx]]
+		_equip_box.move_child(row, _equip_box.get_child_count() - 1)
 
 
 func _show_msg(text: String) -> void:
