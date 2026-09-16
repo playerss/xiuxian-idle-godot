@@ -183,6 +183,7 @@ func _ready() -> void:
 	await _assert_tower_rounds()  # 打磨-105: 战斗时长 预估 行 (M5 数值 模型 rounds 仅 展示: 双塔 卡片 文案/恒等 口径/败 预测 追加/剧毒 联动/节流)
 	await _assert_milestone_chest()  # 打磨-103: 登天梯 里程碑 宝箱 保底 高品质 词缀 (tooltip 保底 段/卡片 口径/胜局 掉落 品质)
 	await _assert_tower_mats_tip()  # 打磨-106: 怪物卡 tooltip 材料 掉落 预估 (双塔 材料 行/接口 恒等/节流; 修 stats 幂等 丢 mats)
+	await _assert_tower_reward_weights()  # 打磨-108: 怪物种 reward 权重 stone_w/affix_w (tooltip 权重 行/接口 恒等/Boss 层 无 行/节流)
 
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
@@ -5394,6 +5395,76 @@ func _assert_tower_mats_tip() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(int(g.tower_endless_floor) == 1, "打磨-106 收尾 干净 基准 (塔 态 归零)")
+
+
+# 打磨-108: 怪物种 reward 权重 stone_w/affix_w (M5 规格 掉落 差异化 灵石/词缀 段 — 数据 层
+# stone_w/affix_w 已 生成 但 逻辑 层 未 消费, 本轮 接入: stone_w 乘 灵石 / affix_w 词缀 掉率
+# base 乘数). UI 侧 断言: 怪物卡 tooltip 含 "· 种 掉落 权重: 灵石 x%.3f · 词缀 x%.3f" 行
+# (有 怪物种 层 展示 / Boss 层 权重 1.0 不 展示) + tooltip = 接口 恒等 (stats 字典 路径
+# 权重 行 不 丢) + 同态 节流 无 副作用; 数值 口径 断言 在 selftest 段 (stats/结算/幂等).
+func _assert_tower_reward_weights() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 (镇妖塔 第 1 层 种 m41 权重 1.255/0.63; 登天梯 第 5 层 种 同 锚定)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 5
+	g.tower_endless_best = 4
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.auto_tower = false
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 镇妖塔 第 1 层 (有 怪物种): tooltip 含 种 掉落 权重 行 (数值 = 接口 同源)
+	var fr: Dictionary = g.get_fixed_floor(1)
+	var fs: Dictionary = g.tower_monster_stats(fr)
+	check(absf(float(fs.get("stone_w", 1.0)) - 1.255) < 1e-9,
+			"打磨-108 镇妖塔 第 1 层 stats stone_w = 1.255 (数据 锚定, 实际 %s)" % str(fs.get("stone_w")))
+	var f_tip: String = str(ui._tw_mon_labels["fixed"].tooltip_text)
+	var f_exp: String = g.tower_monster_tip(fs, "fixed")
+	check(f_tip == f_exp, "打磨-108 镇妖塔 怪物卡 tooltip = 接口 (权重 行 stats 字典 路径 不 丢)")
+	check(f_tip.find("· 种 掉落 权重: 灵石 x%.3f · 词缀 x%.3f" % [float(fs["stone_w"]), float(fs["affix_w"])]) >= 0,
+			"打磨-108 镇妖塔 tooltip 含 种 权重 行 (实际 %s)" % f_tip.left(80))
+	# 登天梯 第 5 层 (普通层 有 种): 同 口径 恒等
+	var er: Dictionary = g.get_endless_floor(5)
+	var es: Dictionary = g.tower_monster_stats(er)
+	var e_tip: String = str(ui._tw_mon_labels["endless"].tooltip_text)
+	var e_exp: String = g.tower_monster_tip(es, "endless")
+	check(e_tip == e_exp and e_tip.find("· 种 掉落 权重: 灵石 x%.3f · 词缀 x%.3f" % [float(es["stone_w"]), float(es["affix_w"])]) >= 0,
+			"打磨-108 登天梯 tooltip 含 种 权重 行 且 = 接口 (stone_w %s)" % str(es.get("stone_w")))
+	# Boss 层 (第 50 层 小 Boss 无 reward 字段): 权重 1.0 不 展示 权重 行
+	var fb: Dictionary = g.get_fixed_floor(50)
+	var mb: Dictionary = g.tower_monster_stats(fb)
+	var b_tip: String = g.tower_monster_tip(mb, "fixed")
+	check(float(mb.get("stone_w", 1.0)) == 1.0 and float(mb.get("affix_w", 1.0)) == 1.0,
+			"打磨-108 Boss 层 权重 = 1.0 兜底 (实际 %s / %s)" % [str(mb.get("stone_w")), str(mb.get("affix_w"))])
+	check(b_tip.find("种 掉落 权重") < 0, "打磨-108 Boss 层 tooltip 无 权重 行 (1.0 不 展示, 实际 %s)" % b_tip.left(80))
+	# 同态 节流: 无 塔 态 变化 再 刷 不 重写 (tooltip 文本 稳定) + 无 统计 副作用
+	var snap_tw: Dictionary = g.stats.duplicate(true)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text) == f_tip and g.stats == snap_tw,
+			"打磨-108 同态 再刷 tooltip 稳定 无 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.learned.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_endless_floor) == 1, "打磨-108 收尾 干净 基准 (塔 态 归零)")
 
 
 # M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;

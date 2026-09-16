@@ -758,13 +758,16 @@ func affix_roll_tier(bucket: int, roll: float) -> int:
 # [5]=池 (0..5) / [6]=变体 (0..3); 缺失 项 按 0.5 兜底 (不影响 确定性)
 # 打磨-103: 品质 保底 (来源 配置 min_tier, 数据驱动; 里程碑 宝箱 = 稀有+ [M5 规格 保底 高级词缀],
 # 其余 来源 min_tier=0 旧 口径 不变): roll 出 品质 < min_tier 时 钳制 至 min_tier (只升不降)
-func affix_roll_drop(source: String, floor: int, rolls: Array, bonus_chance: float = 0.0) -> Array:
+# 打磨-108: affix_w = 怪物种 reward.affix_w 掉率 乘数 (0.2~0.8, 数据 生成; 缺省 1.0 旧 口径,
+# Boss/无种 层 = 1.0 不 加成): 有效 掉率 = 来源 base x affix_w + bonus_chance (clamp 0..1)
+func affix_roll_drop(source: String, floor: int, rolls: Array, bonus_chance: float = 0.0, affix_w: float = 1.0) -> Array:
 	var out: Array = []
 	var src: Dictionary = _affix_sources.get(source, {})
 	if src.is_empty() or rolls.size() < 3:
 		return out
-	# 打磨-100: 词缀袋 affix_bag 掉率加成 (monster 特性 传入 bonus_chance; clamp 0..1 防 溢出)
-	var chance: float = clampf(float(src.get("chance", 0.0)) + bonus_chance, 0.0, 1.0)
+	# 打磨-100: 词缀袋 affix_bag 掉率 加成 (monster 特性 传入 bonus_chance; clamp 0..1 防 溢出)
+	# 打磨-108: 怪物种 affix_w 乘 来源 base (掉落 差异化 词缀 段; 乘在 base 上, bonus 加在 乘后)
+	var chance: float = clampf(float(src.get("chance", 0.0)) * clampf(affix_w, 0.0, 10.0) + bonus_chance, 0.0, 1.0)
 	if float(rolls[0]) >= chance:
 		return out
 	var cnt := int(src.get("count_min", 1))
@@ -1110,6 +1113,11 @@ func get_endless_floor(floor: int) -> Dictionary:
 #   镇妖塔/未带 floor 层数 保守 不放大 旧 口径 恒等); ② 幂等: 已 计算过 (带 grudge_mult 键)
 #   的 stats 字典 再 过一遍 恒等 不 叠乘 (UI 怪物卡 tooltip 走 该路径, 顺带 修复 既有 特性
 #   倍率 在 tooltip 内 二次 放大 的 显示 偏差, 灵石 行 口径 不变 [stats 字典 无 reward_stone 键])
+# 打磨-108: 怪物种 reward 权重 stone_w (灵石) / affix_w (词缀 掉率 加成 基准) 接入 (M5 规格
+#   "掉落差异化 每种 怪物 reward_bonus 灵石/材料/词缀 权重" 灵石/词缀 段 落地; mat_w 已
+#   打磨-100 接入): stone_w 乘 stone (首算 叠, stats 字典 再算 沿用 已 结算 值 幂等),
+#   affix_w = 词缀 掉率 加成 基准 (结算 时 传入 affix_roll_drop bonus_chance; Boss 层 无
+#   种 = 1.0 旧 口径 不 加成; 数据 缺 字段 兜底 1.0)
 func tower_monster_stats(rec: Dictionary) -> Dictionary:
 	var hp := float(rec.get("hp", 0.0))
 	var atk := float(rec.get("atk", 0.0))
@@ -1123,6 +1131,11 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 	# 种 基础 x 特性 mat 倍率 已 叠完), 再 算 直接 沿用 恒等; 原始 层 记录 (无 mats 键)
 	# 按 怪物种 基础 1+mat_w 解析 (Boss 层 无 种 = 0)
 	var mats := float(rec["mats"]) if is_stats else 0.0
+	# 打磨-108: stone_w/affix_w 幂等 — stats 字典 携带 已 解析 权重 (首算 已 叠 stone),
+	# 再 算 沿用 恒等 不 二重; 原始 层 记录 按 怪物种 reward.stone_w/affix_w 解析
+	# (Boss 层 无 reward 缺 字段 = 1.0 旧 口径 不 加成 不 放大)
+	var stone_w := float(rec.get("stone_w", 1.0)) if is_stats else 1.0
+	var affix_w := float(rec.get("affix_w", 1.0)) if is_stats else 1.0
 	if not is_stats:
 		var sp: Dictionary = monster_by_id.get(str(rec.get("species", "")), {})
 		if not sp.is_empty():
@@ -1130,7 +1143,10 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 			var mat_w := 0.8
 			if typeof(sp_rw) == TYPE_DICTIONARY:
 				mat_w = float((sp_rw as Dictionary).get("mat_w", 0.8))
+				stone_w = float((sp_rw as Dictionary).get("stone_w", 1.0))
+				affix_w = float((sp_rw as Dictionary).get("affix_w", 1.0))
 			mats = 1.0 + mat_w
+			stone *= stone_w
 	for tid in tlist:
 		var td: Dictionary = trait_by_id.get(str(tid), {})
 		if td.is_empty():
@@ -1166,6 +1182,9 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 		# 打磨-106: species 随 stats 传递 — 幂等 再算 时 怪物种 基础 mats (1+mat_w) 可 重解 恒等;
 		# 缺 该 键 时 再算 mats 归零 (UI tooltip 走 stats 字典 路径 的 隐性 缺口, 本轮 修复)
 		"species": str(rec.get("species", "")),
+		# 打磨-108: stone_w/affix_w 随 stats 传递 — 幂等 再算 沿用 已 解析 权重 (stone 首算 已 叠,
+		# 再算 不 二重 放大); 结算 时 affix_w 供 词缀 掉率 加成 (base x affix_w)
+		"stone_w": stone_w, "affix_w": affix_w,
 	}
 
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
@@ -1259,7 +1278,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 			drop_src = "elite"
 		elif str(mon["boss_type"]) != "":
 			drop_src = "milestone" if tower == "endless" else "boss"
-		affix_drops = affix_roll_drop(drop_src, next_floor, dr, affix_bonus_chance)
+		affix_drops = affix_roll_drop(drop_src, next_floor, dr, affix_bonus_chance, float(mon.get("affix_w", 1.0)))
 		_stat_inc("affix_drop", float(affix_drops.size()))
 		if tower == "fixed":
 			if next_floor < 1000:
@@ -2434,6 +2453,11 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 			lines.append("· %s — %s" % [str(td.get("name", "")), str(td.get("desc", ""))])
 	lines.append("HP %s · ATK %s · DEF %s" % [fmt(float(mon["hp"])), fmt(float(mon["atk"])), fmt(float(mon["def"]))])
 	lines.append("奖励 灵石 %s" % fmt(float(mon["stone"])))
+	# 打磨-108: 怪物种 掉落 权重 展示 (M5 规格 掉落 差异化 灵石/词缀 段: 灵石 已 乘 权重
+	# 入 上行, 词缀 掉率 = 来源 base x 权重 [结算 时 判定]); Boss/无种 层 权重 1.0 不 展示
+	if float(mon.get("stone_w", 1.0)) != 1.0 or float(mon.get("affix_w", 1.0)) != 1.0:
+		lines.append("· 种 掉落 权重: 灵石 x%.3f · 词缀 x%.3f" % [
+			float(mon.get("stone_w", 1.0)), float(mon.get("affix_w", 1.0))])
 	# 打磨-106: 材料 掉落 预估 (M5 规格 掉落展示 灵石/材料/词缀 材料 段 展示 位; 与 战斗 结算 同源
 	# = stats mats [基础 1+怪物种 mat_w x 材料囊x2, 幸运/不屈 叠乘 属 结算 时 随机 判定 不 入 预估],
 	# 向上取整 口径 与 reward_mat 一致; mats=0 防御 不 展示 该行)

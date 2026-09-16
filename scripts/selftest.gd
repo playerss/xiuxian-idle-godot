@@ -439,7 +439,7 @@ func _init() -> void:
 			check(bool(r1["win"]), "新档 胜 第 1 层 (实际 %s)" % str(r1["win"]))
 			check(int(g.tower_fixed_floor) == 1, "胜 第 1 层 后 最高 层 = 1 (实际 %d)" % g.tower_fixed_floor)
 			check(g.stones > 0.0, "胜 第 1 层 灵石 入账 (实际 %s)" % g.fmt(g.stones))
-			check(absf(float(r1["reward_stone"]) - float(f1["reward_stone"])) < 1e-9, "奖励 灵石 = 层表 值")
+			check(absf(float(r1["reward_stone"]) - float(f1["reward_stone"]) * 1.255) < 1e-6, "奖励 灵石 = 层表 值 x 种 stone_w (打磨-108, 实际 %s / 期望 %s)" % [g.fmt(float(r1["reward_stone"])), g.fmt(float(f1["reward_stone"]) * 1.255)])
 			check(g.fixed_challenge_floor() == 2, "下一 挑战 层 = 2 (实际 %d)" % g.fixed_challenge_floor())
 			check(int(g.stats.get("tower_win", 0.0)) == 1, "战斗 统计 tower_win +1")
 			# 新档 atk 2.0 败 第 2 层 (怪 atk 3.339 x 0.85 = 2.84 > 2.0) — 无 惩罚 无 消耗
@@ -6234,8 +6234,8 @@ func _init() -> void:
 	g.affix_materials = 0
 	var rw1: Dictionary = g.try_tower_challenge("fixed", 0.5)
 	check(bool(rw1["win"]), "打磨-100 道祖 胜 第 1 层")
-	check(absf(float(rw1["reward_stone"]) - float(f1100["reward_stone"])) < 1e-6,
-			"打磨-100 无 奖励 特性 灵石 = 层表 值 (实际 %s / 表 %s)" % [g.fmt(float(rw1["reward_stone"])), g.fmt(float(f1100["reward_stone"]))])
+	check(absf(float(rw1["reward_stone"]) - float(f1100["reward_stone"]) * float(m1100["stone_w"])) < 1e-6,
+			"打磨-100 无 奖励 特性 灵石 = 层表 值 x stone_w (打磨-108, 实际 %s / 期望 %s)" % [g.fmt(float(rw1["reward_stone"])), g.fmt(float(f1100["reward_stone"]) * float(m1100["stone_w"]))])
 	check(int(rw1["reward_mat"]) == int(ceil(float(m1100["mats"]))) and int(rw1["reward_mat"]) >= 1,
 			"打磨-100 无 奖励 特性 材料 = ceil(mats) (实际 %d / 期望 %d)" % [int(rw1["reward_mat"]), int(ceil(float(m1100["mats"])))])
 	check(g.affix_materials == int(rw1["reward_mat"]), "打磨-100 材料 入账 affix_materials (实际 %d)" % g.affix_materials)
@@ -6249,8 +6249,8 @@ func _init() -> void:
 	var rw5: Dictionary = g.try_tower_challenge("fixed", 0.5)
 	check(bool(rw5["win"]), "打磨-100 道祖 胜 第 5 层 (不屈)")
 	check(bool(rw5["indomit_hit"]), "打磨-100 不屈 命中 标记 true")
-	check(absf(float(rw5["reward_stone"]) - float(f5100["reward_stone"]) * 1.2) < 1e-6,
-			"打磨-100 不屈 灵石 x1.2 (实际 %s / 期望 %s)" % [g.fmt(float(rw5["reward_stone"])), g.fmt(float(f5100["reward_stone"]) * 1.2)])
+	check(absf(float(rw5["reward_stone"]) - float(f5100["reward_stone"]) * float(m5100["stone_w"]) * 1.2) < 1e-6,
+			"打磨-100 不屈 灵石 = 层表 x stone_w x1.2 (打磨-108, 实际 %s / 期望 %s)" % [g.fmt(float(rw5["reward_stone"])), g.fmt(float(f5100["reward_stone"]) * float(m5100["stone_w"]) * 1.2)])
 	check(int(rw5["reward_mat"]) == int(ceil(float(m5100["mats"]) * 1.2)),
 			"打磨-100 不屈 材料 = ceil(mats x1.2) (实际 %d / 期望 %d)" % [int(rw5["reward_mat"]), int(ceil(float(m5100["mats"]) * 1.2))])
 	check(g.affix_materials == int(rw5["reward_mat"]), "打磨-100 不屈 材料 入账 (实际 %d)" % g.affix_materials)
@@ -6270,8 +6270,8 @@ func _init() -> void:
 	# 5) 幸运 lucky (第 8 层): 50%% 全奖励 x2 — rolls[7] 内部 randf 不 可注入, 断言 双值 边界
 	var f8100: Dictionary = g.get_fixed_floor(8)
 	var m8100: Dictionary = g.tower_monster_stats(f8100)
-	var st_no_lucky: float = float(f8100["reward_stone"])
-	var st_lucky: float = float(f8100["reward_stone"]) * 2.0
+	var st_no_lucky: float = float(f8100["reward_stone"]) * float(m8100["stone_w"])
+	var st_lucky: float = float(f8100["reward_stone"]) * float(m8100["stone_w"]) * 2.0
 	var mat_no_lucky: int = int(ceil(float(m8100["mats"])))
 	var mat_lucky: int = int(ceil(float(m8100["mats"]) * 2.0))
 	g.tower_fixed_floor = 7
@@ -6298,8 +6298,8 @@ func _init() -> void:
 			break
 	check(rich_floor > 0 and not rich_rec.is_empty(), "打磨-100 镇妖塔 存在 rich_ore 层 (实际 层 %d)" % rich_floor)
 	var mrich: Dictionary = g.tower_monster_stats(rich_rec)
-	check(absf(float(mrich["stone"]) - float(rich_rec["reward_stone"]) * 2.0) < 1e-6,
-			"打磨-100 富矿 stone = 层表 x2 (tower_monster_stats 已含, 实际 %s / 期望 %s)" % [g.fmt(float(mrich["stone"])), g.fmt(float(rich_rec["reward_stone"]) * 2.0)])
+	check(absf(float(mrich["stone"]) - float(rich_rec["reward_stone"]) * float(mrich["stone_w"]) * 2.0) < 1e-6,
+			"打磨-100 富矿 stone = 层表 x stone_w x2 (打磨-108, 实际 %s / 期望 %s)" % [g.fmt(float(mrich["stone"])), g.fmt(float(rich_rec["reward_stone"]) * float(mrich["stone_w"]) * 2.0)])
 	# 7) 词缀袋 affix_bag 掉率 加成: affix_roll_drop bonus_chance 提升 命中 (掉率 判定 rolls[0])
 	var f_ab: Dictionary = g.get_fixed_floor(27)  # 第 27 层 = 单 affix_bag (数据 锚定)
 	check("affix_bag" in (f_ab["traits"] as Array), "打磨-100 第 27 层 = affix_bag (数据 锚定, 实际 %s)" % str(f_ab["traits"]))
@@ -6307,13 +6307,14 @@ func _init() -> void:
 	var chance0: float = float(src_norm.get("chance", 0.0))
 	# 掉率 判定 用 rolls[0]: base normal 掉率 %s, 词缀袋 +10%% 后 = base + 0.1;
 	# 取 roll 0.10 区分: 无 bonus (chance=base=0.05) 不命中, 有 bonus (chance=0.15) 命中
-	check(g.affix_roll_drop("normal", 27, [0.99, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0).is_empty(),
-			"打磨-100 掉率 roll 0.99 超 上限 不掉落 (bonus 0)")
-	check(g.affix_roll_drop("normal", 27, [0.10, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0).is_empty(),
-			"打磨-100 roll 0.10 超 base 掉率 0.05 不掉落 (bonus 0)")
-	check(g.affix_roll_drop("normal", 27, [0.10, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.10).size() > 0,
+	# (打磨-108: affix_w 缺省 1.0 显式 传, 本段 验 bonus 口径 不受 种 权重 影响)
+	check(g.affix_roll_drop("normal", 27, [0.99, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0, 1.0).is_empty(),
+			"打磨-100 掉率 roll 0.99 超 上限 不掉落 (bonus 0, affix_w 1.0)")
+	check(g.affix_roll_drop("normal", 27, [0.10, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0, 1.0).is_empty(),
+			"打磨-100 roll 0.10 超 base 掉率 0.05 不掉落 (bonus 0, affix_w 1.0)")
+	check(g.affix_roll_drop("normal", 27, [0.10, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.10, 1.0).size() > 0,
 			"打磨-100 词缀袋 +10%% 掉率 roll 0.10 命中 (base %s + 0.1 = 0.15 > 0.10)" % str(chance0))
-	check(g.affix_roll_drop("normal", 27, [0.99, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.10).is_empty(),
+	check(g.affix_roll_drop("normal", 27, [0.99, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.10, 1.0).is_empty(),
 			"打磨-100 词缀袋 +10%% 仍 不 越 roll 0.99 上限")
 	# 8) 会话 材料 累计 + 文案 材料 段 (内存态, 读档 归零)
 	g._auto_tower_seq = 0
@@ -6575,6 +6576,85 @@ func _init() -> void:
 	var snap107: Dictionary = g.stats.duplicate(true)
 	check(g.tower_win_float_text(r107b) == t107b and g.stats == snap107,
 			"打磨-107 只读 连读 恒定 (无 统计 副作用)")
+
+	# ---------- 打磨-108: 怪物种 reward 权重 stone_w/affix_w 结算接入 (M5 掉落差异化) ----------
+	# 数据 锚定: 第 1 层 种 m41 stone_w=1.255 / affix_w=0.63 (gen_data 固定 种子 恒定)
+	g.set_process(false)
+	g.poison_battles = 0
+	g.ascended = true
+	g.dao_level = 8
+	g.learned.clear()
+	for id in g.skill_ids:
+		var s108: Dictionary = g.skill_by_id[id]
+		if str(s108.get("type", "")) == "passive" and str(s108.get("effect", "")) in ["atk", "def", "all_mult"]:
+			g.learned.append(id)
+	var f108: Dictionary = g.get_fixed_floor(1)
+	var m108: Dictionary = g.tower_monster_stats(f108)
+	# 1) stone_w 接入: stats stone = 层表 reward_stone x stone_w (首算 叠, 与 mat_w 同 位置)
+	check(absf(float(m108["stone"]) - float(f108["reward_stone"]) * 1.255) < 1e-9 * maxf(float(f108["reward_stone"]), 1.0),
+			"打磨-108 第 1 层 stats stone = 层表 x stone_w 1.255 (实际 %s / 期望 %s)" % [g.fmt(float(m108["stone"])), g.fmt(float(f108["reward_stone"]) * 1.255)])
+	check(absf(float(m108["stone_w"]) - 1.255) < 1e-9 and absf(float(m108["affix_w"]) - 0.63) < 1e-9,
+			"打磨-108 stats 携带 stone_w/affix_w (实际 %s / %s)" % [str(m108["stone_w"]), str(m108["affix_w"])])
+	# 2) 幂等: stats 字典 再 过一遍 stone 恒等 不 二重 放大 (UI tooltip 路径)
+	var m108b: Dictionary = g.tower_monster_stats(m108)
+	check(absf(float(m108b["stone"]) - float(m108["stone"])) < 1e-9 * float(m108["stone"]),
+			"打磨-108 stats 幂等 再算 stone 恒等 不 二重 (实际 %s)" % g.fmt(float(m108b["stone"])))
+	# 3) 结算: 道祖 胜 第 1 层 reward_stone = 层表 x stone_w (与 stats stone 同源)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.affix_materials = 0
+	var rw108: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rw108["win"]), "打磨-108 道祖 胜 第 1 层")
+	check(absf(float(rw108["reward_stone"]) - float(f108["reward_stone"]) * 1.255) < 1e-9 * float(f108["reward_stone"]),
+			"打磨-108 结算 reward_stone = 层表 x stone_w (实际 %s)" % g.fmt(float(rw108["reward_stone"])))
+	g.tower_fixed_floor = 0
+	# 4) Boss 层 无 种: 权重 = 1.0 旧 口径 (第 50 层 小 Boss 无 reward 字段 兜底)
+	var fb108: Dictionary = g.get_fixed_floor(50)
+	var mb108: Dictionary = g.tower_monster_stats(fb108)
+	check(absf(float(mb108["stone_w"]) - 1.0) < 1e-9 and absf(float(mb108["affix_w"]) - 1.0) < 1e-9,
+			"打磨-108 Boss 层 权重 = 1.0 (无 reward 字段 兜底, 实际 %s / %s)" % [str(mb108["stone_w"]), str(mb108["affix_w"])])
+	check(absf(float(mb108["stone"]) - float(fb108["reward_stone"])) < 1e-9 * float(fb108["reward_stone"]),
+			"打磨-108 Boss 层 stone = 层表 值 不 放大 (实际 %s)" % g.fmt(float(mb108["stone"])))
+	# 5) 词缀 掉率 = 来源 base x affix_w (乘在 base 上; roll 阈值 恒等 口径)
+	var e108: Dictionary = g.get_endless_floor(1)  # 种 m01 affix_w=0.55 (数据 锚定)
+	var me108: Dictionary = g.tower_monster_stats(e108)
+	check(absf(float(me108["affix_w"]) - 0.55) < 1e-9, "打磨-108 登天梯 第 1 层 affix_w = 0.55 (实际 %s)" % str(me108["affix_w"]))
+	var base0: float = float(g._affix_sources.get("normal", {}).get("chance", 0.0))
+	check(base0 == 0.05, "打磨-108 normal 掉率 base = 0.05 (数据 锚定, 实际 %s)" % str(base0))
+	# roll 0.027 < 0.05 x 0.55 = 0.0275 命中 / roll 0.04 > 0.0275 不命中 (affix_w 1.0 恒 0.05 命中)
+	check(g.affix_roll_drop("normal", 1, [0.027, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0, 0.55).size() == 1,
+			"打磨-108 affix_w 0.55: roll 0.027 < 0.0275 命中 (有效 掉率 = base x 权重)")
+	check(g.affix_roll_drop("normal", 1, [0.04, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0, 0.55).is_empty(),
+			"打磨-108 affix_w 0.55: roll 0.04 > 0.0275 不命中 (旧 口径 0.05 会 命中)")
+	check(g.affix_roll_drop("normal", 1, [0.04, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.0, 1.0).size() == 1,
+			"打磨-108 affix_w 1.0 旧 口径 恒等 (roll 0.04 < 0.05 命中)")
+	# 6) bonus 与 权重 叠加: 词缀袋 +0.1 加在 权重 乘后 (base x affix_w + bonus)
+	check(g.affix_roll_drop("normal", 1, [0.10, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9], 0.10, 0.55).size() == 1,
+			"打磨-108 词缀袋 + 权重: roll 0.10 < 0.0275 + 0.1 = 0.1275 命中")
+	# 7) 权重 展示 行: 有 种 层 tooltip 含 种 掉落 权重 行, Boss 层 不 含 (1.0 不 展示)
+	var tip108: String = g.tower_monster_tip(f108, "fixed")
+	check(tip108.find("· 种 掉落 权重: 灵石 x1.255 · 词缀 x0.630") >= 0,
+			"打磨-108 镇妖塔 怪物卡 tooltip 含 种 权重 行 (实际 %s)" % tip108.left(120))
+	var tip108b: String = g.tower_monster_tip(fb108, "fixed")
+	check(tip108b.find("种 掉落 权重") < 0, "打磨-108 Boss 层 tooltip 无 权重 行 (权重 1.0 不 展示)")
+	# 8) 只读: 连读 恒定 无 状态/统计 副作用
+	var snap108: Dictionary = g.stats.duplicate(true)
+	check(g.tower_monster_stats(f108)["stone"] == m108["stone"] and g.stats == snap108,
+			"打磨-108 只读 连读 恒定 (无 统计 副作用)")
+	# 收尾: 塔 态 归零 + 境界 复原 (防 污染 后续 段/汇报)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.affix_materials = 0
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.set_process(true)
 
 	# ---------- 汇报 ----------
 	print("")

@@ -333,6 +333,35 @@ func _init() -> void:
 	check(g.affix_drop_bucket(1000) == 19, "M6-4 1000 层 = 顶桶 19")
 	check(g.affix_roll_tier(0, 0.9999) < 4, "M6-4 首桶 无 传说 掉落 (roll 0.9999 = 品质%d)" % g.affix_roll_tier(0, 0.9999))
 	check(g.affix_roll_tier(19, 0.9999) == 4, "M6-4 顶桶 高 roll 命中 传说 (roll 0.9999 = 品质%d)" % g.affix_roll_tier(19, 0.9999))
+	# 6.5) 打磨-108: 怪物种 reward 权重 数值 受控 (stone_w 0.8~1.4 / affix_w 0.2~0.8,
+	# gen_data 固定 种子 生成; 扫 120 种 验证 权重 范围 + stone_w 放大 有 种 层 灵石
+	# 曲线 仍 随 层数 指数 上升 单调 [权重 为 常量 倍率 不 破坏 单调性])
+	var sw_min := 1e9
+	var sw_max := 0.0
+	var aw_min := 1e9
+	var aw_max := 0.0
+	var n_sp := 0
+	for mid in g.monster_ids:
+		var m: Dictionary = g.monster_by_id.get(str(mid), {})
+		if str(m.get("kind", "")) != "species":
+			continue
+		var rw: Variant = m.get("reward", {})
+		if typeof(rw) != TYPE_DICTIONARY:
+			continue
+		n_sp += 1
+		sw_min = minf(sw_min, float((rw as Dictionary).get("stone_w", 1.0)))
+		sw_max = maxf(sw_max, float((rw as Dictionary).get("stone_w", 1.0)))
+		aw_min = minf(aw_min, float((rw as Dictionary).get("affix_w", 1.0)))
+		aw_max = maxf(aw_max, float((rw as Dictionary).get("affix_w", 1.0)))
+	check(n_sp == 120, "打磨-108 120 种 权重 全量 可扫 (实际 %d)" % n_sp)
+	check(sw_min >= 0.8 and sw_max <= 1.4, "打磨-108 stone_w 范围 0.8~1.4 受控 (实际 %.3f~%.3f)" % [sw_min, sw_max])
+	check(aw_min >= 0.2 and aw_max <= 0.8, "打磨-108 affix_w 范围 0.2~0.8 受控 (实际 %.3f~%.3f)" % [aw_min, aw_max])
+	# 有 种 层 灵石 曲线 单调 (同 种 跨 层: 层 1 与 层 121 均 = 种 m01 [轮转 周期 120,
+	# stone_w 同 1.335], 层数 指数 1.06^floor 恒 单调 上升; 权重 常量 倍率 不 破坏 单调)
+	var s108a: float = float(g.tower_monster_stats(g.get_endless_floor(1))["stone"])
+	var s108b: float = float(g.tower_monster_stats(g.get_endless_floor(121))["stone"])
+	check(s108b > s108a and is_finite(s108b) and s108b < 1e12,
+			"打磨-108 登天梯 同 种 灵石 曲线 单调 有限 (1层 %s -> 121层 %s)" % [g.fmt(s108a), g.fmt(s108b)])
 	# 7) 收尾 复原 (清 词缀/装备/槽位 状态, 防 污染 后续)
 	g.affix_load.clear()
 	g.affix_bag.clear()
