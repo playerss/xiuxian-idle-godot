@@ -191,6 +191,7 @@ func _ready() -> void:
 	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
 	await _assert_m99_upgrade()  # 打磨-99: 一键 强化 槽位 按钮 (道祖期 批量 3->4, 200 材料/件)
 	await _assert_m101_exchange_all()  # 打磨-101: 一键 兑换 按钮 (材料 连兑 买不起 的 最高 变体 词缀)
+	await _assert_stats_affix()  # 打磨-110: 修行统计 词缀 段 (stats_text 4 段 展示/tooltip 口径/埋点 联动/节流/收尾)
 	_finish()
 
 
@@ -5813,3 +5814,60 @@ func _assert_m63_diy() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.seen_affixes.is_empty() and g.affix_materials == 0, "M6-3 收尾 干净 基准")
+
+
+# 打磨-110: 修行统计 词缀 段 — stats_text 追加 词缀 掉落/装配/分解/兑换 4 段 (埋点 打磨-96/99/101 已有, 展示位 补齐);
+# 断言: 标签 含 4 段 基准 0 / 统计 行 文本 = stats_text 接口 恒等 / tooltip 含 词缀 口径 行 / 埋点 递增 后
+# _refresh 同步 / 同态 节流 无 副作用 / 收尾 恢复 干净 基准
+func _assert_stats_affix() -> void:
+	var g := GameData
+	# 切 修行页 (统计 标签 所在 页, 布局 落定)
+	ui._tab.current_tab = 0
+	g.set_process(false)
+	# 基准: 词缀 4 键 清零 (前 段 词缀 UI 断言 可能 残留 埋点, 全清 保 基准 纯净)
+	g.stats["affix_drop"] = 0.0
+	g.stats["affix_equip"] = 0.0
+	g.stats["affix_decompose"] = 0.0
+	g.stats["affix_exchange"] = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+	# 1) 标签 节点 存在 且 文本 = 接口 恒等 (含 4 段 基准 0)
+	check(ui._stats_label != null, "打磨-110 统计 标签 存在")
+	var stt: String = g.stats_text()
+	check(stt.find("词缀 掉落 0") >= 0 and stt.find("装配 0") >= 0 and stt.find("分解 0") >= 0 and stt.find("兑换 0") >= 0,
+			"打磨-110 stats_text 含 词缀 4 段 基准 0 (实际 %s)" % stt)
+	check(str(ui._stats_label.text) == stt, "打磨-110 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text))
+	# 2) tooltip 含 词缀 口径 行 (打磨-110 补 说明)
+	check(ui._stats_label.tooltip_text.find("词缀") >= 0 and ui._stats_label.tooltip_text.find("存档保存") >= 0,
+			"打磨-110 统计 行 tooltip 含 词缀 口径 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# 3) 埋点 递增 后 _refresh 同步 (只读 展示 路径, 无 资源/统计 副作用)
+	var snap_r: float = g.essence
+	var snap_s: float = g.stones
+	var snap_st: Dictionary = g.stats.duplicate(true)
+	g.stats["affix_drop"] = 3.0
+	g.stats["affix_exchange"] = 1.0
+	ui._refresh()
+	var stt2: String = g.stats_text()
+	check(stt2.find("词缀 掉落 3") >= 0 and stt2.find("兑换 1") >= 0, "打磨-110 埋点 递增 后 文案 同步 (实际 %s)" % stt2.right(80))
+	check(str(ui._stats_label.text) == stt2, "打磨-110 _refresh 后 标签 文本 同步 恒等")
+	check(g.essence == snap_r and g.stones == snap_s, "打磨-110 刷新 无 资源 副作用")
+	var diff_keys: Array[String] = []
+	for k in g.stats:
+		if k in ["affix_drop", "affix_exchange"]:
+			continue
+		if absf(float(g.stats[k]) - float(snap_st.get(k, 0.0))) > 1e-9:
+			diff_keys.append(str(k))
+	check(diff_keys.is_empty(), "打磨-110 刷新 无 其他 统计 副作用 (变化键 %s)" % ", ".join(diff_keys))
+	# 4) 同态 节流: 再 刷 文本 不 重写 (缓存 键 不变)
+	var cached: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached and str(ui._stats_label.text) == stt2, "打磨-110 同态 节流 文本 稳定 无 副作用")
+	# 5) 收尾: 归零 恢复 干净 基准 (防 污染 _finish 汇报 计数 之外 的 状态)
+	g.stats["affix_drop"] = 0.0
+	g.stats["affix_equip"] = 0.0
+	g.stats["affix_decompose"] = 0.0
+	g.stats["affix_exchange"] = 0.0
+	g.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(g.stats_text().find("词缀 掉落 0") >= 0 and str(ui._stats_label.text) == g.stats_text(), "打磨-110 收尾 干净 基准 (实际 %s)" % g.stats_text().right(80))

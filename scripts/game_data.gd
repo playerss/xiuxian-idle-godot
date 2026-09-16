@@ -1458,12 +1458,15 @@ func _load_stats(v: Variant) -> void:
 			stats[k] = 0.0
 
 # 统计文本 (修行页展示)
+# 打磨-110: 追加 词缀 段 (掉落/装配/分解/兑换 — 埋点 打磨-96/99/101 已有, 展示位 补齐)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 · 道行精进 %d 次 · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次" % [
+	return "修行 %s · 突破 %d 次 · 道行精进 %d 次 · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("dao_ok", 0.0)),
 		int(stats.get("skill_use", 0.0)), int(stats.get("item_buy", 0.0)),
-		int(stats.get("equip_buy", 0.0)), int(stats.get("tower_win", 0.0))]
+		int(stats.get("equip_buy", 0.0)), int(stats.get("tower_win", 0.0)),
+		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
+		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0))]
 
 # 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
 # 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)

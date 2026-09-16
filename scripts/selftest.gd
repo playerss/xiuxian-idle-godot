@@ -6712,6 +6712,75 @@ func _init() -> void:
 	g.equipped.clear()
 	g.set_process(true)
 
+	# ---------- 打磨-110: 修行统计 词缀 段 (掉落/装配/分解/兑换 埋点 打磨-96/99/101 已有, 展示位 补齐) ----------
+	# 基准: 受控 词缀 态 清零 + 统计 清零 (前 段 词缀 操作 可能 残留 埋点 计数, 全清 保 基准 纯净)
+	g.set_process(false)
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_load = {}
+	g.affix_bag = {}
+	g.affix_materials = 0
+	g.stats["affix_drop"] = 0.0
+	g.stats["affix_equip"] = 0.0
+	g.stats["affix_decompose"] = 0.0
+	g.stats["affix_exchange"] = 0.0
+	# 1) 初始 全 0 时 文案 含 4 段 且 = 0
+	var stt110: String = g.stats_text()
+	check(stt110.find("词缀 掉落 0") >= 0 and stt110.find("装配 0") >= 0 and stt110.find("分解 0") >= 0 and stt110.find("兑换 0") >= 0,
+			"打磨-110 stats_text 含 词缀 4 段 且 基准 0 (实际 %s)" % stt110)
+	# 2) 掉落 埋点: boss 来源 100% 掉率, rolls[1]=0.5 -> count 1+int(0.5x3)=2 件 确定性
+	# (affix_roll_drop 自身 入包, 埋点 由 结算 路径 _stat_inc 口径 同 试)
+	var dr110: Array = [0.0, 0.5, 0.5, 0.5, 0.5, 0.0, 0.0, 0.9]
+	var drops110: Array = g.affix_roll_drop("boss", 1, dr110)
+	check(drops110.size() == 2, "打磨-110 受控 掉落 2 件 (实际 %d)" % drops110.size())
+	g._stat_inc("affix_drop", 2.0)  # 结算 入账 口径 (try_tower_challenge 同 埋点 位置)
+	check(int(g.stats["affix_drop"]) == 2, "打磨-110 掉落 埋点 计数 2 (实际 %d)" % int(g.stats["affix_drop"]))
+	# 3) 装配 埋点: 装入 1 件 (真实 路径 affix_equip 埋点)
+	var aid110: String = str(drops110[0])
+	g.owned_eq.append("weapon_0_0")
+	check(g.affix_equip("weapon_0_0", 0, aid110) == "", "打磨-110 装配 成功")
+	check(int(g.stats["affix_equip"]) == 1, "打磨-110 装配 埋点 计数 1 (实际 %d)" % int(g.stats["affix_equip"]))
+	# 4) 分解 埋点: 拆卸 回背包 后 全 分解 (背包 = 掉落 2 件 - 装配 1 件 + 回退 1 件 = 2 件)
+	g.affix_unequip("weapon_0_0", 0)
+	var dec110: int = g.affix_decompose_all()
+	check(dec110 == 2, "打磨-110 分解 2 件 (背包 空, 实际 %d)" % dec110)
+	check(int(g.stats["affix_decompose"]) == 2, "打磨-110 分解 埋点 计数 2 (实际 %d)" % int(g.stats["affix_decompose"]))
+	# 5) 兑换 埋点: 材料 补足 后 兑换 1 件 (真实 路径 affix_exchange 埋点)
+	g.affix_materials = 1000
+	check(g.affix_exchange(aid110) == "", "打磨-110 兑换 成功")
+	check(int(g.stats["affix_exchange"]) == 1, "打磨-110 兑换 埋点 计数 1 (实际 %d)" % int(g.stats["affix_exchange"]))
+	# 6) 文案 动态 恒等: 4 段 数值 = 埋点 计数 (直接 %d 拼接 无 截断)
+	var stt110b: String = g.stats_text()
+	var exp110: String = "词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
+			int(g.stats["affix_drop"]), int(g.stats["affix_equip"]),
+			int(g.stats["affix_decompose"]), int(g.stats["affix_exchange"])]
+	check(stt110b.find(exp110) >= 0, "打磨-110 stats_text 词缀 段 数值 动态 恒等 (期望 %s / 实际 %s)" % [exp110, stt110b.right(120)])
+	# 7) 旧档 兼容: _load_stats 缺 4 键 时 兜底 0 (兜底 键 表 已 含, 断言 兜底 后 文案 含 0 段)
+	var save110: Dictionary = g.stats.duplicate(true)
+	g.stats = {}
+	g._load_stats({})
+	check(g.stats_text().find("词缀 掉落 0") >= 0, "打磨-110 空档 _load_stats 兜底 词缀 段 = 0 (实际 %s)" % g.stats_text().right(80))
+	# 8) 存档 往返: stats 4 键 随 存档 持久化 (读档 后 文案 恒等; 快照 取 于 load 前 因 stats 为 字典 引用 替换)
+	g.stats = save110
+	g.save_game()
+	var snap110: Dictionary = g.stats.duplicate(true)
+	g.load_game()
+	check(g.stats_text().find(exp110) >= 0 and g.stats == snap110, "打磨-110 存档 往返 词缀 段 恒等 (期望 %s / 实际 %s)" % [exp110, g.stats_text().right(120)])
+	# 9) 只读: 连读 恒定 无 副作用 (stats_text 不 改 任何 状态/统计)
+	check(g.stats_text() == stt110b and g.stats == snap110, "打磨-110 stats_text 只读 连读 恒定 (无 状态/统计 副作用)")
+	# 收尾: 归零 落盘 (防 污染 汇报/后续)
+	g.affix_load = {}
+	g.affix_decompose_all()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stats["affix_drop"] = 0.0
+	g.stats["affix_equip"] = 0.0
+	g.stats["affix_decompose"] = 0.0
+	g.stats["affix_exchange"] = 0.0
+	g.affix_materials = 0
+	g.set_process(true)
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

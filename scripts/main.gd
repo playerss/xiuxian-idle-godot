@@ -709,7 +709,7 @@ func _build_training_page(page: Panel) -> void:
 	# 打磨-14: 修行统计 (累计时长/突破/道行精进/神通/法器/装备, 持久化)
 	_stats_label = _label("", 13, DIM)
 	left.add_child(_stats_label)
-	_stats_label.tooltip_text = "修行统计自开荒起累计, 存档保存。\n突破: 境界层数成功次数 (含飞升)。\n道行精进: 飞升后道行阶段成功次数。"
+	_stats_label.tooltip_text = "修行统计自开荒起累计, 存档保存。\n突破: 境界层数成功次数 (含飞升)。\n道行精进: 飞升后道行阶段成功次数。\n词缀: 塔掉落/装配/分解/兑换 累计 (打磨-110, 只读展示, 与 修行统计 同存档 口径)"
 	left.add_child(_sep())
 	_progress_label = _label("突破进度  0%", 14, DIM)
 	left.add_child(_progress_label)
