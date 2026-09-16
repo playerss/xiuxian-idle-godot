@@ -184,6 +184,7 @@ func _ready() -> void:
 	await _assert_milestone_chest()  # 打磨-103: 登天梯 里程碑 宝箱 保底 高品质 词缀 (tooltip 保底 段/卡片 口径/胜局 掉落 品质)
 	await _assert_tower_mats_tip()  # 打磨-106: 怪物卡 tooltip 材料 掉落 预估 (双塔 材料 行/接口 恒等/节流; 修 stats 幂等 丢 mats)
 	await _assert_tower_reward_weights()  # 打磨-108: 怪物种 reward 权重 stone_w/affix_w (tooltip 权重 行/接口 恒等/Boss 层 无 行/节流)
+	await _assert_tower_def_line()  # 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段: 双塔 节点/恒等/剧毒 不 变/DEF 变化 同步/升层 同步/tooltip/节流)
 
 	await _assert_equip_score_sort()  # 打磨-109: 装备页 按评分排序 开关 (M6 规格 装备列表按评分排序: 开关/降序/同分/筛选叠加/装配联动/节流/收尾)
 
@@ -5468,6 +5469,115 @@ func _assert_tower_reward_weights() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(int(g.tower_endless_floor) == 1, "打磨-108 收尾 干净 基准 (塔 态 归零)")
+
+
+# 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段 落地 — tower_power_line 只有
+# ATK 段+胜负, 玩家 DEF/怪物 DEF 无 展示位; 爬塔页 双塔 卡片 战力对比 行 下 加 12px DEF 行).
+# UI 断言: 双塔 标签 节点 齐全/文案 = GameData.tower_power_def_line 恒等 口径/剧毒 只 减 有效 ATK
+# DEF 行 不 变 (ATK/DEF 口径 区分)/玩家 DEF 变化 (装备 词缀 def 池) 动态 同步/升层 怪物 DEF 同步/
+# tooltip 口径 说明/同态 节流 无 副作用 (收尾 干净 基准 防 污染)
+func _assert_tower_def_line() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 + 玩家 DEF 基础 2.0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 双塔 标签 节点 齐全 (战力对比 行 下 构建)
+	check(ui._tw_def_labels.has("fixed") and ui._tw_def_labels.has("endless"),
+			"打磨-111 双塔 DEF 行 标签 节点 齐全")
+	# 文案 = 接口 恒等 (按 preview 同 输入 口径 动态 计算, 不 硬编码 数值)
+	var pv: Dictionary = g.tower_challenge_preview()
+	var fmon: Dictionary = pv["fixed_mon"]
+	var emon: Dictionary = pv["endless_mon"]
+	var dl_fixed: String = g.tower_power_def_line(float(fmon["def"]))
+	var dl_endless: String = g.tower_power_def_line(float(emon["def"]))
+	check(str(ui._tw_def_labels["fixed"].text) == dl_fixed,
+			"打磨-111 镇妖塔 DEF 行 = 接口 恒等 (实际 %s)" % str(ui._tw_def_labels["fixed"].text))
+	check(str(ui._tw_def_labels["endless"].text) == dl_endless,
+			"打磨-111 登天梯 DEF 行 = 接口 恒等 (实际 %s)" % str(ui._tw_def_labels["endless"].text))
+	# 判定 口径 说明 段
+	check(str(ui._tw_def_labels["fixed"].text).find("DEF 不 参与 胜负 判定") >= 0,
+			"打磨-111 DEF 行 含 判定 口径 说明 (实际 %s)" % str(ui._tw_def_labels["fixed"].text).left(60))
+	# tooltip 口径 (构建 路径 写入)
+	check(str(ui._tw_def_labels["fixed"].tooltip_text).find("DEF 不 参与 胜负 判定") >= 0
+			and str(ui._tw_def_labels["fixed"].tooltip_text).find("只 影响 对怪 伤害 与 回合 预估") >= 0,
+			"打磨-111 DEF 行 tooltip 含 口径 说明")
+	# 剧毒 只 减 有效 ATK: ATK 行 变 而 DEF 行 不变 (口径 区分)
+	var pwr_before: String = str(ui._tw_pwr_labels["fixed"].text)
+	var def_before: String = str(ui._tw_def_labels["fixed"].text)
+	g.poison_battles = g.TOWER_POISON_BATTLES
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_pwr_labels["fixed"].text) != pwr_before
+			and str(ui._tw_def_labels["fixed"].text) == def_before,
+			"打磨-111 剧毒 后 ATK 行 变化 而 DEF 行 不变 (DEF 不 随 剧毒 变化)")
+	g.poison_battles = 0
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 玩家 DEF 变化 (飞升 道祖 进度 17, 战力 指数 成长): 玩家 段 动态 同步 (文本 必变 防 假 恒等;
+	# 低 档 def 池 词缀/装备 增幅 经 fmt int 截断 不 可见 [2.0->2.1 均显 "2"], 用 飞升 量级 变化 断言 刷新 路径)
+	g.ascended = true
+	g.dao_level = 8
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var dl_after: String = g.tower_power_def_line(float(fmon["def"]))
+	check(str(ui._tw_def_labels["fixed"].text) == dl_after and dl_after != dl_fixed,
+			"打磨-111 玩家 DEF 变化 (飞升 道祖) 后 DEF 行 动态 同步 = 接口 恒等 (实际 %s)" % str(ui._tw_def_labels["fixed"].text))
+	g.ascended = false
+	g.dao_level = 0
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 基准 重捕获 (上一步 从 飞升 道祖 复位 后 玩家 DEF 回 基础, 须 重新 按 接口 取 基准;
+	# 与 首 基准 dl_endless [可能 残留 飞升 段] 区分, 防 假 变化)
+	var dl_endless0: String = g.tower_power_def_line(float(emon["def"]))
+	check(str(ui._tw_def_labels["endless"].text) == dl_endless0,
+			"打磨-111 复位 后 登天梯 DEF 行 基准 重捕获 = 接口 恒等 (实际 %s)" % str(ui._tw_def_labels["endless"].text))
+	# 升层 怪物 DEF 变化 (登天梯 30 层 精英, DEF fmt 4->9 真 变化 防 假 恒等;
+	# 10 层 精英 4.44 与 1 层 4.16 经 fmt int 截断 同显 "4" 不 触发 刷新 路径, 故 取 30 层): 登天梯 行 动态 同步
+	g.tower_endless_floor = 30
+	g.tower_endless_best = 29
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var pv2: Dictionary = g.tower_challenge_preview()
+	var emon2: Dictionary = pv2["endless_mon"]
+	var dl_endless2: String = g.tower_power_def_line(float(emon2["def"]))
+	check(str(ui._tw_def_labels["endless"].text) == dl_endless2 and dl_endless2 != dl_endless0,
+			"打磨-111 升 精英层 后 登天梯 DEF 行 动态 同步 (实际 %s)" % str(ui._tw_def_labels["endless"].text))
+	# 同态 节流: 无 变化 再 刷 不 重写 + 无 统计 副作用
+	var snap_tw: Dictionary = g.stats.duplicate(true)
+	var txt_tw: String = str(ui._tw_def_labels["fixed"].text)
+	ui._refresh_tower()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_def_labels["fixed"].text) == txt_tw and g.stats == snap_tw,
+			"打磨-111 同态 再刷 稳定 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态/飞升/灵石 归零, 防 污染 后续 段)
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.ascended = false
+	g.dao_level = 0
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.learned.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_endless_floor) == 1 and int(g.tower_endless_best) == 0,
+			"打磨-111 收尾 干净 基准 (塔 态 归零)")
 
 
 # M6-3: DIY 词缀 UI 断言 (装备页 词缀背包 抽屉: 容量行/收集行/共鸣行/一键装配/分解/网格 格子/选中 金边;

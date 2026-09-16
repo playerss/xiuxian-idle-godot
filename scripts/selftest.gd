@@ -728,6 +728,55 @@ func _init() -> void:
 			g.tower_rounds_line(100.0, 5.0, true)
 			g.tower_rounds_line(1e14, 1e9, false)
 			check(g.stats == snap105, "打磨-105 tower_rounds_line 只读 连读 无 统计 副作用")
+			# ---------- 打磨-111: 战力对比 DEF 行 (M5 UI 规格 "玩家 atk/def vs 怪物" DEF 段) ----------
+			# 受控 基准: 先 归 干净 玩家 态 (前 段 打磨-105 残留 飞升/道祖/守塔, 须 复位 使 DEF 回 基础 2.0),
+			# 无 功法/装备 时 DEF 基础 = 2.0 x 40^0 = 2.0; 当前 挑战 层 数据
+			g.ascended = false
+			g.dao_level = 0
+			g.learned.clear()
+			g.tower_fixed_clear = false
+			var pd111: float = g.player_def()
+			check(absf(pd111 - 2.0) < 1e-9, "打磨-111 基准 玩家 DEF = 2.0 (实际 %s)" % g.fmt(pd111))
+			var f111: Dictionary = g.get_fixed_floor(g.fixed_challenge_floor())
+			var m111: Dictionary = g.tower_monster_stats(f111)
+			var dl111: String = g.tower_power_def_line(float(m111["def"]))
+			check(dl111.begins_with("玩家 DEF %s vs 怪物 DEF %s" % [g.fmt(pd111), g.fmt(float(m111["def"]))]),
+					"打磨-111 DEF 行 = 玩家 DEF + 怪物 DEF 同 输入 恒等 口径 (实际 %s)" % dl111)
+			check(dl111.find("DEF 不 参与 胜负 判定") >= 0, "打磨-111 DEF 行 含 判定 口径 说明 (实际 %s)" % dl111)
+			# 登天梯 同 口径 (当前 待挑战 层 数据)
+			var e111: Dictionary = g.get_endless_floor(g.tower_endless_floor)
+			var me111: Dictionary = g.tower_monster_stats(e111)
+			var dl111e: String = g.tower_power_def_line(float(me111["def"]))
+			check(dl111e.begins_with("玩家 DEF %s vs 怪物 DEF %s" % [g.fmt(pd111), g.fmt(float(me111["def"]))]),
+					"打磨-111 登天梯 DEF 行 同 口径 恒等 (实际 %s)" % dl111e)
+			# 剧毒 只 减 有效 ATK 不 减 DEF: DEF 行 不 随 剧毒 变化 (ATK 行 变 口径 区分)
+			var dl111_nop: String = g.tower_power_def_line(float(m111["def"]))
+			var al111_nop: String = g.tower_power_line(float(m111["atk"]))
+			g.poison_battles = g.TOWER_POISON_BATTLES
+			var dl111_poi: String = g.tower_power_def_line(float(m111["def"]))
+			var al111_poi: String = g.tower_power_line(float(m111["atk"]))
+			check(dl111_poi == dl111_nop, "打磨-111 剧毒 后 DEF 行 不变 (DEF 不 随 剧毒 变化)")
+			check(al111_poi != al111_nop, "打磨-111 剧毒 后 ATK 行 变化 (有效 ATK -15%%, ATK/DEF 口径 区分)")
+			g.poison_battles = 0
+			# 玩家 DEF 成长 (飞升 道祖 进度 17): DEF 行 玩家 段 同步 变化
+			var atk111_before: float = g.player_atk()
+			g.ascended = true
+			g.dao_level = 8
+			g.tower_fixed_clear = true
+			var dl111s: String = g.tower_power_def_line(5.0)
+			check(dl111s.begins_with("玩家 DEF %s vs 怪物 DEF 5" % g.fmt(g.player_def())),
+					"打磨-111 道祖 玩家 DEF 段 动态 同步 (实际 %s)" % dl111s)
+			check(g.player_def() > pd111 * 10.0, "打磨-111 道祖 玩家 DEF 量级 上升 (基准 %s / 道祖 %s)" % [g.fmt(pd111), g.fmt(g.player_def())])
+			g.ascended = false
+			g.dao_level = 0
+			g.learned.clear()
+			g.tower_fixed_clear = false
+			# 只读: 连读 恒定 无 状态/统计 副作用
+			var snap111: Dictionary = g.stats.duplicate(true)
+			g.tower_power_def_line(1.0)
+			g.tower_power_def_line(1e12)
+			check(g.tower_power_def_line(1.0) == "玩家 DEF %s vs 怪物 DEF 1 (DEF 不 参与 胜负 判定, 只 影响 回合 预估)" % g.fmt(g.player_def()) and g.stats == snap111,
+					"打磨-111 tower_power_def_line 只读 连读 恒定 无 副作用")
 			# 收尾: 恢复 干净 基准 (塔 态 归零 防 污染 后续 段)
 			g.ascended = false
 			g.dao_level = 0

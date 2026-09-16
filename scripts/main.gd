@@ -153,6 +153,7 @@ var _tw_mon_tips: Dictionary = {}    # 塔 id -> 怪物卡 tooltip 缓存
 var _tw_pwr_labels: Dictionary = {}  # 塔 id -> 战力对比 Label (变化才刷, 着色 胜绿/败红)
 var _tw_pwr_tips: Dictionary = {}    # 塔 id -> 战力对比 tooltip 缓存
 var _tw_round_labels: Dictionary = {}  # 打磨-105: 塔 id -> 战斗时长 预估 Label (变化才刷)
+var _tw_def_labels: Dictionary = {}    # 打磨-111: 塔 id -> 战力对比 DEF 行 Label (变化才刷)
 var _tw_key := ""                # 爬塔页 刷新键 (层数/怪物名/胜负/玩家 atk 变化才刷)
 var _tw_card_hi_tween: Tween      # M5-4: 爬塔 卡片 金边高亮 tween (顶栏 通关 徽标 点击直达 1.2s 自动恢复)
 var _tw_status_label: Label      # 爬塔 状态汇总行 (镇妖塔最高/登天梯纪录/剧毒提醒)
@@ -1706,6 +1707,10 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	var pwr_l := _label("", 13, WHITEISH)
 	pwr_l.tooltip_text = ""
 	box.add_child(pwr_l)
+	# 打磨-111: 战力对比 DEF 行 (玩家 DEF vs 怪物 DEF; M5 规格 "玩家 atk/def vs 怪物" DEF 段;
+	# DEF 不 参与 胜负 判定 [判定 仅 有效 ATK], 只 影响 对怪 伤害 与 回合 预估; 文本变化才刷)
+	var def_l := _label("", 12, DIM)
+	box.add_child(def_l)
 	# 打磨-105: 战斗时长 预估 (M5 数值 模型 rounds 仅 展示: ceil(怪 HP/预估伤害), 败 预测 追加 口径 说明)
 	var round_l := _label("", 12, DIM)
 	box.add_child(round_l)
@@ -1719,6 +1724,7 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	}
 	_tw_mon_labels[tid] = mon_l
 	_tw_pwr_labels[tid] = pwr_l
+	_tw_def_labels[tid] = def_l
 	_tw_round_labels[tid] = round_l
 	# 首刷 不 在 此处: 双塔 卡片 构建期 另一塔 尚未 登记 (_tw_cards 缺键),
 	# 统一 由 _build_tower_page 收尾 强制 全量 刷新 (清 刷新键 后 _refresh_tower)
@@ -1779,11 +1785,12 @@ func _refresh_tower() -> void:
 	var p: Dictionary = g.tower_challenge_preview()
 	var fmon: Dictionary = p["fixed_mon"]
 	var emon: Dictionary = p["endless_mon"]
-	var key: String = "%d|%d|%s|%s|%d|%d|%d|%d" % [
+	var key: String = "%d|%d|%s|%s|%d|%d|%d|%d|%d" % [
 		int(p["fixed_floor"]), int(p["endless_floor"]),
 		str(fmon["name"]), str(emon["name"]),
 		1 if bool(p["fixed_win"]) else 0, 1 if bool(p["endless_win"]) else 0,
-		int(g.player_atk_effective() / 0.5), g._auto_tower_wins]  # 打磨-95: 胜局数 入键 (守塔 模式 恒 1000 层 胜局 不 变 层数, 键 须 感知 会话 统计 变化)
+		int(g.player_atk_effective() / 0.5), int(g.player_def() / 0.5),
+		g._auto_tower_wins]  # 打磨-95: 胜局数 入键 (守塔 模式 恒 1000 层 胜局 不 变 层数, 键 须 感知 会话 统计 变化); 打磨-111: 玩家 DEF 0.5 档 入键 (DEF 变化 刷 DEF 行)
 	if key == _tw_key and _tw_key != "":
 		return
 	_tw_key = key
@@ -1835,6 +1842,14 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 		pwr_l.add_theme_color_override("font_color", Color(0.6, 0.95, 0.6) if win else Color(0.98, 0.55, 0.5))
 		pwr_l.tooltip_text = ("判定口径: 玩家 有效 ATK ≥ 怪物 ATK x 0.85 即胜 (即时判定, 无死亡惩罚, 败 停留本层 可 无限重试)。\n"
 			+ ("玩家 当前 处 剧毒 debuff (ATK -15%% x %d 场), 按 减成 后 口径 预测。" % g.poison_battles if g.poison_battles > 0 else "无 debuff, 按 当前 战力 预测。"))
+	# 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段; 仅展示 不 参与 胜负 判定,
+	# DEF 只 影响 对怪 伤害 与 回合 预估 [回合预估 用 最不利 0.9 浮动档 同口径]; 文本 变化 才 刷)
+	var def_l2: Label = _tw_def_labels[tid]
+	var def_txt: String = g.tower_power_def_line(float(mon["def"]))
+	if str(def_l2.text) != def_txt:
+		def_l2.text = def_txt
+		def_l2.tooltip_text = ("战力对比 DEF 行 (M5 规格: 玩家 atk/def vs 怪物)。玩家 DEF = 基础 x 境界 x (1+功法+装备+法器 def 池) x 通关增益 汇总, 不随 剧毒 变化 (剧毒 只 减 有效 ATK)。\n"
+			+ "DEF 不 参与 胜负 判定 (判定 仅 有效 ATK ≥ 怪物 ATK x 0.85), 只 影响 对怪 伤害 与 回合 预估 (回合预估 取 最不利 0.9 浮动档 同口径)。")
 	# 打磨-105: 战斗时长 预估 行 (仅 展示 不 改变 即时 胜负 判定, 文本 变化 才 刷)
 	var round_l2: Label = _tw_round_labels[tid]
 	var round_txt: String = g.tower_rounds_line(float(mon["hp"]), float(mon["def"]), win)

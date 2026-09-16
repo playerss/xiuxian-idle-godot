@@ -2504,6 +2504,16 @@ func tower_power_line(mon_atk: float) -> String:
 		" (剧毒 -15%% x %d 场)" % poison_battles if poison_battles > 0 else "",
 		fmt(mon_atk), ("胜" if ok else "败"), TOWER_WIN_RATIO]
 
+# 打磨-111: 战力对比 DEF 行 文案 (M5 UI 规格 "战力对比 (玩家 atk/def vs 怪物)" DEF 段 落地 —
+# tower_power_line 只有 ATK 段+胜负, 玩家 DEF/怪物 DEF 无 展示位; 只读 接口:
+# 玩家 DEF = player_def() 汇总口径 (不随 剧毒 变化 — 剧毒 只 减 有效 ATK),
+# 怪物 DEF = 传入 值 (与 怪物卡/回合预估 同源); DEF 不 参与 胜负 判定
+# (判定 仅 用 有效 ATK ≥ 怪 ATK x 0.85), 只 影响 对怪 伤害 与 回合 预估
+# (tower_rounds_line 伤害 段 口径 同源); 无 状态/存档/统计 副作用, 爬塔页 战力对比 行下 展示
+func tower_power_def_line(mon_def: float) -> String:
+	return "玩家 DEF %s vs 怪物 DEF %s (DEF 不 参与 胜负 判定, 只 影响 回合 预估)" % [
+		fmt(player_def()), fmt(mon_def)]
+
 # 打磨-105: 战斗时长 预估 行 文案 (M5 战斗 数值 模型: rounds = ceil(mon_hp / dmg) 决定
 # "战斗时长" 仅 展示, 判定 仍 是 即时). 只读 接口: 按 当前 玩家 有效 atk/def 预估
 # 对 怪物 HP 的 回合数 (dmg = max(1, 有效 atk - 怪 def), 取 最 不利 0.9 浮动档
