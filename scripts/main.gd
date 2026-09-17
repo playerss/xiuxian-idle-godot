@@ -1753,7 +1753,8 @@ func _on_tower_challenge(tid: String) -> void:
 		if float(r["daily_bonus"]) > 0.0:
 			extra += " (含每日首胜 +%s)" % g.fmt(float(r["daily_bonus"]))
 		if float(r.get("clear_reward_stone", 0.0)) > 0.0:
-			extra += g.tower_clear_reward_text(float(r["clear_reward_stone"]))
+			# 打磨-114: 文案 追加 顶级(传说) 词缀 段 (实际 入包 件数; 背包满 折算 材料 态 由 接口 展示)
+			extra += g.tower_clear_reward_text(float(r["clear_reward_stone"]), int(r.get("clear_reward_affixes", []).size()))
 		# 打磨-94: 词缀 掉落 展示 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 词缀 段:
 		# 词缀 静默 入包 后 由 本 消息 告知 掉 了 什么; 0 掉落 不追加; 底部消息 口径 与 灵石/每日首胜/通关大奖 并存)
 		var adrops: Array = r.get("affix_drops", [])
@@ -2264,7 +2265,7 @@ func _refresh() -> void:
 		if cl_on:
 			_clear_badge.visible = true
 			_clear_badge.text = g.tower_clear_title()
-			_clear_badge.tooltip_text = ("镇妖塔 已通关 (1000 层 全部 登遍), 获得 称号「镇妖塔·通关者」+ 一次性 灵石 大奖 + 永久 atk/def 增益 (守塔模式: 反复 挑战 1000 层 Boss 拿 刷新 掉落)。\n"
+			_clear_badge.tooltip_text = ("镇妖塔 已通关 (1000 层 全部 登遍), 获得 称号「镇妖塔·通关者」+ 一次性 灵石 大奖 + 顶级(传说) 词缀 x3 + 永久 atk/def 增益 (守塔模式: 反复 挑战 1000 层 Boss 拿 刷新 掉落)。\n"
 				+ "点击: 直达 爬塔页·镇妖塔 卡片")
 		else:
 			_clear_badge.visible = false

@@ -7012,6 +7012,190 @@ func _init() -> void:
 	g.stones = 0.0
 	g.save_game()
 
+	# ---------- 打磨-114: 镇妖塔通关 一次性 大奖 补发 顶级(传说) 词缀 x3 (M5 规格 落地: 神品口径→传说) ----------
+	# 受控 基准: 干净 档态 (无 词缀/背包/装备/技能; 境界 练气 第1层; 未 通关)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.affix_materials = 0
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.poison_battles = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_clear_reward_got = false
+	g.ach_done.clear()  # 打磨-114: 清 派生 态 (bag_40 容量 +10 不 泄漏 本段, 容量 回 基础 30)
+	g.stones = 1e12
+	g.save_game()
+	# 1) 数据 口径: 顶级(传说) = 最高 tier (M6 品质 上限 4 档 普通/优秀/稀有/史诗/传说)
+	var max_tier114 := 0
+	for aid114 in g.affix_ids:
+		max_tier114 = maxi(max_tier114, int(g.affix_by_id[str(aid114)].get("tier", 0)))
+	check(max_tier114 == 4, "打磨-114 词缀 品质 上限 = 传说 tier4 (实际 %d)" % max_tier114)
+	check(g.affix_tier_name(4) == "传说", "打磨-114 品质名 4 = 传说 (实际 %s)" % g.affix_tier_name(4))
+	# 2) tower_clear_affix_ids: 返回 3 件 顶级(传说), 数值 最高 优先 (跨 池 各 池 最高 变体), 确定性 只读
+	var ids114: Array = g.tower_clear_affix_ids()
+	check(ids114.size() == g.TOWER_CLEAR_BONUS_AFFIX_COUNT, "打磨-114 大奖 词缀 件数 = 3 (实际 %d)" % ids114.size())
+	var all_leg114 := true
+	var all_valid114 := true
+	for aid114 in ids114:
+		var a114: Dictionary = g.affix_by_id.get(str(aid114), {})
+		if int(a114.get("tier", 0)) != max_tier114:
+			all_leg114 = false
+		if a114.is_empty():
+			all_valid114 = false
+	check(all_leg114, "打磨-114 大奖 3 件 全 为 顶级(传说) (实际 %s)" % str(ids114))
+	check(all_valid114, "打磨-114 大奖 ids 全 有效 (实际 %s)" % str(ids114))
+	# 唯一 无重复
+	var uniq114: Array = []
+	var dup114 := false
+	for aid114 in ids114:
+		if uniq114.has(str(aid114)):
+			dup114 = true
+		uniq114.append(str(aid114))
+	check(not dup114, "打磨-114 大奖 3 件 互不 重复 (实际 %s)" % str(ids114))
+	# 数值 降序 (最高 价值 优先)
+	var vals114: Array = []
+	var desc114 := true
+	for aid114 in ids114:
+		var v114: float = float(g.affix_by_id[str(aid114)].get("value", 0.0))
+		vals114.append(v114)
+	for i114 in range(1, vals114.size()):
+		if float(vals114[i114]) > float(vals114[i114 - 1]) + 1e-9:
+			desc114 = false
+	check(desc114, "打磨-114 大奖 词缀 数值 降序 (实际 %s)" % str(vals114))
+	# 确定性 只读 连读 恒定
+	check(JSON.stringify(ids114) == JSON.stringify(g.tower_clear_affix_ids()), "打磨-114 大奖 ids 只读 连读 恒定")
+	# 3) 结算 发放: 道祖 首通 1000 层 Boss -> 大奖 3 件 传说 入包
+	g.learned.clear()
+	for id114 in g.skill_ids:
+		var s6: Dictionary = g.skill_by_id[id114]
+		if str(s6.get("type", "")) == "passive" and str(s6.get("effect", "")) in ["atk", "all_mult"]:
+			g.learned.append(id114)
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_fixed_floor = 999
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.stones = 1e12
+	var bag0_114: int = int(g.affix_bag_used())
+	var mat0_114: int = int(g.affix_materials)
+	var seen0_114: Array = g.seen_affixes.duplicate()
+	var r6_114: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(r6_114["win"]) and bool(r6_114["clear"]), "打磨-114 道祖 首通 1000 层 触发 通关 (win=%s clear=%s)" % [str(r6_114["win"]), str(r6_114["clear"])])
+	var got114: Array = r6_114.get("clear_reward_affixes", [])
+	check(got114.size() == g.TOWER_CLEAR_BONUS_AFFIX_COUNT, "打磨-114 通关 发放 3 件 传说 词缀 入包 (实际 %d)" % got114.size())
+	# 3 件 大奖 词缀 各 已 入包 (1000 层 最终 Boss 额外 随机 掉落 词缀, 背包 格数 >= 基准 + 3, 不 精确断言 防 flake)
+	var inbag114 := true
+	for aid114 in ids114:
+		if int(g.affix_bag.get(str(aid114), 0)) < 1:
+			inbag114 = false
+	check(inbag114, "打磨-114 大奖 3 件 全 已 入包 (实际 %s)" % str(g.affix_bag))
+	check(g.affix_bag_used() >= bag0_114 + g.TOWER_CLEAR_BONUS_AFFIX_COUNT, "打磨-114 背包 格数 >= 基准 + 3 (实际 %d)" % g.affix_bag_used())
+	check(g.affix_materials == mat0_114, "打磨-114 入包 全 成功 不 折算 材料 (材料 %d)" % g.affix_materials)
+	check(int(r6_114.get("clear_reward_mat", 0)) == 0, "打磨-114 未 背包满 折算 材料 = 0 (实际 %d)" % int(r6_114.get("clear_reward_mat", 0)))
+	# 入包 的 3 件 全 为 传说 + 与 期望 ids 一致 (确定性)
+	check(JSON.stringify(got114) == JSON.stringify(ids114), "打磨-114 发放 ids = 期望 顶级 ids (实际 %s)" % str(got114))
+	# seen_affixes 收集 只增 (3 件 标记 入包)
+	check(g.seen_affixes.size() >= seen0_114.size() + g.TOWER_CLEAR_BONUS_AFFIX_COUNT, "打磨-114 收集 seen 标记 只增 (实际 %d)" % g.seen_affixes.size())
+	# 4) 守塔 幂等: 再 打 1000 层 不 重复 发放 大奖 词缀 (reward_got 防 重放)
+	var r6b_114: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(r6b_114["win"]), "打磨-114 守塔 再 打 胜")
+	check(int(r6b_114.get("clear_reward_affixes", []).size()) == 0 and int(r6b_114.get("clear_reward_mat", 0)) == 0,
+		"打磨-114 守塔 再胜 不 重复 发放 大奖 词缀 (幂等, 实际 %s/%d)" % [str(r6b_114.get("clear_reward_affixes", [])), int(r6b_114.get("clear_reward_mat", 0))])
+	# 5) 背包满 态: 填满 30 格 后 首通 -> 3 件 高品质 拒绝 入包 全 折算 材料 (5/件 = 15)
+	g.tower_fixed_clear = false
+	g.tower_fixed_floor = 999
+	g.tower_clear_reward_got = false
+	g.ascended = true
+	g.dao_level = 8
+	g.affix_bag = {}
+	var cap114: int = int(g.affix_bag_capacity())
+	var fill_ids114: Array = []
+	for aid114 in g.affix_ids:
+		if fill_ids114.size() >= cap114:
+			break
+		fill_ids114.append(str(aid114))
+	for aid114 in fill_ids114:
+		g.affix_bag[str(aid114)] = 1
+	check(g.affix_bag_full(), "打磨-114 前置: 背包 填满 %d 格 已满 (实际 %d)" % [cap114, g.affix_bag_used()])
+	var mat_full0: int = int(g.affix_materials)
+	var bag_full0: int = int(g.affix_bag_used())
+	var r_full114: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(r_full114["win"]) and bool(r_full114["clear"]), "打磨-114 背包满 首通 触发 通关")
+	check(int(r_full114.get("clear_reward_affixes", []).size()) == 0, "打磨-114 背包满 大奖 词缀 全 拒绝 入包 (实际 %d)" % int(r_full114.get("clear_reward_affixes", []).size()))
+	var exp_mat114 := 0
+	for aid114 in ids114:
+		exp_mat114 += g.affix_decomp_gain(str(aid114))
+	check(int(r_full114.get("clear_reward_mat", 0)) == exp_mat114, "打磨-114 背包满 折算 材料 = 3 件 分解产出 %d (实际 %d)" % [exp_mat114, int(r_full114.get("clear_reward_mat", 0))])
+	check(g.affix_bag_used() == bag_full0, "打磨-114 背包满 不 新增 格数 (实际 %d)" % g.affix_bag_used())
+	check(g.affix_materials == mat_full0 + exp_mat114, "打磨-114 折算 材料 入账 affix_materials + %d (实际 %d)" % [exp_mat114, g.affix_materials])
+	check(g.tower_clear_reward_got, "打磨-114 背包满 态 大奖 已发放 标记 置位")
+	# 6) 文案 接口: 通关 大奖 文案 含 词缀 段 (入包 3 件) / 折算 材料 态 / 0 发放 空串
+	var rw114a: String = g.tower_clear_reward_text(g.TOWER_CLEAR_BONUS_STONE, 3)
+	check(rw114a.find("顶级(传说) 词缀 x3") >= 0, "打磨-114 大奖 文案 含 顶级(传说) 词缀 x3 (实际 %s)" % rw114a)
+	check(rw114a.find("镇妖塔·通关者") >= 0 and rw114a.find("守塔") >= 0, "打磨-114 大奖 文案 含 称号/守塔 (实际 %s)" % rw114a)
+	var rw114b: String = g.tower_clear_reward_text(g.TOWER_CLEAR_BONUS_STONE, 0)
+	check(rw114b.find("折算") >= 0 and rw114b.find("材料") >= 0, "打磨-114 大奖 文案 背包满 折算 材料 段 (实际 %s)" % rw114b)
+	# 旧 调用 单参 不 展示 词缀 段 (默认 -1)
+	var rw114c: String = g.tower_clear_reward_text(g.TOWER_CLEAR_BONUS_STONE)
+	check(rw114c.find("顶级(传说) 词缀") < 0, "打磨-114 单参 旧 调用 不 展示 词缀 段 (实际 %s)" % rw114c)
+	check(g.tower_clear_reward_text(0.0) == "", "打磨-114 大奖 文案 0 发放 = 空串")
+	# 7) 胜利 浮动 文案: 含 大奖词缀 段 (入包 态)
+	var flt114: String = g.tower_win_float_text(r6_114)
+	check(flt114.find("大奖词缀") >= 0, "打磨-114 胜利 浮动 含 大奖词缀 段 (实际 %s)" % flt114)
+	# 折算 材料 态 浮动 文案
+	var flt114b: String = g.tower_win_float_text(r_full114)
+	check(flt114b.find("大奖词缀 折算 材料") >= 0, "打磨-114 浮动 背包满 折算 材料 段 (实际 %s)" % flt114b)
+	# 8) 未 通关 态: 败 局 / 未 通关 不 发放 大奖 词缀
+	g.tower_fixed_clear = false
+	g.tower_fixed_floor = 1
+	g.tower_clear_reward_got = false
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.learned.clear()  # 清 功法 池 回 基准 atk 2.0 (与 M5-2 口径: 基准 败 第 2 层)
+	var r_pre114: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(not bool(r_pre114["win"]), "打磨-114 新档 败 未 通关 (win=%s)" % str(r_pre114["win"]))
+	check(int(r_pre114.get("clear_reward_affixes", []).size()) == 0 and float(r_pre114.get("clear_reward_stone", 0.0)) == 0.0,
+		"打磨-114 未 通关 不 发放 大奖 词缀/灵石 (实际 %s/%s)" % [str(r_pre114.get("clear_reward_affixes", [])), str(r_pre114.get("clear_reward_stone", 0.0))])
+	# 9) 只读 连读 恒定 无 副作用 (tower_clear_affix_ids / 文案 接口)
+	var snap114: Dictionary = g.stats.duplicate(true)
+	var atk114: float = g.player_atk()
+	check(not g.tower_clear_affix_ids().is_empty() and g.player_atk() == atk114 and g.stats == snap114,
+		"打磨-114 大奖 ids/文案 只读 无 状态/统计 副作用")
+	# 收尾: 归零 落盘 (防 污染 后续 段: 词缀/背包/材料/收集/塔 态 全 复位)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.affix_materials = 0
+	g.seen_affixes = []
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.tower_clear_reward_got = false
+	g.stones = 0.0
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

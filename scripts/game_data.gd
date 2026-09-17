@@ -24,9 +24,11 @@ const TOWER_WIN_RATIO := 0.85        # 判定: 玩家 atk >= 怪 atk x 0.85 即�
 const TOWER_POISON_ATK_MULT := 0.85  # 剧毒: 战胜后 玩家 atk -15%, 持续 2 场
 const TOWER_POISON_BATTLES := 2      # 剧毒持续场数
 # M5-4: 镇妖塔 通关 一次性 大奖 (首通 1000 层 Boss: 称号 + 灵石 大奖 + 永久 atk/def 增益,
-# 守塔 模式 保持 长期 收益; 神品词缀 大奖 待 M6 词缀系统 落地 后 替换 口径 — 原计划 神品词缀 x3)
+# 守塔 模式 保持 长期 收益; 打磨-114: M5 规格 "顶级词缀 x3" 落地 — 词缀 品质 上限 = 传说,
+# 发放 = 数值 最高 3 件 传说 词缀 (跨 池 取 各 池 最高价值 变体), 背包满 自动 折算 材料, 不 重复 发放)
 const TOWER_CLEAR_BONUS_STONE := 1000000.0  # 通关 一次性 灵石 大奖
 const TOWER_CLEAR_BUFF := 0.15              # 通关 永久 增益: 玩家 atk/def +15% (乘算 独立 项)
+const TOWER_CLEAR_BONUS_AFFIX_COUNT := 3    # 通关 一次性 大奖 顶级(传说) 词缀 件数 (M5 规格 x3)
 const ENDLESS_ELITE_MULT := 3.0      # 登天梯 精英层 (每 10 层) 数值 x3
 const ENDLESS_BOSS_MULT := 10.0      # 登天梯 里程碑 Boss (每 100 层) 数值 x10
 # 打磨-102: 登天梯 500 层后 全部 普通 怪物 默认 魔化 (M5 规格 "500 层后所有怪物默认魔化"):
@@ -1224,6 +1226,8 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 	var clear := tower_fixed_clear
 	var daily_bonus := 0.0
 	var clear_reward_stone := 0.0
+	var clear_reward_affixes: Array[String] = []  # 打磨-114: 通关 大奖 顶级(传说) 词缀 (实际 入包 的 ids)
+	var clear_reward_mat := 0  # 打磨-114: 背包满 折算 材料 (入包 0 件 时 = 3 件 分解 产出)
 	var daily_date_today := _today_str()
 	# M6-2: 词缀掉落 (胜利 结算; 来源 由 层 结构 决定: 里程碑 Boss=milestone, Boss=boss,
 	# 精英=elite, 普通=normal; rolls 前 7 个 确定性 种子 随机 注入 (roll 已生成 时 复用),
@@ -1295,6 +1299,19 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 						tower_clear_reward_got = true
 						clear_reward_stone = TOWER_CLEAR_BONUS_STONE
 						stones += clear_reward_stone
+						# 打磨-114: 通关 大奖 追加 顶级(传说) 词缀 x3 (M5 规格 落地): 数值 最高 3 件 传说
+						# 逐件 affix_add 真实 入账 (背包满 时 高品质 拒绝 返回 0), 未入包 件 折算 材料
+						# (分解 产出口径 1+品质档=5/件, 计 分解 埋点) — 不 重复 发放 (reward_got 防 重放)
+						var mat_gain_total := 0
+						for aid114 in tower_clear_affix_ids():
+							if affix_add(str(aid114), 1) > 0:
+								clear_reward_affixes.append(str(aid114))
+							else:
+								mat_gain_total += affix_decomp_gain(str(aid114))
+						if mat_gain_total > 0:
+							clear_reward_mat = mat_gain_total
+							affix_materials += mat_gain_total
+							_stat_inc("affix_decompose", float(mat_gain_total))
 		elif tower == "endless":
 			# 口径: tower_endless_best = 历史 最高 已 通关 层; tower_endless_floor = 当前 待挑战 层 (最高+1)
 			# 本胜 通关 next_floor 层 -> 最高纪录 更新 为 next_floor, 待挑战 推进 到 next_floor+1
@@ -1325,6 +1342,8 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		# 未命中 = 0/false; UI 消息 与 自测 断言 同源)
 		"reward_mat": reward_mat, "lucky_hit": lucky_hit, "indomit_hit": indomit_hit,
 		"clear_reward_stone": clear_reward_stone,
+		# 打磨-114: 通关 大奖 词缀 段 (实际 入包 ids / 背包满 折算 材料 数; 未 通关 = 空/0)
+		"clear_reward_affixes": clear_reward_affixes, "clear_reward_mat": clear_reward_mat,
 		"daily_bonus": daily_bonus, "clear": clear, "poison": bool(mon["poison"]),
 		"poison_battles": poison_battles, "affix_drops": affix_drops,
 		"reason": ("胜" if win else "败: 战力 不足, 停留 本层 (无 惩罚, 可 重试)"),
@@ -1370,6 +1389,13 @@ func _try_auto_tower() -> void:
 		extra += " · 每日首胜 +%s" % fmt(daily_t)
 	if float(wf.get("clear_reward_stone", 0.0)) + float(we.get("clear_reward_stone", 0.0)) > 0.0:
 		extra += " · 通关大奖"
+		# 打磨-114: 通关 大奖 词缀 明细 (实际 入包 件数 / 背包满 折算 材料; 与 手动 挑战 底部消息 同源)
+		var ca_n := int(wf.get("clear_reward_affixes", []).size()) + int(we.get("clear_reward_affixes", []).size())
+		var ca_m := int(wf.get("clear_reward_mat", 0)) + int(we.get("clear_reward_mat", 0))
+		if ca_m > 0:
+			extra += " (大奖词缀 折算 材料 %d)" % ca_m
+		elif ca_n > 0:
+			extra += " (大奖词缀 x%d)" % ca_n
 	_auto_tower_last_txt = "自动爬塔 胜利 %d 场 (%s) %s" % [
 		n_win, " + ".join(parts), extra]
 	_auto_tower_seq += 1
@@ -2619,13 +2645,62 @@ func affix_drop_text(ids: Array) -> String:
 		parts.append("「%s」" % (str(a.get("name", str(aid))) if not a.is_empty() else str(aid)))
 	return "、".join(parts)
 
-# M5-4: 镇妖塔 通关 一次性 大奖 文案 (首通 1000 层 Boss 触发; 灵石 大奖 100 万 + 永久 atk/def +15%;
-# 称号 与 成就 tower_clear 由 check_achievements 判定, 此处 只 给 灵石 大奖 文案; 0 发放=空串)
-func tower_clear_reward_text(stone: float) -> String:
+# 打磨-114: 通关 大奖 顶级(传说) 词缀 ids (M5 规格 "一次性 大奖 (顶级词缀 x3)" 落地; 原 神品 口径
+# M6 品质 上限 = 传说, 取 数据 最高 tier = 传说). 口径: 每 池 取 最高价值 变体 (affix_best_variant_id
+# 数据 驱动 确定性), 池 间 按 价值 降序 (同值 按 池 数据序), 取 前 3; 池 不足 3 时 全 传说 按 价值 降序 补足.
+# 只读 不 改 状态/存档/统计
+func tower_clear_affix_ids() -> Array[String]:
+	var max_tier := 0
+	for aid in affix_ids:
+		max_tier = maxi(max_tier, int(affix_by_id[str(aid)].get("tier", 0)))
+	var pool_order: Dictionary = {}
+	var order_i := 0
+	for aid in affix_ids:
+		var p: String = str(affix_by_id[str(aid)].get("pool", ""))
+		if p != "" and not pool_order.has(p):
+			pool_order[p] = order_i
+			order_i += 1
+	var entries: Array = []
+	for p in pool_order:
+		var b: String = affix_best_variant_id(str(p), max_tier)
+		if b == "":
+			continue
+		entries.append([float(affix_by_id[b].get("value", 0.0)), int(pool_order[p]), str(b)])
+	entries.sort_custom(func(x: Array, y: Array):
+		if float(x[0]) != float(y[0]):
+			return float(x[0]) > float(y[0])
+		return int(x[1]) < int(y[1]))
+	var out: Array[String] = []
+	for e in entries:
+		out.append(str(e[2]))
+		if out.size() >= TOWER_CLEAR_BONUS_AFFIX_COUNT:
+			break
+	if out.size() < TOWER_CLEAR_BONUS_AFFIX_COUNT:
+		for aid in affix_ids:
+			if int(affix_by_id[str(aid)].get("tier", 0)) != max_tier or out.has(str(aid)):
+				continue
+			out.append(str(aid))
+			if out.size() >= TOWER_CLEAR_BONUS_AFFIX_COUNT:
+				break
+	return out
+
+# M5-4: 镇妖塔 通关 一次性 大奖 文案 (首通 1000 层 Boss 触发; 灵石 大奖 100 万 + 永久 atk/def +15% +
+# 顶级(传说) 词缀 x3 [打磨-114]; 称号 与 成就 tower_clear 由 check_achievements 判定, 此处 只 给 大奖 文案;
+# 0 发放=空串; affix_n = 实际 入包 件数 [0 = 背包满 全 折算 材料, <0 = 旧 调用 不 展示 词缀 段])
+func tower_clear_reward_text(stone: float, affix_n: int = -1) -> String:
 	if stone <= 0.0:
 		return ""
-	return " 通关大奖: 称号「镇妖塔·通关者」+ 灵石 %s + 永久 atk/def +%.0f%% (守塔模式)" % [
+	var s := " 通关大奖: 称号「镇妖塔·通关者」+ 灵石 %s + 永久 atk/def +%.0f%% (守塔模式)" % [
 		fmt(stone), TOWER_CLEAR_BUFF * 100.0]
+	if affix_n >= 0:
+		if affix_n > 0:
+			s += " + 顶级(传说) 词缀 x%d" % affix_n
+		else:
+			var mat_n := 0
+			for aid in tower_clear_affix_ids():
+				mat_n += affix_decomp_gain(str(aid))
+			s += " (大奖 词缀 背包满, 折算 %d 材料)" % mat_n
+	return s
 
 # M5-4: 镇妖塔 通关 称号 (顶栏/爬塔页 展示; 未通关 空串; 只读 无 状态/存档/统计 副作用)
 func tower_clear_title() -> String:
@@ -2652,6 +2727,14 @@ func tower_win_float_text(r: Dictionary) -> String:
 		s += " 不屈 全奖励x1.2"
 	if float(r.get("daily_bonus", 0.0)) > 0.0:
 		s += " 每日首胜 +%s" % fmt(float(r["daily_bonus"]))
+	# 打磨-114: 通关 大奖 词缀 段 (手动 挑战 胜利 首通 时 追加, 与 底部 消息 通关大奖 段 同源; 折算 材料 态 也 展示)
+	var clr114: Array = r.get("clear_reward_affixes", [])
+	var clrm114: int = int(r.get("clear_reward_mat", 0))
+	if float(r.get("clear_reward_stone", 0.0)) > 0.0 and (clr114.size() > 0 or clrm114 > 0):
+		if clrm114 > 0:
+			s += " 大奖词缀 折算 材料 +%d" % clrm114
+		elif clr114.size() > 0:
+			s += " 大奖词缀 +%d" % clr114.size()
 	var adrops: Array = r.get("affix_drops", [])
 	if adrops.size() > 0:
 		s += " 词缀 x%d" % adrops.size()

@@ -4632,6 +4632,22 @@ func _assert_tower_clear() -> void:
 	check(rw_txt.find("镇妖塔·通关者") >= 0 and rw_txt.find("永久 atk/def") >= 0 and rw_txt.find("守塔") >= 0,
 			"M5-4 通关 大奖 文案 含 称号/永久atk/def/守塔 (实际 %s)" % rw_txt)
 	check(g.tower_clear_reward_text(0.0) == "", "M5-4 通关 大奖 文案 0 发放 = 空串")
+	# 打磨-114: 通关 大奖 顶级(传说) 词缀 x3 — 数据 口径/发放 入包/文案 段/守塔 幂等/背包满 折算 材料
+	var ids114: Array = g.tower_clear_affix_ids()
+	check(ids114.size() == g.TOWER_CLEAR_BONUS_AFFIX_COUNT, "打磨-114 大奖 词缀 ids = 3 件 (实际 %d)" % ids114.size())
+	var leg114 := true
+	for aid114 in ids114:
+		if int(g.affix_by_id.get(str(aid114), {}).get("tier", 0)) != 4:
+			leg114 = false
+	check(leg114, "打磨-114 大奖 3 件 全 为 传说 (实际 %s)" % str(ids114))
+	check(int(rc.get("clear_reward_affixes", []).size()) == g.TOWER_CLEAR_BONUS_AFFIX_COUNT,
+			"打磨-114 通关 发放 3 件 传说 词缀 入包 (实际 %s)" % str(rc.get("clear_reward_affixes", [])))
+	check(JSON.stringify(rc.get("clear_reward_affixes", [])) == JSON.stringify(ids114),
+			"打磨-114 发放 ids = 期望 顶级 ids (实际 %s)" % str(rc.get("clear_reward_affixes", [])))
+	check(int(rc.get("clear_reward_mat", 0)) == 0, "打磨-114 未 背包满 折算 材料 = 0 (实际 %d)" % int(rc.get("clear_reward_mat", 0)))
+	var rw114: String = g.tower_clear_reward_text(g.TOWER_CLEAR_BONUS_STONE, 3)
+	check(rw114.find("顶级(传说) 词缀 x3") >= 0, "打磨-114 大奖 文案 含 顶级(传说) 词缀 x3 (实际 %s)" % rw114)
+	check(g.tower_win_float_text(rc).find("大奖词缀") >= 0, "打磨-114 胜利 浮动 含 大奖词缀 段 (实际 %s)" % g.tower_win_float_text(rc).right(60))
 	# 通关 后 状态行 含 称号
 	check(g.tower_status_line().find("镇妖塔·通关者") >= 0, "M5-4 状态行 含 通关 称号 (实际 %s)" % g.tower_status_line())
 	# 守塔 模式: 通关 后 反复 打 1000 层, 再胜 不 重复 发放 大奖 (reward_got 幂等)
@@ -4639,6 +4655,9 @@ func _assert_tower_clear() -> void:
 	var rc2: Dictionary = g.try_tower_challenge("fixed", 0.5)
 	check(bool(rc2["win"]) and int(rc2["floor"]) == 1000, "M5-4 守塔 反复 打 恒 1000 层 (实际 %d)" % int(rc2["floor"]))
 	check(float(rc2["clear_reward_stone"]) == 0.0, "M5-4 守塔 再胜 不 重复 发放 大奖 (幂等, 实际 %s)" % str(rc2["clear_reward_stone"]))
+	# 打磨-114: 守塔 再胜 不 重复 发放 大奖 词缀 (幂等, 与 灵石 大奖 同 reward_got 口径)
+	check(int(rc2.get("clear_reward_affixes", []).size()) == 0 and int(rc2.get("clear_reward_mat", 0)) == 0,
+			"打磨-114 守塔 再胜 不 重复 发放 大奖 词缀 (幂等, 实际 %s)" % str(rc2.get("clear_reward_affixes", [])))
 	check(absf(g.stones - (stones_before2 + float(rc2["reward_stone"]))) < 1e-6,
 			"M5-4 守塔 再胜 仅 本层 奖励 无 大奖 (实际 %s)" % g.fmt(g.stones))
 	# 通关 永久 增益: atk/def +15% (乘算 独立 项, 通关 恒 生效)
@@ -4682,6 +4701,11 @@ func _assert_tower_clear() -> void:
 	g.owned.clear()
 	g.owned_eq.clear()
 	g.equipped.clear()
+	# 打磨-114: 收尾 清 词缀 残留 (本段 首通 入包 3 件 传说 大奖, 防 泄漏 后续 段 收集/背包 断言)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.affix_materials = 0
+	g.seen_affixes = []
 	g.set_process(true)
 	ui._tab.current_tab = 3
 	ui._refresh()
