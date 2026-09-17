@@ -151,7 +151,8 @@ var _tw_cards: Dictionary = {}    # 双塔入口卡片 id -> {panel, prog_label,
 var _tw_mon_labels: Dictionary = {}  # 塔 id -> 怪物名 Label (刷新键 变化才刷)
 var _tw_mon_tips: Dictionary = {}    # 塔 id -> 怪物卡 tooltip 缓存
 var _tw_pwr_labels: Dictionary = {}  # 塔 id -> 战力对比 Label (变化才刷, 着色 胜绿/败红)
-var _tw_pwr_tips: Dictionary = {}    # 塔 id -> 战力对比 tooltip 缓存
+var _tw_pwr_tips: Dictionary = {}    # 打磨-113: 塔 id -> 战力对比 判定口径 段 缓存 (剧毒 态 变化才刷)
+var _tw_pwr_compose_tips: Dictionary = {}  # 打磨-113: 塔 id -> 战力构成 tooltip 段 缓存 (构成 变化才刷)
 var _tw_round_labels: Dictionary = {}  # 打磨-105: 塔 id -> 战斗时长 预估 Label (变化才刷)
 var _tw_def_labels: Dictionary = {}    # 打磨-111: 塔 id -> 战力对比 DEF 行 Label (变化才刷)
 var _tw_key := ""                # 爬塔页 刷新键 (层数/怪物名/胜负/玩家 atk 变化才刷)
@@ -1843,8 +1844,19 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 		pwr_l.set_meta("_win", win)
 		pwr_l.text = pwr_txt
 		pwr_l.add_theme_color_override("font_color", Color(0.6, 0.95, 0.6) if win else Color(0.98, 0.55, 0.5))
-		pwr_l.tooltip_text = ("判定口径: 玩家 有效 ATK ≥ 怪物 ATK x 0.85 即胜 (即时判定, 无死亡惩罚, 败 停留本层 可 无限重试)。\n"
-			+ ("玩家 当前 处 剧毒 debuff (ATK -15%% x %d 场), 按 减成 后 口径 预测。" % g.poison_battles if g.poison_battles > 0 else "无 debuff, 按 当前 战力 预测。"))
+	# 打磨-113: 判定口径 段 静态 前缀 (剧毒 态 切换 才 变; 独立 于 文本变化 检查 —
+	# 剧毒 -15% 经 fmt 截断 时 文本 不变 但 口径 段 须 刷; 构成 段 独立 缓存)
+	var tip_static: String = ("判定口径: 玩家 有效 ATK ≥ 怪物 ATK x 0.85 即胜 (即时判定, 无死亡惩罚, 败 停留本层 可 无限重试)。\n"
+		+ ("玩家 当前 处 剧毒 debuff (ATK -15%% x %d 场), 按 减成 后 口径 预测。" % g.poison_battles if g.poison_battles > 0 else "无 debuff, 按 当前 战力 预测。"))
+	if _tw_pwr_tips.get(tid, "") != tip_static:
+		_tw_pwr_tips[tid] = tip_static
+		pwr_l.tooltip_text = tip_static + "\n\n" + _tw_pwr_compose_tips.get(tid, "")
+	# 打磨-113: 战力构成 tooltip 段 (M5 规格 "境界 x 功法 x 装备 x 塔专属 加成" 构成 展示 位;
+	# 构成 文本 变化 才 重写 tooltip, 挂机 恒定 无 每帧 重建)
+	var compose_txt: String = g.tower_power_compose_tip()
+	if _tw_pwr_compose_tips.get(tid, "") != compose_txt:
+		_tw_pwr_compose_tips[tid] = compose_txt
+		pwr_l.tooltip_text = _tw_pwr_tips.get(tid, "") + "\n\n" + compose_txt
 	# 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段; 仅展示 不 参与 胜负 判定,
 	# DEF 只 影响 对怪 伤害 与 回合 预估 [回合预估 用 最不利 0.9 浮动档 同口径]; 文本 变化 才 刷)
 	var def_l2: Label = _tw_def_labels[tid]

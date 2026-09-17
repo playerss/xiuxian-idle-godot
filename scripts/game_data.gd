@@ -2543,6 +2543,35 @@ func tower_power_def_line(mon_def: float) -> String:
 	return "玩家 DEF %s vs 怪物 DEF %s (DEF 不 参与 胜负 判定, 只 影响 回合 预估)" % [
 		fmt(player_def()), fmt(mon_def)]
 
+# 打磨-113: 爬塔 战力构成 tooltip (M5 规格 "玩家 战力 = 境界 x 功法 x 装备 x 塔专属 加成"
+# 的 构成 展示 位 — 原 战力对比 行 只 给 汇总值, 玩家 不知 战力 怎么 叠 起来; 悬停 战力对比 行
+# 展开 五段 构成: 境界 基础 x 功法 atk/def 池 x 装备 atk/def 池 [含 已装 词缀] x 法器 atk/def
+# 池 x 塔 专属 [镇妖塔 通关 永久 增益 + 套装 共鸣 逐档]; 各 段 数值 与 player_atk/player_def
+# 汇总 公式 同源 (同 一 批 只读 接口), 剧毒 -15% 只 减 有效 ATK 不 入 基础 构成;
+# 只读 无 状态/存档/统计 副作用)
+func tower_power_compose_tip() -> String:
+	var prog: int = tower_power_progress()
+	var base_v: float = TOWER_BASE_ATK * pow(TOWER_POWER_GROWTH, float(prog))
+	var prog_txt: String = "境界 进度 %d (%s)" % [prog, realm_display()]
+	var lines: Array[String] = []
+	lines.append("玩家 战力 构成: 境界 基础 x 功法 x 装备 [含词缀] x 法器 x 塔 专属 增益")
+	lines.append("· 境界 基础: ATK %s · DEF %s (%s)" % [
+		fmt(base_v), fmt(base_v), prog_txt])
+	lines.append("· 功法 atk/def 池: ATK +%.1f%% · DEF +%.1f%%" % [
+		skill_atk_bonus() * 100.0, skill_def_bonus() * 100.0])
+	lines.append("· 装备 atk/def 池: ATK +%.1f%% · DEF +%.1f%% (已装 词缀 计入 装备池, 同 槽位 乘算 独立项)" % [
+		equip_bonus("atk") * 100.0, equip_bonus("def") * 100.0])
+	lines.append("· 法器 atk/def 池: ATK +%.1f%% · DEF +%.1f%%" % [
+		item_attack() * 100.0, item_defense() * 100.0])
+	lines.append("· 塔 专属: 通关 增益 x%.2f (%s)" % [
+		clear_buff_mult(), "未通关 = x1.00" if not tower_fixed_clear else "镇妖塔 通关 永久 atk/def +%.0f%%" % (TOWER_CLEAR_BUFF * 100.0)])
+	lines.append("· 套装 共鸣: %s (atk/def 乘算 独立项)" % resonance_text())
+	lines.append("· 汇总: 有效 ATK %s%s · DEF %s (剧毒 只 减 有效 ATK, 不 入 基础 构成)" % [
+		fmt(player_atk()),
+		" (剧毒 x%.2f x %d 场)" % [TOWER_POISON_ATK_MULT, poison_battles] if poison_battles > 0 else "",
+		fmt(player_def())])
+	return "\n".join(lines)
+
 # 打磨-105: 战斗时长 预估 行 文案 (M5 战斗 数值 模型: rounds = ceil(mon_hp / dmg) 决定
 # "战斗时长" 仅 展示, 判定 仍 是 即时). 只读 接口: 按 当前 玩家 有效 atk/def 预估
 # 对 怪物 HP 的 回合数 (dmg = max(1, 有效 atk - 怪 def), 取 最 不利 0.9 浮动档

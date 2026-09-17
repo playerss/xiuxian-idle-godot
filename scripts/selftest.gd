@@ -6893,6 +6893,125 @@ func _init() -> void:
 	g.set_process(true)
 	g.save_game()
 
+	# ---------- 打磨-113: 爬塔 战力构成 tooltip (M5 规格 "境界 x 功法 x 装备 x 塔专属 加成" 构成 展示 位) ----------
+	# 受控 基准: 干净 档态 (无 技能/装备/法器/词缀/剧毒/通关, 境界 练气 第1层 进度 0 -> 基础 2.0)
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.owned.clear()
+	g.equipped.clear()
+	g.affix_load = {}
+	g.affix_bag = {}
+	g.slot_upgrades = {}
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.poison_battles = 0
+	g.tower_fixed_clear = false
+	g.stones = 1e12
+	g.save_game()
+	# 1) 基准 文案: 五段 构成 齐全 + 数值 与 汇总 公式 同源 恒等
+	var tip113: String = g.tower_power_compose_tip()
+	check(tip113.find("玩家 战力 构成") == 0, "打磨-113 构成 首行 前缀 (实际 %s)" % tip113.left(30))
+	check(tip113.find("境界 基础: ATK %s" % g.fmt(2.0)) >= 0, "打磨-113 境界 基础 段 = 2.0 x 40^0 (实际 %s)" % tip113)
+	check(tip113.find("境界 进度 0") >= 0, "打磨-113 境界 进度 段 (实际 %s)" % tip113)
+	check(tip113.find("功法 atk/def 池: ATK +0.0% · DEF +0.0%") >= 0, "打磨-113 功法 池 基准 0 (实际 %s)" % tip113)
+	check(tip113.find("装备 atk/def 池: ATK +0.0% · DEF +0.0%") >= 0, "打磨-113 装备 池 基准 0 (实际 %s)" % tip113)
+	check(tip113.find("法器 atk/def 池: ATK +0.0% · DEF +0.0%") >= 0, "打磨-113 法器 池 基准 0 (实际 %s)" % tip113)
+	check(tip113.find("塔 专属: 通关 增益 x1.00 (未通关 = x1.00)") >= 0, "打磨-113 通关 未 态 文案 (实际 %s)" % tip113)
+	check(tip113.find("未 触发") >= 0, "打磨-113 共鸣 未 触发 说明 (实际 %s)" % tip113)
+	check(tip113.find("汇总: 有效 ATK %s · DEF %s" % [g.fmt(g.player_atk()), g.fmt(g.player_def())]) >= 0,
+			"打磨-113 汇总 段 = player_atk/player_def 恒等 (实际 %s)" % tip113)
+	check(tip113.find("(剧毒 x0.85") < 0, "打磨-113 无 剧毒 不 追加 剧毒 段 (实际 %s)" % tip113.right(60))
+	# 2) 功法 池 变化: 学 木剑法 (sword_0_0 atk 0.06/def 0.02) 后 功法 段 动态 同步 + 汇总 恒等
+	var res113: String = g.learn_skill("sword_0_0")
+	check(g.learned.has("sword_0_0"), "打磨-113 前置: 木剑法 学习 成功 (实际 %s)" % res113)
+	var tip113b: String = g.tower_power_compose_tip()
+	check(tip113b.find("功法 atk/def 池: ATK +6.0% · DEF +2.0%") >= 0, "打磨-113 功法 段 动态 同步 (实际 %s)" % tip113b)
+	check(tip113b.find("汇总: 有效 ATK %s · DEF %s" % [g.fmt(g.player_atk()), g.fmt(g.player_def())]) >= 0,
+			"打磨-113 学 功法 后 汇总 恒等 (实际 %s)" % tip113b)
+	check(tip113b != tip113, "打磨-113 构成 文案 随 功法 变化")
+	# 3) 装备 池 变化 (含 已装 词缀): 穿 木剑 (weapon_0_0 atk 0.05/def 0.01) + 装 破虚 (af_atk_0_0 0.08)
+	g.buy_equipment("weapon_0_0")
+	check(str(g.equipped.get("weapon", "")) == "weapon_0_0", "打磨-113 前置: 木剑 自动 穿戴")
+	g.affix_add("af_atk_0_0", 1)
+	check(g.affix_equip("weapon_0_0", 0, "af_atk_0_0") == "", "打磨-113 前置: 破虚 装配 成功")
+	var tip113c: String = g.tower_power_compose_tip()
+	check(absf(g.equip_bonus("atk") - (0.05 + 0.08)) < 1e-9, "打磨-113 装备 atk 池 含 词缀 0.13 (实际 %s)" % g.equip_bonus("atk"))
+	check(tip113c.find("装备 atk/def 池: ATK +13.0% · DEF +1.0%") >= 0, "打磨-113 装备 段 含 词缀 动态 同步 (实际 %s)" % tip113c)
+	# 4) 法器 池 变化: 买 木剑 法器 (wooden_sword atk 0.01/def 0.01)
+	g.stones = 1e9
+	g.try_buy_item("wooden_sword")
+	var tip113d: String = g.tower_power_compose_tip()
+	check(tip113d.find("法器 atk/def 池: ATK +1.0% · DEF +1.0%") >= 0, "打磨-113 法器 段 动态 同步 (实际 %s)" % tip113d)
+	# 5) 套装 共鸣 触发: robe/amulet 穿 木玉佩 档 (robe_0_0 法袍·凡/amulet_0_0 玉佩·凡, 同 品质 0) + 3 件 atk 词缀 同 品质
+	# (破虚 已 装 木剑 槽0 普通 档; 再 装 robe_0_0 槽0 磐石 af_def_0_0 普通 档 + amulet_0_0 槽0 破虚 af_atk_0_0 普通 档)
+	# 同 品质 0 装配 3 件 -> 共鸣 x1.06 生效
+	g.buy_equipment("robe_0_0")
+	g.buy_equipment("amulet_0_0")
+	g.affix_add("af_def_0_0", 1)
+	check(g.affix_equip("robe_0_0", 0, "af_def_0_0") == "", "打磨-113 前置: 法袍 磐石 装配")
+	g.affix_add("af_atk_0_0", 1)
+	check(g.affix_equip("amulet_0_0", 0, "af_atk_0_0") == "", "打磨-113 前置: 玉佩 破虚 装配")
+	check(absf(g.resonance_mult() - 1.06) < 1e-9, "打磨-113 前置: 共鸣 x1.06 触发 (实际 %s)" % g.resonance_mult())
+	var tip113e: String = g.tower_power_compose_tip()
+	check(tip113e.find("套装 共鸣: %s" % g.resonance_text()) >= 0, "打磨-113 共鸣 段 = resonance_text 恒等 (实际 %s)" % tip113e)
+	check(tip113e.find("未 触发") < 0, "打磨-113 共鸣 触发 后 非 未 触发 文案")
+	# 6) 剧毒: 有效 ATK 减成 汇总 段 追加 剧毒 标注, 基础 构成 段 不 变 (动态 恒等: 去 剧毒 后缀 = 剧前 快照)
+	var tip113f_pre: String = g.tower_power_compose_tip()
+	g.poison_battles = g.TOWER_POISON_BATTLES
+	var tip113f: String = g.tower_power_compose_tip()
+	check(tip113f.find("(剧毒 x0.85 x 2 场)") >= 0, "打磨-113 汇总 段 剧毒 标注 (实际 %s)" % tip113f)
+	check(tip113f.replace(" (剧毒 x0.85 x 2 场)", "") == tip113f_pre, "打磨-113 剧毒 不 改 基础 构成 段 (实际 %s)" % tip113f)
+	check(absf(g.player_atk_effective() - g.player_atk() * g.TOWER_POISON_ATK_MULT) < 1e-6,
+			"打磨-113 有效 ATK = 基础 x 剧毒 恒等")
+	g.poison_battles = 0
+	# 7) 通关 态: 通关 增益 x1.15 段 切换 + 汇总 恒等
+	g.tower_fixed_clear = true
+	var tip113g: String = g.tower_power_compose_tip()
+	check(tip113g.find("塔 专属: 通关 增益 x1.15 (镇妖塔 通关 永久 atk/def +15%)") >= 0,
+			"打磨-113 通关 态 文案 (实际 %s)" % tip113g)
+	check(absf(g.clear_buff_mult() - 1.15) < 1e-9, "打磨-113 通关 增益 x1.15 (实际 %s)" % g.clear_buff_mult())
+	check(tip113g.find("汇总: 有效 ATK %s · DEF %s" % [g.fmt(g.player_atk()), g.fmt(g.player_def())]) >= 0,
+			"打磨-113 通关 后 汇总 恒等 (实际 %s)" % tip113g)
+	g.tower_fixed_clear = false
+	# 8) 境界 提升: 基础 段 40^1 = 80 档 + 汇总 指数 成长 恒等
+	g.realm_idx = 1
+	var tip113h: String = g.tower_power_compose_tip()
+	check(tip113h.find("境界 基础: ATK %s" % g.fmt(80.0)) >= 0 and tip113h.find("境界 进度 1") >= 0,
+			"打磨-113 境界 提升 基础 段 80 档 (实际 %s)" % tip113h)
+	check(tip113h.find("汇总: 有效 ATK %s · DEF %s" % [g.fmt(g.player_atk()), g.fmt(g.player_def())]) >= 0,
+			"打磨-113 境界 提升 后 汇总 恒等 (实际 %s)" % tip113h)
+	# 9) 飞升 道祖: 进度 17 口径 + 境界 显示 段 同步
+	g.realm_idx = 0
+	g.ascended = true
+	g.dao_level = 8
+	var tip113i: String = g.tower_power_compose_tip()
+	check(tip113i.find("境界 进度 17 (真仙·道祖 (已飞升))") >= 0, "打磨-113 飞升 道祖 进度 17 口径 (实际 %s)" % tip113i)
+	check(tip113i.find("汇总: 有效 ATK %s · DEF %s" % [g.fmt(g.player_atk()), g.fmt(g.player_def())]) >= 0,
+			"打磨-113 飞升 道祖 汇总 恒等 (实际 %s)" % tip113i)
+	g.ascended = false
+	g.dao_level = 0
+	# 10) 只读 连读 恒定 无 副作用 (tooltip 接口 不 改 任何 状态/统计)
+	var snap113: Dictionary = g.stats.duplicate(true)
+	var atk113: float = g.player_atk()
+	var tip113j: String = g.tower_power_compose_tip()
+	check(g.tower_power_compose_tip() == tip113j and g.stats == snap113 and g.player_atk() == atk113,
+			"打磨-113 只读 连读 恒定 无 状态/统计 副作用")
+	# 收尾: 归零 落盘 (防 污染 后续 段: 装备/词缀/法器/剧毒/境界 全 复位)
+	g.affix_unequip("weapon_0_0", 0)
+	g.affix_unequip("robe_0_0", 0)
+	g.affix_unequip("amulet_0_0", 0)
+	g.affix_decompose_all()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.learned.clear()
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 0.0
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

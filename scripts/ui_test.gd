@@ -194,6 +194,7 @@ func _ready() -> void:
 	await _assert_m101_exchange_all()  # 打磨-101: 一键 兑换 按钮 (材料 连兑 买不起 的 最高 变体 词缀)
 	await _assert_stats_affix()  # 打磨-110: 修行统计 词缀 段 (stats_text 4 段 展示/tooltip 口径/埋点 联动/节流/收尾)
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
+	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
 	_finish()
 
 
@@ -6064,3 +6065,88 @@ func _assert_swap_delta() -> void:
 	await get_tree().process_frame
 	check(ui._equip_swap.size() == g.equip_ids.size() and str(ui._equip_swap["weapon_5_0"].text) == g.equip_swap_hint("weapon_5_0")["text"],
 			"打磨-112 收尾 干净 基准 (标签 随 穿戴 清空 回 空 态)")
+
+
+# 打磨-113: 爬塔 战力构成 tooltip (M5 规格 "玩家 战力 = 境界 x 功法 x 装备 x 塔专属 加成"
+# 构成 展示 位 缺口 落地 — 战力对比 行 悬停 展开 五段 构成: 境界 基础 x 功法 x 装备[含词缀]
+# x 法器 x 塔 专属 [通关 增益+套装 共鸣]; 构成 段 独立 缓存 变化 才 刷, 判定口径 段 静态).
+# UI 断言: 双塔 标签 节点 齐全/tooltip = 判定口径 段 + 构成 段 拼接 恒等 (构成 = 接口
+# tower_power_compose_tip 同 口径)/剧毒 态 判定口径 段 切换 (构成 段 剧毒 不 入 基础 口径 不 变)/
+# 同态 节流 无 副作用 (收尾 干净 基准 防 污染)
+func _assert_tower_power_compose() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 + 无 剧毒 + 境界 练气 进度 0 (M5-4 通关 段 可能 残留 tower_fixed_clear)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_load = {}
+	g.affix_bag = {}
+	g.affix_decompose_all()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 双塔 战力对比 标签 存在 + tooltip = 判定口径 段 + 构成 段 拼接 恒等
+	check(ui._tw_pwr_labels.has("fixed") and ui._tw_pwr_labels.has("endless"),
+			"打磨-113 双塔 战力对比 标签 齐全")
+	var tip113: String = g.tower_power_compose_tip()
+	var exp113: String = ("判定口径: 玩家 有效 ATK ≥ 怪物 ATK x 0.85 即胜 (即时判定, 无死亡惩罚, 败 停留本层 可 无限重试)。\n"
+		+ "无 debuff, 按 当前 战力 预测。\n\n" + tip113)
+	check(str(ui._tw_pwr_labels["fixed"].tooltip_text) == exp113,
+			"打磨-113 镇妖塔 战力对比 tooltip = 判定口径 段 + 构成 段 恒等 (实际 %s)" % str(ui._tw_pwr_labels["fixed"].tooltip_text).left(60))
+	check(str(ui._tw_pwr_labels["endless"].tooltip_text) == exp113,
+			"打磨-113 登天梯 战力对比 tooltip 同 口径 恒等")
+	# 构成 段 关键 行 (基准 境界 进度 0 / 基础 2.0)
+	check(tip113.find("境界 基础: ATK %s" % g.fmt(g.TOWER_BASE_ATK)) >= 0,
+			"打磨-113 构成 段 境界 基础 = 2.0 (实际 %s)" % tip113)
+	check(tip113.find("未 触发") >= 0 and tip113.find("未通关 = x1.00") >= 0,
+			"打磨-113 构成 段 共鸣 未 触发 + 通关 未 态 基准")
+	# 2) 剧毒 态: 判定口径 段 切 减成 口径 (文本 因 fmt 截断 不 变 也 须 刷 口径 段)
+	g.poison_battles = g.TOWER_POISON_BATTLES
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var tip113b: String = g.tower_power_compose_tip()
+	var exp113b: String = ("判定口径: 玩家 有效 ATK ≥ 怪物 ATK x 0.85 即胜 (即时判定, 无死亡惩罚, 败 停留本层 可 无限重试)。\n"
+		+ "玩家 当前 处 剧毒 debuff (ATK -15%% x %d 场), 按 减成 后 口径 预测。\n\n" % g.poison_battles
+		+ tip113b)
+	check(str(ui._tw_pwr_labels["fixed"].tooltip_text) == exp113b,
+			"打磨-113 剧毒 态 判定口径 段 切换 = 拼接 恒等 (实际 %s)" % str(ui._tw_pwr_labels["fixed"].tooltip_text).left(60))
+	check(tip113b.replace(" (剧毒 x0.85 x 2 场)", "") == tip113,
+			"打磨-113 剧毒 仅 汇总行 追加 标注, 基础 构成 段 不变 (实际 %s)" % tip113b.right(60))
+	g.poison_battles = 0
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 3) 同态 节流: 无 变化 再 刷 tooltip 不 重写 对象 不 变 + 无 统计 副作用
+	var stats113: Dictionary = g.stats.duplicate(true)
+	var ref113: String = str(ui._tw_pwr_labels["fixed"].tooltip_text)
+	ui._refresh_tower()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_pwr_labels["fixed"].tooltip_text) == ref113 and g.stats == stats113,
+			"打磨-113 同态 节流 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态/剧毒/境界 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_endless_floor) == 1 and int(g.tower_endless_best) == 0,
+			"打磨-113 收尾 干净 基准 (塔 态 归零)")
