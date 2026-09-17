@@ -2183,26 +2183,55 @@ func equipped_at(slot: String) -> Dictionary:
 	return equip_by_id.get(id, {})
 
 # 换装对比: 穿上 id 后该部位属性变化
-# {"cur": {}, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0, "text": ""}
-# text: "" = 槽位空 (纯增益) / "替换 「X」: 灵气+12% 灵石+7%" (负数带负号, 0 省略)
+# {"cur": {}, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0,
+#  "d_atk": 0.0, "d_def": 0.0, "score_d": 0.0, "text": ""}
+# text: "" = 槽位空/自身 (纯增益, 无对比对象) /
+# "替换「X」: 灵气+12% 灵石+7% 攻击+5% 防御+2% 评分+0.87"
+# (灵气/灵石/攻击/防御 负数带负号, 0 省略; 评分段恒带 — 评分差 0.00 = 显式 "无变化" 信号,
+# M6 规格 "当前穿戴 vs 备选 实时对比" 战力/评分 段 落地 打磨-112; 全 无变化 = 空 text 旧 口径)
 func equip_swap_hint(id: String) -> Dictionary:
 	var e: Dictionary = equip_by_id.get(id, {})
 	if e.is_empty():
-		return {"cur": {}, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0, "text": ""}
+		return {"cur": {}, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0,
+			"d_atk": 0.0, "d_def": 0.0, "score_d": 0.0, "text": ""}
 	var slot := str(e["slot"])
 	var cur: Dictionary = equipped_at(slot)
 	if cur.is_empty() or str(cur.get("id", "")) == id:
-		return {"cur": cur, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0, "text": ""}
+		return {"cur": cur, "replace_name": "", "d_qi": 0.0, "d_stone": 0.0,
+			"d_atk": 0.0, "d_def": 0.0, "score_d": 0.0, "text": ""}
+	var cur_id: String = str(cur.get("id", ""))
 	var dqi: float = (float(e["qi_mult"]) + affix_bonus_for_equipment(id, "qi_mult")) \
-		- (float(cur.get("qi_mult", 0.0)) + affix_bonus_for_equipment(str(cur.get("id", "")), "qi_mult"))
+		- (float(cur.get("qi_mult", 0.0)) + affix_bonus_for_equipment(cur_id, "qi_mult"))
 	var dst: float = (float(e["stone_mult"]) + affix_bonus_for_equipment(id, "stone_mult")) \
-		- (float(cur.get("stone_mult", 0.0)) + affix_bonus_for_equipment(str(cur.get("id", "")), "stone_mult"))
+		- (float(cur.get("stone_mult", 0.0)) + affix_bonus_for_equipment(cur_id, "stone_mult"))
+	# 打磨-112: 战力 atk/def 段 (与 d_qi 同 口径: 基础 + 已装 词缀 池, 新-旧)
+	var datk: float = (float(e.get("atk", 0.0)) + affix_bonus_for_equipment(id, "atk")) \
+		- (float(cur.get("atk", 0.0)) + affix_bonus_for_equipment(cur_id, "atk"))
+	var ddef: float = (float(e.get("def", 0.0)) + affix_bonus_for_equipment(id, "def")) \
+		- (float(cur.get("def", 0.0)) + affix_bonus_for_equipment(cur_id, "def"))
+	# 打磨-112: 评分 Δ (equip_score 同 口径 = 基础 6 池 + 已装 词缀 6 池; 列表 排序/行 评分 同源)
+	var sd: float = equip_score(id) - equip_score(cur_id)
 	var parts: Array = []
 	if absf(dqi) >= 0.0005:
 		parts.append("灵气%s%0.0f%%" % ["+" if dqi > 0.0 else "-", absf(dqi) * 100.0])
 	if absf(dst) >= 0.0005:
 		parts.append("灵石%s%0.0f%%" % ["+" if dst > 0.0 else "-", absf(dst) * 100.0])
-	return {"cur": cur, "replace_name": str(cur.get("name", "")), "d_qi": dqi, "d_stone": dst,
+	if absf(datk) >= 0.0005:
+		parts.append("攻击%s%.1f%%" % ["+" if datk > 0.0 else "-", absf(datk) * 100.0])
+	if absf(ddef) >= 0.0005:
+		parts.append("防御%s%.1f%%" % ["+" if ddef > 0.0 else "-", absf(ddef) * 100.0])
+	if parts.is_empty() and absf(sd) < 0.005:
+		return {"cur": cur, "replace_name": str(cur.get("name", "")),
+			"d_qi": dqi, "d_stone": dst, "d_atk": datk, "d_def": ddef, "score_d": sd, "text": ""}
+	# 评分 段 恒带: 正=+x.xx / 负=-x.xx / 无变化=+0.00 (显式 无变化 信号, 与 行 评分 标签 恒 联动)
+	var sd_txt: String
+	if sd >= -0.005:
+		sd_txt = "评分+%.2f" % sd
+	else:
+		sd_txt = "评分-%.2f" % (-sd)
+	parts.append(sd_txt)
+	return {"cur": cur, "replace_name": str(cur.get("name", "")),
+		"d_qi": dqi, "d_stone": dst, "d_atk": datk, "d_def": ddef, "score_d": sd,
 		"text": "替换「%s」: %s" % [str(cur.get("name", "")), ", ".join(parts)]}
 
 # 打磨-22: 装备状态 (0=未拥有 1=已拥有未穿戴 2=已穿戴) — 供装备列表排序

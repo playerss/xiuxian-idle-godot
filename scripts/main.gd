@@ -1595,7 +1595,10 @@ func _add_equip_row(id: String) -> void:
 	info.add_child(eta_l)
 	_equip_eta[id] = eta_l
 	# 打磨-25: 换装对比提示 (穿上本件后该部位主属性变化; 穿戴/卸下状态变化才刷)
+	# 打磨-112: 对比 追加 攻击/防御/评分 段 (M6 规格 当前穿戴 vs 备选 实时对比; 评分段恒带, 口径 说明 tooltip)
 	var swap_l := _label("", 12, CYAN)
+	swap_l.tooltip_text = ("换装对比 = 穿上本件 vs 当前已穿 的 变化: 灵气/灵石/攻击/防御 为 该池 (基础+已装词缀) 差值 (0 省略), "
+		+ "评分 = 装备评分 差 (评分 = 基础 6 池 + 已装词缀 6 池, 与 行内 评分 标签/列表排序 同口径, 恒带: +0.00 = 无变化)。")
 	info.add_child(swap_l)
 	_equip_swap[id] = swap_l
 	# M6-3: 词缀槽 chips (3 个空槽 =「+」可点装配, 已装 = 品质色词缀 名 点击 拆卸/换装;

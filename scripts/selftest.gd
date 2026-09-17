@@ -1881,6 +1881,69 @@ func _init() -> void:
 	check(g.equip_detail("weapon_5_0").find("换装对比:") < 0, "卸下后 equip_detail 无换装对比行")
 	check(g.equip_detail("weapon_5_0") != det25_before, "detail 随穿戴状态变化而变化")
 
+	# ---------- 打磨-112: 换装对比 补 战力 atk/def + 评分 Δ 段 (M6 规格 当前穿戴 vs 备选 实时对比) ----------
+	# 受控态: 打磨-25 段 收尾 已 卸下 武器槽, 此处 重新 穿 紫刀 (weapon_2_1, atk 0.28/def 0.056/评分 0.811);
+	# 备选 weapon_5_0 (仙剑); seen_affixes 快照 保存/恢复 (本 段 词缀 入包 会 标记 收集, 防 泄漏 污染 打磨-92 段 断言)
+	var seen112_bak: Array = g.seen_affixes.duplicate()
+	check(str(g.equip_equipment("weapon_2_1")).begins_with("已穿戴"), "打磨-112 前置: 紫刀 穿戴 成功 (实际 %s)" % str(g.equip_equipment("weapon_2_1")))
+	check(str(g.equipped.get("weapon", "")) == "weapon_2_1", "打磨-112 受控 基准: 紫刀 已穿 (实际 %s)" % str(g.equipped.get("weapon", "")))
+	var e112a: Dictionary = g.equip_by_id["weapon_5_0"]
+	var e112b: Dictionary = g.equip_by_id["weapon_2_1"]
+	var sw112: Dictionary = g.equip_swap_hint("weapon_5_0")
+	check(absf(float(sw112["d_atk"]) - (float(e112a["atk"]) - float(e112b["atk"]))) < 1e-9,
+			"打磨-112 d_atk = 新-旧 atk 基础差 (实际 %s)" % str(sw112["d_atk"]))
+	check(absf(float(sw112["d_def"]) - (float(e112a["def"]) - float(e112b["def"]))) < 1e-9,
+			"打磨-112 d_def = 新-旧 def 基础差 (实际 %s)" % str(sw112["d_def"]))
+	check(absf(float(sw112["score_d"]) - (g.equip_score("weapon_5_0") - g.equip_score("weapon_2_1"))) < 1e-9,
+			"打磨-112 score_d = equip_score 差 恒等 (实际 %s)" % str(sw112["score_d"]))
+	check(absf(float(sw112["score_d"]) - 0.754) < 1e-9, "打磨-112 仙剑 vs 紫刀 评分差 = 1.565-0.811 = 0.754 (实际 %s)" % str(sw112["score_d"]))
+	var t112: String = str(sw112["text"])
+	check(t112.find("攻击+27.0%") >= 0, "打磨-112 text 含 攻击 正差 段 (实际 %s)" % t112)
+	check(t112.find("防御+5.4%") >= 0, "打磨-112 text 含 防御 正差 段 (实际 %s)" % t112)
+	check(t112.find("评分+0.75") >= 0, "打磨-112 text 含 评分 正差 段 (实际 %s)" % t112)
+	check(t112.find("灵气+") >= 0 and t112.find("灵石+") >= 0, "打磨-112 原 灵气/灵石 段 保留 (实际 %s)" % t112)
+	# 负差: weapon_1_0 (灵剑) vs 已穿 紫刀 -> 评分-0.37 (float32 口径, 不 硬编码 期望值 仅 验 负号+格式)
+	var sw112b: Dictionary = g.equip_swap_hint("weapon_1_0")
+	check(absf(float(sw112b["score_d"]) - (g.equip_score("weapon_1_0") - g.equip_score("weapon_2_1"))) < 1e-9,
+			"打磨-112 负差 score_d 恒等 (实际 %s)" % str(sw112b["score_d"]))
+	check(float(sw112b["score_d"]) < 0.0 and str(sw112b["text"]).find("评分-0.3") >= 0
+			and str(sw112b["text"]).find("攻击-") >= 0 and str(sw112b["text"]).find("防御-") >= 0,
+			"打磨-112 评分 负差 带负号 + 战力 负差 段 (实际 %s)" % str(sw112b["text"]))
+	# 穿上 自身: 无 对比对象 (全 0 键 + text 空 旧 口径)
+	var sw112c: Dictionary = g.equip_swap_hint("weapon_2_1")
+	check(str(sw112c["text"]) == "" and float(sw112c["d_atk"]) == 0.0
+			and float(sw112c["d_def"]) == 0.0 and float(sw112c["score_d"]) == 0.0,
+			"打磨-112 穿上自身 无对比对象 全 0 + text 空 (实际 %s)" % str(sw112c["text"]))
+	# 未知 id / 空槽: 结构 完整 全 0 键 (打磨-25 旧 口径 兼容)
+	var sw112d: Dictionary = g.equip_swap_hint("not_exist")
+	check(sw112d.has("d_atk") and sw112d.has("d_def") and sw112d.has("score_d")
+			and float(sw112d["score_d"]) == 0.0 and str(sw112d["text"]) == "",
+			"打磨-112 未知 id 结构 完整 全 0 键")
+	var sw112e: Dictionary = g.equip_swap_hint("robe_0_0")
+	check(str(sw112e["text"]) == "" and float(sw112e["score_d"]) == 0.0,
+			"打磨-112 空槽位 纯增益 无对比 text 空 (实际 %s)" % str(sw112e["text"]))
+	# 实时 预览: 紫刀 装 atk 词缀 (af_atk_0_0 0.08) 后 对比 动态 同步 (评分 恒等 + 词缀 联动)
+	var pre112: Dictionary = g.equip_swap_hint("weapon_5_0")
+	g.owned_eq.append("weapon_0_0")
+	g.affix_add("af_atk_0_0", 1)
+	check(g.affix_equip("weapon_2_1", 0, "af_atk_0_0") == "", "打磨-112 受控 装配 atk 词缀 成功")
+	var post112: Dictionary = g.equip_swap_hint("weapon_5_0")
+	check(absf(float(post112["score_d"]) - (g.equip_score("weapon_5_0") - g.equip_score("weapon_2_1"))) < 1e-9,
+			"打磨-112 词缀 装配 后 score_d 动态 恒等 (实际 %s)" % str(post112["score_d"]))
+	check(absf(float(post112["score_d"]) - float(pre112["score_d"]) + 0.08) < 5e-3,
+			"打磨-112 词缀 装配 后 评分差 -0.08 (被替换件 变强, 容差 float32 档, 实际 %s)" % str(post112["score_d"]))
+	check(absf(float(post112["d_atk"]) - (float(e112a["atk"]) - float(e112b["atk"]) - 0.08)) < 1e-9,
+			"打磨-112 词缀 装配 后 d_atk 同步 (实际 %s)" % str(post112["d_atk"]))
+	# 收尾: 卸下 词缀 回背包 全 分解 + 清空 + 恢复 seen_affixes (本 段 词缀 入包 标记 收集,
+	# 防 泄漏 污染 打磨-92 收集 段 断言 — 本 段 位于 打磨-28/92 之前, seen 残留 会 致 入包 +1 断言 偏移)
+	g.affix_unequip("weapon_2_1", 0)
+	g.affix_decompose_all()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stats["affix_equip"] = 0.0
+	g.stats["affix_decompose"] = 0.0
+	g.seen_affixes = seen112_bak
+
 	# ---------- 打磨-26: 一键最佳穿戴 (各槽位自动穿上拥有的最佳件) ----------
 	# 受控状态: 全清空, 练气第 1 层, 满灵石
 	g.learned.clear()

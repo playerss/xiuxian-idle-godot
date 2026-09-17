@@ -193,6 +193,7 @@ func _ready() -> void:
 	await _assert_m99_upgrade()  # 打磨-99: 一键 强化 槽位 按钮 (道祖期 批量 3->4, 200 材料/件)
 	await _assert_m101_exchange_all()  # 打磨-101: 一键 兑换 按钮 (材料 连兑 买不起 的 最高 变体 词缀)
 	await _assert_stats_affix()  # 打磨-110: 修行统计 词缀 段 (stats_text 4 段 展示/tooltip 口径/埋点 联动/节流/收尾)
+	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	_finish()
 
 
@@ -3612,6 +3613,7 @@ func _finish() -> void:
 		if rf != null:
 			rf.store_string("\n".join(_fail))
 			rf.close()
+		get_tree().quit(1)  # 修复: 失败分支 原 缺 退出 调用 — headless 场景 模式 不 quit 会 无限 空转 (进程 挂死), 现 退出码 1 与 selftest/stress 口径 一致
 
 
 # 打磨-75: 顶栏 一键系列 状态汇总徽标 — 顶栏 青色 徽标 "一键:" + 6 段热区 (领悟/神通/施展/法器/装备/最佳,
@@ -5981,3 +5983,84 @@ func _assert_stats_affix() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g.stats_text().find("词缀 掉落 0") >= 0 and str(ui._stats_label.text) == g.stats_text(), "打磨-110 收尾 干净 基准 (实际 %s)" % g.stats_text().right(80))
+
+
+# 打磨-112: 换装对比 战力 atk/def + 评分 Δ 段 (M6 规格 "当前穿戴 vs 备选 实时对比" 缺口 落地 —
+# 打磨-25 换装对比 行 只有 灵气/灵石 差, atk/def 战力 与 装备 评分 无 对比 位; 行 换装 标签 + 行
+# tooltip 由 equip_swap_hint text 驱动 自动 覆盖 新 段, UI 无 逻辑 改动). 断言 (手动驱动 确定性):
+# 受控 基准 (已穿 紫刀) 行 标签 = 接口 恒等 含 攻击/防御/评分 段 / 负差 带 负号 / 词缀 装配 后
+# 动态 同步 = 接口 恒等 / 换装 标签 tooltip 口径 说明 / 同态 节流 无 资源 统计 副作用 / 收尾 干净 基准
+func _assert_swap_delta() -> void:
+	var g := GameData
+	# 切 装备页 (换装 标签 所在 页, 布局 落定)
+	ui._tab.current_tab = 2
+	g.set_process(false)
+	# 受控 基准: 清空 拥有/穿戴/词缀, 灵石 足够, 穿 紫刀 (weapon_2_1); 前 段 可能 残留, 全清 保 基准 纯净
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.seen_affixes = []
+	g.affix_decompose_all()
+	g.stats["affix_equip"] = 0.0
+	g.stats["affix_decompose"] = 0.0
+	g.stones = 1e12
+	g.buy_equipment("weapon_2_1")  # 槽位 空 -> 自动 穿戴 紫刀
+	check(str(g.equipped.get("weapon", "")) == "weapon_2_1", "打磨-112 受控 基准: 紫刀 已穿 (实际 %s)" % str(g.equipped.get("weapon", "")))
+	var stats112: Dictionary = g.stats.duplicate(true)
+	var stones112: float = g.stones
+	ui._refresh()
+	await get_tree().process_frame
+	# 1) 行 换装 标签 存在 (140 件 全 构建) + 未拥有 备选 件 标签 文本 = 接口 恒等 (含 攻击/防御/评分 段)
+	check(ui._equip_swap.size() == g.equip_ids.size(), "打磨-112 换装 标签 140 件 全 构建 (实际 %d)" % ui._equip_swap.size())
+	var sw112: Dictionary = g.equip_swap_hint("weapon_5_0")  # 仙剑 vs 已穿 紫刀
+	var l112: Label = ui._equip_swap["weapon_5_0"]
+	check(l112 != null, "打磨-112 仙剑 行 换装 标签 存在")
+	check(str(l112.text) == str(sw112["text"]) and str(l112.text).find("替换「") == 0,
+			"打磨-112 仙剑 行 换装 标签 = 接口 恒等 (实际 %s)" % str(l112.text))
+	check(str(l112.text).find("攻击+") >= 0 and str(l112.text).find("防御+") >= 0,
+			"打磨-112 换装 标签 含 攻击/防御 战力 段 (实际 %s)" % str(l112.text))
+	check(str(l112.text).find("评分+") >= 0, "打磨-112 换装 标签 含 评分 段 (实际 %s)" % str(l112.text))
+	# 2) 负差 件 (灵剑 评分 低于 紫刀) 评分 段 带 负号; 行 tooltip 随 标签 变化 同步 含 新 段
+	var sw112b: Dictionary = g.equip_swap_hint("weapon_1_0")
+	check(str(sw112b["text"]).find("评分-") >= 0, "打磨-112 负差 评分 段 带 负号 (接口 %s)" % str(sw112b["text"]))
+	check(str(ui._equip_swap["weapon_1_0"].text) == str(sw112b["text"]),
+			"打磨-112 灵剑 行 标签 = 接口 恒等 (负差 态)")
+	var row112: Node = ui._equip_row_nodes["weapon_5_0"]
+	check(str(row112.tooltip_text) == g.equip_detail("weapon_5_0")
+			and str(row112.tooltip_text).find("评分+") >= 0,
+			"打磨-112 行 tooltip 随 换装 标签 变化 同步 含 评分 段 (实际 %s)" % str(row112.tooltip_text).left(40))
+	# 3) 换装 标签 tooltip 口径 说明 (打磨-112 补: 攻击/防御/评分 段 口径)
+	check(str(l112.tooltip_text).find("评分") >= 0 and str(l112.tooltip_text).find("攻击") >= 0,
+			"打磨-112 换装 标签 tooltip 含 评分/攻击 口径 (实际 %s)" % str(l112.tooltip_text).left(40))
+	# 4) 词缀 装配 动态 同步: 紫刀 装 atk 词缀 后 行 标签 = 接口 恒等 (评分 差 -0.08 联动)
+	g.owned_eq.append("weapon_0_0")
+	g.affix_add("af_atk_0_0", 1)
+	check(g.affix_equip("weapon_2_1", 0, "af_atk_0_0") == "", "打磨-112 受控 装配 atk 词缀 成功")
+	ui._refresh()
+	await get_tree().process_frame
+	var sw112c: Dictionary = g.equip_swap_hint("weapon_5_0")
+	check(str(ui._equip_swap["weapon_5_0"].text) == str(sw112c["text"]),
+			"打磨-112 词缀 装配 后 行 标签 动态 同步 = 接口 恒等 (实际 %s)" % str(ui._equip_swap["weapon_5_0"].text))
+	check(absf(float(sw112c["score_d"]) - (float(sw112["score_d"]) - 0.08)) < 5e-3,
+			"打磨-112 词缀 装配 后 评分 差 -0.08 联动 (容差 float32 档, 实际 %s)" % str(sw112c["score_d"]))
+	# 5) 同态 节流: 重复 _refresh 标签 文本 不 重写, 无 资源/统计 副作用 (快照 取 于 装配 后, 含 affix_equip 埋点)
+	var l112_pre: String = str(ui._equip_swap["weapon_5_0"].text)
+	var stats112b: Dictionary = g.stats.duplicate(true)
+	ui._refresh()
+	check(str(ui._equip_swap["weapon_5_0"].text) == l112_pre and g.stones == stones112 and g.stats == stats112b,
+			"打磨-112 同态 节流 无 资源/统计 副作用")
+	# 6) 收尾: 卸下 词缀 全 分解 + 清空 恢复 干净 基准 (防 污染 后续 段)
+	g.affix_unequip("weapon_2_1", 0)
+	g.affix_decompose_all()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.seen_affixes = []
+	g.stats["affix_equip"] = 0.0
+	g.stats["affix_decompose"] = 0.0
+	g.stones = 0.0
+	g.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(ui._equip_swap.size() == g.equip_ids.size() and str(ui._equip_swap["weapon_5_0"].text) == g.equip_swap_hint("weapon_5_0")["text"],
+			"打磨-112 收尾 干净 基准 (标签 随 穿戴 清空 回 空 态)")
