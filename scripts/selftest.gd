@@ -7280,6 +7280,81 @@ func _init() -> void:
 	g.tower_clear_reward_got = false
 	g.save_game()
 
+	# ---------- 打磨-116: 登天梯 每日首胜奖励 当日 状态 行 (M5 规格 "每日 首胜 额外 灵石" 展示位) ----------
+	# 触发 判定 = tower_daily_date == 今日 (与 结算 分支 同口径); tower_daily_first_line 两态 只读 接口;
+	# tower_status_line 已 触发 追加 段 / 未 触发 无 段; 只读 无 状态/统计 副作用
+	# 1) 受控 基准: 登天梯 待挑战 第 2 层 (弱 玩家 atk 2.0, 第 2 层 判 胜负 与 首胜 无关, 数据 锚定 用 强 玩家)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ascended = true
+	g.dao_level = 8
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.poison_battles = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 2
+	g.tower_endless_best = 1
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	# 2) 未 触发 态: 接口 = 未 触发 文案 + 状态行 无 段
+	var dfl116a: String = g.tower_daily_first_line()
+	check(dfl116a.find("未 触发") >= 0, "打磨-116 未 触发 态 接口 文案 (实际 %s)" % dfl116a)
+	check(dfl116a.find("+0.5x 该层 灵石") >= 0, "打磨-116 未 触发 态 含 0.5x 口径 说明 (实际 %s)" % dfl116a)
+	check(g.tower_status_line().find("每日 首胜 奖励 已 触发") < 0, "打磨-116 未 触发 态 状态行 无 段 (实际 %s)" % g.tower_status_line())
+	# 3) 强 玩家 胜 第 2 层 (新纪录 2 > best 1, 今日 未 发放) -> 结算 触发 首胜:
+	#    日期 落 今日 / daily_bonus = 0.5x 本层 灵石 / bonus_stones 累计 / 状态行 追加 段
+	var mon116: Dictionary = g.tower_monster_stats(g.get_endless_floor(2))
+	check(g.player_atk_effective() >= float(mon116["atk"]) * g.TOWER_WIN_RATIO, "打磨-116 强 玩家 第 2 层 判定=胜 (数据 锚定)")
+	var rd116: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(rd116["win"]), "打磨-116 第 2 层 胜 (win=%s)" % str(rd116["win"]))
+	check(int(rd116["floor"]) == 2 and float(rd116["reward_stone"]) > 0.0, "打磨-116 结算 数据 锚定 (stone=%s)" % str(rd116["reward_stone"]))
+	check(float(rd116["daily_bonus"]) == float(rd116["reward_stone"]) * 0.5, "打磨-116 首胜 奖励 = 0.5x 本层 结算 灵石 (bonus=%s)" % str(rd116["daily_bonus"]))
+	check(g.tower_daily_date == g._today_str(), "打磨-116 首胜 触发 日期 落 今日 (实际 %s)" % g.tower_daily_date)
+	check(g.tower_daily_bonus_stones == float(rd116["reward_stone"]) * 0.5, "打磨-116 bonus_stones 累计 同源 (实际 %s)" % str(g.tower_daily_bonus_stones))
+	check(g.tower_status_line().find("每日 首胜 奖励 已 触发") >= 0, "打磨-116 已 触发 态 状态行 含 段 (实际 %s)" % g.tower_status_line())
+	# 4) 已 触发 态 接口 文案 切换 + 再 胜 (第 3 层) 不 重复 发放 (was_best 但 日期 已 今日)
+	var dfl116b: String = g.tower_daily_first_line()
+	check(dfl116b.find("已 触发") >= 0 and dfl116b.find("明日 再 触发") >= 0, "打磨-116 已 触发 态 接口 文案 (实际 %s)" % dfl116b)
+	var rd116b: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(rd116b["win"]) and float(rd116b["daily_bonus"]) == 0.0, "打磨-116 当日 再 胜 新纪录 不 重复 发放 (bonus=%s)" % str(rd116b["daily_bonus"]))
+	check(g.tower_daily_bonus_stones == float(rd116["reward_stone"]) * 0.5, "打磨-116 bonus_stones 不变 (幂等)")
+	# 5) 跨日 模拟: 日期 改 昨日 -> 状态行 段 消失 + 接口 回 未 触发 态 (结算 分支 同 口径: 非今日 即 可 再 触发)
+	var yest116: Dictionary = Time.get_datetime_dict_from_unix_time(Time.get_unix_time_from_system() - 86400)
+	g.tower_daily_date = "%04d-%02d-%02d" % [int(yest116.year), int(yest116.month), int(yest116.day)]
+	check(g.tower_status_line().find("每日 首胜 奖励 已 触发") < 0, "打磨-116 跨日 (日期=昨日) 状态行 段 消失 (实际 %s)" % g.tower_status_line())
+	check(g.tower_daily_first_line() == dfl116a, "打磨-116 跨日 接口 回 未 触发 态 (动态 恒等)")
+	# 6) 只读 接口 连读 恒定 (无 状态/统计 副作用)
+	var snap116: Dictionary = g.stats.duplicate(true)
+	var bs116: float = g.tower_daily_bonus_stones
+	check(g.tower_daily_first_line() == g.tower_daily_first_line() and g.tower_status_line() == g.tower_status_line()
+		and g.stats == snap116 and g.tower_daily_bonus_stones == bs116, "打磨-116 只读 连读 恒定 无 副作用")
+	# 收尾: 归零 落盘 (防 污染 后续 段)
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_clear_reward_got = false
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

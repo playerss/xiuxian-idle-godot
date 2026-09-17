@@ -2747,11 +2747,25 @@ func tower_win_float_text(r: Dictionary) -> String:
 		s += " 里程碑 宝箱 (保底 稀有+ 词缀)"
 	return s
 
+# 打磨-116: 登天梯 每日首胜奖励 当日 状态 行 (只读; M5 规格 "每日 首胜 奖励: 每天 首次
+# 通过 新纪录 层 给 额外 灵石 (鼓励 每日 上线)"; 触发 判定 = tower_daily_date == 今日
+# [与 结算 分支 同口径], 单场 数额 已 随 胜利 消息/浮动 展示, 状态 行 只 给 当日 是否 已 触发;
+# bonus_stones 为 跨日 累计 非 当日 值, 不 入 行 防 误导; 无 新 存档 字段, 不 改 状态/统计)
+func tower_daily_first_line() -> String:
+	if tower_daily_date == _today_str():
+		return "今日 首胜 奖励 已 触发 (明日 再 触发)"
+	return "今日 首胜 奖励 未 触发 (今日 首次 通过 新纪录 层 即 额外 +0.5x 该层 灵石)"
+
+
 # M5-3: 爬塔 状态汇总 文案 (只读; 修行页 爬塔区 展示; 含 剧毒 debuff 提醒; 不 改 状态)
 func tower_status_line() -> String:
 	var s: String = "镇妖塔 最高 %d/1000 层%s · 登天梯 待挑战 第 %d 层 (最高 %d)" % [
 		tower_fixed_floor, " (通关「镇妖塔·通关者」)" if tower_fixed_clear else "",
 		tower_endless_floor, tower_endless_best]
+	# 打磨-116: 登天梯 每日 首胜 奖励 当日 已 触发 追加 段 (未 触发 不 追加 防 行 过长;
+	# 触发 必 伴随 层数 推进, UI 刷新 键 天然 感知)
+	if tower_daily_date == _today_str():
+		s += " · 每日 首胜 奖励 已 触发"
 	if poison_battles > 0:
 		s += " · 剧毒 -15%% 攻 x %d 场" % poison_battles
 	# 打磨-95: 自动爬塔 会话 统计 (本次 运行 胜局 数+灵石 累计, 内存态 不持久化;

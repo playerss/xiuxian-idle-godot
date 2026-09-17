@@ -185,6 +185,7 @@ func _ready() -> void:
 	await _assert_tower_mats_tip()  # 打磨-106: 怪物卡 tooltip 材料 掉落 预估 (双塔 材料 行/接口 恒等/节流; 修 stats 幂等 丢 mats)
 	await _assert_tower_reward_weights()  # 打磨-108: 怪物种 reward 权重 stone_w/affix_w (tooltip 权重 行/接口 恒等/Boss 层 无 行/节流)
 	await _assert_milestone_chest_tag()  # 打磨-115: 登天梯 里程碑 Boss 宝箱 标记 + 胜利 底部消息/浮动 宝箱 段 (卡片 标记/消息 段/浮动 段/普通层 无/败局 不弹/节流)
+	await _assert_tower_daily_first()  # 打磨-116: 登天梯 每日首胜 当日 状态 行 (未触发 无 段/触发 追加 段/恒等/跨日 消失/tooltip 口径/节流/收尾)
 	await _assert_tower_def_line()  # 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段: 双塔 节点/恒等/剧毒 不 变/DEF 变化 同步/升层 同步/tooltip/节流)
 
 	await _assert_equip_score_sort()  # 打磨-109: 装备页 按评分排序 开关 (M6 规格 装备列表按评分排序: 开关/降序/同分/筛选叠加/装配联动/节流/收尾)
@@ -5610,6 +5611,96 @@ func _assert_milestone_chest_tag() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(int(g.tower_endless_floor) == 1 and g.affix_bag_used() == 0, "打磨-115 收尾 干净 基准 (塔 态/词缀 归零)")
+
+
+# 打磨-116: 登天梯 每日首胜奖励 当日 状态 行 (M5 规格 "每日 首胜 奖励" 展示位: tower_daily_date
+# 已 随 结算/存档 落地, 但 爬塔页 状态行 无 当日 是否 已 触发 展示位, 玩家 不知 今日 首胜 是否
+# 已 领; 状态行 已 触发 追加 段 + 刷新键 感知 当日态; UI 断言: 未 触发 无 段/触发 追加 段/
+# 文本 = tower_status_line 恒等/手动 模拟 触发 态 刷新/跨日 段 消失/败局 不 触发/tooltip 口径/
+# 同态 节流/收尾 干净 基准 防 污染)
+func _assert_tower_daily_first() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 + 弱 玩家 (atke 2.0 恒败 防 误触 结算) + 登天梯 待挑战 第 15 层
+	# (第 15 层 怪 atk ≈ 4.8 > 2.0/0.85 恒败 [第 2 层 怪 太弱 弱 玩家 可胜, 须 选 层 锚定];
+	# equipped 也 清 — 前段 残留 装备 atk 池 会 抬 玩家 战力 致 弱 玩家 假设 失效)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 15
+	g.tower_endless_best = 14
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.auto_tower = false
+	g.learned.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 未 触发 态: 状态行 无 段 + 文本 = 接口 恒等
+	var st116a: String = str(ui._tw_status_label.text)
+	check(st116a.find("每日 首胜 奖励 已 触发") < 0, "打磨-116 未 触发 态 状态行 无 段 (实际 %s)" % st116a)
+	check(st116a == g.tower_status_line(), "打磨-116 状态行 文本 = tower_status_line 恒等")
+	check(g.tower_status_line().find("登天梯 待挑战 第 15 层") >= 0, "打磨-116 状态行 层数 口径 基准 (实际 %s)" % st116a)
+	# 2) 手动 模拟 当日 已 触发 态 (日期 = 今日): 刷新键 变化 自动 刷 状态行 追加 段
+	g.tower_daily_date = g._today_str()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var st116b: String = str(ui._tw_status_label.text)
+	check(st116b.find("每日 首胜 奖励 已 触发") >= 0, "打磨-116 已 触发 态 状态行 含 段 (实际 %s)" % st116b)
+	check(st116b == g.tower_status_line(), "打磨-116 已 触发 态 文本 = 接口 恒等")
+	# 3) 败局 不 触发: 弱 玩家 恒败 不 改 日期 (状态行 保持 已 触发 模拟 态 不变)
+	var mon116: Dictionary = g.tower_monster_stats(g.get_endless_floor(15))
+	check(g.player_atk_effective() < float(mon116["atk"]) * g.TOWER_WIN_RATIO, "打磨-116 弱 玩家 第 15 层 判定=败 (数据 锚定)")
+	ui._on_tower_challenge("endless")
+	check(g.tower_daily_date == g._today_str(), "打磨-116 败局 日期 不变 (首胜 不 触发)")
+	check(str(ui._tw_status_label.text) == st116b, "打磨-116 败局 后 状态行 保持 (层数 未 推进 键 不变)")
+	# 4) 跨日 模拟 (日期 = 昨日): 刷新键 变化 -> 段 消失
+	var yest116: Dictionary = Time.get_datetime_dict_from_unix_time(Time.get_unix_time_from_system() - 86400)
+	g.tower_daily_date = "%04d-%02d-%02d" % [int(yest116.year), int(yest116.month), int(yest116.day)]
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_status_label.text).find("每日 首胜 奖励 已 触发") < 0, "打磨-116 跨日 后 状态行 段 消失 (实际 %s)" % str(ui._tw_status_label.text))
+	# 5) 状态行 tooltip 含 每日 首胜 口径 说明
+	check(str(ui._tw_status_panel.tooltip_text).find("每日 首胜 奖励") >= 0, "打磨-116 状态行 tooltip 含 每日 首胜 口径")
+	check(str(ui._tw_status_panel.tooltip_text).find("0.5x 该层 灵石") >= 0, "打磨-116 状态行 tooltip 含 0.5x 口径")
+	# 6) 同态 节流: 无 变化 再 刷 无 统计 副作用
+	var snap116: Dictionary = g.stats.duplicate(true)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(g.stats == snap116, "打磨-116 同态 再刷 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (日期/塔 态 归零, 防 污染 后续 段)
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_clear_reward_got = false
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.learned.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_endless_floor) == 1 and g.tower_daily_date == "", "打磨-116 收尾 干净 基准 (塔 态/日期 归零)")
 
 
 # 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段 落地 — tower_power_line 只有
