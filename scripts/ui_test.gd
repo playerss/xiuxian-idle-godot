@@ -184,6 +184,7 @@ func _ready() -> void:
 	await _assert_milestone_chest()  # 打磨-103: 登天梯 里程碑 宝箱 保底 高品质 词缀 (tooltip 保底 段/卡片 口径/胜局 掉落 品质)
 	await _assert_tower_mats_tip()  # 打磨-106: 怪物卡 tooltip 材料 掉落 预估 (双塔 材料 行/接口 恒等/节流; 修 stats 幂等 丢 mats)
 	await _assert_tower_reward_weights()  # 打磨-108: 怪物种 reward 权重 stone_w/affix_w (tooltip 权重 行/接口 恒等/Boss 层 无 行/节流)
+	await _assert_milestone_chest_tag()  # 打磨-115: 登天梯 里程碑 Boss 宝箱 标记 + 胜利 底部消息/浮动 宝箱 段 (卡片 标记/消息 段/浮动 段/普通层 无/败局 不弹/节流)
 	await _assert_tower_def_line()  # 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段: 双塔 节点/恒等/剧毒 不 变/DEF 变化 同步/升层 同步/tooltip/节流)
 
 	await _assert_equip_score_sort()  # 打磨-109: 装备页 按评分排序 开关 (M6 规格 装备列表按评分排序: 开关/降序/同分/筛选叠加/装配联动/节流/收尾)
@@ -5496,6 +5497,119 @@ func _assert_tower_reward_weights() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(int(g.tower_endless_floor) == 1, "打磨-108 收尾 干净 基准 (塔 态 归零)")
+
+
+# 打磨-115: 登天梯 里程碑 Boss 「里程碑 宝箱」 怪物卡 标记 + 胜利 底部消息/浮动 宝箱 段
+# (M5 规格 "每 100 层 里程碑 Boss + 宝箱 [保底 稀有+ 词缀]" 的 展示位; 词缀 结算 口径 打磨-103 已落地,
+# 本段 补 展示: 卡片 tag 追加 宝箱 标记 + 手动 挑战 胜利 底部消息/浮动 追加 宝箱 段).
+# UI 断言: 登天梯 100 层 怪物卡 标记 含 宝箱/镇妖塔 Boss 不 含 宝箱/101 层 普通层 不 含/
+# 手动 挑战 100 层 胜 底部消息 含 宝箱 段 + 浮动 含 宝箱 段/101 层 胜 无 宝箱 段/败 局 不 弹 浮动/
+# 同态 节流 无 副作用 (收尾 干净 基准 防 污染)
+func _assert_milestone_chest_tag() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 + 词缀 清零 + 待挑战 100 层 (里程碑 Boss)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.auto_tower = false
+	g.learned.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 登天梯 100 层 里程碑 Boss: 怪物卡 标记 含 宝箱 (⚑Boss·里程碑 宝箱)
+	var mon115: String = str(ui._tw_mon_labels["endless"].text)
+	check(mon115.find("⚑Boss·里程碑 宝箱") >= 0, "打磨-115 登天梯 100 层 怪物卡 标记 含 里程碑 宝箱 (实际 %s)" % mon115)
+	check(mon115.find("第 100 层") >= 0, "打磨-115 怪物卡 标记 层数 口径 (实际 %s)" % mon115.left(20))
+	# 镇妖塔 卡片: 镇妖塔 层表 非 100 倍数 boss 无 宝箱 标记 (基准 待挑战 第 1 层 普通层, 无 标记 行)
+	check(str(ui._tw_mon_labels["fixed"].text).find("里程碑 宝箱") < 0, "打磨-115 镇妖塔 怪物卡 不 含 里程碑 宝箱 标记")
+	# 登天梯 101 层 普通层: 无 宝箱 标记
+	g.tower_endless_floor = 101
+	g.tower_endless_best = 100
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["endless"].text).find("里程碑 宝箱") < 0, "打磨-115 登天梯 101 层 普通层 不 含 宝箱 标记 (实际 %s)" % str(ui._tw_mon_labels["endless"].text))
+	# 强 玩家 (飞升 道祖) 恒胜 100 层 里程碑 Boss → 底部消息 + 浮动 含 宝箱 段
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	g.ascended = true
+	g.dao_level = 8
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon115s: Dictionary = g.tower_monster_stats(g.get_endless_floor(100))
+	check(g.player_atk_effective() >= float(mon115s["atk"]) * g.TOWER_WIN_RATIO, "打磨-115 强 玩家 100 层 判定=胜 (数据 锚定)")
+	ui._tower_win_float_count = 0
+	ui._tower_win_last_text = ""
+	ui._on_tower_challenge("endless")
+	var msg115: String = str(ui._msg_label.text)
+	check(msg115.begins_with("✔ 登天梯 第 100 层"), "打磨-115 胜局 底部 消息 口径 (实际 %s)" % msg115.left(20))
+	check(msg115.find("里程碑 宝箱") >= 0 and msg115.find("保底 稀有+") >= 0, "打磨-115 胜局 底部 消息 含 宝箱 段 (实际 %s)" % msg115)
+	check(ui._tower_win_float_count == 1, "打磨-115 胜局 浮动 计数 +1 (实际 %d)" % ui._tower_win_float_count)
+	var ftxt115: String = str(ui._tower_win_float_label.text)
+	check(ftxt115.find("里程碑 宝箱") >= 0, "打磨-115 胜局 浮动 含 宝箱 段 (实际 %s)" % ftxt115)
+	check(ftxt115.find("保底 稀有+") >= 0, "打磨-115 浮动 宝箱 段 含 保底 口径 (实际 %s)" % ftxt115)
+	check(ui._tower_win_float_label.visible, "打磨-115 浮动 标签 可见")
+	# 101 层 普通层 胜: 底部消息/浮动 无 宝箱 段 (标记 只 100 倍数 boss 层)
+	ui._on_tower_challenge("endless")
+	var msg115b: String = str(ui._msg_label.text)
+	check(msg115b.begins_with("✔ 登天梯 第 101 层"), "打磨-115 101 层 胜局 口径 (实际 %s)" % msg115b.left(20))
+	check(msg115b.find("里程碑 宝箱") < 0, "打磨-115 101 层 普通层 底部 消息 无 宝箱 段 (实际 %s)" % msg115b)
+	check(str(ui._tower_win_float_label.text).find("里程碑 宝箱") < 0, "打磨-115 101 层 浮动 无 宝箱 段")
+	# 败 局: 弱 玩家 100 层 恒败 → 不 弹 浮动 无 宝箱 段 (浮动 计数 保持)
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	var cnt_before: int = ui._tower_win_float_count
+	var mon115w: Dictionary = g.tower_monster_stats(g.get_endless_floor(100))
+	check(g.player_atk_effective() < float(mon115w["atk"]) * g.TOWER_WIN_RATIO, "打磨-115 弱 玩家 100 层 判定=败 (数据 锚定)")
+	ui._on_tower_challenge("endless")
+	check(ui._tower_win_float_count == cnt_before, "打磨-115 败 局 不 弹 浮动 (实际 %d)" % ui._tower_win_float_count)
+	check(str(ui._msg_label.text).begins_with("✖ 登天梯 第 100 层"), "打磨-115 败 局 底部 消息 保留 (实际 %s)" % str(ui._msg_label.text).left(20))
+	# 同态 节流: 无 塔 态 变化 再 刷 不 重写 无 统计 副作用
+	var snap115: Dictionary = g.stats.duplicate(true)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(g.stats == snap115, "打磨-115 同态 再刷 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (词缀/塔 态/飞升 归零, 防 污染 后续 段)
+	g.ascended = false
+	g.dao_level = 0
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.learned.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_endless_floor) == 1 and g.affix_bag_used() == 0, "打磨-115 收尾 干净 基准 (塔 态/词缀 归零)")
 
 
 # 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段 落地 — tower_power_line 只有

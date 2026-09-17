@@ -7196,6 +7196,90 @@ func _init() -> void:
 	g.stones = 0.0
 	g.save_game()
 
+	# ---------- 打磨-115: 登天梯 里程碑 Boss 「里程碑 宝箱」 标记 + 胜利 浮动 宝箱 段 ----------
+	# M5 规格 "每 100 层 里程碑 Boss + 宝箱 (保底 高级词缀)" 的 展示位: is_milestone 结算 字段
+	# (与 drop_src=milestone 同口径) + tower_win_float_text 宝箱 段; 仅 登天梯 100 倍数 boss 胜局,
+	# 镇妖塔/精英/普通层/败局 恒 false; 数据层 断言 (UI 段 在 ui_test)
+	# 1) 受控 基准: 登天梯 待挑战 100 层 (里程碑 Boss) + 强 玩家 (飞升 道祖) 恒胜
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ascended = true
+	g.dao_level = 8
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.poison_battles = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	# 数据 锚定: 100 层 = 里程碑 Boss (boss_type = "boss")
+	var rec115: Dictionary = g.get_endless_floor(100)
+	var mon115: Dictionary = g.tower_monster_stats(rec115)
+	check(str(mon115.get("boss_type", "")) == "boss", "打磨-115 登天梯 第 100 层 = 里程碑 Boss (数据 锚定, 实际 %s)" % str(mon115.get("boss_type", "")))
+	check(g.player_atk_effective() >= float(mon115["atk"]) * g.TOWER_WIN_RATIO, "打磨-115 强 玩家 100 层 里程碑 Boss 判定=胜 (数据 锚定)")
+	# 2) 胜局 结算: is_milestone = true + 浮动 文案 含 宝箱 段
+	var rm115: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(rm115["win"]), "打磨-115 100 层 里程碑 Boss 胜 (win=%s)" % str(rm115["win"]))
+	check(bool(rm115.get("is_milestone", false)), "打磨-115 里程碑 Boss 胜局 is_milestone = true (实际 %s)" % str(rm115.get("is_milestone", false)))
+	var flt115: String = g.tower_win_float_text(rm115)
+	check(flt115.find("里程碑 宝箱") >= 0, "打磨-115 胜利 浮动 含 里程碑 宝箱 段 (实际 %s)" % flt115)
+	check(flt115.find("保底 稀有+") >= 0, "打磨-115 宝箱 段 含 保底 稀有+ 口径 (实际 %s)" % flt115)
+	# 3) 同 层 再胜 (101 层 普通层, 强 玩家 胜): is_milestone 回 false — 标记 只 100 倍数 boss 层
+	check(int(rm115["new_floor"]) == 101, "打磨-115 里程碑 胜 推进 到 101 层 (new_floor=%s)" % str(rm115["new_floor"]))
+	var rn115: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(rn115["win"]) and not bool(rn115.get("is_milestone", false)), "打磨-115 101 层 普通层 胜局 is_milestone = false (实际 %s)" % str(rn115.get("is_milestone", false)))
+	check(g.tower_win_float_text(rn115).find("里程碑 宝箱") < 0, "打磨-115 普通层 浮动 无 宝箱 段")
+	# 4) 镇妖塔 Boss 层 (50 层 小 Boss) 恒 false — 仅 登天梯 生效
+	g.tower_fixed_floor = 49
+	var rf115: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rf115["win"]) and not bool(rf115.get("is_milestone", false)), "打磨-115 镇妖塔 Boss 胜局 is_milestone = false (实际 %s)" % str(rf115.get("is_milestone", false)))
+	# 5) 败局 恒 false (弱 玩家: 清 功法 境界0 atk 2.0, 100 层 里程碑 Boss 恒败)
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	var mon115b: Dictionary = g.tower_monster_stats(g.get_endless_floor(100))
+	check(g.player_atk_effective() < float(mon115b["atk"]) * g.TOWER_WIN_RATIO, "打磨-115 弱 玩家 100 层 判定=败 (数据 锚定)")
+	var rl115: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(not bool(rl115["win"]) and not bool(rl115.get("is_milestone", false)), "打磨-115 败局 is_milestone = false (win=%s)" % str(rl115["win"]))
+	check(g.tower_win_float_text(rl115) == "", "打磨-115 败局 浮动 空串 (不 弹 无 宝箱 段)")
+	# 6) 只读 接口 连读 恒定 (tower_win_float_text 无 状态/统计 副作用)
+	var snap115: Dictionary = g.stats.duplicate(true)
+	var atk115: float = g.player_atk()
+	check(g.tower_win_float_text(rm115) == flt115 and g.player_atk() == atk115 and g.stats == snap115, "打磨-115 浮动 文案 只读 无 副作用")
+	# 收尾: 归零 落盘 (防 污染 后续 段: 塔 态/飞升/资源 全 复位)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.affix_materials = 0
+	g.seen_affixes = []
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.tower_clear_reward_got = false
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

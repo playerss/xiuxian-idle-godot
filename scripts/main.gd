@@ -1760,6 +1760,11 @@ func _on_tower_challenge(tid: String) -> void:
 		var adrops: Array = r.get("affix_drops", [])
 		if adrops.size() > 0:
 			extra += " (词缀: %s)" % g.affix_drop_text(adrops)
+		# 打磨-115: 登天梯 里程碑 Boss 宝箱 段 (M5 规格 "每 100 层 里程碑 Boss + 宝箱 [保底 稀有+ 词缀]";
+		# 词缀 已 按 milestone 来源 结算, 此处 给 宝箱 口径 标注 [与 怪物卡 标记/tooltip 打磨-103 同源];
+		# 仅 登天梯 100 倍数 boss 胜局 触发, 镇妖塔/精英/普通层 不追加)
+		if bool(r.get("is_milestone", false)):
+			extra += " (里程碑 宝箱: 保底 稀有+ 词缀)"
 		_show_msg("✔ %s 第 %d 层「%s」胜利! 灵石 +%s%s" % [
 			tname, int(r["floor"]), str(r["monster"]), g.fmt(float(r["reward_stone"])), extra])
 		# 打磨-107: 胜利 居中 绿色 浮动 提示 (M5-3 规格 浮动 段; 文案 = 塔名/层/怪名/灵石+材料/幸运/不屈/首胜/词缀 件数,
@@ -1828,7 +1833,10 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 	if bool(mon["is_elite"]):
 		tag = " ★精英"
 	elif str(mon["boss_type"]) != "":
-		tag = " ⚑Boss"
+		# 打磨-115: 登天梯 里程碑 Boss (100 倍数) 追加 宝箱 标记 — M5 规格 "每 100 层
+		# 里程碑 Boss + 宝箱 [保底 稀有+ 词缀]"; 与 drop_src=milestone 结算口径 同源,
+		# 镇妖塔 Boss / 精英层 不 追加 (仅 登天梯 100 倍数 boss 层)
+		tag = (" ⚑Boss·里程碑 宝箱" if tid == "endless" and floor_n % 100 == 0 else " ⚑Boss")
 	var mon_txt: String = "第 %d 层「%s」%s" % [floor_n, str(mon["name"]), tag]
 	var mon_l: Label = _tw_mon_labels[tid]
 	if str(mon_l.text) != mon_txt:

@@ -1344,6 +1344,9 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		"clear_reward_stone": clear_reward_stone,
 		# 打磨-114: 通关 大奖 词缀 段 (实际 入包 ids / 背包满 折算 材料 数; 未 通关 = 空/0)
 		"clear_reward_affixes": clear_reward_affixes, "clear_reward_mat": clear_reward_mat,
+		# 打磨-115: 登天梯 里程碑 Boss 层 标记 (M5 规格 "每 100 层 里程碑 Boss + 宝箱";
+		# 与 drop_src = milestone 同口径 — 结算 层 为 登天梯 100 倍数 且 boss 层; 供 展示 宝箱 段)
+		"is_milestone": win and tower == "endless" and str(mon["boss_type"]) != "" and next_floor % 100 == 0,
 		"daily_bonus": daily_bonus, "clear": clear, "poison": bool(mon["poison"]),
 		"poison_battles": poison_battles, "affix_drops": affix_drops,
 		"reason": ("胜" if win else "败: 战力 不足, 停留 本层 (无 惩罚, 可 重试)"),
@@ -2738,6 +2741,10 @@ func tower_win_float_text(r: Dictionary) -> String:
 	var adrops: Array = r.get("affix_drops", [])
 	if adrops.size() > 0:
 		s += " 词缀 x%d" % adrops.size()
+	# 打磨-115: 登天梯 里程碑 Boss 宝箱 段 (M5 规格 "每 100 层 里程碑 Boss + 宝箱 [保底 稀有+ 词缀]";
+	# 词缀 已 按 milestone 来源 结算 入 上行 件数, 此处 给 宝箱 口径 标注 [与 怪物卡 tooltip 打磨-103 同源])
+	if bool(r.get("is_milestone", false)):
+		s += " 里程碑 宝箱 (保底 稀有+ 词缀)"
 	return s
 
 # M5-3: 爬塔 状态汇总 文案 (只读; 修行页 爬塔区 展示; 含 剧毒 debuff 提醒; 不 改 状态)
