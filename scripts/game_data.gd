@@ -31,6 +31,11 @@ const TOWER_CLEAR_BUFF := 0.15              # 通关 永久 增益: 玩家 atk/d
 const TOWER_CLEAR_BONUS_AFFIX_COUNT := 3    # 通关 一次性 大奖 顶级(传说) 词缀 件数 (M5 规格 x3)
 const ENDLESS_ELITE_MULT := 3.0      # 登天梯 精英层 (每 10 层) 数值 x3
 const ENDLESS_BOSS_MULT := 10.0      # 登天梯 里程碑 Boss (每 100 层) 数值 x10
+# 打磨-119: 镇妖塔 精英层 (每 10 层非 Boss) 结构/奖励 乘数 (M5 规格 "每 10 层精英 数值 x3
+# 掉落 x2"; 与 gen_data TOWER_ELITE_MULT/TOWER_ELITE_REWARD 同源; 数值 已 落表, 本 常量
+# 供 展示 口径 说明 单一 来源; 登天梯 精英/魔化 同 结构 [数值 x3 + 奖励 x2, get_endless_floor 结算])
+const TOWER_ELITE_MULT := 3.0
+const TOWER_ELITE_REWARD := 2
 # 打磨-102: 登天梯 500 层后 全部 普通 怪物 默认 魔化 (M5 规格 "500 层后所有怪物默认魔化"):
 # 魔化 口径 同 精英层 = 数值 x3 + 追加 1 额外特性 + 「魔化·」前缀; Boss 层 独立 结构 (x10) 不叠魔化
 const ENDLESS_DEMON_FLOOR := 500     # 登天梯 魔化 起点 层 (>= 此层 非 Boss 怪物 恒 魔化)
@@ -2552,6 +2557,13 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 	var btier: String = tower_boss_tier(mon)
 	if btier != "":
 		lines.append(btier)
+	# 打磨-119: 精英/魔化 结构 行 (M5 规格 "每 10 层 精英 数值 x3 掉落 x2" + "登天梯 500 层后
+	# 全部 怪物 默认 魔化" 的 结构/奖励 倍率 展示 位 — 数值/掉落 已 随 层表 结算, 此处 给 口径
+	# 说明; 双塔 精英 同 结构 [魔化· 前缀 + 追加 1 额外 特性 + x3/x2], 登天梯 500+ 非 Boss
+	# 层 恒 魔化; Boss 层 独立 结构 (x10/x20/x50, 分层 行 已 展示) 空串 不 叠; 只 展示 不 改 数值)
+	var sline: String = tower_struct_line(mon, tower)
+	if sline != "":
+		lines.append(sline)
 	# 打磨-117: 属性 偏向/类型 行 (M5 规格 120 怪物种 每种 固定 stat_bias: 血牛/狂攻/铁壁/均衡,
 	# 让 不同 怪物 战斗 手感 不同; 数据 层 bias_cn/category_name 已 生成 但 无 展示 位 无 消费 —
 	# 本 行 落地; Boss/无种 层 空串 不 展示; 只 展示 不 改 数值 口径)
@@ -2624,6 +2636,26 @@ func tower_boss_tier(rec: Dictionary) -> String:
 	if bt == "small":
 		return "分层: 小 Boss (每 50 层 · 数值 x%d)" % int(TOWER_BOSS_MULT_SMALL)
 	return ""
+
+# 打磨-119: 精英/魔化 结构 行 文案 (M5 规格 "每 10 层 精英 (数值 x3, 掉落 x2)" + "登天梯
+# 500 层后 所有 怪物 默认 魔化" 的 结构/奖励 倍率 展示 位 — 精英/魔化 数值 与 掉落 倍率 已
+# 随 层表/结算 落地 (hp/atk/def 落表 含 x3, reward_mult=2 入 奖励 结算), 本 接口 只给 口径
+# 说明 不改 数值; 口径: 双塔 精英 同 结构 = 「魔化·」前缀 + 追加 1 额外 特性 + 数值 x3 +
+# 掉落 x2 [镇妖塔 gen_data 落表 / 登天梯 get_endless_floor 结算 同 口径], 登天梯 500+ 非
+# Boss 层 恒 魔化 (ENDLESS_DEMON_FLOOR); 非精英 层/Boss 层 [分层 行 已 展示 防 叠]/魔化
+# 判定 未知 (无 tower 键 的 原始 记录) = 空串 不 展示; 只读 无 状态/存档/统计 副作用)
+func tower_struct_line(rec: Dictionary, tower: String = "") -> String:
+	if not bool(rec.get("is_elite", false)):
+		return ""
+	var src: String = "精英层 (每 10 层)"
+	if tower == "endless":
+		var fl: int = int(rec.get("floor", 0))
+		var mon_tower: String = str(rec.get("tower", ""))
+		# stats 字典 路径 带 tower 键 (幂等 沿用); 原始 记录 路径 由 参数 tower 判定
+		if (mon_tower == "endless" and fl >= ENDLESS_DEMON_FLOOR) or (mon_tower == "" and fl >= ENDLESS_DEMON_FLOOR):
+			src = "魔化 (500 层后 默认 魔化 + 精英 结构)"
+	return "结构: %s 数值 x%d · 掉落 x%d (追加 1 额外 特性 +「魔化·」前缀)" % [
+		src, int(TOWER_ELITE_MULT), TOWER_ELITE_REWARD]
 
 # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 "玩家 战力 = 境界 x 功法 x 装备 x 塔专属 加成"
 # 的 构成 展示 位 — 原 战力对比 行 只 给 汇总值, 玩家 不知 战力 怎么 叠 起来; 悬停 战力对比 行

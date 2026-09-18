@@ -192,6 +192,7 @@ func _ready() -> void:
 
 	await _assert_m63_diy()  # M6-3: DIY 词缀 UI (背包抽屉/槽位装配/拆卸/换装/一键/分解/评分)
 	await _assert_bag_expand()  # 打磨-97: 背包 容量 成就 解锁 (bag_40: 曾入包满30格 -> 容量 30->40)
+	await _assert_struct_line_tip()  # 打磨-119: 怪物卡 tooltip 精英/魔化 结构 行 (M5 规格 精英 x3 掉落 x2 + 登天梯 500 层后 默认 魔化 展示位: 精英/魔化 两 口径 行/普通层 Boss 层 无 行/状态行 tooltip 口径/节流/收尾)
 	await _assert_m99_upgrade()  # 打磨-99: 一键 强化 槽位 按钮 (道祖期 批量 3->4, 200 材料/件)
 	await _assert_m101_exchange_all()  # 打磨-101: 一键 兑换 按钮 (材料 连兑 买不起 的 最高 变体 词缀)
 	await _assert_stats_affix()  # 打磨-110: 修行统计 词缀 段 (stats_text 4 段 展示/tooltip 口径/埋点 联动/节流/收尾)
@@ -3603,6 +3604,94 @@ func _assert_m101_exchange_all() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g.affix_bag.is_empty() and g.affix_load.is_empty() and g.seen_affixes.is_empty() and g.affix_materials == 0, "打磨-101 收尾 干净 基准")
+
+
+# 打磨-119: 怪物卡 tooltip 精英/魔化 结构 行 (M5 规格 "每 10 层 精英 (数值 x3, 掉落 x2)" +
+# "登天梯 500 层后 所有 怪物 默认 魔化" 的 结构/奖励 倍率 展示 位 — 数值/掉落 已 随 层表/
+# 结算 落地, tooltip 追加 结构 行 给 口径 说明 (双塔 精英 同 结构 魔化· 前缀 + 追加 1 额外
+# 特性 + x3/x2, 登天梯 500+ 非 Boss 层 恒 魔化); Boss 层 分层 行 已 展示 不 叠; 状态行
+# tooltip 追加 精英/魔化 口径 说明; UI 断言: 精英 层 结构 行 = 接口 恒等/魔化 层 魔化 口径/
+# 普通层·Boss 层 无 结构 行/状态行 tooltip 口径/同态 节流/收尾 干净 基准 防 污染)
+func _assert_struct_line_tip() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 + 弱 玩家 (防 误触 结算 推进 层数)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 基准 普通层 (镇妖塔 第 1 层): 怪物卡 无 精英 标记 + tooltip 无 结构 行
+	check(str(ui._tw_mon_labels["fixed"].text).find("★精英") < 0,
+			"打磨-119 镇妖塔 第 1 层 普通层 无 精英 标记 (实际 %s)" % str(ui._tw_mon_labels["fixed"].text))
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).find("结构: ") < 0,
+			"打磨-119 镇妖塔 普通层 怪物卡 tooltip 无 结构 行 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).left(60))
+	# 2) 镇妖塔 精英层 (第 10 层): 卡片 tag ★精英 + tooltip 结构 行 = 接口 恒等
+	g.tower_fixed_floor = 9
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon119a: String = str(ui._tw_mon_labels["fixed"].text)
+	check(mon119a.find("第 10 层") >= 0 and mon119a.find("★精英") >= 0,
+			"打磨-119 镇妖塔 第 10 层 精英 卡片 tag ★精英 (实际 %s)" % mon119a)
+	check(mon119a.find("魔化·") >= 0, "打磨-119 镇妖塔 精英 名 含 魔化· 前缀 (实际 %s)" % mon119a)
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text) == g.tower_monster_tip(g.get_fixed_floor(10), "fixed")
+			and str(ui._tw_mon_labels["fixed"].tooltip_text).find("结构: 精英层 (每 10 层) 数值 x3 · 掉落 x2") >= 0,
+			"打磨-119 镇妖塔 精英 怪物卡 tooltip 含 精英 结构 行 且 = 接口 恒等 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 3))
+	# 3) 登天梯 魔化 精英 (第 510 层 >= 500): tooltip 魔化 口径 行
+	g.tower_fixed_floor = 0
+	g.tower_endless_floor = 510
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon119b: String = str(ui._tw_mon_labels["endless"].text)
+	check(mon119b.find("第 510 层") >= 0 and mon119b.find("魔化·") >= 0,
+			"打磨-119 登天梯 第 510 层 魔化 名 含 魔化· 前缀 (实际 %s)" % mon119b)
+	check(str(ui._tw_mon_labels["endless"].tooltip_text) == g.tower_monster_tip(g.get_endless_floor(510), "endless")
+			and str(ui._tw_mon_labels["endless"].tooltip_text).find("结构: 魔化 (500 层后 默认 魔化 + 精英 结构)") >= 0,
+			"打磨-119 登天梯 第 510 层 怪物卡 tooltip 含 魔化 结构 行 且 = 接口 恒等 (实际 %s)" % str(ui._tw_mon_labels["endless"].tooltip_text).get_slice("\n", 2))
+	# 4) 登天梯 499 层 (< 500 非 精英): 无 结构 行 (普通层 无 魔化 前缀)
+	g.tower_endless_floor = 499
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["endless"].text).find("魔化·") < 0,
+			"打磨-119 登天梯 第 499 层 (<500) 无 魔化 前缀 (实际 %s)" % str(ui._tw_mon_labels["endless"].text))
+	check(str(ui._tw_mon_labels["endless"].tooltip_text).find("结构: ") < 0,
+			"打磨-119 登天梯 第 499 层 普通层 tooltip 无 结构 行 (实际 %s)" % str(ui._tw_mon_labels["endless"].tooltip_text).left(60))
+	# 5) 登天梯 500 层 里程碑 Boss: 无 结构 行 (Boss 分层/宝箱 行 已 展示 不 叠)
+	g.tower_endless_floor = 500
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon119c: String = str(ui._tw_mon_labels["endless"].text)
+	check(mon119c.find("⚑Boss") >= 0 and str(ui._tw_mon_labels["endless"].tooltip_text).find("结构: ") < 0,
+			"打磨-119 登天梯 第 500 层 里程碑 Boss 无 结构 行 (Boss 不 叠 精英/魔化, 实际 %s)" % mon119c)
+	# 6) 状态行 tooltip 含 精英/魔化 口径 说明 (构建 时 写入)
+	check(str(ui._tw_status_panel.tooltip_text).find("精英/魔化 结构") >= 0
+			and str(ui._tw_status_panel.tooltip_text).find("数值 x3 + 掉落 x2") >= 0
+			and str(ui._tw_status_panel.tooltip_text).find("500 层后 全部 非 Boss 怪物 默认 魔化") >= 0,
+			"打磨-119 状态行 tooltip 含 精英/魔化 口径 说明")
+	# 7) 同态 节流: 无 塔 态 变化 再 刷 不 重写 + 无 统计 副作用
+	var snap119: Dictionary = g.stats.duplicate(true)
+	var ref119: String = str(ui._tw_mon_labels["endless"].text)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["endless"].text) == ref119 and g.stats == snap119,
+			"打磨-119 同态 节流 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
 
 
 func _finish() -> void:

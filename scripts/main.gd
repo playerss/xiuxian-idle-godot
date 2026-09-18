@@ -1645,7 +1645,7 @@ func _build_tower_page(page: Panel) -> void:
 	tpsb.bg_color = Color(0, 0, 0, 0)
 	tpsb.set_corner_radius_all(6)
 	_tw_status_panel.add_theme_stylebox_override("panel", tpsb)
-	_tw_status_panel.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n登天梯 每日 首胜 奖励: 今日 首次 通过 新纪录 层 时 额外 +0.5x 该层 灵石 (鼓励 每日 上线), 触发后 状态行 追加 已 触发 段, 跨日 自动 重置 (状态行 随 刷新 键 同步)。\n镇妖塔 25 专属 Boss 分层: 每 50 层 小 Boss (数值 x10) · 第 100/250/500/750 层 主题 Boss (x20) · 第 1000 层 最终 Boss「镇妖塔主」(x50), 分层 标记 见 怪物卡 标签 + tooltip 分层 行。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。\n顶栏 剧毒 徽标 点击 直达 本行 (紫边 高亮 1.2s)。"
+	_tw_status_panel.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n登天梯 每日 首胜 奖励: 今日 首次 通过 新纪录 层 时 额外 +0.5x 该层 灵石 (鼓励 每日 上线), 触发后 状态行 追加 已 触发 段, 跨日 自动 重置 (状态行 随 刷新 键 同步)。\n镇妖塔 25 专属 Boss 分层: 每 50 层 小 Boss (数值 x10) · 第 100/250/500/750 层 主题 Boss (x20) · 第 1000 层 最终 Boss「镇妖塔主」(x50), 分层 标记 见 怪物卡 标签 + tooltip 分层 行。\n精英/魔化 结构: 每 10 层 精英 (镇妖塔/登天梯 同 结构: 「魔化·」前缀 + 追加 1 额外 特性 + 数值 x3 + 掉落 x2), 登天梯 500 层后 全部 非 Boss 怪物 默认 魔化, 倍率 口径 见 怪物卡 tooltip 结构 行。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。\n顶栏 剧毒 徽标 点击 直达 本行 (紫边 高亮 1.2s)。"
 	outer.add_child(_tw_status_panel)
 	_tw_status_label = _label("", 14, CYAN)
 	_tw_status_panel.add_child(_tw_status_label)
