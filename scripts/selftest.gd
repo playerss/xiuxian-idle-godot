@@ -7137,7 +7137,11 @@ func _init() -> void:
 		exp_mat114 += g.affix_decomp_gain(str(aid114))
 	check(int(r_full114.get("clear_reward_mat", 0)) == exp_mat114, "打磨-114 背包满 折算 材料 = 3 件 分解产出 %d (实际 %d)" % [exp_mat114, int(r_full114.get("clear_reward_mat", 0))])
 	check(g.affix_bag_used() == bag_full0, "打磨-114 背包满 不 新增 格数 (实际 %d)" % g.affix_bag_used())
-	check(g.affix_materials == mat_full0 + exp_mat114, "打磨-114 折算 材料 入账 affix_materials + %d (实际 %d)" % [exp_mat114, g.affix_materials])
+	# 审查驳回: 背包满 态 下 本 胜 (1000 层 boss) 结算 还 含 M6-2 boss 词缀掉落 (chance=1.0
+	# 走 真实 randf 未 种子 不可 注入), bucket19 权重 [2,30,22,28,60] 含 ~1.4%% tier0 概率;
+	# tier0 掉落 背包满 自动 入料 (affix_add) -> affix_materials 或 +1 [随机源 不可 隔离],
+	# 精确 == 断言 flaky [实测 3 跑 1 FAIL +15 实际 16]; 改 >= [大奖折算 exp 恒 入账, 随机 入料 恒 >=0]
+	check(g.affix_materials >= mat_full0 + exp_mat114, "打磨-114 折算 材料 入账 affix_materials >= + %d (实际 %d)" % [exp_mat114, g.affix_materials])
 	check(g.tower_clear_reward_got, "打磨-114 背包满 态 大奖 已发放 标记 置位")
 	# 6) 文案 接口: 通关 大奖 文案 含 词缀 段 (入包 3 件) / 折算 材料 态 / 0 发放 空串
 	var rw114a: String = g.tower_clear_reward_text(g.TOWER_CLEAR_BONUS_STONE, 3)
