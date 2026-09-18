@@ -200,6 +200,7 @@ func _ready() -> void:
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
 	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)
 	await _assert_boss_tier_tag()  # 打磨-118: 镇妖塔 主题/最终 Boss 卡片 标记 分层 (卡片 tag/tooltip 分层 行/状态行 tooltip 口径/普通层 无 标记/节流/收尾)
+	await _assert_affix_drop_line()  # 打磨-120: 怪物卡 tooltip 词缀 掉落 概率 行 (M6 规格 掉落 来源 口径 展示 位: 普通 5%/精英 20%/Boss 1~3/里程碑 宝箱 1~2; 有效 掉率 = base x 种 权重 + 词缀袋 +10%; 含 掉率 行/接口 恒等/Boss 100%/状态行 tooltip 口径/节流/收尾)
 	_finish()
 
 
@@ -3681,6 +3682,87 @@ func _assert_struct_line_tip() -> void:
 	await get_tree().process_frame
 	check(str(ui._tw_mon_labels["endless"].text) == ref119 and g.stats == snap119,
 			"打磨-119 同态 节流 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+
+
+
+# 打磨-120: 怪物卡 tooltip 词缀 掉落 概率 行 (M6 规格 掉落 来源 口径 展示 位 — 普通 5% /
+# 精英 20% / Boss 1~3 件 / 里程碑 宝箱 1~2 件; 结算 口径 affix_roll_drop 已 落地 但 tooltip
+# 无 概率 展示; 只读 接口 tower_affix_drop_line = 来源 base x 种 affix_w + 词缀袋 +10%
+# 同 表达式 clamp, 100% → "1~N 件"; 败 局 不 掉 词缀 标注 仅 胜利). UI 断言: 怪物卡 tooltip
+# 含 词缀 掉落 行 = 接口 同 输入 恒等 (stats 字典 路径 不 丢)/普通 层 百分比 档/Boss 100% 1~N 件/
+# 状态行 tooltip 口径/同态 节流 无 副作用/收尾 干净 基准.
+func _assert_affix_drop_line() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 基准 普通层 (镇妖塔 第 1 层): 怪物卡 tooltip 含 词缀 掉落 行 = 接口 同 输入 恒等
+	var f1: Dictionary = g.get_fixed_floor(1)
+	var dl1: String = g.tower_affix_drop_line(f1, "fixed")
+	check(dl1.find("词缀 掉落:") >= 0 and dl1.find("%") >= 0 and dl1.find("仅 胜利 结算") >= 0,
+			"打磨-120 普通层 掉率 行 含 概率 + 仅 胜利 口径 (实际 %s)" % dl1)
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text) == g.tower_monster_tip(g.get_fixed_floor(1), "fixed"),
+			"打磨-120 镇妖塔 普通层 怪物卡 tooltip = 接口 恒等 (同 输入 口径)")
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).find(dl1) >= 0,
+			"打磨-120 镇妖塔 普通层 tooltip 含 词缀 掉落 行 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 6))
+	# 2) 镇妖塔 精英层 (第 10 层): tooltip 含 精英 掉率 行 (base 20% x 权重)
+	g.tower_fixed_floor = 9
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var f10: Dictionary = g.get_fixed_floor(10)
+	var dl10: String = g.tower_affix_drop_line(f10, "fixed")
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).find(dl10) >= 0
+			and dl10.find("来源 base 20%") >= 0,
+			"打磨-120 精英层 tooltip 含 base 20%% 掉率 行 (实际 %s)" % dl10)
+	# 3) 镇妖塔 小 Boss (第 50 层): tooltip 含 100% 1~3 件 段
+	g.tower_fixed_floor = 49
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).find("词缀 掉落: 100% (1~3 件)") >= 0,
+			"打磨-120 小 Boss tooltip 含 100%% 1~3 件 段 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).left(40))
+	# 4) 登天梯 里程碑 Boss (第 100 层): tooltip 含 100% 1~2 件 段
+	g.tower_fixed_floor = 0
+	g.tower_endless_floor = 100
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["endless"].tooltip_text).find("词缀 掉落: 100% (1~2 件)") >= 0,
+			"打磨-120 登天梯 里程碑 Boss tooltip 含 100%% 1~2 件 段 (实际 %s)" % str(ui._tw_mon_labels["endless"].tooltip_text).left(40))
+	# 5) stats 字典 路径 幂等 恒等 (UI tooltip 走 stats 路径 不 丢 掉率 行):
+	var s1: Dictionary = g.tower_monster_stats(g.get_fixed_floor(40))
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text) != "" and g.tower_affix_drop_line(s1, "fixed") == g.tower_affix_drop_line(g.tower_monster_stats(s1), "fixed"),
+			"打磨-120 stats 字典 路径 掉率 行 幂等 恒等 (40 层 精英+词缀袋)")
+	# 6) 状态行 tooltip 含 词缀 掉落 口径 说明 (构建 时 写入)
+	check(str(ui._tw_status_panel.tooltip_text).find("词缀 掉落") >= 0
+			and str(ui._tw_status_panel.tooltip_text).find("词缀 掉落 行") >= 0,
+			"打磨-120 状态行 tooltip 含 词缀 掉落 口径 说明")
+	# 7) 同态 节流: 无 塔 态 变化 再 刷 不 重写 + 无 统计 副作用
+	var snap120: Dictionary = g.stats.duplicate(true)
+	var ref120: String = str(ui._tw_mon_labels["endless"].tooltip_text)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["endless"].tooltip_text) == ref120 and g.stats == snap120,
+			"打磨-120 同态 节流 无 统计 副作用")
 	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
 	g.tower_fixed_floor = 0
 	g.tower_fixed_clear = false

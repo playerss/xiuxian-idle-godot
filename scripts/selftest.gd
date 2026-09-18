@@ -7524,6 +7524,75 @@ func _init() -> void:
 	g.poison_events.clear()
 	g.save_game()
 
+	# ---------- 打磨-120: 怪物卡 tooltip 词缀 掉落 概率 行 (M6 规格 "掉落 来源: 普通 5% /
+	# 精英 20% / Boss 1~3 件 / 里程碑 宝箱 1~2 件" 的 展示 位 缺口; 结算 口径 affix_roll_drop
+	# 已 落地 但 tooltip 无 概率 展示; 只读 接口 tower_affix_drop_line = 来源 base x 种 affix_w
+	# + 词缀袋 +10% 同 表达式 clamp, 100% → "1~N 件"; 败 局 不 掉 词缀 标注 仅 胜利 ----------
+	# 1) 镇妖塔 普通层 (第 1 层 m41 affix_w=0.63 数据 锚定): 有效 掉率 = 5% x 0.63 = 3.15%
+	var f119a: Dictionary = g.get_fixed_floor(1)
+	var m119a: Dictionary = g.tower_monster_stats(f119a)
+	var aw1: float = float(m119a["affix_w"])
+	check(abs(aw1 - 0.63) < 1e-9, "打磨-120 镇妖塔 第 1 层 种 affix_w = 0.63 数据 锚定 (实际 %.3f)" % aw1)
+	var dl1: String = g.tower_affix_drop_line(f119a, "fixed")
+	check(dl1 == "词缀 掉落: 3.1% (来源 base 5% x 种 权重 x0.630, 仅 胜利 结算)",
+			"打磨-120 镇妖塔 普通层 掉率 行 = base x 权重 (实际 %s)" % dl1)
+	# 2) 精英层 (第 10 层 m83 affix_w=0.408): 20% x 0.408 = 8.16% → 8.2%
+	var f119b: Dictionary = g.get_fixed_floor(10)
+	var m119b: Dictionary = g.tower_monster_stats(f119b)
+	var dl10: String = g.tower_affix_drop_line(f119b, "fixed")
+	check(dl10 == "词缀 掉落: 8.2% (来源 base 20% x 种 权重 x0.408, 仅 胜利 结算)",
+			"打磨-120 精英层 掉率 行 = 20%% x 权重 0.408 (实际 %s)" % dl10)
+	# 3) 精英 + 词缀袋 特性 层 (第 40 层 m23 affix_w=0.202, m23 含 词缀袋 +10%):
+	# 20% x 0.202 + 10% = 14.04% → 14.0%
+	var f119c: Dictionary = g.get_fixed_floor(40)
+	var m119c: Dictionary = g.tower_monster_stats(f119c)
+	check(float(m119c["affix_w"]) == 0.202 and "affix_bag" in m119c["traits"],
+			"打磨-120 第 40 层 精英+词缀袋 数据 锚定 (affix_w %.3f traits %s)" % [
+				float(m119c["affix_w"]), str(m119c["traits"])])
+	var dl40: String = g.tower_affix_drop_line(f119c, "fixed")
+	check(dl40 == "词缀 掉落: 14.0% (来源 base 20% x 种 权重 x0.202 + 词缀袋 +10%, 仅 胜利 结算)",
+			"打磨-120 精英+词缀袋 掉率 行 = base x 权重 + 10%% (实际 %s)" % dl40)
+	# 4) 镇妖塔 小 Boss (第 50 层 boss 来源 100% 1~3 件, 无 种 权重 1.0 兜底):
+	var dl50: String = g.tower_affix_drop_line(g.get_fixed_floor(50), "fixed")
+	check(dl50 == "词缀 掉落: 100% (1~3 件) (来源 base 100% x 种 权重 x1.000, 仅 胜利 结算)",
+			"打磨-120 小 Boss 掉率 行 = 100%% 1~3 件 (实际 %s)" % dl50)
+	# 5) 登天梯 里程碑 Boss (第 100 层 milestone 来源 100% 1~2 件):
+	var dl100: String = g.tower_affix_drop_line(g.get_endless_floor(100), "endless")
+	check(dl100 == "词缀 掉落: 100% (1~2 件) (来源 base 100% x 种 权重 x1.000, 仅 胜利 结算)",
+			"打磨-120 登天梯 里程碑 Boss 掉率 行 = 100%% 1~2 件 (实际 %s)" % dl100)
+	# 6) 登天梯 普通层 (第 2 层 无 种 时 权重 1.0; 有 种 时 动态 口径 恒等):
+	var dl2: String = g.tower_affix_drop_line(g.get_endless_floor(2), "endless")
+	var m120e: Dictionary = g.tower_monster_stats(g.get_endless_floor(2))
+	var exp2: String = "词缀 掉落: %.1f%% (来源 base 5%% x 种 权重 x%.3f%s, 仅 胜利 结算)" % [
+		5.0 * float(m120e["affix_w"]), float(m120e["affix_w"]),
+		" + 词缀袋 +10%" if "affix_bag" in m120e["traits"] else ""]
+	check(dl2 == exp2, "打磨-120 登天梯 普通层 掉率 行 = base x 权重 动态 恒等 (实际 %s)" % dl2)
+	# 7) tooltip 接入: 镇妖塔 第 1 层 含 掉率 行 = 接口 同 输入 恒等; Boss 层 含 100% 段
+	check(g.tower_monster_tip(f119a, "fixed").find(dl1) >= 0
+			and g.tower_monster_tip(f119a, "fixed").find("词缀 掉落:") >= 0,
+			"打磨-120 镇妖塔 普通层 tooltip 含 词缀 掉落 行")
+	check(g.tower_monster_tip(g.get_fixed_floor(50), "fixed").find("词缀 掉落: 100% (1~3 件)") >= 0,
+			"打磨-120 镇妖塔 Boss 层 tooltip 含 100% 1~3 件 段")
+	# 8) stats 字典 路径 幂等 恒等 (UI tooltip 走 stats 路径 不 丢 掉率 行):
+	var s1: Dictionary = g.tower_monster_stats(f119c)
+	var s1r: Dictionary = g.tower_monster_stats(s1)
+	check(g.tower_affix_drop_line(s1, "fixed") == dl40
+			and g.tower_affix_drop_line(s1r, "fixed") == dl40
+			and g.tower_monster_tip(s1, "fixed") == g.tower_monster_tip(s1r, "fixed"),
+			"打磨-120 stats 字典 路径 掉率 行 幂等 恒等 (40 层 精英+词缀袋 口径 不 丢)")
+	# 9) 只读 连读 恒定 + 无 状态/统计 副作用
+	var snap120: Dictionary = g.stats.duplicate(true)
+	check(g.tower_affix_drop_line(f119a, "fixed") == dl1
+			and g.stats == snap120, "打磨-120 只读 连读 恒定 无 统计 副作用")
+	# 收尾: 塔 态 归零 落盘 (防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

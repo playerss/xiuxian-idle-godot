@@ -2590,6 +2590,12 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 	# 向上取整 口径 与 reward_mat 一致; mats=0 防御 不 展示 该行)
 	if float(mon["mats"]) > 0.0:
 		lines.append("奖励 材料 %d" % int(ceil(float(mon["mats"]))))
+	# 打磨-120: 词缀 掉落 概率 行 (M6 规格 掉落 来源 口径 展示 位: 普通 5% / 精英 20% / Boss
+	# 1~3 件 / 里程碑 宝箱 1~2 件; 有效 掉率 = 来源 base x 种 affix_w + 词缀袋 +10%, 与
+	# affix_roll_drop 结算 同 表达式; 空串 不 展示; 败 局 不 掉 词缀 标注 仅 胜利)
+	var dline: String = tower_affix_drop_line(mon, tower)
+	if dline != "":
+		lines.append(dline)
 	# 打磨-104: 天怨 生效 提示 (仅 登天梯 且 含 天怨 特性; HP 行 已 含 放大, 此处 给 口径 说明;
 	# 与 数值 恒等 同源 grudge_mult = 1 + 层数/GRUDGE_FLOOR_DIV)
 	if tower == "endless" and float(mon["grudge_mult"]) > 1.0:
@@ -2656,6 +2662,45 @@ func tower_struct_line(rec: Dictionary, tower: String = "") -> String:
 			src = "魔化 (500 层后 默认 魔化 + 精英 结构)"
 	return "结构: %s 数值 x%d · 掉落 x%d (追加 1 额外 特性 +「魔化·」前缀)" % [
 		src, int(TOWER_ELITE_MULT), TOWER_ELITE_REWARD]
+
+# 打磨-120: 怪物卡 词缀 掉落 概率 行 (M6 规格 "掉落 来源: 普通 5% / 精英 20% / Boss 1~3 件 /
+# 里程碑 宝箱 1~2 件" 的 展示 位 — 结算 口径 affix_roll_drop 已 落地 (来源 base x 种 affix_w
+# + 词缀袋 特性 +10%, Boss/里程碑 = 100% 1~N 件), 但 怪物卡 tooltip 无 概率 展示, 玩家 悬停
+# 不知 本层 掉 词缀 概率; 只读 接口: chance = 来源 base x 种 affix_w + 词缀袋 bonus (与
+# affix_roll_drop 同 表达式 clamp 0..1), 100% → "1~N 件"; 败 局 不 掉 词缀 故 标注 仅 胜利;
+# 来源 配置 未 加载 = 空串 不 展示; 无 状态/存档/统计 副作用)
+func tower_affix_drop_line(rec: Dictionary, tower: String = "") -> String:
+	var mon: Dictionary = tower_monster_stats(rec)
+	var src_key: String = "normal"
+	if str(mon["boss_type"]) != "":
+		src_key = "milestone" if tower == "endless" else "boss"
+	elif bool(mon["is_elite"]):
+		src_key = "elite"
+	var src: Dictionary = _affix_sources.get(src_key, {})
+	if src.is_empty():
+		return ""
+	var chance: float = clampf(float(src.get("chance", 0.0)) * clampf(float(mon["affix_w"]), 0.0, 10.0), 0.0, 1.0)
+	# 词缀袋 特性 掉率 加成 (与 try_tower_challenge 结算 遍历 同 口径; 同种 不重复 特性,
+	# 魔化 追加 特性 亦 仅 1 个, bonus 至多 累加 一次 词缀袋)
+	var bonus: float = 0.0
+	for tid in mon["traits"]:
+		var td: Dictionary = trait_by_id.get(str(tid), {})
+		if not td.is_empty():
+			var mult: Dictionary = td.get("mult", {})
+			if mult.has("affix_drop"):
+				bonus += float(mult["affix_drop"])
+	if bonus > 0.0:
+		chance = clampf(chance + bonus, 0.0, 1.0)
+	var bag_seg: String = (" + 词缀袋 +%.0f%%" % (bonus * 100.0)) if bonus > 0.0 else ""
+	var base_pct: String = "%.0f" % (float(src.get("chance", 0.0)) * 100.0)
+	var aw: float = float(mon["affix_w"])
+	if chance >= 0.9995:
+		var lo: int = int(src.get("count_min", 1))
+		var hi: int = int(src.get("count_max", lo))
+		return "词缀 掉落: 100%% (%d~%d 件) (来源 base %s%% x 种 权重 x%.3f%s, 仅 胜利 结算)" % [
+			lo, hi, base_pct, aw, bag_seg]
+	return "词缀 掉落: %.1f%% (来源 base %s%% x 种 权重 x%.3f%s, 仅 胜利 结算)" % [
+		chance * 100.0, base_pct, aw, bag_seg]
 
 # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 "玩家 战力 = 境界 x 功法 x 装备 x 塔专属 加成"
 # 的 构成 展示 位 — 原 战力对比 行 只 给 汇总值, 玩家 不知 战力 怎么 叠 起来; 悬停 战力对比 行
