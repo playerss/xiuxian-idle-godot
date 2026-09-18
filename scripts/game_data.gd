@@ -36,6 +36,12 @@ const ENDLESS_BOSS_MULT := 10.0      # 登天梯 里程碑 Boss (每 100 层) �
 const ENDLESS_DEMON_FLOOR := 500     # 登天梯 魔化 起点 层 (>= 此层 非 Boss 怪物 恒 魔化)
 # 打磨-104: 天怨 特性 生效 层数 底数 (M5 规格: 仅 无尽塔 HP x (1 + 层数/400))
 const GRUDGE_FLOOR_DIV := 400
+# 打磨-118: 镇妖塔 25 专属 Boss 分层 数值乘数 (M5 规格: 20 小 Boss 每 50 层 x10 /
+# 4 主题 Boss 100·250·500·750 层 x20 / 最终 Boss「镇妖塔主」1000 层 x50; 与 gen_data
+# TOWER_BOST_MULTS 同口径 单一 来源, 只 展示 不 改 数值 — 数值 已 落表)
+const TOWER_BOSS_MULT_SMALL := 10.0
+const TOWER_BOSS_MULT_THEME := 20.0
+const TOWER_BOSS_MULT_FINAL := 50.0
 
 # 境界表: 每个境界有若干层, 逐层突破
 const REALMS := [
@@ -2529,7 +2535,11 @@ func _trait_names(traits: Array) -> String:
 func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 	var mon: Dictionary = tower_monster_stats(rec)
 	var lines: Array[String] = []
-	lines.append(str(mon["name"]) + (" (精英)" if bool(mon["is_elite"]) else "") + (" (Boss)" if str(mon["boss_type"]) != "" else ""))
+	# 打磨-118: 镇妖塔 主题/最终 Boss name 行 追加 后缀 (与 分层 行 同源 口径; 小 Boss 无 后缀
+	# 只 有 分层 行 防 重复; 登天梯 里程碑 Boss boss_type="boss" 无 分层 不 追加)
+	var btsfx: String = " (主题 Boss)" if str(mon.get("boss_type", "")) == "theme" else (
+		" (最终 Boss)" if str(mon.get("boss_type", "")) == "final" else "")
+	lines.append(str(mon["name"]) + (" (精英)" if bool(mon["is_elite"]) else "") + (" (Boss)" if str(mon["boss_type"]) != "" else "") + btsfx)
 	var tn: String = _trait_names(mon["traits"])
 	if tn != "":
 		lines.append("特性: " + tn)
@@ -2537,6 +2547,11 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 		var td: Dictionary = trait_by_id.get(str(tid), {})
 		if not td.is_empty():
 			lines.append("· %s — %s" % [str(td.get("name", "")), str(td.get("desc", ""))])
+	# 打磨-118: 镇妖塔 专属 Boss 分层 行 (小/主题/最终 Boss 分层 口径; 特性 行 后, 偏向 行 前;
+	# 与 tower_boss_tier 同源 只读 接口, 非 Boss/登天梯 里程碑 Boss 空串 不 展示)
+	var btier: String = tower_boss_tier(mon)
+	if btier != "":
+		lines.append(btier)
 	# 打磨-117: 属性 偏向/类型 行 (M5 规格 120 怪物种 每种 固定 stat_bias: 血牛/狂攻/铁壁/均衡,
 	# 让 不同 怪物 战斗 手感 不同; 数据 层 bias_cn/category_name 已 生成 但 无 展示 位 无 消费 —
 	# 本 行 落地; Boss/无种 层 空串 不 展示; 只 展示 不 改 数值 口径)
@@ -2593,6 +2608,22 @@ func tower_power_line(mon_atk: float) -> String:
 func tower_power_def_line(mon_def: float) -> String:
 	return "玩家 DEF %s vs 怪物 DEF %s (DEF 不 参与 胜负 判定, 只 影响 回合 预估)" % [
 		fmt(player_def()), fmt(mon_def)]
+
+# 打磨-118: 镇妖塔 专属 Boss 分层 文案 (M5 规格 "25 专属 Boss: 20 小 Boss 每 50 层 (x10) /
+# 4 主题 Boss 100·250·500·750 层 (x20) / 最终 Boss「镇妖塔主」1000 层 (x50)" 的 展示 位 —
+# 原 怪物卡 所有 Boss 统一 "⚑Boss" 无 分层; 只读 接口 返回 分层 说明 行: 仅 镇妖塔
+# small/theme/final 三 类型 有 分层, 非 Boss 层/登天梯 里程碑 Boss [boss_type="boss"
+# 无 分层 概念]/未知 类型 = 空串 不 展示; 数值 已 落表 本 接口 只 给 分层 口径 说明;
+# 无 状态/存档/统计 副作用)
+func tower_boss_tier(rec: Dictionary) -> String:
+	var bt: String = str(rec.get("boss_type", ""))
+	if bt == "theme":
+		return "分层: 主题 Boss (数值 x%d)" % int(TOWER_BOSS_MULT_THEME)
+	if bt == "final":
+		return "分层: 最终 Boss (数值 x%d)" % int(TOWER_BOSS_MULT_FINAL)
+	if bt == "small":
+		return "分层: 小 Boss (每 50 层 · 数值 x%d)" % int(TOWER_BOSS_MULT_SMALL)
+	return ""
 
 # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 "玩家 战力 = 境界 x 功法 x 装备 x 塔专属 加成"
 # 的 构成 展示 位 — 原 战力对比 行 只 给 汇总值, 玩家 不知 战力 怎么 叠 起来; 悬停 战力对比 行

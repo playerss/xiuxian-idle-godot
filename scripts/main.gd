@@ -1645,7 +1645,7 @@ func _build_tower_page(page: Panel) -> void:
 	tpsb.bg_color = Color(0, 0, 0, 0)
 	tpsb.set_corner_radius_all(6)
 	_tw_status_panel.add_theme_stylebox_override("panel", tpsb)
-	_tw_status_panel.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n登天梯 每日 首胜 奖励: 今日 首次 通过 新纪录 层 时 额外 +0.5x 该层 灵石 (鼓励 每日 上线), 触发后 状态行 追加 已 触发 段, 跨日 自动 重置 (状态行 随 刷新 键 同步)。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。\n顶栏 剧毒 徽标 点击 直达 本行 (紫边 高亮 1.2s)。"
+	_tw_status_panel.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n登天梯 每日 首胜 奖励: 今日 首次 通过 新纪录 层 时 额外 +0.5x 该层 灵石 (鼓励 每日 上线), 触发后 状态行 追加 已 触发 段, 跨日 自动 重置 (状态行 随 刷新 键 同步)。\n镇妖塔 25 专属 Boss 分层: 每 50 层 小 Boss (数值 x10) · 第 100/250/500/750 层 主题 Boss (x20) · 第 1000 层 最终 Boss「镇妖塔主」(x50), 分层 标记 见 怪物卡 标签 + tooltip 分层 行。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。\n顶栏 剧毒 徽标 点击 直达 本行 (紫边 高亮 1.2s)。"
 	outer.add_child(_tw_status_panel)
 	_tw_status_label = _label("", 14, CYAN)
 	_tw_status_panel.add_child(_tw_status_label)
@@ -1838,6 +1838,12 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 		# 里程碑 Boss + 宝箱 [保底 稀有+ 词缀]"; 与 drop_src=milestone 结算口径 同源,
 		# 镇妖塔 Boss / 精英层 不 追加 (仅 登天梯 100 倍数 boss 层)
 		tag = (" ⚑Boss·里程碑 宝箱" if tid == "endless" and floor_n % 100 == 0 else " ⚑Boss")
+		# 打磨-118: 镇妖塔 主题/最终 Boss 标记 分层 (M5 规格 25 专属 Boss: 20 小 + 4 主题
+		# + 最终 Boss 镇妖塔主; 数值 已 落表 分层 只 展示, 与 tower_boss_tier 同源 口径)
+		if tid == "fixed" and str(mon["boss_type"]) == "theme":
+			tag = " ⚑主题Boss"
+		elif tid == "fixed" and str(mon["boss_type"]) == "final":
+			tag = " ⚑最终Boss·镇妖塔主"
 	var mon_txt: String = "第 %d 层「%s」%s" % [floor_n, str(mon["name"]), tag]
 	var mon_l: Label = _tw_mon_labels[tid]
 	if str(mon_l.text) != mon_txt:

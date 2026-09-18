@@ -7416,6 +7416,65 @@ func _init() -> void:
 	g.poison_events.clear()
 	g.save_game()
 
+	# ---------- 打磨-118: 镇妖塔 专属 Boss 分层 标记/文案 (M5 规格 "25 专属 Boss: 20 小 Boss
+	# 每 50 层 x10 / 4 主题 Boss 100·250·500·750 层 x20 / 最终 Boss 镇妖塔主 1000 层 x50"
+	# 展示 位; tower_boss_tier 只读 接口 + tooltip 分层 行 + name 行 主题/最终 后缀;
+	# 数值 已 落表 只 展示 不 改 数值; 非 Boss/登天梯 里程碑 Boss 空串 不 展示 ----------
+	# 1) tower_boss_tier 四 态: small/theme/final/非 Boss 空串 (数据 锚定 镇妖塔 层表)
+	check(g.tower_boss_tier(g.get_fixed_floor(50)) == "分层: 小 Boss (每 50 层 · 数值 x10)",
+			"打磨-118 第 50 层 小 Boss 分层 文案 (实际 %s)" % g.tower_boss_tier(g.get_fixed_floor(50)))
+	check(g.tower_boss_tier(g.get_fixed_floor(100)) == "分层: 主题 Boss (数值 x20)",
+			"打磨-118 第 100 层 主题 Boss 分层 文案 (实际 %s)" % g.tower_boss_tier(g.get_fixed_floor(100)))
+	check(g.tower_boss_tier(g.get_fixed_floor(1000)) == "分层: 最终 Boss (数值 x50)",
+			"打磨-118 第 1000 层 最终 Boss 分层 文案 (实际 %s)" % g.tower_boss_tier(g.get_fixed_floor(1000)))
+	check(g.tower_boss_tier(g.get_fixed_floor(1)) == "" and g.tower_boss_tier(g.get_fixed_floor(10)) == "",
+			"打磨-118 非 Boss 层 (普通/精英) 分层 空串 不 展示")
+	check(g.tower_boss_tier(g.get_endless_floor(100)) == "",
+			"打磨-118 登天梯 里程碑 Boss (boss_type=boss 无 分层) 空串 不 展示")
+	# 2) tooltip 分层 行: 100 层 主题 Boss 含 分层 行 + name 行 含 (主题 Boss) 后缀
+	var tip118a: String = g.tower_monster_tip(g.get_fixed_floor(100), "fixed")
+	check(tip118a.find("分层: 主题 Boss (数值 x20)") >= 0,
+			"打磨-118 第 100 层 tooltip 含 主题 Boss 分层 行 (实际 %s)" % tip118a.get_slice("\n", 2))
+	check(tip118a.get_slice("\n", 0).find(" (主题 Boss)") >= 0,
+			"打磨-118 第 100 层 tooltip name 行 含 (主题 Boss) 后缀 (实际 %s)" % tip118a.get_slice("\n", 0))
+	# 3) 1000 层 最终 Boss: 分层 行 + name 行 (最终 Boss) 后缀 (镇妖塔主)
+	var tip118b: String = g.tower_monster_tip(g.get_fixed_floor(1000), "fixed")
+	check(tip118b.find("分层: 最终 Boss (数值 x50)") >= 0,
+			"打磨-118 第 1000 层 tooltip 含 最终 Boss 分层 行 (实际 %s)" % tip118b.get_slice("\n", 2))
+	check(tip118b.get_slice("\n", 0).find(" (最终 Boss)") >= 0 and tip118b.get_slice("\n", 0).find("镇妖塔主") >= 0,
+			"打磨-118 第 1000 层 tooltip name 行 含 (最终 Boss) + 镇妖塔主 (实际 %s)" % tip118b.get_slice("\n", 0))
+	# 4) 50 层 小 Boss: 分层 行 有, name 行 无 后缀 (防 重复 口径)
+	var tip118c: String = g.tower_monster_tip(g.get_fixed_floor(50), "fixed")
+	check(tip118c.find("分层: 小 Boss (每 50 层 · 数值 x10)") >= 0,
+			"打磨-118 第 50 层 tooltip 含 小 Boss 分层 行 (实际 %s)" % tip118c.get_slice("\n", 2))
+	check(tip118c.get_slice("\n", 0).find(" (主题 Boss)") < 0 and tip118c.get_slice("\n", 0).find(" (最终 Boss)") < 0,
+			"打磨-118 第 50 层 小 Boss name 行 无 主题/最终 后缀 (防 重复)")
+	# 5) 非 Boss 层 / 登天梯 里程碑 Boss: tooltip 无 分层 行
+	check(g.tower_monster_tip(g.get_fixed_floor(1), "fixed").find("分层:") < 0,
+			"打磨-118 镇妖塔 普通层 tooltip 无 分层 行")
+	check(g.tower_monster_tip(g.get_endless_floor(100), "endless").find("分层: 小") < 0
+			and g.tower_monster_tip(g.get_endless_floor(100), "endless").find("分层: 主题") < 0
+			and g.tower_monster_tip(g.get_endless_floor(100), "endless").find("分层: 最终") < 0,
+			"打磨-118 登天梯 里程碑 Boss tooltip 无 小/主题/最终 分层 行 (兜底 分层: Boss 不 展示)")
+	# 6) stats 字典 路径 幂等 恒等 (UI tooltip 走 stats 路径 不 丢 分层 行)
+	var m118: Dictionary = g.tower_monster_stats(g.get_fixed_floor(250))
+	var m118r: Dictionary = g.tower_monster_stats(m118)
+	check(g.tower_monster_tip(m118, "fixed") == g.tower_monster_tip(m118r, "fixed"),
+			"打磨-118 stats 字典 路径 tooltip = 原始 记录 路径 恒等 (250 层 主题 Boss 分层 行 不 丢)")
+	# 7) 只读 连读 恒定 + 无 状态/统计 副作用
+	var snap118: Dictionary = g.stats.duplicate(true)
+	check(g.tower_boss_tier(g.get_fixed_floor(500)) == "分层: 主题 Boss (数值 x20)"
+			and g.tower_boss_tier(g.get_fixed_floor(500)) == "分层: 主题 Boss (数值 x20)"
+			and g.stats == snap118, "打磨-118 只读 连读 恒定 无 统计 副作用")
+	# 收尾: 塔 态 归零 落盘 (防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

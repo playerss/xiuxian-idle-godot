@@ -198,6 +198,7 @@ func _ready() -> void:
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
 	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)
+	await _assert_boss_tier_tag()  # 打磨-118: 镇妖塔 主题/最终 Boss 卡片 标记 分层 (卡片 tag/tooltip 分层 行/状态行 tooltip 口径/普通层 无 标记/节流/收尾)
 	_finish()
 
 
@@ -6450,3 +6451,99 @@ func _assert_tower_power_compose() -> void:
 	await get_tree().process_frame
 	check(int(g.tower_endless_floor) == 1 and int(g.tower_endless_best) == 0,
 			"打磨-113 收尾 干净 基准 (塔 态 归零)")
+
+
+# 打磨-118: 镇妖塔 专属 Boss 分层 卡片 标记 + tooltip 分层 行 (M5 规格 "25 专属 Boss: 20 小
+# Boss 每 50 层 x10 / 4 主题 Boss 100·250·500·750 层 x20 / 最终 Boss 镇妖塔主 1000 层 x50"
+# 展示 位 — 原 怪物卡 所有 Boss 统一 ⚑Boss 无 分层; 卡片 tag 主题/最终 Boss 分层 标记 +
+# tooltip 分层 行 + 状态行 tooltip 分层 口径 说明; 数值 已 落表 只 展示 不 改 数值;
+# UI 断言: 普通层 无 分层 标记/主题 Boss 卡片 tag + tooltip 分层 行/最终 Boss tag/
+# 状态行 tooltip 分层 口径/登天梯 里程碑 Boss 不 叠 分层/同态 节流/收尾 干净 基准 防 污染)
+func _assert_boss_tier_tag() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 + 弱 玩家 (防 误触 结算 推进 层数)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 基准 普通层 (镇妖塔 第 1 层): 怪物卡 无 Boss/主题/最终 标记 + 无 分层 行
+	var mon118a: String = str(ui._tw_mon_labels["fixed"].text)
+	check(mon118a.find("⚑") < 0 and mon118a.find("★精英") < 0,
+			"打磨-118 镇妖塔 第 1 层 普通层 无 Boss 标记 (实际 %s)" % mon118a)
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).find("分层:") < 0,
+			"打磨-118 镇妖塔 普通层 怪物卡 tooltip 无 分层 行 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).left(60))
+	# 2) 主题 Boss (镇妖塔 第 100 层 万幻妖殿主): 卡片 tag 含 主题Boss + tooltip 分层 行
+	g.tower_fixed_floor = 99
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon118b: String = str(ui._tw_mon_labels["fixed"].text)
+	check(mon118b.find("第 100 层") >= 0 and mon118b.find("⚑主题Boss") >= 0,
+			"打磨-118 镇妖塔 第 100 层 主题 Boss 卡片 tag = ⚑主题Boss (实际 %s)" % mon118b)
+	check(mon118b.find("万幻妖殿主") >= 0, "打磨-118 主题 Boss 名 = 万幻妖殿主 (数据 锚定, 实际 %s)" % mon118b)
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).find("分层: 主题 Boss (数值 x20)") >= 0,
+			"打磨-118 主题 Boss 怪物卡 tooltip 含 分层 行 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 2))
+	# 3) 小 Boss (镇妖塔 第 50 层): 卡片 tag 恒 ⚑Boss (旧 口径 不变) + tooltip 含 小 Boss 分层 行
+	g.tower_fixed_floor = 49
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon118c: String = str(ui._tw_mon_labels["fixed"].text)
+	check(mon118c.find("第 50 层") >= 0 and mon118c.find("⚑Boss") >= 0 and mon118c.find("主题") < 0,
+			"打磨-118 小 Boss 卡片 tag 恒 ⚑Boss (旧 口径 不变, 实际 %s)" % mon118c)
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).find("分层: 小 Boss (每 50 层 · 数值 x10)") >= 0,
+			"打磨-118 小 Boss 怪物卡 tooltip 含 小 Boss 分层 行 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 2))
+	# 4) 最终 Boss (镇妖塔 通关 守塔 模式 恒 1000 层 镇妖塔主): 卡片 tag 含 最终Boss·镇妖塔主
+	g.tower_fixed_floor = 1000
+	g.tower_fixed_clear = true
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon118d: String = str(ui._tw_mon_labels["fixed"].text)
+	check(mon118d.find("⚑最终Boss·镇妖塔主") >= 0,
+			"打磨-118 最终 Boss 卡片 tag = ⚑最终Boss·镇妖塔主 (实际 %s)" % mon118d)
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).find("分层: 最终 Boss (数值 x50)") >= 0,
+			"打磨-118 最终 Boss 怪物卡 tooltip 含 最终 Boss 分层 行 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 2))
+	# 5) 登天梯 里程碑 Boss (100 层): 卡片 tag 恒 ⚑Boss·里程碑 宝箱 (不 叠 镇妖塔 分层)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 100
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var mon118e: String = str(ui._tw_mon_labels["endless"].text)
+	check(mon118e.find("⚑Boss·里程碑 宝箱") >= 0 and mon118e.find("主题") < 0 and mon118e.find("最终") < 0,
+			"打磨-118 登天梯 里程碑 Boss 不 叠 镇妖塔 分层 标记 (实际 %s)" % mon118e)
+	check(str(ui._tw_mon_labels["endless"].tooltip_text).find("分层:") < 0,
+			"打磨-118 登天梯 里程碑 Boss tooltip 无 分层 行 (实际 %s)" % str(ui._tw_mon_labels["endless"].tooltip_text).left(60))
+	# 6) 状态行 tooltip 含 分层 口径 说明 (构建 时 写入)
+	check(str(ui._tw_status_panel.tooltip_text).find("主题 Boss (x20)") >= 0
+			and str(ui._tw_status_panel.tooltip_text).find("最终 Boss") >= 0
+			and str(ui._tw_status_panel.tooltip_text).find("小 Boss (数值 x10)") >= 0,
+			"打磨-118 状态行 tooltip 含 25 Boss 分层 口径 说明")
+	# 7) 同态 节流: 无 塔 态 变化 再 刷 不 重写 + 无 统计 副作用
+	var snap118: Dictionary = g.stats.duplicate(true)
+	var ref118: String = str(ui._tw_mon_labels["endless"].text)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["endless"].text) == ref118 and g.stats == snap118,
+			"打磨-118 同态 节流 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_fixed_floor) == 0 and int(g.tower_endless_floor) == 1,
+			"打磨-118 收尾 干净 基准 (塔 态 归零)")
