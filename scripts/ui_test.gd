@@ -197,6 +197,7 @@ func _ready() -> void:
 	await _assert_stats_affix()  # 打磨-110: 修行统计 词缀 段 (stats_text 4 段 展示/tooltip 口径/埋点 联动/节流/收尾)
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
+	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)
 	_finish()
 
 
@@ -5498,6 +5499,76 @@ func _assert_tower_reward_weights() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(int(g.tower_endless_floor) == 1, "打磨-108 收尾 干净 基准 (塔 态 归零)")
+
+
+# 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 120 怪物种 每种 stat_bias
+# 血牛/狂攻/铁壁/均衡 的 展示 位; 数据 层 bias_cn/category_name 已 生成 但 无 展示 位 —
+# 本轮 tower_monster_stats 携带 字段 + tower_monster_tip 追加 类型 · 偏向 行).
+# UI 断言: 怪物卡 tooltip 含 偏向 行 + = 接口 恒等 (stats 字典 路径 不 丢)/Boss 层 无 行/
+# 升层 动态 同步/同态 节流 无 副作用 (收尾 干净 基准 防 污染).
+func _assert_monster_bias_tip() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 (镇妖塔 第 1 层 种 m41 = 虫群 · 均衡型 数据 锚定)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 5
+	g.tower_endless_best = 4
+	g.poison_battles = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.auto_tower = false
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 镇妖塔 怪物卡 tooltip 含 类型 · 偏向 行 + = 接口 (stats 字典 路径 不 丢 偏向 行)
+	var fr: Dictionary = g.get_fixed_floor(1)
+	var fs: Dictionary = g.tower_monster_stats(fr)
+	check(str(fs.get("bias_cn", "")) != "" and str(fs.get("category_name", "")) != "",
+			"打磨-117 镇妖塔 第 1 层 stats 有 偏向/类型 (数据 锚定, 实际 %s / %s)" % [str(fs.get("bias_cn")), str(fs.get("category_name"))])
+	var f_tip: String = str(ui._tw_mon_labels["fixed"].tooltip_text)
+	var f_exp: String = g.tower_monster_tip(fs, "fixed")
+	check(f_tip == f_exp, "打磨-117 镇妖塔 怪物卡 tooltip = 接口 (同 输入 口径, 偏向 行 stats 路径 不 丢)")
+	check(f_tip.find("类型 · 偏向: %s" % str(fs.get("category_name", ""))) >= 0,
+			"打磨-117 镇妖塔 怪物卡 tooltip 含 类型 · 偏向 行 (期望 %s, 实际 %s)" % [str(fs.get("category_name")), f_tip.left(60)])
+	check(f_tip.find("类型 · 偏向: %s · %s" % [str(fs.get("category_name", "")), str(fs.get("bias_cn", ""))]) >= 0,
+			"打磨-117 镇妖塔 tooltip 偏向 行 含 偏向 名 (实际 %s)" % f_tip.get_slice("\n", 1))
+	# 登天梯 普通层 (第 5 层 有 种): 同 口径 恒等
+	var er: Dictionary = g.get_endless_floor(5)
+	var es: Dictionary = g.tower_monster_stats(er)
+	var e_tip: String = str(ui._tw_mon_labels["endless"].tooltip_text)
+	check(e_tip == g.tower_monster_tip(es, "endless") and e_tip.find("类型 · 偏向") >= 0,
+			"打磨-117 登天梯 怪物卡 tooltip 含 偏向 行 且 = 接口 (实际 %s)" % str(es.get("bias_cn")))
+	# Boss 层 (第 50 层 小 Boss 无 种): 无 类型 · 偏向 行 (空串 不 展示)
+	g.tower_fixed_floor = 49
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var b_tip: String = str(ui._tw_mon_labels["fixed"].tooltip_text)
+	check(b_tip.find("类型 · 偏向") < 0, "打磨-117 Boss 层 怪物卡 tooltip 无 类型 · 偏向 行 (实际 %s)" % b_tip.left(60))
+	# 同态 节流: 无 塔 态 变化 再 刷 不 重写 + 无 统计 副作用
+	var snap117u: Dictionary = g.stats.duplicate(true)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text) == b_tip and g.stats == snap117u,
+			"打磨-117 同态 再刷 tooltip 稳定 无 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.learned.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_endless_floor) == 1, "打磨-117 收尾 干净 基准 (塔 态 归零)")
 
 
 # 打磨-115: 登天梯 里程碑 Boss 「里程碑 宝箱」 怪物卡 标记 + 胜利 底部消息/浮动 宝箱 段

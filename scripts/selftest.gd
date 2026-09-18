@@ -7355,6 +7355,63 @@ func _init() -> void:
 	g.tower_clear_reward_got = false
 	g.save_game()
 
+	# ---------- 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 120 怪物种 每种
+	# 固定 stat_bias 血牛/狂攻/铁壁/均衡; 数据 层 bias_cn/category_name 已 生成 但 无 展示 位
+	# 无 消费 — 本 行 落地). 数据层断言: stats 携带 字段/原始 记录 从 种 解析/Boss 无种 兜底/
+	# stats 幂等 再算 恒等/tooltip 恒等/只读 无 副作用 ----------
+	# 受控 基准: 塔 态 归零 + 无 剧毒
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	# 1) 数据 锚定: 镇妖塔 第 1 层 种 m41 (虫群 · 均衡型) — stats 解析 bias_cn/category_name
+	var rec117: Dictionary = g.get_fixed_floor(1)
+	var m117: Dictionary = g.tower_monster_stats(rec117)
+	var sp117: Dictionary = g.monster_by_id.get(str(rec117.get("species", "")), {})
+	check(not sp117.is_empty() and str(m117.get("bias_cn", "")) == str(sp117.get("bias_cn", "")),
+			"打磨-117 镇妖塔 第 1 层 stats bias_cn = 怪物种 bias_cn (数据 锚定, 实际 %s)" % str(m117.get("bias_cn")))
+	check(str(m117.get("category_name", "")) == str(sp117.get("category_name", "")) and str(m117.get("category_name", "")) != "",
+			"打磨-117 镇妖塔 第 1 层 stats category_name = 怪物种 (数据 锚定, 实际 %s)" % str(m117.get("category_name")))
+	# 2) tooltip 含 类型 · 偏向 行 (特性 行 后, HP 行 前; 数值 与 接口 同源 恒等)
+	var tip117: String = g.tower_monster_tip(m117, "fixed")
+	check(tip117.find("类型 · 偏向: %s" % str(m117.get("category_name", ""))) >= 0,
+			"打磨-117 镇妖塔 第 1 层 tooltip 含 类型 · 偏向 行 (实际 %s)" % tip117.get_slice("\n", 1))
+	# 3) stats 字典 幂等 再算 恒等 (UI tooltip 走 stats 路径 不 丢 偏向/类型; 与 既有 stone_w/affix_w 同 口径)
+	var m117r: Dictionary = g.tower_monster_stats(m117)
+	check(str(m117r.get("bias_cn", "")) == str(m117.get("bias_cn", "")) and str(m117r.get("category_name", "")) == str(m117.get("category_name", "")),
+			"打磨-117 stats 字典 幂等 再算 bias_cn/category_name 恒等 (无 丢失, 实际 %s / %s)" % [str(m117r.get("bias_cn")), str(m117r.get("category_name"))])
+	var tip117r: String = g.tower_monster_tip(m117r, "fixed")
+	check(tip117r == tip117, "打磨-117 stats 字典 路径 tooltip = 原始 记录 路径 恒等 (偏向 行 不 丢)")
+	# 4) 登天梯 普通层 (第 5 层 有 种): 同 口径 恒等 (种 轮转 解析 偏向/类型)
+	var erec117: Dictionary = g.get_endless_floor(5)
+	var e117: Dictionary = g.tower_monster_stats(erec117)
+	var esp117: Dictionary = g.monster_by_id.get(str(erec117.get("species", "")), {})
+	check(not esp117.is_empty() and str(e117.get("bias_cn", "")) == str(esp117.get("bias_cn", "")),
+			"打磨-117 登天梯 第 5 层 stats bias_cn = 怪物种 (数据 锚定, 实际 %s)" % str(e117.get("bias_cn")))
+	check(g.tower_monster_tip(e117, "endless").find("类型 · 偏向: %s" % str(e117.get("category_name", ""))) >= 0,
+			"打磨-117 登天梯 第 5 层 tooltip 含 类型 · 偏向 行 (实际 %s)" % str(e117.get("bias_cn")))
+	# 5) Boss 层 (镇妖塔 第 50 层 小 Boss 无 种): 偏向/类型 空串 不 展示 该 行
+	var brec117: Dictionary = g.get_fixed_floor(50)
+	var b117: Dictionary = g.tower_monster_stats(brec117)
+	check(str(brec117.get("species", "")) == "" and str(b117.get("bias_cn", "")) == "" and str(b117.get("category_name", "")) == "",
+			"打磨-117 Boss 层 无 种 偏向/类型 空串 兜底 (实际 bias=%s cat=%s)" % [str(b117.get("bias_cn")), str(b117.get("category_name"))])
+	check(g.tower_monster_tip(b117, "fixed").find("类型 · 偏向") < 0,
+			"打磨-117 Boss 层 tooltip 无 类型 · 偏向 行 (空串 不 展示, 实际 %s)" % g.tower_monster_tip(b117, "fixed").left(60))
+	# 6) 只读 连读 恒定 + 无 状态/统计 副作用
+	var snap117: Dictionary = g.stats.duplicate(true)
+	check(g.tower_monster_tip(m117, "fixed") == tip117 and g.monster_by_id.size() == 145 and g.stats == snap117,
+			"打磨-117 只读 连读 恒定 无 资源/统计 副作用")
+	# 收尾: 塔 态 归零 落盘 (防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

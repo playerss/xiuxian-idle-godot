@@ -1138,6 +1138,10 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 	# (Boss 层 无 reward 缺 字段 = 1.0 旧 口径 不 加成 不 放大)
 	var stone_w := float(rec.get("stone_w", 1.0)) if is_stats else 1.0
 	var affix_w := float(rec.get("affix_w", 1.0)) if is_stats else 1.0
+	# 打磨-117: 属性 偏向/类型 (M5 规格 每种 stat_bias 血牛/狂攻/铁壁/均衡; stats 字典
+	# 携带 已 解析 值 幂等, 原始 层 记录 从 怪物种 解析; Boss/无种 = 空串 不 展示)
+	var bias_cn := str(rec.get("bias_cn", "")) if is_stats else ""
+	var category_name := str(rec.get("category_name", "")) if is_stats else ""
 	if not is_stats:
 		var sp: Dictionary = monster_by_id.get(str(rec.get("species", "")), {})
 		if not sp.is_empty():
@@ -1149,6 +1153,8 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 				affix_w = float((sp_rw as Dictionary).get("affix_w", 1.0))
 			mats = 1.0 + mat_w
 			stone *= stone_w
+			bias_cn = str(sp.get("bias_cn", ""))
+			category_name = str(sp.get("category_name", ""))
 	for tid in tlist:
 		var td: Dictionary = trait_by_id.get(str(tid), {})
 		if td.is_empty():
@@ -1187,6 +1193,8 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 		# 打磨-108: stone_w/affix_w 随 stats 传递 — 幂等 再算 沿用 已 解析 权重 (stone 首算 已 叠,
 		# 再算 不 二重 放大); 结算 时 affix_w 供 词缀 掉率 加成 (base x affix_w)
 		"stone_w": stone_w, "affix_w": affix_w,
+		# 打磨-117: 属性 偏向/类型 随 stats 传递 (幂等 再算 沿用; Boss/无种 = 空串 不 展示)
+		"bias_cn": bias_cn, "category_name": category_name,
 	}
 
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
@@ -2529,6 +2537,20 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 		var td: Dictionary = trait_by_id.get(str(tid), {})
 		if not td.is_empty():
 			lines.append("· %s — %s" % [str(td.get("name", "")), str(td.get("desc", ""))])
+	# 打磨-117: 属性 偏向/类型 行 (M5 规格 120 怪物种 每种 固定 stat_bias: 血牛/狂攻/铁壁/均衡,
+	# 让 不同 怪物 战斗 手感 不同; 数据 层 bias_cn/category_name 已 生成 但 无 展示 位 无 消费 —
+	# 本 行 落地; Boss/无种 层 空串 不 展示; 只 展示 不 改 数值 口径)
+	var bias_txt: String = ""
+	var catn: String = str(mon.get("category_name", ""))
+	var biasn: String = str(mon.get("bias_cn", ""))
+	if catn != "" and biasn != "":
+		bias_txt = "%s · %s" % [catn, biasn]
+	elif catn != "":
+		bias_txt = catn
+	elif biasn != "":
+		bias_txt = biasn
+	if bias_txt != "":
+		lines.append("类型 · 偏向: %s" % bias_txt)
 	lines.append("HP %s · ATK %s · DEF %s" % [fmt(float(mon["hp"])), fmt(float(mon["atk"])), fmt(float(mon["def"]))])
 	lines.append("奖励 灵石 %s" % fmt(float(mon["stone"])))
 	# 打磨-108: 怪物种 掉落 权重 展示 (M5 规格 掉落 差异化 灵石/词缀 段: 灵石 已 乘 权重
