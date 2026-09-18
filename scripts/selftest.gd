@@ -7593,6 +7593,45 @@ func _init() -> void:
 	g.poison_events.clear()
 	g.save_game()
 
+	# ---------- 打磨-121: 下一 里程碑 行 (M5 规格 "每 100 层 天阶 里程碑" 进度 展示 位) ----------
+	# 1) 镇妖塔 普通 层 (待挑战 第 1 层): 下一 里程碑 = 第 10 层 精英层 (还有 9 层)
+	check(g.tower_milestone_line("fixed", 1) == "下一 里程碑: 第 10 层精英层 (还有 9 层)",
+		"打磨-121 镇妖塔 第 1 层 下一 里程碑 = 10 层 精英 (实际 %s)" % g.tower_milestone_line("fixed", 1))
+	# 2) 镇妖塔 待挑战 层 本身 是 精英 (第 10 层): 就在 本层 标注
+	check(g.tower_milestone_line("fixed", 10) == "下一 里程碑: 就在 第 10 层精英层 (结构 口径 见 怪物卡 tooltip)",
+		"打磨-121 镇妖塔 第 10 层 本层 即是 精英 标注 就在 本层 (实际 %s)" % g.tower_milestone_line("fixed", 10))
+	# 3) 镇妖塔 小 Boss 层 (第 50 层): 就在 本层 小 Boss (数值 x10)
+	check(g.tower_milestone_line("fixed", 50) == "下一 里程碑: 就在 第 50 层小 Boss (数值 x10) (结构 口径 见 怪物卡 tooltip)",
+		"打磨-121 镇妖塔 第 50 层 小 Boss 就在 本层 (实际 %s)" % g.tower_milestone_line("fixed", 50))
+	# 4) 镇妖塔 主题 Boss 层 (第 100 层): 就在 本层 主题 Boss (数值 x20)
+	check(g.tower_milestone_line("fixed", 100) == "下一 里程碑: 就在 第 100 层主题 Boss (数值 x20) (结构 口径 见 怪物卡 tooltip)",
+		"打磨-121 镇妖塔 第 100 层 主题 Boss 就在 本层 (实际 %s)" % g.tower_milestone_line("fixed", 100))
+	# 5) 镇妖塔 普通 层 下一 是 小 Boss (第 49 层 -> 50 层 小 Boss 还有 1 层)
+	check(g.tower_milestone_line("fixed", 49) == "下一 里程碑: 第 50 层小 Boss (数值 x10) (还有 1 层)",
+		"打磨-121 镇妖塔 第 49 层 下一 = 50 层 小 Boss (实际 %s)" % g.tower_milestone_line("fixed", 49))
+	# 6) 镇妖塔 最终 Boss 层 未 通关 (第 1000 层): 就在 本层 最终 Boss (数值 x50)
+	check(g.tower_milestone_line("fixed", 1000) == "下一 里程碑: 就在 第 1000 层最终 Boss (数值 x50) (结构 口径 见 怪物卡 tooltip)",
+		"打磨-121 镇妖塔 第 1000 层 未 通关 最终 Boss 就在 本层 (实际 %s)" % g.tower_milestone_line("fixed", 1000))
+	# 7) 镇妖塔 通关 守塔 模式: 空串 (无 下一 层 概念)
+	g.tower_fixed_clear = true
+	check(g.tower_milestone_line("fixed", 1000) == "", "打磨-121 镇妖塔 通关 守塔 模式 空串")
+	g.tower_fixed_clear = false
+	# 8) 登天梯 普通 层 (第 1 层): 下一 里程碑 = 100 层 里程碑 Boss + 宝箱 (还有 99 层)
+	check(g.tower_milestone_line("endless", 1) == "下一 里程碑: 第 100 层 里程碑 Boss + 宝箱 (还有 99 层, 保底 稀有+ 词缀)",
+		"打磨-121 登天梯 第 1 层 下一 = 100 层 里程碑 (实际 %s)" % g.tower_milestone_line("endless", 1))
+	# 9) 登天梯 里程碑 层 (第 100 层): 下一 = 200 层 (还有 100 层)
+	check(g.tower_milestone_line("endless", 100) == "下一 里程碑: 第 200 层 里程碑 Boss + 宝箱 (还有 100 层, 保底 稀有+ 词缀)",
+		"打磨-121 登天梯 第 100 层 下一 = 200 层 (实际 %s)" % g.tower_milestone_line("endless", 100))
+	# 10) 登天梯 高层 (第 550 层): 下一 = 600 层 (还有 50 层)
+	check(g.tower_milestone_line("endless", 550) == "下一 里程碑: 第 600 层 里程碑 Boss + 宝箱 (还有 50 层, 保底 稀有+ 词缀)",
+		"打磨-121 登天梯 第 550 层 下一 = 600 层 (实际 %s)" % g.tower_milestone_line("endless", 550))
+	# 11) 未知 塔: 空串 防御
+	check(g.tower_milestone_line("unknown", 5) == "", "打磨-121 未知 塔 空串 防御")
+	# 12) 只读 连读 恒定 无 状态/统计 副作用
+	var snap121: Dictionary = g.stats.duplicate(true)
+	check(g.tower_milestone_line("fixed", 1) == g.tower_milestone_line("fixed", 1)
+			and g.stats == snap121, "打磨-121 只读 连读 恒定 无 统计 副作用")
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

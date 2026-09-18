@@ -1718,13 +1718,17 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	# 打磨-105: 战斗时长 预估 (M5 数值 模型 rounds 仅 展示: ceil(怪 HP/预估伤害), 败 预测 追加 口径 说明)
 	var round_l := _label("", 12, DIM)
 	box.add_child(round_l)
+	# 打磨-121: 下一 里程碑 行 (M5 规格 "每 100 层 天阶 里程碑" 进度 展示 位: 距 下个 精英/Boss/
+	# 里程碑 Boss 还有 几 层; 文本 变化 才 刷, 空串 隐藏 [镇妖塔 通关 守塔 模式 无 下一 层 概念])
+	var ms_l := _label("", 12, DIM)
+	box.add_child(ms_l)
 	# 挑战按钮 (立即结算一次; 与 自动爬塔 同路径 try_tower_challenge)
 	var btn := _make_button("挑战 本层")
 	btn.pressed.connect(_on_tower_challenge.bind(tid))
 	box.add_child(btn)
 	_tw_cards[tid] = {
 		"panel": card, "floor": floor_l, "bar_bg": bar_bg, "bar_fill": bar_fill,
-		"btn": btn,
+		"btn": btn, "milestone": ms_l,
 	}
 	_tw_mon_labels[tid] = mon_l
 	_tw_pwr_labels[tid] = pwr_l
@@ -1888,6 +1892,15 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 		round_l2.text = round_txt
 		round_l2.tooltip_text = ("战斗时长 预估 (M5 数值 模型: 回合数 = ceil(怪物 HP / 预估伤害), 伤害 = max(1, 玩家有效 ATK - 怪物 DEF) 取 最不利 0.9 浮动档)。\n"
 			+ "仅 展示 用 — 胜负 判定 是 即时 的 (玩家有效 ATK ≥ 怪物 ATK x 0.85), 回合数 不 改变 胜负。")
+	# 打磨-121: 下一 里程碑 行 (M5 规格 "每 100 层 天阶 里程碑" 进度 展示 位; 目标 = 当前 挑战 层
+	# 之后 最近 的 精英/Boss/里程碑 Boss [本层 即是 时 标注 就在本层]; 文本 变化 才 刷, 空串 隐藏)
+	var ms_l2: Label = c["milestone"]
+	var ms_txt: String = g.tower_milestone_line(tid, floor_n)
+	if str(ms_l2.text) != ms_txt:
+		ms_l2.text = ms_txt
+		ms_l2.visible = ms_txt != ""
+		ms_l2.tooltip_text = ("下一 里程碑 (M5 规格: 每 10 层 精英 [x3/x2] · 镇妖塔 每 50 层 小 Boss [x10] / 第 100/250/500/750 层 主题 Boss [x20] / 第 1000 层 最终 Boss [x50] · 登天梯 每 100 层 里程碑 Boss + 宝箱 [保底 稀有+ 词缀])。\n"
+			+ "当前 待挑战 层 本身 是 精英/Boss 层 时 标注 就在本层; 镇妖塔 通关 守塔 模式 恒打 1000 层 Boss, 无 下一 层 概念 不 展示。")
 
 
 # ---------- 成就页 ----------

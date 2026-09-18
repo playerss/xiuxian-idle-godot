@@ -201,6 +201,7 @@ func _ready() -> void:
 	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)
 	await _assert_boss_tier_tag()  # 打磨-118: 镇妖塔 主题/最终 Boss 卡片 标记 分层 (卡片 tag/tooltip 分层 行/状态行 tooltip 口径/普通层 无 标记/节流/收尾)
 	await _assert_affix_drop_line()  # 打磨-120: 怪物卡 tooltip 词缀 掉落 概率 行 (M6 规格 掉落 来源 口径 展示 位: 普通 5%/精英 20%/Boss 1~3/里程碑 宝箱 1~2; 有效 掉率 = base x 种 权重 + 词缀袋 +10%; 含 掉率 行/接口 恒等/Boss 100%/状态行 tooltip 口径/节流/收尾)
+	await _assert_tower_milestone_line()  # 打磨-121: 双塔 卡片 下一 里程碑 行 (M5 规格 每 100 层 天阶 里程碑 进度 展示 位: 距 下个 精英/Boss/里程碑 Boss 层数/就在 本层/通关 隐藏/tooltip/节流/收尾)
 	_finish()
 
 
@@ -3763,6 +3764,78 @@ func _assert_affix_drop_line() -> void:
 	await get_tree().process_frame
 	check(str(ui._tw_mon_labels["endless"].tooltip_text) == ref120 and g.stats == snap120,
 			"打磨-120 同态 节流 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+
+
+# 打磨-121: 双塔 卡片 下一 里程碑 行 (M5 规格 "每 100 层 天阶 里程碑" 进度 展示 位 — 距 下个
+# 精英/Boss/里程碑 Boss 还有 几 层; 本层 即是 标注 就在 本层; 镇妖塔 通关 守塔 模式 隐藏;
+# 文本 变化 才 刷 节流; 收尾 干净 基准)
+func _assert_tower_milestone_line() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 双塔 里程碑 行 节点 存在 + 初始 基准 文案 = 接口 恒等 (镇妖塔 第 1 层 下一 = 10 层 精英)
+	var fms: Label = ui._tw_cards["fixed"]["milestone"]
+	var ems: Label = ui._tw_cards["endless"]["milestone"]
+	check(fms != null and ems != null, "打磨-121 双塔 里程碑 行 节点 存在")
+	check(str(fms.text) == g.tower_milestone_line("fixed", 1)
+			and str(fms.text).find("第 10 层精英层") >= 0 and str(fms.text).find("还有 9 层") >= 0,
+			"打磨-121 镇妖塔 基准 里程碑 行 = 接口 恒等 含 层数+余量 (实际 %s)" % str(fms.text))
+	check(str(ems.text) == g.tower_milestone_line("endless", 1)
+			and str(ems.text).find("第 100 层 里程碑 Boss + 宝箱") >= 0 and str(ems.text).find("还有 99 层") >= 0,
+			"打磨-121 登天梯 基准 里程碑 行 = 接口 恒等 (实际 %s)" % str(ems.text))
+	check(fms.visible and ems.visible, "打磨-121 基准 双塔 里程碑 行 可见")
+	# 2) 镇妖塔 待挑战 层 本身 是 精英 (第 10 层): 就在 本层 标注
+	g.tower_fixed_floor = 9
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(fms.text) == g.tower_milestone_line("fixed", 10)
+			and str(fms.text).find("就在 第 10 层") >= 0,
+			"打磨-121 镇妖塔 精英 本层 就在 标注 (实际 %s)" % str(fms.text))
+	# 3) 登天梯 第 100 层 (里程碑 Boss 层): 下一 = 200 层 动态 同步
+	g.tower_endless_floor = 100
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ems.text) == g.tower_milestone_line("endless", 100)
+			and str(ems.text).find("第 200 层") >= 0,
+			"打磨-121 登天梯 100 层 下一 = 200 层 同步 (实际 %s)" % str(ems.text))
+	# 4) 镇妖塔 通关 守塔 模式: 里程碑 行 隐藏 (无 下一 层 概念)
+	g.tower_fixed_floor = 999
+	g.tower_fixed_clear = true
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(fms.text) == "" and not fms.visible,
+			"打磨-121 镇妖塔 通关 守塔 模式 里程碑 行 隐藏 (实际 text=%s visible=%s)" % [str(fms.text), str(fms.visible)])
+	# 5) 里程碑 行 tooltip 口径 说明
+	check(str(fms.tooltip_text).find("下一 里程碑") >= 0 and str(fms.tooltip_text).find("守塔 模式") >= 0,
+			"打磨-121 里程碑 行 tooltip 含 口径 说明 (实际 %s)" % str(fms.tooltip_text).left(40))
+	# 6) 同态 节流: 无 塔 态 变化 再 刷 不 重写 + 无 统计 副作用
+	var snap121: Dictionary = g.stats.duplicate(true)
+	var ref121: String = str(ems.text)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(ems.text) == ref121 and g.stats == snap121, "打磨-121 同态 节流 无 统计 副作用")
 	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
 	g.tower_fixed_floor = 0
 	g.tower_fixed_clear = false

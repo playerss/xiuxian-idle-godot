@@ -2609,6 +2609,65 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 		lines.append("里程碑 宝箱: 必掉 1~2 件 词缀, 品质 保底 %s+ (桶位上移, 高层 更高 品质 概率)" % affix_tier_name(mtn))
 	return "\n".join(lines)
 
+# 打磨-121: 下一里程碑 行 (M5 规格 "每 100 层 天阶 里程碑" 的 进度 展示 位 缺口 — 双塔 卡片
+# 只有 当前 层/纪录, 玩家 挂机 爬塔 不知 距 下个 精英/Boss/里程碑 Boss 还有 几 层; 口径:
+# 目标 = 当前 挑战 层 (待挑战 层 本身 是 精英/Boss 层 时 = 本层 "就在本层") 之 后 最近 的
+# 精英层/小 Boss/主题 Boss/最终 Boss/登天梯 里程碑 Boss [100 倍数]; 镇妖塔 通关 守塔 模式
+# 恒打 1000 层 最终 Boss = 空串 (无 下 一 层 概念); 只读 无 状态/存档/统计 副作用)
+func tower_milestone_line(tower: String, cur_floor: int) -> String:
+	if tower == "fixed":
+		if tower_fixed_clear:
+			return ""
+		var cur: int = clampi(cur_floor, 1, 1000)
+		var rec: Dictionary = get_fixed_floor(cur)
+		if rec.is_empty():
+			return ""
+		if bool(rec.get("is_elite", false)) or str(rec.get("boss_type", "")) != "":
+			var lab: String = "精英层"
+			if str(rec.get("boss_type", "")) == "small":
+				lab = "小 Boss"
+			elif str(rec.get("boss_type", "")) == "theme":
+				lab = "主题 Boss"
+			elif str(rec.get("boss_type", "")) == "final":
+				lab = "最终 Boss"
+			return "下一 里程碑: 就在 第 %d 层%s (结构 口径 见 怪物卡 tooltip)" % [cur, _ms_boss_mult(lab)]
+		var nf: int = cur + 1
+		while nf <= 1000:
+			var nrec: Dictionary = get_fixed_floor(nf)
+			if nrec.is_empty():
+				return ""
+			if bool(nrec.get("is_elite", false)) or str(nrec.get("boss_type", "")) != "":
+				var nl: String = "精英层"
+				if str(nrec.get("boss_type", "")) == "small":
+					nl = "小 Boss"
+				elif str(nrec.get("boss_type", "")) == "theme":
+					nl = "主题 Boss"
+				elif str(nrec.get("boss_type", "")) == "final":
+					nl = "最终 Boss"
+				return "下一 里程碑: 第 %d 层%s (还有 %d 层)" % [nf, _ms_boss_mult(nl), nf - cur]
+			nf += 1
+		return ""
+	if tower == "endless":
+		var ec: int = maxi(cur_floor, 1)
+		var nf2: int = ((ec + 99) / 100) * 100
+		if nf2 <= ec:
+			nf2 = ec + 100
+		return "下一 里程碑: 第 %d 层 里程碑 Boss + 宝箱 (还有 %d 层, 保底 稀有+ 词缀)" % [nf2, nf2 - ec]
+	return ""
+
+# 打磨-121: 里程碑 标签 类型+倍率 后缀 (精英层 无 倍率 只 给 类型 / 小 Boss x10 / 主题 x20 /
+# 最终 x50; 与 TOWER_BOSS_MULT_* 常量 同源, 只 展示 不 改 数值; 精英 x3 口径 见 结构 行 不 重复)
+func _ms_boss_mult(lab: String) -> String:
+	if lab == "精英层":
+		return "精英层"
+	if lab == "小 Boss":
+		return "小 Boss (数值 x%d)" % int(TOWER_BOSS_MULT_SMALL)
+	if lab == "主题 Boss":
+		return "主题 Boss (数值 x%d)" % int(TOWER_BOSS_MULT_THEME)
+	if lab == "最终 Boss":
+		return "最终 Boss (数值 x%d)" % int(TOWER_BOSS_MULT_FINAL)
+	return ""
+
 # 战力对比 行 文案 (玩家 atk/def 有效 vs 怪物 atk; 胜=绿/败=红 由 UI 着色, 此处 只给 文本)
 func tower_power_line(mon_atk: float) -> String:
 	var ok: bool = player_atk_effective() >= mon_atk * TOWER_WIN_RATIO
