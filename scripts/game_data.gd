@@ -167,6 +167,7 @@ var _auto_tower_last_txt := ""  # 上轮 胜局 汇总 文案 (内存态, 供 au
 var _auto_tower_wins := 0       # 本次 运行 自动 爬塔 胜局 总数 (内存态, 供 auto_tower_session_text)
 var _auto_tower_stone := 0.0    # 本次 运行 自动 爬塔 胜局 灵石 总量 (含 每日首胜/通关大奖, 内存态)
 var _auto_tower_mats := 0       # 打磨-100: 本次 运行 自动 爬塔 胜局 材料 总量 (内存态, 读档 归零 同 灵石 口径)
+var _auto_tower_affixes := 0    # 打磨-122: 本次 运行 自动 爬塔 胜局 词缀 件数 总量 (内存态, 读档 归零 同 灵石 口径)
 var _auto_cast_last_n := 0      # 打磨-69: 上轮 施展 神通 数 (内存态, 供 auto_cast_last_text)
 var _auto_cast_last_burst := 0.0  # 打磨-69: 上轮 爆发 总量 (内存态, 供 auto_cast_last_text)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备/爬塔, 读档时 _load_stats 兜底)
@@ -1394,6 +1395,10 @@ func _try_auto_tower() -> void:
 	_auto_tower_stone += tot_stone
 	# 打磨-100: 会话 材料 累计 (内存态 不持久化, 读档 归零 同 灵石 口径)
 	_auto_tower_mats += int(wf.get("reward_mat", 0)) + int(we.get("reward_mat", 0))
+	# 打磨-122: 会话 词缀 件数 累计 (与 单场 文案 "词缀 xN" 同源 affix_drops;
+	# 通关 大奖 词缀 另段 展示 口径 同 打磨-114 不 并入 本 累计 — 本 累计 只 计 战斗 掉落)
+	var adrops_all: Array = wf.get("affix_drops", []) + we.get("affix_drops", [])
+	_auto_tower_affixes += adrops_all.size()
 	var parts: Array = []
 	for r in [wf, we]:
 		if bool(r["win"]):
@@ -2964,7 +2969,11 @@ func tower_status_line() -> String:
 		var mat_s := ""
 		if _auto_tower_mats > 0:
 			mat_s = " · 材料 %d" % _auto_tower_mats
-		s += " · 自动 胜 %d 场 (灵石 %s)%s" % [_auto_tower_wins, fmt(_auto_tower_stone), mat_s]
+		# 打磨-122: 会话 词缀 累计 段 (挂机 自动 爬塔 战斗 掉落 词缀 件数; 0 不 追加 段)
+		var af_s := ""
+		if _auto_tower_affixes > 0:
+			af_s = " · 词缀 %d 件" % _auto_tower_affixes
+		s += " · 自动 胜 %d 场 (灵石 %s)%s%s" % [_auto_tower_wins, fmt(_auto_tower_stone), mat_s, af_s]
 	return s
 
 # 打磨-95: 自动爬塔 上一轮 胜局 汇总 文案 (只读; seq<=0 [从未 胜局] 返回 "";
@@ -2978,13 +2987,17 @@ func auto_tower_last_text() -> String:
 # 打磨-95: 自动爬塔 会话 统计 文案 (只读; 0 胜局 返回 ""; 格式 "自动 胜 N 场 (灵石 X)" —
 # 会话 = 本次 运行, 读档 归零; 爬塔 状态 汇总行 展示 + 自测 断言 同 口径; 不 改 状态)
 # 打磨-100: 追加 材料 累计 段 (0 材料 时 仅 灵石 段, 口径 与 状态行 一致)
+# 打磨-122: 追加 词缀 累计 段 (0 词缀 时 不 追加, 口径 与 状态行 一致)
 func auto_tower_session_text() -> String:
 	if _auto_tower_wins <= 0:
 		return ""
 	var mat_s := ""
 	if _auto_tower_mats > 0:
 		mat_s = " · 材料 %d" % _auto_tower_mats
-	return "自动 胜 %d 场 (灵石 %s)%s" % [_auto_tower_wins, fmt(_auto_tower_stone), mat_s]
+	var af_s := ""
+	if _auto_tower_affixes > 0:
+		af_s = " · 词缀 %d 件" % _auto_tower_affixes
+	return "自动 胜 %d 场 (灵石 %s)%s%s" % [_auto_tower_wins, fmt(_auto_tower_stone), mat_s, af_s]
 
 # 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1|1|0" = 突破|购置|施展|领悟|爬塔, 1=开 0=关;
 # M5-3 起 5 开关: 第 5 段=自动爬塔; UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
@@ -3712,6 +3725,7 @@ func load_game() -> void:
 	_auto_tower_wins = 0
 	_auto_tower_stone = 0.0
 	_auto_tower_mats = 0  # 打磨-100: 会话 材料 累计 读档 归零 (同 灵石 口径)
+	_auto_tower_affixes = 0  # 打磨-122: 会话 词缀 累计 读档 归零 (同 灵石 口径)
 	# M6-2: DIY 词缀 (旧档缺字段 默认 空; 非法 项 丢弃 防 污染)
 	# 顺序: 先 槽位升级 (affix_load 校验 依赖 槽位 上限), 再 库存, 最后 装配
 	slot_upgrades = {}

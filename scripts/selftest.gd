@@ -7632,6 +7632,104 @@ func _init() -> void:
 	check(g.tower_milestone_line("fixed", 1) == g.tower_milestone_line("fixed", 1)
 			and g.stats == snap121, "打磨-121 只读 连读 恒定 无 统计 副作用")
 
+	# ---------- 打磨-122: 自动爬塔 会话 词缀 段 (会话 累计 胜局/灵石/材料/词缀 件数 展示位:
+	# 挂机 自动 爬塔 战斗 掉落 词缀 累计, 状态行/会话 文案 追加 "词缀 N 件" 段; 通关 大奖 词缀
+	# 另段 展示 不 计入 本 累计 [打磨-114 口径]; 内存态 读档 归零 同 灵石 口径) ----------
+	g.set_process(false)
+	g.auto_tower = false
+	# 防御性 重置 (会话/塔 态/词缀 态 干净 基准)
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g.affix_bag = {}
+	g.affix_materials = 0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	# 1) 初始 0 胜局: 会话 文案 空串
+	check(g.auto_tower_session_text() == "", "打磨-122 初始 0 胜局 会话 文案 空串")
+	# 2) 手动 会话 态 (词缀 > 0): 状态行/会话 文案 追加 词缀 段 (同 表达式)
+	g._auto_tower_wins = 2
+	g._auto_tower_stone = 1234.0
+	g._auto_tower_mats = 7
+	g._auto_tower_affixes = 3
+	var st122: String = g.tower_status_line()
+	check(st122.find("自动 胜 2 场 (灵石 ") >= 0 and st122.find("材料 7") >= 0 and st122.find("词缀 3 件") >= 0,
+			"打磨-122 状态行 会话 段 含 词缀 累计 (实际 %s)" % st122)
+	check(g.auto_tower_session_text() == "自动 胜 2 场 (灵石 %s) · 材料 7 · 词缀 3 件" % g.fmt(1234.0),
+			"打磨-122 会话 文案 = 表达式 恒等 (实际 %s)" % g.auto_tower_session_text())
+	# 3) 词缀 = 0 不 追加 段 (旧 口径)
+	g._auto_tower_affixes = 0
+	check(g.auto_tower_session_text() == "自动 胜 2 场 (灵石 %s) · 材料 7" % g.fmt(1234.0),
+			"打磨-122 0 词缀 不 追加 段 旧 口径 (实际 %s)" % g.auto_tower_session_text())
+	# 4) 只读 连读 恒定 无 状态/统计 副作用
+	var snap122: Dictionary = g.stats.duplicate(true)
+	g.tower_status_line()
+	g.auto_tower_session_text()
+	g.auto_tower_last_text()
+	check(g._auto_tower_affixes == 0 and g.stats == snap122, "打磨-122 只读 连读 恒定 无 副作用")
+	# 5) 真实 链路: 道祖 自动爬塔 双塔 全胜 (镇妖塔 1000 层 Boss + 登天梯 100 层 里程碑 Boss,
+	# Boss/里程碑 100% 掉 1~N 件) → 会话 词缀 累计 >= 2 且 文案 = 累计 恒等
+	g.learned.clear()
+	for id122 in g.skill_ids:
+		var s122: Dictionary = g.skill_by_id[id122]
+		if str(s122.get("type", "")) == "passive" and str(s122.get("effect", "")) in ["atk", "all_mult"]:
+			g.learned.append(id122)
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_fixed_floor = 999
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.affix_bag = {}
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g.auto_tower = true
+	g._process(0.016)
+	check(g._auto_tower_wins == 2, "打磨-122 道祖 自动 双塔 全胜 胜局 +2 (实际 %d)" % g._auto_tower_wins)
+	check(g._auto_tower_affixes >= 2, "打磨-122 会话 词缀 累计 >= 2 (Boss+里程碑 必掉, 实际 %d)" % g._auto_tower_affixes)
+	check(g.auto_tower_session_text().find("词缀 %d 件" % g._auto_tower_affixes) >= 0,
+			"打磨-122 真实 链路 会话 文案 词缀 段 = 累计 (实际 %s)" % g.auto_tower_session_text())
+	check(g.tower_status_line().find("词缀 %d 件" % g._auto_tower_affixes) >= 0,
+			"打磨-122 真实 链路 状态行 词缀 段 = 累计 (实际 %s)" % g.tower_status_line())
+	# 6) 会话 词缀 读档 归零 (不 持久化, 同 灵石 口径)
+	g.auto_tower = false
+	g.save_game()
+	g._auto_tower_affixes = 5
+	g.load_game()
+	check(g._auto_tower_affixes == 0, "打磨-122 会话 词缀 读档 归零 (不 持久化, 实际 %d)" % g._auto_tower_affixes)
+	# 收尾: 会话/塔 态/强玩家 态 归零 落盘 (防 污染 后续 段)
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.affix_bag = {}
+	g.affix_materials = 0
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.set_process(true)
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

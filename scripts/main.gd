@@ -1645,7 +1645,7 @@ func _build_tower_page(page: Panel) -> void:
 	tpsb.bg_color = Color(0, 0, 0, 0)
 	tpsb.set_corner_radius_all(6)
 	_tw_status_panel.add_theme_stylebox_override("panel", tpsb)
-	_tw_status_panel.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n登天梯 每日 首胜 奖励: 今日 首次 通过 新纪录 层 时 额外 +0.5x 该层 灵石 (鼓励 每日 上线), 触发后 状态行 追加 已 触发 段, 跨日 自动 重置 (状态行 随 刷新 键 同步)。\n镇妖塔 25 专属 Boss 分层: 每 50 层 小 Boss (数值 x10) · 第 100/250/500/750 层 主题 Boss (x20) · 第 1000 层 最终 Boss「镇妖塔主」(x50), 分层 标记 见 怪物卡 标签 + tooltip 分层 行。\n精英/魔化 结构: 每 10 层 精英 (镇妖塔/登天梯 同 结构: 「魔化·」前缀 + 追加 1 额外 特性 + 数值 x3 + 掉落 x2), 登天梯 500 层后 全部 非 Boss 怪物 默认 魔化, 倍率 口径 见 怪物卡 tooltip 结构 行。\n词缀 掉落: 来源 base (普通 5% / 精英 20% / Boss 与 里程碑 宝箱 100% 1~N 件) x 怪物种 权重 (0.2~0.8) + 词缀袋 特性 +10%, 仅 胜利 结算, 本层 有效 掉率 见 怪物卡 tooltip 词缀 掉落 行。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。\n顶栏 剧毒 徽标 点击 直达 本行 (紫边 高亮 1.2s)。"
+	_tw_status_panel.tooltip_text = "爬塔 进度 汇总 (镇妖塔 最高 已过层 + 登天梯 当前 待挑战层 与 历史 最高 纪录)。\n登天梯 每日 首胜 奖励: 今日 首次 通过 新纪录 层 时 额外 +0.5x 该层 灵石 (鼓励 每日 上线), 触发后 状态行 追加 已 触发 段, 跨日 自动 重置 (状态行 随 刷新 键 同步)。\n镇妖塔 25 专属 Boss 分层: 每 50 层 小 Boss (数值 x10) · 第 100/250/500/750 层 主题 Boss (x20) · 第 1000 层 最终 Boss「镇妖塔主」(x50), 分层 标记 见 怪物卡 标签 + tooltip 分层 行。\n精英/魔化 结构: 每 10 层 精英 (镇妖塔/登天梯 同 结构: 「魔化·」前缀 + 追加 1 额外 特性 + 数值 x3 + 掉落 x2), 登天梯 500 层后 全部 非 Boss 怪物 默认 魔化, 倍率 口径 见 怪物卡 tooltip 结构 行。\n词缀 掉落: 来源 base (普通 5% / 精英 20% / Boss 与 里程碑 宝箱 100% 1~N 件) x 怪物种 权重 (0.2~0.8) + 词缀袋 特性 +10%, 仅 胜利 结算, 本层 有效 掉率 见 怪物卡 tooltip 词缀 掉落 行。\n剧毒 特性 战胜 后 玩家 ATK -15% 持续 2 场战斗 (可 刷新), 期间 战力对比 按 减成 后 口径 预测 胜负。\n顶栏 剧毒 徽标 点击 直达 本行 (紫边 高亮 1.2s)。\n自动 胜局 会话 段: 本次 运行 自动 爬塔 累计 (胜局 数/灵石/材料/词缀 件数, 读档 归零); 词缀 件数 = 战斗 掉落 词缀 累计 (通关 大奖 词缀 另段 展示, 不 计入 本 累计)。"
 	outer.add_child(_tw_status_panel)
 	_tw_status_label = _label("", 14, CYAN)
 	_tw_status_panel.add_child(_tw_status_label)
@@ -1799,13 +1799,14 @@ func _refresh_tower() -> void:
 	var p: Dictionary = g.tower_challenge_preview()
 	var fmon: Dictionary = p["fixed_mon"]
 	var emon: Dictionary = p["endless_mon"]
-	var key: String = "%d|%d|%s|%s|%d|%d|%d|%d|%d|%d" % [
+	var key: String = "%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d" % [
 		int(p["fixed_floor"]), int(p["endless_floor"]),
 		str(fmon["name"]), str(emon["name"]),
 		1 if bool(p["fixed_win"]) else 0, 1 if bool(p["endless_win"]) else 0,
 		int(g.player_atk_effective() / 0.5), int(g.player_def() / 0.5),
 		g._auto_tower_wins,  # 打磨-95: 胜局数 入键 (守塔 模式 恒 1000 层 胜局 不 变 层数, 键 须 感知 会话 统计 变化); 打磨-111: 玩家 DEF 0.5 档 入键 (DEF 变化 刷 DEF 行)
-		1 if g.tower_daily_date == g._today_str() else 0]  # 打磨-116: 登天梯 每日 首胜 当日 态 入键 (触发 时 层数 已 推进 天然 感知; 跨日 挂机 不 升层 也 须 清 状态 行 段)
+		1 if g.tower_daily_date == g._today_str() else 0,  # 打磨-116: 登天梯 每日 首胜 当日 态 入键 (触发 时 层数 已 推进 天然 感知; 跨日 挂机 不 升层 也 须 清 状态 行 段)
+		g._auto_tower_mats, g._auto_tower_affixes]  # 打磨-100/122: 会话 材料/词缀 累计 入键 (状态行 会话 段 依赖, 手动 测试/外部 置态 不 升层 也 须 刷; 真实 路径 胜局 必 变 wins 天然 感知)
 	if key == _tw_key and _tw_key != "":
 		return
 	_tw_key = key
