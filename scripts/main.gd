@@ -155,6 +155,7 @@ var _tw_pwr_tips: Dictionary = {}    # 打磨-113: 塔 id -> 战力对比 判定
 var _tw_pwr_compose_tips: Dictionary = {}  # 打磨-113: 塔 id -> 战力构成 tooltip 段 缓存 (构成 变化才刷)
 var _tw_round_labels: Dictionary = {}  # 打磨-105: 塔 id -> 战斗时长 预估 Label (变化才刷)
 var _tw_def_labels: Dictionary = {}    # 打磨-111: 塔 id -> 战力对比 DEF 行 Label (变化才刷)
+var _tw_thr_labels: Dictionary = {}  # 打磨-123: 塔 id -> 胜 阈值/缺口 行 Label (败 预测 才 可见)
 var _tw_key := ""                # 爬塔页 刷新键 (层数/怪物名/胜负/玩家 atk 变化才刷)
 var _tw_card_hi_tween: Tween      # M5-4: 爬塔 卡片 金边高亮 tween (顶栏 通关 徽标 点击直达 1.2s 自动恢复)
 var _tw_status_label: Label      # 爬塔 状态汇总行 (镇妖塔最高/登天梯纪录/剧毒提醒)
@@ -1711,6 +1712,11 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	var pwr_l := _label("", 13, WHITEISH)
 	pwr_l.tooltip_text = ""
 	box.add_child(pwr_l)
+	# 打磨-123: 胜 阈值/缺口 行 (M5 规格 战力对比 败 预测 时 展示 "胜还需 多少 ATK":
+	# 阈值 = 怪物 ATK x 0.85 判定口径, 缺口 = 阈值 - 当前 有效 ATK; 败 预测 才 可见,
+	# 胜 预测 隐藏 [缺口 <=0 无展示 价值]; 文本 变化 才 刷, 随 战力/剧毒/层数 动态 同步)
+	var thr_l := _label("", 12, DIM)
+	box.add_child(thr_l)
 	# 打磨-111: 战力对比 DEF 行 (玩家 DEF vs 怪物 DEF; M5 规格 "玩家 atk/def vs 怪物" DEF 段;
 	# DEF 不 参与 胜负 判定 [判定 仅 有效 ATK], 只 影响 对怪 伤害 与 回合 预估; 文本变化才刷)
 	var def_l := _label("", 12, DIM)
@@ -1732,6 +1738,7 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	}
 	_tw_mon_labels[tid] = mon_l
 	_tw_pwr_labels[tid] = pwr_l
+	_tw_thr_labels[tid] = thr_l
 	_tw_def_labels[tid] = def_l
 	_tw_round_labels[tid] = round_l
 	# 首刷 不 在 此处: 双塔 卡片 构建期 另一塔 尚未 登记 (_tw_cards 缺键),
@@ -1886,6 +1893,19 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 		def_l2.text = def_txt
 		def_l2.tooltip_text = ("战力对比 DEF 行 (M5 规格: 玩家 atk/def vs 怪物)。玩家 DEF = 基础 x 境界 x (1+功法+装备+法器 def 池) x 通关增益 汇总, 不随 剧毒 变化 (剧毒 只 减 有效 ATK)。\n"
 			+ "DEF 不 参与 胜负 判定 (判定 仅 有效 ATK ≥ 怪物 ATK x 0.85), 只 影响 对怪 伤害 与 回合 预估 (回合预估 取 最不利 0.9 浮动档 同口径)。")
+	# 打磨-123: 胜 阈值/缺口 行 (M5 规格 战力对比 败 预测 时 展示 "胜还需 多少 ATK"; 口径 与
+	# tower_power_line 判定 同源 单点: 阈值 = 怪物 ATK x 0.85, 缺口 = 阈值 - 当前 有效 ATK
+	# [剧毒 -15% 已 计入 player_atk_effective]; 仅 败 预测 可见 — 胜 预测 缺口 <=0 隐藏 不 误导;
+	# 文本 变化 才 刷, 随 战力/剧毒/层数 动态 同步, 挂机 恒定 无 每帧 重建)
+	var thr_l2: Label = _tw_thr_labels[tid]
+	var thr_txt: String = ("" if win else g.tower_win_threshold_line(float(mon["atk"])))
+	if str(thr_l2.text) != thr_txt:
+		thr_l2.text = thr_txt
+	thr_l2.visible = not win
+	if thr_txt != "":
+		thr_l2.tooltip_text = ("胜 阈值/缺口 (M5 判定口径: 玩家 有效 ATK ≥ 怪物 ATK x 0.85 即胜, 即时判定 无 死亡惩罚)。\n"
+			+ "阈值 = 本层 怪物 ATK x 0.85; 缺口 = 阈值 - 当前 有效 ATK (剧毒 debuff 已 计入 有效 ATK)。\n"
+			+ "提升 路径: 突破 升境界 (战力 40^进度 指数) / 领悟 功法 atk 池 / 穿戴 高 atk 装备与法器 / 套装 共鸣 / 镇妖塔 通关 永久 +15%; 剧毒 期间 缺口 偏大, 2 场 后 自动 恢复。")
 	# 打磨-105: 战斗时长 预估 行 (仅 展示 不 改变 即时 胜负 判定, 文本 变化 才 刷)
 	var round_l2: Label = _tw_round_labels[tid]
 	var round_txt: String = g.tower_rounds_line(float(mon["hp"]), float(mon["def"]), win)

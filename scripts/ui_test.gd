@@ -204,6 +204,7 @@ func _ready() -> void:
 	await _assert_boss_tier_tag()  # 打磨-118: 镇妖塔 主题/最终 Boss 卡片 标记 分层 (卡片 tag/tooltip 分层 行/状态行 tooltip 口径/普通层 无 标记/节流/收尾)
 	await _assert_affix_drop_line()  # 打磨-120: 怪物卡 tooltip 词缀 掉落 概率 行 (M6 规格 掉落 来源 口径 展示 位: 普通 5%/精英 20%/Boss 1~3/里程碑 宝箱 1~2; 有效 掉率 = base x 种 权重 + 词缀袋 +10%; 含 掉率 行/接口 恒等/Boss 100%/状态行 tooltip 口径/节流/收尾)
 	await _assert_tower_milestone_line()  # 打磨-121: 双塔 卡片 下一 里程碑 行 (M5 规格 每 100 层 天阶 里程碑 进度 展示 位: 距 下个 精英/Boss/里程碑 Boss 层数/就在 本层/通关 隐藏/tooltip/节流/收尾)
+	await _assert_win_threshold_line()  # 打磨-123: 爬塔 战力对比 胜 阈值/缺口 行 (M5 规格 败 预测 时 展示 胜还需 多少 ATK: 败 可见 阈值/缺口=接口 恒等/胜 预测 隐藏/升层 动态 同步/剧毒 缺口 放大/tooltip 提升 路径/同态 节流 无 副作用/收尾 干净 基准)
 	_finish()
 
 
@@ -3847,6 +3848,109 @@ func _assert_tower_milestone_line() -> void:
 	g.tower_daily_bonus_stones = 0.0
 	g.poison_battles = 0
 	g.poison_events.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+
+
+# 打磨-123: 爬塔 战力对比 胜 阈值/缺口 行 (M5 规格 "战力对比 (胜/败 预测)" 败 预测 时 展示
+# 缺口 — 玩家 有效 ATK 不足 只 见 "败", 不知 要 多 强 才 能 过 本层; 阈值 = 怪物 ATK x 0.85
+# 判定 口径 与 tower_power_line 同源 单点, 缺口 = 阈值 - 当前 有效 ATK [剧毒 已 计入];
+# 败 预测 才 可见 胜 预测 隐藏; 随 战力/剧毒/层数 动态 同步; 收尾 干净 基准)
+func _assert_win_threshold_line() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 弱 玩家 (atk 池 清空, 有效 ATK 2.0) + 塔 态 受控:
+	# 镇妖塔 挑战层 = 12 (判定=败: 阈值 3.23 > 2.0, 数据 锚定), 登天梯 = 1 (判定=胜:
+	# 阈值 1.7 < 2.0) — 一败一胜 覆盖 阈值 行 可见/隐藏 双向
+	g.learned.clear()
+	g.equipped = {}
+	g.owned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 11
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 双塔 阈值 行 节点 存在 + 败/胜 预测 阈值 行 可见性 分态 (镇妖塔 12 层 败=可见,
+	# 登天梯 1 层 胜=隐藏) 且 败 态 文案 = 接口 恒等
+	var fthr: Label = ui._tw_thr_labels["fixed"]
+	var ethr: Label = ui._tw_thr_labels["endless"]
+	check(fthr != null and ethr != null, "打磨-123 双塔 阈值 行 节点 存在")
+	var fm123: Dictionary = g.tower_monster_stats(g.get_fixed_floor(12))
+	var em123: Dictionary = g.tower_monster_stats(g.get_endless_floor(1))
+	check(g.player_atk_effective() < float(fm123["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-123 弱 玩家 镇妖塔 第 12 层 判定=败 (数据 锚定)")
+	check(g.player_atk_effective() >= float(em123["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-123 弱 玩家 登天梯 第 1 层 判定=胜 (数据 锚定)")
+	check(fthr.visible and str(fthr.text) == g.tower_win_threshold_line(float(fm123["atk"]))
+			and str(fthr.text).find("胜 阈值") >= 0 and str(fthr.text).find("还差") >= 0,
+			"打磨-123 镇妖塔 败 预测 阈值 行 可见 + = 接口 恒等 (实际 %s)" % str(fthr.text))
+	check(not ethr.visible and str(ethr.text) == "",
+			"打磨-123 登天梯 胜 预测 阈值 行 隐藏 (实际 vis=%s txt=%s)" % [ethr.visible, str(ethr.text)])
+	# 2) 阈值 数值 段 = 怪物 ATK x 0.85 精确 (fmt_score 口径, 与 判定 口径 单点 同源)
+	check(str(fthr.text).find("有效 ATK %s" % g.fmt_score(float(fm123["atk"]) * g.TOWER_WIN_RATIO)) >= 0
+			and str(fthr.text).find("还差 %s ATK" % g.fmt_score(float(fm123["atk"]) * g.TOWER_WIN_RATIO - g.player_atk_effective())) >= 0,
+			"打磨-123 阈值/缺口 数值 段 精确 (实际 %s)" % str(fthr.text))
+	# 3) 升层: 阈值/缺口 动态 同步 (镇妖塔 第 20 层 精英 层 数值 更高)
+	g.tower_fixed_floor = 19
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var fm123_20: Dictionary = g.tower_monster_stats(g.get_fixed_floor(20))
+	check(str(fthr.text) == g.tower_win_threshold_line(float(fm123_20["atk"])),
+			"打磨-123 升 精英层 阈值 行 动态 同步 (实际 %s)" % str(fthr.text))
+	# 4) 剧毒 态: 有效 ATK x0.85 后 缺口 放大, 行 文案 动态 同步 (判定 口径 同源)
+	g.poison_battles = 1
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var thr_poison123: String = g.tower_win_threshold_line(float(fm123_20["atk"]))
+	check(str(fthr.text) == thr_poison123 and str(thr_poison123).find("还差 %s ATK" % g.fmt_score(float(fm123_20["atk"]) * g.TOWER_WIN_RATIO - g.player_atk_effective())) >= 0,
+			"打磨-123 剧毒 态 缺口 放大 动态 同步 (实际 %s)" % str(fthr.text))
+	g.poison_battles = 0
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 5) tooltip 口径 说明 (判定 口径 + 阈值/缺口 构成 + 提升 路径)
+	check(str(fthr.tooltip_text).find("胜 阈值/缺口") >= 0 and str(fthr.tooltip_text).find("x 0.85") >= 0
+			and str(fthr.tooltip_text).find("提升 路径") >= 0,
+			"打磨-123 阈值 行 tooltip 含 口径+提升 路径 (实际 %s)" % str(fthr.tooltip_text).left(40))
+	# 6) 强 玩家 (飞升 道祖): 双塔 胜 预测 → 阈值 行 隐藏 (缺口 <=0 无 展示 价值)
+	g.ascended = true
+	g.dao_level = 8
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(not fthr.visible and str(fthr.text) == "" and not ethr.visible and str(ethr.text) == "",
+			"打磨-123 强 玩家 胜 预测 双塔 阈值 行 隐藏 (实际 f_vis=%s e_vis=%s)" % [fthr.visible, ethr.visible])
+	# 7) 同态 节流: 无 状态 变化 再 刷 不 重写 + 无 统计 副作用 (基准 败 态 恢复 后)
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 0
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var snap123: Dictionary = g.stats.duplicate(true)
+	var ref123: String = str(fthr.text)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(fthr.text) == ref123 and g.stats == snap123, "打磨-123 同态 节流 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态/玩家 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.learned.clear()
+	g.equipped = {}
+	g.owned.clear()
+	g.ascended = false
+	g.dao_level = 0
 	g.set_process(true)
 	ui._tab.current_tab = 3
 

@@ -2899,6 +2899,16 @@ func tower_clear_reward_text(stone: float, affix_n: int = -1) -> String:
 			s += " (大奖 词缀 背包满, 折算 %d 材料)" % mat_n
 	return s
 
+# 打磨-123: 爬塔 胜 阈值 行 文案 (M5 规格 "战力对比 (胜/败 预测)" 败 预测 时 展示 缺口 —
+# 玩家 有效 ATK 不足 时 只 见 "败", 不知 要 多 强 才 能 过 本层; 口径 与 tower_power_line
+# 同源 单点: 阈值 = 怪物 ATK x TOWER_WIN_RATIO, gap = 阈值 - 当前 有效 ATK (剧毒 已 计入
+# player_atk_effective); 数值 <1e4 两位 小数 (fmt_score 口径, 防 fmt int 截断 误导),
+# 只读 无 状态/存档/统计 副作用; 胜/无怪物 层 不 展示 由 UI 按 win 态 门控)
+func tower_win_threshold_line(mon_atk: float) -> String:
+	var need: float = float(mon_atk) * TOWER_WIN_RATIO
+	var gap: float = need - player_atk_effective()
+	return "胜 阈值: 有效 ATK %s · 还差 %s ATK" % [fmt_score(need), fmt_score(gap)]
+
 # M5-4: 镇妖塔 通关 称号 (顶栏/爬塔页 展示; 未通关 空串; 只读 无 状态/存档/统计 副作用)
 func tower_clear_title() -> String:
 	return "镇妖塔·通关者" if tower_fixed_clear else ""

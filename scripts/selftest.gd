@@ -7632,6 +7632,99 @@ func _init() -> void:
 	check(g.tower_milestone_line("fixed", 1) == g.tower_milestone_line("fixed", 1)
 			and g.stats == snap121, "打磨-121 只读 连读 恒定 无 统计 副作用")
 
+	# ---------- 打磨-123: 爬塔 胜 阈值/缺口 行 (M5 规格 战力对比 败 预测 时 展示 "胜还需
+	# 多少 ATK": 阈值 = 怪物 ATK x 0.85 判定 口径 单点 同源, 缺口 = 阈值 - 有效 ATK
+	# [剧毒 已 计入]; 口径 变化 动态 同步; 只读 无 副作用) ----------
+	# 受控 基准 快照 (本段 末 完全 复原, 防 污染 后续 段 122 及 之后)
+	var snap_learned123: Array[String] = g.learned.duplicate()
+	var snap_equipped123: Dictionary = g.equipped.duplicate(true)
+	var snap_asc123: bool = g.ascended
+	var snap_dao123: int = g.dao_level
+	var snap_fclr123: bool = g.tower_fixed_clear
+	var snap_floor123: int = g.tower_fixed_floor
+	var snap_end123: int = g.tower_endless_floor
+	var snap_best123: int = g.tower_endless_best
+	var snap_ess123: float = g.essence
+	var snap_stone123: float = g.stones
+	var snap_stats123: Dictionary = g.stats.duplicate(true)
+	# 弱 玩家 (atk 池 清空) + 镇妖塔 第 12 层 判定=败 (数据 锚定: 弱 玩家 atk 2.0 < 阈值 3.23)
+	g.learned.clear()
+	g.equipped.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_clear = false
+	g.poison_battles = 0
+	var m123f: Dictionary = g.tower_monster_stats(g.get_fixed_floor(12))
+	var atk123: float = float(m123f["atk"])
+	var pa123: float = g.player_atk_effective()
+	check(pa123 < atk123 * g.TOWER_WIN_RATIO, "打磨-123 弱 玩家 第 12 层 判定=败 (数据 锚定, atk %s vs 阈值 %s)" % [g.fmt(pa123), g.fmt(atk123 * g.TOWER_WIN_RATIO)])
+	# 1) 文案 = 阈值/缺口 恒等 (fmt_score 口径, 防 fmt int 截断) + 段 齐全
+	var thr123: String = g.tower_win_threshold_line(atk123)
+	check(thr123 == "胜 阈值: 有效 ATK %s · 还差 %s ATK" % [g.fmt_score(atk123 * g.TOWER_WIN_RATIO), g.fmt_score(atk123 * g.TOWER_WIN_RATIO - pa123)],
+			"打磨-123 基准 阈值/缺口 恒等 (实际 %s)" % thr123)
+	check(thr123.find("胜 阈值") >= 0 and thr123.find("还差") >= 0, "打磨-123 文案 含 阈值+缺口 段")
+	# 2) 登天梯 第 1 层: 接口 纯 函数 性质 (给定 怪物 atk, 缺口 随 当前 有效 ATK 动态 恒等;
+	# 不 依赖 判定 胜负 — 阈值/缺口 行 展示 由 UI 按 win 态 门控, 本 层 弱 玩家 判定=胜)
+	var m123e: Dictionary = g.tower_monster_stats(g.get_endless_floor(1))
+	var atk123e: float = float(m123e["atk"])
+	check(atk123e > 0.0, "打磨-123 登天梯 第 1 层 怪物 atk 有效 (实际 %s)" % g.fmt(atk123e))
+	check(g.tower_win_threshold_line(atk123e) == "胜 阈值: 有效 ATK %s · 还差 %s ATK" % [g.fmt_score(atk123e * g.TOWER_WIN_RATIO), g.fmt_score(atk123e * g.TOWER_WIN_RATIO - g.player_atk_effective())],
+			"打磨-123 登天梯 阈值/缺口 动态 恒等 (实际 %s)" % g.tower_win_threshold_line(atk123e))
+	# 3) 功法 atk 池: 学 全部 atk/all_mult 功法 后 有效 ATK 上升 + 缺口 收窄 (动态 恒等)
+	var pa_before123: float = pa123
+	var n_learn123 := 0
+	for id123 in g.skill_ids:
+		var s123: Dictionary = g.skill_by_id[id123]
+		if str(s123.get("type", "")) == "passive" and str(s123.get("effect", "")) in ["atk", "all_mult"]:
+			g.learned.append(id123)
+			n_learn123 += 1
+	check(n_learn123 > 0, "打磨-123 atk/all 功法 存在 (实际 %d)" % n_learn123)
+	var pa_skill123: float = g.player_atk_effective()
+	check(pa_skill123 > pa_before123, "打磨-123 学 atk 功法 有效 ATK 上升 (基准 %s → %s)" % [g.fmt(pa_before123), g.fmt(pa_skill123)])
+	check(g.tower_win_threshold_line(atk123) == "胜 阈值: 有效 ATK %s · 还差 %s ATK" % [g.fmt_score(atk123 * g.TOWER_WIN_RATIO), g.fmt_score(atk123 * g.TOWER_WIN_RATIO - pa_skill123)],
+			"打磨-123 功法 池 变化 缺口 动态 恒等 (实际 %s)" % g.tower_win_threshold_line(atk123))
+	g.learned.clear()
+	g.learned.assign(snap_learned123)
+	check(g.player_atk_effective() == pa_before123, "打磨-123 功法 复原 有效 ATK 回基准")
+	# 4) 装备 atk 池: 穿 最高 atk 装备 有效 ATK 进一步 上升 (动态 恒等, 复原)
+	var top_eq123 := ""
+	var top_atk123 := 0.0
+	for e123 in g.equip_ids:
+		var ed123: Dictionary = g.equip_by_id[e123]
+		if float(ed123.get("atk", 0.0)) > top_atk123:
+			top_atk123 = float(ed123.get("atk", 0.0))
+			top_eq123 = str(e123)
+	check(top_eq123 != "", "打磨-123 最高 atk 装备 存在 (实际 %s)" % top_eq123)
+	var slot123: String = str(g.equip_by_id[top_eq123]["slot"])
+	g.equipped = {slot123: top_eq123}
+	var pa_eq123: float = g.player_atk_effective()
+	check(pa_eq123 > pa_before123, "打磨-123 穿 atk 装备 有效 ATK 上升 (实际 %s)" % g.fmt(pa_eq123))
+	check(g.tower_win_threshold_line(atk123) == "胜 阈值: 有效 ATK %s · 还差 %s ATK" % [g.fmt_score(atk123 * g.TOWER_WIN_RATIO), g.fmt_score(atk123 * g.TOWER_WIN_RATIO - pa_eq123)],
+			"打磨-123 装备 池 变化 缺口 动态 恒等 (实际 %s)" % g.tower_win_threshold_line(atk123))
+	g.equipped.clear()
+	g.equipped.assign(snap_equipped123)
+	check(g.player_atk_effective() == pa_before123, "打磨-123 装备 复原 有效 ATK 回基准")
+	# 5) 剧毒 态: 有效 ATK x0.85 后 缺口 放大 (与 tower_power_line 剧毒 标注 同 口径)
+	g.poison_battles = 1
+	var pa_poison123: float = g.player_atk_effective()
+	check(absf(pa_poison123 - pa_before123 * g.TOWER_POISON_ATK_MULT) < 1e-6, "打磨-123 剧毒 有效 ATK = 基准 x0.85 (实际 %s)" % g.fmt(pa_poison123))
+	check(g.tower_win_threshold_line(atk123) == "胜 阈值: 有效 ATK %s · 还差 %s ATK" % [g.fmt_score(atk123 * g.TOWER_WIN_RATIO), g.fmt_score(atk123 * g.TOWER_WIN_RATIO - pa_poison123)],
+			"打磨-123 剧毒 态 缺口 放大 动态 恒等 (实际 %s)" % g.tower_win_threshold_line(atk123))
+	g.poison_battles = 0
+	# 6) 高层 Boss 量级 锚定 (镇妖塔 第 100 层 主题 Boss: 阈值 千 档, fmt_score 两位 小数)
+	var m123b: Dictionary = g.get_fixed_floor(100)
+	check(g.tower_win_threshold_line(float(m123b["atk"])) == "胜 阈值: 有效 ATK %s · 还差 %s ATK" % [g.fmt_score(float(m123b["atk"]) * g.TOWER_WIN_RATIO), g.fmt_score(float(m123b["atk"]) * g.TOWER_WIN_RATIO - pa_before123)],
+			"打磨-123 主题 Boss 量级 阈值/缺口 恒等 (实际 %s)" % g.tower_win_threshold_line(float(m123b["atk"])))
+	# 7) 只读 连读 恒定 无 状态/统计 副作用 (末 完全 复原 基准 态)
+	var snap123: Dictionary = g.stats.duplicate(true)
+	check(g.tower_win_threshold_line(atk123) == thr123
+			and g.stats == snap123 and g.stats == snap_stats123
+			and g.learned == snap_learned123 and g.equipped == snap_equipped123
+			and g.ascended == snap_asc123 and g.dao_level == snap_dao123
+			and g.tower_fixed_clear == snap_fclr123 and g.poison_battles == 0
+			and g.essence == snap_ess123 and g.stones == snap_stone123,
+			"打磨-123 只读 连读 恒定 无 副作用")
+
 	# ---------- 打磨-122: 自动爬塔 会话 词缀 段 (会话 累计 胜局/灵石/材料/词缀 件数 展示位:
 	# 挂机 自动 爬塔 战斗 掉落 词缀 累计, 状态行/会话 文案 追加 "词缀 N 件" 段; 通关 大奖 词缀
 	# 另段 展示 不 计入 本 累计 [打磨-114 口径]; 内存态 读档 归零 同 灵石 口径) ----------
