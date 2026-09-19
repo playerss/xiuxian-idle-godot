@@ -29,6 +29,11 @@ const TOWER_POISON_BATTLES := 2      # 剧毒持续场数
 const TOWER_CLEAR_BONUS_STONE := 1000000.0  # 通关 一次性 灵石 大奖
 const TOWER_CLEAR_BUFF := 0.15              # 通关 永久 增益: 玩家 atk/def +15% (乘算 独立 项)
 const TOWER_CLEAR_BONUS_AFFIX_COUNT := 3    # 通关 一次性 大奖 顶级(传说) 词缀 件数 (M5 规格 x3)
+# 打磨-127: 下一里程碑 ETA 估算口径 — 战斗 节拍 = 2s/层 (M5 规格 "战斗 节奏 ≤2 秒/层",
+# ETA = 距 下一 里程碑 层数 x 本层 预估 回合数 [tower_rounds_line 同源 最不利 0.9 档] x 本节拍;
+# 展示 上限 7 天 封顶 "7天+" (同 境界 阶梯 ETA 打磨-33 上限 口径); 纯 估算 不 改 判定)
+const TOWER_MILESTONE_FLOOR_SEC := 2.0
+const TOWER_ETA_CAP_SEC := 7.0 * 86400.0
 const ENDLESS_ELITE_MULT := 3.0      # 登天梯 精英层 (每 10 层) 数值 x3
 const ENDLESS_BOSS_MULT := 10.0      # 登天梯 里程碑 Boss (每 100 层) 数值 x10
 # 打磨-119: 镇妖塔 精英层 (每 10 层非 Boss) 结构/奖励 乘数 (M5 规格 "每 10 层精英 数值 x3
@@ -2624,45 +2629,90 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 # 精英层/小 Boss/主题 Boss/最终 Boss/登天梯 里程碑 Boss [100 倍数]; 镇妖塔 通关 守塔 模式
 # 恒打 1000 层 最终 Boss = 空串 (无 下 一 层 概念); 只读 无 状态/存档/统计 副作用)
 func tower_milestone_line(tower: String, cur_floor: int) -> String:
+	# 打磨-127: 目标 解析 抽 单点 接口 _tower_milestone_target (行 文案 与 ETA 行 同源 恒等)
+	var t: Dictionary = _tower_milestone_target(tower, cur_floor)
+	if t.is_empty():
+		return ""
+	var floor_n: int = int(t["floor"])
+	var remain: int = int(t["remain"])
+	var lab: String = str(t["label"])
+	if remain <= 0:
+		return "下一 里程碑: 就在 第 %d 层%s (结构 口径 见 怪物卡 tooltip)" % [floor_n, _ms_boss_mult(lab)]
+	if tower == "endless":
+		return "下一 里程碑: 第 %d 层 里程碑 Boss + 宝箱 (还有 %d 层, 保底 稀有+ 词缀)" % [floor_n, remain]
+	return "下一 里程碑: 第 %d 层%s (还有 %d 层)" % [floor_n, _ms_boss_mult(lab), remain]
+
+# 打磨-127: 下一 里程碑 目标 解析 (单点 来源 — tower_milestone_line 文案 与 tower_milestone_eta
+# 接口 共用, 防 两处 口径 漂移; 返回 {floor=目标层, remain=层距, label=类型}; 无 下一 里程碑
+# [镇妖塔 通关 守塔 模式 / 待挑战 层 数据 缺失 / 未知 塔] = 空 dict; 只读 无 状态/存档/统计 副作用)
+func _tower_milestone_target(tower: String, cur_floor: int) -> Dictionary:
 	if tower == "fixed":
 		if tower_fixed_clear:
-			return ""
+			return {}
 		var cur: int = clampi(cur_floor, 1, 1000)
 		var rec: Dictionary = get_fixed_floor(cur)
 		if rec.is_empty():
-			return ""
+			return {}
 		if bool(rec.get("is_elite", false)) or str(rec.get("boss_type", "")) != "":
-			var lab: String = "精英层"
-			if str(rec.get("boss_type", "")) == "small":
-				lab = "小 Boss"
-			elif str(rec.get("boss_type", "")) == "theme":
-				lab = "主题 Boss"
-			elif str(rec.get("boss_type", "")) == "final":
-				lab = "最终 Boss"
-			return "下一 里程碑: 就在 第 %d 层%s (结构 口径 见 怪物卡 tooltip)" % [cur, _ms_boss_mult(lab)]
+			return {"floor": cur, "remain": 0, "label": _ms_lab(rec)}
 		var nf: int = cur + 1
 		while nf <= 1000:
 			var nrec: Dictionary = get_fixed_floor(nf)
 			if nrec.is_empty():
-				return ""
+				return {}
 			if bool(nrec.get("is_elite", false)) or str(nrec.get("boss_type", "")) != "":
-				var nl: String = "精英层"
-				if str(nrec.get("boss_type", "")) == "small":
-					nl = "小 Boss"
-				elif str(nrec.get("boss_type", "")) == "theme":
-					nl = "主题 Boss"
-				elif str(nrec.get("boss_type", "")) == "final":
-					nl = "最终 Boss"
-				return "下一 里程碑: 第 %d 层%s (还有 %d 层)" % [nf, _ms_boss_mult(nl), nf - cur]
+				return {"floor": nf, "remain": nf - cur, "label": _ms_lab(nrec)}
 			nf += 1
-		return ""
+		return {}
 	if tower == "endless":
 		var ec: int = maxi(cur_floor, 1)
 		var nf2: int = ((ec + 99) / 100) * 100
 		if nf2 <= ec:
 			nf2 = ec + 100
-		return "下一 里程碑: 第 %d 层 里程碑 Boss + 宝箱 (还有 %d 层, 保底 稀有+ 词缀)" % [nf2, nf2 - ec]
-	return ""
+		return {"floor": nf2, "remain": nf2 - ec, "label": "里程碑 Boss"}
+	return {}
+
+# 打磨-127: 里程碑 类型 标签 (层 记录 → 精英层/小 Boss/主题 Boss/最终 Boss/登天梯 里程碑 Boss;
+# 与 tower_milestone_line 原 标签 口径 同源 单点)
+func _ms_lab(rec: Dictionary) -> String:
+	var bt: String = str(rec.get("boss_type", ""))
+	if bt == "small":
+		return "小 Boss"
+	if bt == "theme":
+		return "主题 Boss"
+	if bt == "final":
+		return "最终 Boss"
+	if bt == "boss":
+		return "里程碑 Boss"
+	return "精英层"
+
+# 打磨-127: 下一里程碑 ETA 估算 文案 (M5 规格 "战斗 节奏 ≤2 秒/层" + 境界 阶梯 ETA 打磨-33
+# "7天+ 封顶" 口径 同系; 双塔 卡片 里程碑 行 下 展示 — 距 下个 精英/Boss/里程碑 Boss 还要 挂
+# 多久, 与 突破 ETA [打磨-24]/境界 阶梯 ETA [打磨-33] 同 "时间 预期" 定位; 只读 无 副作用):
+#   ETA = 距 下一 里程碑 层数 [remain, _tower_milestone_target 同源] x 本层 预估 回合数
+#   [tower_rounds_line 同源 = ceil(怪 HP / max(1, 有效 ATK - 怪 DEF) x 0.9) 最不利 0.9 档]
+#   x TOWER_MILESTONE_FLOOR_SEC (2s/层); 上限 TOWER_ETA_CAP_SEC (7天) 封顶显 "7天+";
+#   败 预测 (有效 ATK < 怪 ATK x 0.85) 显 "本层 战力 不足, 突破/学 功法/换 装备 后 再 估"
+#   (ETA 无意义 — 打不赢 本层 就 到不了 下一 里程碑); 守塔 模式/无 下一 里程碑 = 空串;
+#   层数/战力/剧毒/塔 态 变化 时 文案 动态 同步 (UI 文本 变化 才 刷 节流).
+func tower_milestone_eta(tower: String, cur_floor: int, mon: Dictionary, win: bool) -> String:
+	if not win:
+		return "本层 战力 不足, 突破/学 功法/换 装备 后 再 估 (败 预测 不 出 ETA)"
+	var t: Dictionary = _tower_milestone_target(tower, cur_floor)
+	if t.is_empty():
+		return ""
+	var remain: int = int(t["remain"])
+	var lab: String = str(t["label"])
+	var head: String = ("当前 里程碑 (就在本层) ETA: " if remain <= 0 else "下一 里程碑 ETA: ")
+	var floors: int = maxi(remain, 1)  # 就在 本层 = 只 打 当前 层 1 场
+	var dmg := maxf(1.0, player_atk_effective() - float(mon.get("def", 0.0))) * 0.9
+	var rounds_f: float = ceil(float(mon.get("hp", 1.0)) / dmg) if dmg > 0.0 else 999999.0
+	var sec: float = float(floors) * rounds_f * TOWER_MILESTONE_FLOOR_SEC
+	if sec > TOWER_ETA_CAP_SEC:
+		return head + "7天+ (超上限 封顶; %d 层 x 本层 预估 回合 x %.0f 秒/层, 估算 口径 见 tooltip)" % [floors, TOWER_MILESTONE_FLOOR_SEC]
+	if remain <= 0:
+		return head + fmt_time(sec) + " (%s 本层 预估 回合 x %.0f 秒/层, 估算 口径 见 tooltip)" % [lab, TOWER_MILESTONE_FLOOR_SEC]
+	return head + fmt_time(sec) + " (约 %d 层 x 本层 预估 回合 x %.0f 秒/层, 估算 口径 见 tooltip)" % [floors, TOWER_MILESTONE_FLOOR_SEC]
 
 # 打磨-121: 里程碑 标签 类型+倍率 后缀 (精英层 无 倍率 只 给 类型 / 小 Boss x10 / 主题 x20 /
 # 最终 x50; 与 TOWER_BOSS_MULT_* 常量 同源, 只 展示 不 改 数值; 精英 x3 口径 见 结构 行 不 重复)

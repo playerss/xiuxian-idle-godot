@@ -207,6 +207,7 @@ func _ready() -> void:
 	await _assert_affix_drop_line()  # 打磨-120: 怪物卡 tooltip 词缀 掉落 概率 行 (M6 规格 掉落 来源 口径 展示 位: 普通 5%/精英 20%/Boss 1~3/里程碑 宝箱 1~2; 有效 掉率 = base x 种 权重 + 词缀袋 +10%; 含 掉率 行/接口 恒等/Boss 100%/状态行 tooltip 口径/节流/收尾)
 	await _assert_tower_milestone_line()  # 打磨-121: 双塔 卡片 下一 里程碑 行 (M5 规格 每 100 层 天阶 里程碑 进度 展示 位: 距 下个 精英/Boss/里程碑 Boss 层数/就在 本层/通关 隐藏/tooltip/节流/收尾)
 	await _assert_win_threshold_line()  # 打磨-123: 爬塔 战力对比 胜 阈值/缺口 行 (M5 规格 败 预测 时 展示 胜还需 多少 ATK: 败 可见 阈值/缺口=接口 恒等/胜 预测 隐藏/升层 动态 同步/剧毒 缺口 放大/tooltip 提升 路径/同态 节流 无 副作用/收尾 干净 基准)
+	await _assert_tower_milestone_eta()  # 打磨-127: 双塔 卡片 下一里程碑 ETA 行 (M5 规格 战斗 节奏 ≤2 秒/层 时间 预期: 层距 x 本层 预估 回合 x 2s, 7天+ 封顶/败 预测 战力 不足 提示/升层 动态 同步/剧毒 联动/守塔 隐藏/tooltip 口径/节流/收尾)
 	await _assert_challenge_btn_tip()  # 打磨-124: 爬塔 挑战 按钮 tooltip 动态段 (胜败 预测+胜利 结算 预览 灵石/材料/词缀 掉率/每日 首胜/剧毒 警告 + 败 预测 阈值/缺口 行: 双塔 按钮 tooltip=接口 恒等/一败一胜 双向/结算 预览 段 数值 恒等/升层 动态 同步/同态 节流 无 副作用/收尾 干净 基准)
 	_finish()
 
@@ -3957,6 +3958,141 @@ func _assert_win_threshold_line() -> void:
 	g.set_process(true)
 	ui._tab.current_tab = 3
 
+
+# 打磨-127: 双塔 卡片 下一里程碑 ETA 行 (M5 规格 "战斗 节奏 ≤2 秒/层" 的 时间 预期 展示位 —
+# 里程碑 行 [打磨-121] 只给 层数 余量, 玩家 挂机 不知 距 下个 精英/Boss/里程碑 Boss 还要 挂 多久;
+# 口径 = 层距 x 本层 预估 回合 [tower_rounds_line 同源 最不利 0.9 档] x 2s/层, 7天+ 封顶,
+# 败 预测 显 "本层 战力 不足…再 估", 守塔 模式 隐藏; 随 层数/战力/剧毒 动态 同步; 收尾 干净 基准)
+func _assert_tower_milestone_eta() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 弱 玩家 (atk 池 清空, 有效 ATK 2.0) + 塔 态 受控 —
+	# 镇妖塔 挑战层 = 2 (判定=败: 阈值 2.84 > 2.0, 数据 锚定), 登天梯 = 1 (判定=胜: 阈值 1.44 < 2.0)
+	g.learned.clear()
+	g.equipped = {}
+	g.owned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.tower_fixed_floor = 1
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 双塔 ETA 行 节点 存在 + 一败一胜 双向 (镇妖塔 2 层 败=战力 不足 提示, 登天梯 1 层 胜=ETA 文案)
+	var feta: Label = ui._tw_milestone_eta_labels["fixed"]
+	var eta: Label = ui._tw_milestone_eta_labels["endless"]
+	check(feta != null and eta != null, "打磨-127 双塔 ETA 行 节点 存在")
+	var pv127: Dictionary = g.tower_challenge_preview()
+	var fm127: Dictionary = pv127["fixed_mon"]
+	var em127: Dictionary = pv127["endless_mon"]
+	check(g.player_atk_effective() < float(fm127["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-127 弱 玩家 镇妖塔 第 2 层 判定=败 (数据 锚定)")
+	check(g.player_atk_effective() >= float(em127["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-127 弱 玩家 登天梯 第 1 层 判定=胜 (数据 锚定)")
+	check(feta.visible and str(feta.text) == g.tower_milestone_eta("fixed", 2, fm127, false)
+			and str(feta.text).find("本层 战力 不足") >= 0,
+			"打磨-127 镇妖塔 败 预测 ETA 行 = 接口 恒等 战力 不足 段 (实际 %s)" % str(feta.text))
+	check(eta.visible and str(eta.text) == g.tower_milestone_eta("endless", 1, em127, true)
+			and str(eta.text).find("下一 里程碑 ETA") >= 0 and str(eta.text).find("约 99 层") >= 0,
+			"打磨-127 登天梯 胜 预测 ETA 行 = 接口 恒等 含 层距 段 (实际 %s)" % str(eta.text))
+	# 2) 升层: ETA 动态 同步 (镇妖塔 2→20 层 怪物 数值 变, 仍 败 预测 战力 不足 提示 口径 不变)
+	g.tower_fixed_floor = 19
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var fm127_20: Dictionary = g.tower_challenge_preview()["fixed_mon"]
+	check(g.player_atk_effective() < float(fm127_20["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-127 弱 玩家 镇妖塔 第 20 层 判定=败 (数据 锚定)")
+	check(str(feta.text) == g.tower_milestone_eta("fixed", 20, fm127_20, false),
+			"打磨-127 升 层 败 预测 ETA 行 动态 同步 (实际 %s)" % str(feta.text))
+	# 3) 登天梯 升层 (1→100 层 里程碑 Boss 层): 弱 玩家 败 预测 → 战力 不足 提示 动态 同步
+	# (怪物 字典 走 preview 口径 = UI 标签 同源 endless_mon, 与 _apply_tower_card 传参 一致)
+	g.tower_endless_floor = 100
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var em127_100: Dictionary = g.tower_challenge_preview()["endless_mon"]
+	check(g.player_atk_effective() < float(em127_100["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-127 弱 玩家 登天梯 第 100 层 判定=败 (数据 锚定)")
+	check(str(eta.text) == g.tower_milestone_eta("endless", 100, em127_100, false)
+			and str(eta.text).find("本层 战力 不足") >= 0,
+			"打磨-127 登天梯 升 100 层 败 预测 ETA 行 动态 同步 (实际 %s)" % str(eta.text))
+	# 4) 剧毒 态: 有效 ATK x0.85 后 按 减成 口径 预估 回合, 胜 预测 下 ETA 文案 动态 同步
+	# (剧毒 只 影响 预估 回合, 不 改 胜负 判定; 弱 玩家 登天梯 第 1 层 胜 判定 剧毒 前后 恒 胜;
+	# 怪物 字典 走 preview 口径 = UI 标签 同源 endless_mon; 文案 = 接口 恒等 [剧毒 已 计入 有效 ATK])
+	g.tower_endless_floor = 1
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var em127np: Dictionary = g.tower_challenge_preview()["endless_mon"]
+	var eta127_npoison: String = g.tower_milestone_eta("endless", 1, em127np, true)
+	check(str(eta.text) == eta127_npoison and eta127_npoison.find("本层 战力 不足") < 0,
+			"打磨-127 登天梯 第 1 层 无 剧毒 胜 预测 ETA 文案 基准 (实际 %s)" % eta127_npoison)
+	g.poison_battles = 1
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var em127p: Dictionary = g.tower_challenge_preview()["endless_mon"]
+	var eta127_poison: String = g.tower_milestone_eta("endless", 1, em127p, true)
+	check(str(eta.text) == eta127_poison,
+			"打磨-127 剧毒 态 登天梯 ETA 行 = 接口 恒等 (实际 %s)" % str(eta.text))
+	# 剧毒 降成 校验: 有效 ATK 剧毒 态 (x0.85) < 无 剧毒 态
+	var atk_npoison127: float = g.player_atk()
+	var atk_poison127: float = g.player_atk_effective()
+	check(atk_poison127 < atk_npoison127 and absf(atk_poison127 / atk_npoison127 - g.TOWER_POISON_ATK_MULT) < 1e-6,
+			"打磨-127 剧毒 态 有效 ATK 降成 x%.2f (无剧毒 %s → 剧毒 %s)" % [g.TOWER_POISON_ATK_MULT, g.fmt(atk_npoison127), g.fmt(atk_poison127)])
+	g.poison_battles = 0
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 5) ETA 行 tooltip 口径 说明 (估算 口径/封顶/败 预测 不出 ETA/不 改 判定)
+	check(str(eta.tooltip_text).find("下一 里程碑 ETA") >= 0 and str(eta.tooltip_text).find("7 天 封顶") >= 0
+			and str(eta.tooltip_text).find("不 改 即时 胜负 判定") >= 0,
+			"打磨-127 ETA 行 tooltip 含 口径 说明 (实际 %s)" % str(eta.tooltip_text).left(40))
+	# 6) 强 玩家 (飞升 道祖) 登天梯 第 100 层: 胜 预测 → ETA 正常 文案 (未 封顶, 预估 回合 少)
+	g.tower_endless_floor = 100
+	g.ascended = true
+	g.dao_level = 8
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var em127s100: Dictionary = g.tower_challenge_preview()["endless_mon"]
+	check(g.player_atk_effective() >= float(em127s100["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-127 强 玩家 登天梯 第 100 层 判定=胜 (数据 锚定)")
+	check(str(eta.text) == g.tower_milestone_eta("endless", 100, em127s100, true)
+			and str(eta.text).find("下一 里程碑 ETA") >= 0 and str(eta.text).find("7天+") < 0,
+			"打磨-127 强 玩家 登天梯 100 层 ETA 行 = 接口 恒等 未 封顶 (实际 %s)" % str(eta.text))
+	# 7) 强 玩家 镇妖塔 通关 守塔 模式: ETA 行 + 里程碑 行 均 隐藏 (无 下一 层 概念)
+	g.tower_fixed_floor = 999
+	g.tower_fixed_clear = true
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(not feta.visible and str(feta.text) == "",
+			"打磨-127 镇妖塔 通关 守塔 模式 ETA 行 隐藏 (实际 vis=%s txt=%s)" % [feta.visible, str(feta.text)])
+	# 8) 同态 节流: 无 塔 态 变化 再 刷 不 重写 + 无 统计 副作用
+	var snap127: Dictionary = g.stats.duplicate(true)
+	var ref127: String = str(eta.text)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(eta.text) == ref127 and g.stats == snap127, "打磨-127 同态 节流 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态/玩家 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.learned.clear()
+	g.equipped = {}
+	g.owned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.set_process(true)
+	ui._tab.current_tab = 3
 
 # 打磨-124: 爬塔 挑战 按钮 tooltip 动态段 (M5 规格 战斗 即时 判定 的 结算 展示 位 缺口 —
 # 「挑战 本层」按钮 此前 无 tooltip, 点击 前 悬停 不知 本层 胜败 预测 与 胜利 结算 内容;

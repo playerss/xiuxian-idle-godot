@@ -157,6 +157,7 @@ var _tw_round_labels: Dictionary = {}  # 打磨-105: 塔 id -> 战斗时长 预�
 var _tw_def_labels: Dictionary = {}    # 打磨-111: 塔 id -> 战力对比 DEF 行 Label (变化才刷)
 var _tw_thr_labels: Dictionary = {}  # 打磨-123: 塔 id -> 胜 阈值/缺口 行 Label (败 预测 才 可见)
 var _tw_btn_tips: Dictionary = {}    # 打磨-124: 塔 id -> 挑战 按钮 tooltip 动态段 缓存 (文本 变化 才 刷)
+var _tw_milestone_eta_labels: Dictionary = {}  # 打磨-127: 塔 id -> 下一里程碑 ETA 行 Label (变化才刷)
 var _tw_key := ""                # 爬塔页 刷新键 (层数/怪物名/胜负/玩家 atk 变化才刷)
 var _tw_card_hi_tween: Tween      # M5-4: 爬塔 卡片 金边高亮 tween (顶栏 通关 徽标 点击直达 1.2s 自动恢复)
 var _tw_status_label: Label      # 爬塔 状态汇总行 (镇妖塔最高/登天梯纪录/剧毒提醒)
@@ -1729,6 +1730,11 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	# 里程碑 Boss 还有 几 层; 文本 变化 才 刷, 空串 隐藏 [镇妖塔 通关 守塔 模式 无 下一 层 概念])
 	var ms_l := _label("", 12, DIM)
 	box.add_child(ms_l)
+	# 打磨-127: 下一里程碑 ETA 行 (距 下个 精英/Boss/里程碑 Boss 还要 挂 多久: 层数 x 本层 预估 回合
+	# x 2s/层, 7天+ 封顶; 败 预测 显 "本层 战力 不足…再 估"; 与 突破 ETA [打磨-24]/境界 阶梯 ETA
+	# [打磨-33] 同 时间 预期 定位; 文本 变化 才 刷)
+	var eta_l := _label("", 12, DIM)
+	box.add_child(eta_l)
 	# 挑战按钮 (立即结算一次; 与 自动爬塔 同路径 try_tower_challenge)
 	var btn := _make_button("挑战 本层")
 	btn.pressed.connect(_on_tower_challenge.bind(tid))
@@ -1742,6 +1748,7 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	_tw_thr_labels[tid] = thr_l
 	_tw_def_labels[tid] = def_l
 	_tw_round_labels[tid] = round_l
+	_tw_milestone_eta_labels[tid] = eta_l
 	# 首刷 不 在 此处: 双塔 卡片 构建期 另一塔 尚未 登记 (_tw_cards 缺键),
 	# 统一 由 _build_tower_page 收尾 强制 全量 刷新 (清 刷新键 后 _refresh_tower)
 
@@ -1811,14 +1818,15 @@ func _refresh_tower() -> void:
 	var p: Dictionary = g.tower_challenge_preview()
 	var fmon: Dictionary = p["fixed_mon"]
 	var emon: Dictionary = p["endless_mon"]
-	var key: String = "%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d" % [
+	var key: String = "%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d" % [
 		int(p["fixed_floor"]), int(p["endless_floor"]),
 		str(fmon["name"]), str(emon["name"]),
 		1 if bool(p["fixed_win"]) else 0, 1 if bool(p["endless_win"]) else 0,
 		int(g.player_atk_effective() / 0.5), int(g.player_def() / 0.5),
 		g._auto_tower_wins,  # 打磨-95: 胜局数 入键 (守塔 模式 恒 1000 层 胜局 不 变 层数, 键 须 感知 会话 统计 变化); 打磨-111: 玩家 DEF 0.5 档 入键 (DEF 变化 刷 DEF 行)
 		1 if g.tower_daily_date == g._today_str() else 0,  # 打磨-116: 登天梯 每日 首胜 当日 态 入键 (触发 时 层数 已 推进 天然 感知; 跨日 挂机 不 升层 也 须 清 状态 行 段)
-		g._auto_tower_mats, g._auto_tower_affixes]  # 打磨-100/122: 会话 材料/词缀 累计 入键 (状态行 会话 段 依赖, 手动 测试/外部 置态 不 升层 也 须 刷; 真实 路径 胜局 必 变 wins 天然 感知)
+		g._auto_tower_mats, g._auto_tower_affixes,  # 打磨-100/122: 会话 材料/词缀 累计 入键 (状态行 会话 段 依赖, 手动 测试/外部 置态 不 升层 也 须 刷; 真实 路径 胜局 必 变 wins 天然 感知)
+		1 if g.tower_fixed_clear else 0]  # 打磨-127: 通关态 入键 (999 层 挑战 层 = 1000 层 与 通关 后 守塔 同 挑战 层, 键 须 感知 clear 翻转 — 里程碑/ETA 行 与 守塔 模式 文案 依赖)
 	if key == _tw_key and _tw_key != "":
 		return
 	_tw_key = key
@@ -1927,6 +1935,18 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 		ms_l2.visible = ms_txt != ""
 		ms_l2.tooltip_text = ("下一 里程碑 (M5 规格: 每 10 层 精英 [x3/x2] · 镇妖塔 每 50 层 小 Boss [x10] / 第 100/250/500/750 层 主题 Boss [x20] / 第 1000 层 最终 Boss [x50] · 登天梯 每 100 层 里程碑 Boss + 宝箱 [保底 稀有+ 词缀])。\n"
 			+ "当前 待挑战 层 本身 是 精英/Boss 层 时 标注 就在本层; 镇妖塔 通关 守塔 模式 恒打 1000 层 Boss, 无 下一 层 概念 不 展示。")
+	# 打磨-127: 下一里程碑 ETA 行 (距 下个 精英/Boss/里程碑 Boss 还要 挂 多久; 层数 x 本层 预估 回合
+	# x 2s/层, 7天+ 封顶; 败 预测 显 战力 不足 提示; 与 里程碑 行 同源 单点 _tower_milestone_target;
+	# 文本 变化 才 刷, 挂机 恒定 无 每帧 重建; 只读 无 副作用)
+	var eta_l2: Label = _tw_milestone_eta_labels[tid]
+	var eta_txt: String = g.tower_milestone_eta(tid, floor_n, mon, win)
+	if str(eta_l2.text) != eta_txt:
+		eta_l2.text = eta_txt
+		eta_l2.visible = eta_txt != ""
+		eta_l2.tooltip_text = ("下一 里程碑 ETA (M5 规格 战斗 节奏 ≤2 秒/层; 同 突破 ETA/境界 阶梯 ETA 时间 预期 定位)。\n"
+			+ "估算 = 距 下一 里程碑 层数 x 本层 预估 回合 (最不利 0.9 浮动档, 与 战斗 时长 预估 同口径) x 2 秒/层; 超 7 天 封顶 显 7天+。\n"
+			+ "败 预测 (有效 ATK < 怪 ATK x 0.85) 不出 ETA (打不赢 本层 就 到不了 下一 里程碑), 提升 战力 后 自动 出; 剧毒 期间 预估 回合 偏大, 2 场 后 恢复。\n"
+			+ "纯 估算 不 改 即时 胜负 判定; 自动爬塔 挂机 按 每帧 各 1 次 推进 (实际 快于 本 估算)。")
 	# 打磨-124: 挑战 按钮 tooltip 动态段 (点击 前 悬停 展示 本层 胜败 预测 + 胜利 结算 预览
 	# [灵石/材料/词缀 掉率/每日 首胜/首通 大奖/剧毒 警告] + 败 预测 阈值/缺口 行; 口径 与
 	# 爬塔页 各 展示 位 同源; 文本 变化 才 刷, 挂机 恒定 无 每帧 重建; 只读 无 副作用)
