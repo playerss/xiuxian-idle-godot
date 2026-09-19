@@ -8057,6 +8057,98 @@ func _init() -> void:
 	g.set_process(true)
 	g.save_game()
 
+	# ---------- 打磨-126: 登天梯 新纪录 标记 + 胜利 浮动/底部消息 新纪录 段 (M5 规格
+	# "个人 最高纪录" 展示位 — was_best 结算 已 算 但 无 结果 字段/无 展示, 本 段 落地:
+	# 结算 字典 new_record 字段 [仅 登天梯 胜局 可 为 true, 镇妖塔/败局 恒 false] +
+	# tower_win_float_text 新纪录 段 + 手动 挑战 底部消息 同源 段) ----------
+	# 受控 基准: 登天梯 待挑战 第 2 层 / 历史 最高 1 层 (强 玩家 恒胜 数据 锚定)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ascended = true
+	g.dao_level = 8
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.poison_battles = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 2
+	g.tower_endless_best = 1
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.affix_bag = {}
+	var mon126: Dictionary = g.tower_monster_stats(g.get_endless_floor(2))
+	check(g.player_atk_effective() >= float(mon126["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-126 强 玩家 第 2 层 判定=胜 (数据 锚定)")
+	# 1) 登天梯 胜 第 2 层 创 新纪录 (2 > best 1): new_record=true + 浮动 含 新纪录 段
+	var rd126: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(rd126["win"]) and bool(rd126["new_record"]), "打磨-126 登天梯 胜 新纪录 new_record=true (win=%s)" % str(rd126["win"]))
+	check(int(rd126["floor"]) == 2 and g.tower_endless_best == 2 and g.tower_endless_floor == 3,
+			"打磨-126 结算 口径 推进 (best=%d floor=%d)" % [g.tower_endless_best, g.tower_endless_floor])
+	var flt126: String = g.tower_win_float_text(rd126)
+	check(flt126.find("新纪录! 最高 第 2 层") >= 0, "打磨-126 浮动 含 新纪录 段 (实际 %s)" % flt126)
+	# 2) 当日 再 胜 第 3 层 仍 新纪录 (3 > 2): new_record=true + 每日首胜 不 重复 (日期 已 今日)
+	var rd126b: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(rd126b["win"]) and bool(rd126b["new_record"]) and int(rd126b["floor"]) == 3,
+			"打磨-126 再 胜 第 3 层 新纪录 (best=%d)" % g.tower_endless_best)
+	check(g.tower_win_float_text(rd126b).find("新纪录! 最高 第 3 层") >= 0, "打磨-126 浮动 新纪录 层数 动态 同步")
+	# 3) 镇妖塔 胜局 恒 false (无 最高纪录 概念, 守 1000 层 口径 不 叠 新纪录)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	var rfx126: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rfx126["win"]) and bool(rfx126["new_record"]) == false, "打磨-126 镇妖塔 胜局 new_record=false (数据 锚定)")
+	check(g.tower_win_float_text(rfx126).find("新纪录") < 0, "打磨-126 镇妖塔 浮动 无 新纪录 段")
+	# 4) 登天梯 败局 恒 false (弱 玩家 atk 2.0 < 第 5 层 阈值; 数据 锚定 选 层)
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_endless_floor = 5
+	g.tower_endless_best = 4
+	var mon126w: Dictionary = g.tower_monster_stats(g.get_endless_floor(5))
+	check(g.player_atk_effective() < float(mon126w["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-126 弱 玩家 第 5 层 判定=败 (数据 锚定)")
+	var rd126l: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(rd126l["win"]) == false and bool(rd126l["new_record"]) == false
+			and g.tower_endless_best == 4, "打磨-126 败局 new_record=false 纪录 不 变 (best=%d)" % g.tower_endless_best)
+	check(g.tower_win_float_text(rd126l) == "", "打磨-126 败局 浮动 空串 (不 弹 无 新纪录 段)")
+	# 5) 只读 接口 连读 恒定 (tower_win_float_text 无 状态/统计 副作用)
+	var snap126: Dictionary = g.stats.duplicate(true)
+	var bs126: int = g.tower_endless_best
+	check(g.tower_win_float_text(rd126) == flt126 and g.tower_endless_best == bs126 and g.stats == snap126,
+			"打磨-126 浮动 文案 只读 连读 恒定 无 副作用")
+	# 收尾: 塔 态/强玩家 态 归零 落盘 (防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.affix_bag = {}
+	g.affix_materials = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 0.0
+	g.essence = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

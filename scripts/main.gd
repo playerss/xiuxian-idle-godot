@@ -1762,6 +1762,10 @@ func _on_tower_challenge(tid: String) -> void:
 			extra += " (幸运 全奖励x2)"
 		if bool(r.get("indomit_hit", false)):
 			extra += " (不屈 全奖励x1.2)"
+		# 打磨-126: 登天梯 新纪录 段 (M5 规格 "个人 最高纪录" 展示位; 结算 字典 new_record 字段
+		# 同源 [仅 登天梯 胜局 可 为 true, 镇妖塔/败局 恒 false 不追加]; 与 浮动 提示 同口径)
+		if bool(r.get("new_record", false)):
+			extra += " (新纪录! 最高 第 %d 层)" % int(r["floor"])
 		if float(r["daily_bonus"]) > 0.0:
 			extra += " (含每日首胜 +%s)" % g.fmt(float(r["daily_bonus"]))
 		if float(r.get("clear_reward_stone", 0.0)) > 0.0:

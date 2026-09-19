@@ -1248,6 +1248,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 	var clear_reward_stone := 0.0
 	var clear_reward_affixes: Array[String] = []  # 打磨-114: 通关 大奖 顶级(传说) 词缀 (实际 入包 的 ids)
 	var clear_reward_mat := 0  # 打磨-114: 背包满 折算 材料 (入包 0 件 时 = 3 件 分解 产出)
+	var was_best := false  # 打磨-126: 登天梯 本胜 是否 创 新纪录 (endless 胜局 分支 置位, 其余 恒 false)
 	var daily_date_today := _today_str()
 	# M6-2: 词缀掉落 (胜利 结算; 来源 由 层 结构 决定: 里程碑 Boss=milestone, Boss=boss,
 	# 精英=elite, 普通=normal; rolls 前 7 个 确定性 种子 随机 注入 (roll 已生成 时 复用),
@@ -1335,7 +1336,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		elif tower == "endless":
 			# 口径: tower_endless_best = 历史 最高 已 通关 层; tower_endless_floor = 当前 待挑战 层 (最高+1)
 			# 本胜 通关 next_floor 层 -> 最高纪录 更新 为 next_floor, 待挑战 推进 到 next_floor+1
-			var was_best := next_floor > tower_endless_best
+			was_best = next_floor > tower_endless_best  # 打磨-126: 新纪录 标记 (函数 级 声明, 结果 字典 new_record 同源)
 			tower_endless_best = maxi(tower_endless_best, next_floor)
 			tower_endless_floor = next_floor + 1
 			new_floor = next_floor + 1
@@ -1367,6 +1368,9 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		# 打磨-115: 登天梯 里程碑 Boss 层 标记 (M5 规格 "每 100 层 里程碑 Boss + 宝箱";
 		# 与 drop_src = milestone 同口径 — 结算 层 为 登天梯 100 倍数 且 boss 层; 供 展示 宝箱 段)
 		"is_milestone": win and tower == "endless" and str(mon["boss_type"]) != "" and next_floor % 100 == 0,
+		# 打磨-126: 登天梯 新纪录 标记 (M5 规格 "个人 最高纪录" 展示位: 本胜 通关层 > 历史 最高
+		# 即 创 新纪录, 与 was_best 结算口径 同源; 仅 登天梯 胜局 可 为 true, 镇妖塔/败局 恒 false)
+		"new_record": bool(was_best),
 		"daily_bonus": daily_bonus, "clear": clear, "poison": bool(mon["poison"]),
 		"poison_battles": poison_battles, "affix_drops": affix_drops,
 		"reason": ("胜" if win else "败: 战力 不足, 停留 本层 (无 惩罚, 可 重试)"),
@@ -2985,6 +2989,10 @@ func tower_win_float_text(r: Dictionary) -> String:
 		s += " 幸运 全奖励x2"
 	if bool(r.get("indomit_hit", false)):
 		s += " 不屈 全奖励x1.2"
+	# 打磨-126: 登天梯 新纪录 段 (M5 规格 "个人 最高纪录" 展示位: 本胜 创 新纪录 层 时 追加;
+	# 结算 字典 new_record 字段 同源 [仅 登天梯 胜局 可 为 true, 镇妖塔/败局 恒 false 不 展示])
+	if bool(r.get("new_record", false)):
+		s += " 新纪录! 最高 第 %d 层" % int(r.get("floor", 0))
 	if float(r.get("daily_bonus", 0.0)) > 0.0:
 		s += " 每日首胜 +%s" % fmt(float(r["daily_bonus"]))
 	# 打磨-114: 通关 大奖 词缀 段 (手动 挑战 胜利 首通 时 追加, 与 底部 消息 通关大奖 段 同源; 折算 材料 态 也 展示)
