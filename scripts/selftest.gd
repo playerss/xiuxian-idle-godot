@@ -7823,6 +7823,130 @@ func _init() -> void:
 	g.set_process(true)
 	g.save_game()
 
+	# ---------- 打磨-124: 挑战 按钮 tooltip 动态段 (M5 规格 战斗 即时 判定 的 结算 展示 位
+	# 缺口 — 「挑战 本层」按钮 此前 无 tooltip, 点击 前 悬停 不知 本层 胜败 预测 与 胜利
+	# 结算 内容; 段 口径 与 爬塔页 展示 同源: 胜负 预测 = tower_power_line (有效 ATK ≥ 怪
+	# ATK x 0.85, 剧毒 已 计入), 胜利 结算 预览 = 本层 表值 灵石 (幸运/不屈 属 结算 随机
+	# 判定 不 入 预览) + 材料 向上取整 + 词缀 掉率 行 (同 tower_affix_drop_line, 仅 胜利
+	# 结算) + 登天梯 每日 首胜 0.5x 口径 + 镇妖塔 1000 层 首通 一次性 大奖 口径 + 剧毒
+	# 怪 战胜 减攻 警告; 败 预测 追加 阈值/缺口 行 (打磨-123 同 表达式); 只读 无 状态/
+	# 存档/统计 副作用; 断言 数据 锚定: 弱 玩家 基准 下 镇妖塔 12 层 判定=败 (poison),
+	# 登天梯 1 层 判定=胜 (poison+heavy), 1000 层 首通 大奖 段 用 可胜 合成怪 恒等) ----------
+	g.set_process(false)
+	# 受控 基准 快照 (本段 末 完全 复原, 防 污染 后续 段; 同 打磨-123 口径)
+	var snap_learned124: Array = g.learned.duplicate(true)
+	var snap_equipped124: Dictionary = g.equipped.duplicate(true)
+	var snap_asc124: bool = g.ascended
+	var snap_dao124: int = g.dao_level
+	var pre124: Dictionary = {
+		"lf": g.tower_fixed_floor, "fc": g.tower_fixed_clear, "crg": g.tower_clear_reward_got,
+		"ef": g.tower_endless_floor, "eb": g.tower_endless_best, "dd": g.tower_daily_date,
+		"ds": g.tower_daily_bonus_stones, "pb": g.poison_battles,
+		"pe": g.poison_events.duplicate(true)}
+	var snap_stats124: Dictionary = g.stats.duplicate(true)
+	# 弱 玩家 (同 打磨-123: atk 池 清空, 有效 ATK 2.0) + 塔 态 受控
+	g.learned.clear()
+	g.equipped = {}
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 11
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	var pa124: float = g.player_atk_effective()
+	var fm124: Dictionary = g.tower_monster_stats(g.get_fixed_floor(12))
+	var em124: Dictionary = g.tower_monster_stats(g.get_endless_floor(1))
+	check(pa124 < float(fm124["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-124 弱 玩家 镇妖塔 第 12 层 判定=败 (数据 锚定, atk %s vs 阈值 %s)" % [g.fmt(pa124), g.fmt(float(fm124["atk"]) * g.TOWER_WIN_RATIO)])
+	check(pa124 >= float(em124["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-124 弱 玩家 登天梯 第 1 层 判定=胜 (数据 锚定, atk %s vs 阈值 %s)" % [g.fmt(pa124), g.fmt(float(em124["atk"]) * g.TOWER_WIN_RATIO)])
+	# 1) 镇妖塔 第 12 层 (败 预测): 层 标题 + 胜负 预测 (= tower_power_line 同源 口径)
+	# + 败 预测 阈值/缺口 行 (打磨-123 同 表达式), 无 结算 预览 段
+	var tip124b: String = g.tower_challenge_tip("fixed", 12, fm124)
+	check(tip124b.begins_with("镇妖塔 第 12 层\n"),
+			"打磨-124 镇妖塔 层 标题 行 (实际 %s)" % tip124b.left(20))
+	check(tip124b.find(g.tower_power_line(float(fm124["atk"]))) >= 0
+			and tip124b.find("→ 败") >= 0,
+			"打磨-124 胜负 预测 段 = tower_power_line 恒等 (实际 %s)" % tip124b)
+	check(tip124b.find(g.tower_win_threshold_line(float(fm124["atk"]))) >= 0
+			and tip124b.find("胜利 结算 预览") < 0,
+			"打磨-124 败 预测 阈值/缺口 行 无 结算 预览 (实际 %s)" % tip124b)
+	# 2) 登天梯 第 1 层 (胜 预测): 结算 预览 段 齐全 (灵石 表值/材料 向上取整/词缀 掉率
+	# 恒等/每日 首胜 未 触发 态; 本层 含 剧毒 特性 追加 减攻 警告 段; 无 幸运/不屈 倍率
+	# 段/无 首通 大奖 段)
+	var tip124w: String = g.tower_challenge_tip("endless", 1, em124)
+	check(tip124w.begins_with("登天梯 第 1 层\n"),
+			"打磨-124 登天梯 层 标题 行 (实际 %s)" % tip124w.left(20))
+	check(tip124w.find(g.tower_power_line(float(em124["atk"]))) >= 0 and tip124w.find("→ 胜") >= 0,
+			"打磨-124 胜负 预测 段 = tower_power_line 恒等 (实际 %s)" % tip124w)
+	check(tip124w.find("胜利 结算 预览: 灵石 +%s" % g.fmt(float(em124["stone"]))) >= 0,
+			"打磨-124 结算 预览 灵石 段 = 层表 表值 (实际 %s)" % tip124w)
+	check(tip124w.find("幸运 50% 概率 x2") < 0 and tip124w.find("不屈 x1.2") < 0,
+			"打磨-124 无 幸运/不屈 特性 不 追加 倍率 段 (实际 %s)" % tip124w)
+	check(tip124w.find("· 材料 +%d (同 怪物卡 材料 预估)" % int(ceil(float(em124["mats"])))) >= 0,
+			"打磨-124 材料 段 = 向上取整 stats mats 恒等 (实际 %s)" % tip124w)
+	var dl124: String = g.tower_affix_drop_line(em124, "endless")
+	check(dl124 != "" and tip124w.find("· " + dl124) >= 0,
+			"打磨-124 词缀 掉率 段 = tower_affix_drop_line 恒等 (实际 %s)" % tip124w)
+	check(tip124w.find("· 每日 首胜: 今日 首胜 奖励 未 触发 (今日 首次 通过 新纪录 层 即 额外 +0.5x 该层 灵石)") >= 0,
+			"打磨-124 登天梯 每日 首胜 未 触发 态 段 (实际 %s)" % tip124w)
+	check(tip124w.find("剧毒 特性") >= 0 and tip124w.find("首通 一次性 大奖") < 0,
+			"打磨-124 剧毒 特性 警告 段 存在 + 无 首通 大奖 段 (实际 %s)" % tip124w)
+	# 3) 剧毒 特性 警告 文案 恒等 (同 剧毒 徽标 口径: -15% 持续 TOWER_POISON_BATTLES 场)
+	check(tip124w.find("· 剧毒 特性: 战胜 后 玩家 ATK -15%% 持续 %d 场 (可 刷新)" % int(g.TOWER_POISON_BATTLES)) >= 0,
+			"打磨-124 剧毒 特性 警告 段 文案 恒等 (实际 %s)" % tip124w)
+	# 4) 首通 一次性 大奖 段: 1000 层 可胜 态 (合成 弱怪 恒等 胜 预测, 防 弱 玩家 基准
+	# 下 1000 层 判定=败 走 不到 胜 分支) 未 通关 未 发放 = 标注 (文案 恒等); 已 通关/
+	# 已 发放 态 消失; 999 层 无 段; 无 剧毒 特性 不 追加 警告 段
+	var syn124: Dictionary = {"atk": 0.5, "stone": 100.0, "mats": 0.0, "traits": []}
+	check(g.player_atk_effective() >= 0.5 * g.TOWER_WIN_RATIO, "打磨-124 合成 弱怪 判定=胜 (数据 锚定)")
+	var tip124s: String = g.tower_challenge_tip("fixed", 1000, syn124)
+	check(tip124s.find("· 首通 一次性 大奖: 称号 + 灵石 %s + 永久 atk/def +%.0f%% + 顶级(传说) 词缀 x%d" % [
+				g.fmt(g.TOWER_CLEAR_BONUS_STONE), g.TOWER_CLEAR_BUFF * 100.0, int(g.TOWER_CLEAR_BONUS_AFFIX_COUNT)]) >= 0,
+			"打磨-124 1000 层 首通 大奖 段 文案 恒等 (实际 %s)" % tip124s)
+	check(tip124s.find("剧毒 特性") < 0 and tip124s.find("胜利 结算 预览: 灵石 +100") >= 0,
+			"打磨-124 合成 怪 无 剧毒 段 + 灵石 段 (实际 %s)" % tip124s)
+	g.tower_fixed_clear = true
+	check(g.tower_challenge_tip("fixed", 1000, syn124).find("首通 一次性 大奖") < 0,
+			"打磨-124 已 通关 态 首通 大奖 段 消失 (守塔 模式)")
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = true
+	check(g.tower_challenge_tip("fixed", 1000, syn124).find("首通 一次性 大奖") < 0,
+			"打磨-124 已 发放 态 首通 大奖 段 消失 (reward_got 防 重放 口径)")
+	check(g.tower_challenge_tip("fixed", 999, syn124).find("首通 一次性 大奖") < 0,
+			"打磨-124 999 层 (非 最终 Boss 层) 无 首通 大奖 段")
+	# 5) 只读 连读 恒定 无 状态/统计 副作用 (接口 连读 恒等 + stats/剧毒 不变)
+	check(g.tower_challenge_tip("fixed", 12, fm124) == tip124b
+			and g.tower_challenge_tip("endless", 1, em124) == tip124w
+			and g.tower_challenge_tip("fixed", 1000, syn124) == g.tower_challenge_tip("fixed", 1000, syn124)
+			and g.stats == snap_stats124 and g.poison_battles == 0,
+			"打磨-124 只读 连读 恒定 无 副作用")
+	# 复原: 塔 态 前段 值 + 玩家 态 快照 (防 污染 后续 段)
+	g.tower_fixed_floor = int(pre124["lf"])
+	g.tower_fixed_clear = bool(pre124["fc"])
+	g.tower_clear_reward_got = bool(pre124["crg"])
+	g.tower_endless_floor = int(pre124["ef"])
+	g.tower_endless_best = int(pre124["eb"])
+	g.tower_daily_date = str(pre124["dd"])
+	g.tower_daily_bonus_stones = float(pre124["ds"])
+	g.poison_battles = int(pre124["pb"])
+	g.poison_events.clear()
+	for ev124 in pre124["pe"]:
+		g.poison_events.append(str(ev124))
+	g.ascended = snap_asc124
+	g.dao_level = snap_dao124
+	g.equipped.clear()
+	g.equipped.assign(snap_equipped124)
+	g.learned.clear()
+	g.learned.assign(snap_learned124)
+	g.set_process(true)
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

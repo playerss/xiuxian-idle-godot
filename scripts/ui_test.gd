@@ -205,6 +205,7 @@ func _ready() -> void:
 	await _assert_affix_drop_line()  # 打磨-120: 怪物卡 tooltip 词缀 掉落 概率 行 (M6 规格 掉落 来源 口径 展示 位: 普通 5%/精英 20%/Boss 1~3/里程碑 宝箱 1~2; 有效 掉率 = base x 种 权重 + 词缀袋 +10%; 含 掉率 行/接口 恒等/Boss 100%/状态行 tooltip 口径/节流/收尾)
 	await _assert_tower_milestone_line()  # 打磨-121: 双塔 卡片 下一 里程碑 行 (M5 规格 每 100 层 天阶 里程碑 进度 展示 位: 距 下个 精英/Boss/里程碑 Boss 层数/就在 本层/通关 隐藏/tooltip/节流/收尾)
 	await _assert_win_threshold_line()  # 打磨-123: 爬塔 战力对比 胜 阈值/缺口 行 (M5 规格 败 预测 时 展示 胜还需 多少 ATK: 败 可见 阈值/缺口=接口 恒等/胜 预测 隐藏/升层 动态 同步/剧毒 缺口 放大/tooltip 提升 路径/同态 节流 无 副作用/收尾 干净 基准)
+	await _assert_challenge_btn_tip()  # 打磨-124: 爬塔 挑战 按钮 tooltip 动态段 (胜败 预测+胜利 结算 预览 灵石/材料/词缀 掉率/每日 首胜/剧毒 警告 + 败 预测 阈值/缺口 行: 双塔 按钮 tooltip=接口 恒等/一败一胜 双向/结算 预览 段 数值 恒等/升层 动态 同步/同态 节流 无 副作用/收尾 干净 基准)
 	_finish()
 
 
@@ -3940,6 +3941,108 @@ func _assert_win_threshold_line() -> void:
 	# 收尾: 恢复 干净 基准 (塔 态/玩家 态 归零, 防 污染 后续 段)
 	g.tower_fixed_floor = 0
 	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.learned.clear()
+	g.equipped = {}
+	g.owned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+
+
+# 打磨-124: 爬塔 挑战 按钮 tooltip 动态段 (M5 规格 战斗 即时 判定 的 结算 展示 位 缺口 —
+# 「挑战 本层」按钮 此前 无 tooltip, 点击 前 悬停 不知 本层 胜败 预测 与 胜利 结算 内容;
+# 口径 与 爬塔页 各 展示 位 同源 [player_atk_effective/tower_power_line/
+# tower_win_threshold_line/tower_affix_drop_line/tower_daily_first_line]; 断言:
+# 双塔 按钮 tooltip = 接口 恒等 / 一败一胜 双向 覆盖 / 结算 预览 数值 段 精确
+# (灵石 表值/材料 向上取整/词缀 掉率 恒等/每日 首胜 口径/剧毒 警告 恒等) / 升层 动态
+# 同步 / 同态 节流 无 资源 统计 副作用 / 收尾 干净 基准)
+func _assert_challenge_btn_tip() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准 (同 打磨-123 锚定): 弱 玩家 atk 池 清空 [有效 ATK 2.0] + 塔 态 受控:
+	# 镇妖塔 挑战层 = 12 (判定=败: 阈值 3.23 > 2.0, 含 剧毒 特性), 登天梯 = 1 (判定=胜:
+	# 阈值 1.44 < 2.0, 含 剧毒+重甲 特性) — 一败一胜 覆盖 阈值/缺口 行 与 结算 预览 双向
+	g.learned.clear()
+	g.equipped = {}
+	g.owned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 11
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 双塔 挑战 按钮 节点 存在 + tooltip = 接口 恒等 + 层 标题 行
+	var fbtn: Button = ui._tw_cards["fixed"]["btn"]
+	var efbtn: Button = ui._tw_cards["endless"]["btn"]
+	check(fbtn != null and efbtn != null, "打磨-124 双塔 挑战 按钮 节点 存在")
+	var fm124: Dictionary = g.tower_monster_stats(g.get_fixed_floor(12))
+	var em124: Dictionary = g.tower_monster_stats(g.get_endless_floor(1))
+	check(g.player_atk_effective() < float(fm124["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-124 弱 玩家 镇妖塔 第 12 层 判定=败 (数据 锚定)")
+	check(g.player_atk_effective() >= float(em124["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-124 弱 玩家 登天梯 第 1 层 判定=胜 (数据 锚定)")
+	var ftip124: String = g.tower_challenge_tip("fixed", 12, fm124)
+	var etip124: String = g.tower_challenge_tip("endless", 1, em124)
+	check(str(fbtn.tooltip_text) == ftip124 and str(efbtn.tooltip_text) == etip124,
+			"打磨-124 双塔 挑战 按钮 tooltip = 接口 恒等 (实际 %s / %s)" % [str(fbtn.tooltip_text).left(30), str(efbtn.tooltip_text).left(30)])
+	# 2) 败 预测 (镇妖塔 12 层): 层 标题 + 预测败 + 阈值/缺口 行, 无 结算 预览 段
+	check(str(fbtn.tooltip_text).begins_with("镇妖塔 第 12 层\n") and str(fbtn.tooltip_text).find("→ 败") >= 0
+			and str(fbtn.tooltip_text).find(g.tower_win_threshold_line(float(fm124["atk"]))) >= 0
+			and str(fbtn.tooltip_text).find("胜利 结算 预览") < 0,
+			"打磨-124 镇妖塔 败 预测 tooltip = 预测败 + 阈值/缺口 行 无 结算 预览 (实际 %s)" % str(fbtn.tooltip_text))
+	# 3) 胜 预测 (登天梯 1 层): 结算 预览 段 数值 精确 (灵石 表值/材料 向上取整/词缀 掉率
+	# 恒等/每日 首胜 未 触发 态/剧毒 警告 段 恒等; 无 幸运/不屈 倍率 段/无 首通 大奖 段)
+	check(str(efbtn.tooltip_text).find("→ 胜") >= 0
+			and str(efbtn.tooltip_text).find("胜利 结算 预览: 灵石 +%s" % g.fmt(float(em124["stone"]))) >= 0,
+			"打磨-124 结算 预览 灵石 段 = 层表 表值 (实际 %s)" % str(efbtn.tooltip_text))
+	check(str(efbtn.tooltip_text).find("幸运 50% 概率 x2") < 0 and str(efbtn.tooltip_text).find("不屈 x1.2") < 0,
+			"打磨-124 无 幸运/不屈 特性 不 追加 倍率 段")
+	check(str(efbtn.tooltip_text).find("· 材料 +%d (同 怪物卡 材料 预估)" % int(ceil(float(em124["mats"])))) >= 0,
+			"打磨-124 材料 段 = 向上取整 stats mats 恒等")
+	var dl124: String = g.tower_affix_drop_line(em124, "endless")
+	check(dl124 != "" and str(efbtn.tooltip_text).find("· " + dl124) >= 0,
+			"打磨-124 词缀 掉率 段 = tower_affix_drop_line 恒等")
+	check(str(efbtn.tooltip_text).find("· 每日 首胜: 今日 首胜 奖励 未 触发") >= 0
+			and str(efbtn.tooltip_text).find("首通 一次性 大奖") < 0,
+			"打磨-124 每日 首胜 未 触发 态 + 无 首通 大奖 段")
+	check(str(efbtn.tooltip_text).find("· 剧毒 特性: 战胜 后 玩家 ATK -15%% 持续 %d 场 (可 刷新)" % int(g.TOWER_POISON_BATTLES)) >= 0,
+			"打磨-124 剧毒 特性 警告 段 文案 恒等 (实际 %s)" % str(efbtn.tooltip_text))
+	# 4) 升层 动态 同步 (镇妖塔 第 20 层 精英 层; 按钮 tooltip 随 刷新 键 自动 刷, 文本 变化 才 写)
+	g.tower_fixed_floor = 19
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var fm124_20: Dictionary = g.tower_monster_stats(g.get_fixed_floor(20))
+	check(str(fbtn.tooltip_text) == g.tower_challenge_tip("fixed", 20, fm124_20),
+			"打磨-124 升 精英层 20 层 按钮 tooltip 动态 同步 (实际 %s)" % str(fbtn.tooltip_text).left(40))
+	# 5) 同态 节流: 无 状态 变化 再 刷 不 重写 + 无 资源/统计 副作用
+	var snap124: Dictionary = g.stats.duplicate(true)
+	var ess124: float = g.essence
+	var stone124: float = g.stones
+	var ref124: String = str(fbtn.tooltip_text) + "|" + str(efbtn.tooltip_text)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(str(fbtn.tooltip_text) + "|" + str(efbtn.tooltip_text) == ref124
+			and g.stats == snap124 and g.essence == ess124 and g.stones == stone124,
+			"打磨-124 同态 节流 无 资源 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态/玩家 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
 	g.tower_endless_floor = 1
 	g.tower_endless_best = 0
 	g.tower_daily_date = ""

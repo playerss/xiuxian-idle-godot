@@ -2909,6 +2909,52 @@ func tower_win_threshold_line(mon_atk: float) -> String:
 	var gap: float = need - player_atk_effective()
 	return "胜 阈值: 有效 ATK %s · 还差 %s ATK" % [fmt_score(need), fmt_score(gap)]
 
+# 打磨-124: 挑战 按钮 tooltip 动态段 (M5 规格 战斗 即时 判定 的 结算 展示 位 缺口 —
+# 「挑战 本层」按钮 此前 无 tooltip, 点击 前 悬停 不知 本层 胜败 预测 与 胜利 结算
+# 内容; 段 口径 与 爬塔页 展示 同源: 胜负 预测 = tower_power_line (有效 ATK ≥ 怪物
+# ATK x 0.85, 剧毒 已 计入), 胜利 结算 预览 = 本层 表值 灵石 (幸运/不屈 属 结算 随机
+# 判定 不 入 预览) + 材料 向上取整 (同 tower_monster_tip 材料 行) + 词缀 掉率 行
+# (同 tower_affix_drop_line, 仅 胜利 结算) + 登天梯 每日 首胜 0.5x 口径 (未 触发
+# 态 标注) + 镇妖塔 1000 层 首通 一次性 大奖 口径 (未 通关 且 未 发放 态 标注) +
+# 剧毒 怪 战胜 追加 减攻 警告; 败 预测 追加 阈值/缺口 行 (打磨-123 同 表达式).
+# 只读 无 状态/存档/统计 副作用, 爬塔页 挑战 按钮 悬停 动态 刷新 (文本 变化 才 写))
+func tower_challenge_tip(tower: String, floor_n: int, mon: Dictionary) -> String:
+	var win: bool = player_atk_effective() >= float(mon["atk"]) * TOWER_WIN_RATIO
+	var lines: Array[String] = []
+	lines.append("镇妖塔 第 %d 层" % floor_n if tower == "fixed" else "登天梯 第 %d 层" % floor_n)
+	lines.append(tower_power_line(float(mon["atk"])))
+	if not win:
+		lines.append(tower_win_threshold_line(float(mon["atk"])))
+	else:
+		var has_lucky: bool = false
+		var has_indomit: bool = false
+		for tid in mon["traits"]:
+			var td: Dictionary = trait_by_id.get(str(tid), {})
+			if td.is_empty():
+				continue
+			var mult: Dictionary = td.get("mult", {})
+			if mult.has("lucky_chance"):
+				has_lucky = true
+			if mult.has("all_reward") and not mult.has("lucky_chance"):
+				has_indomit = true
+		var has_poison: bool = bool(mon.get("poison", false))
+		lines.append("胜利 结算 预览: 灵石 +%s%s" % [
+			fmt(float(mon["stone"])),
+			" (幸运 50%% 概率 x2%s)" % (" · 不屈 x1.2" if has_indomit else "") if has_lucky else (" (不屈 x1.2)" if has_indomit else "")])
+		if float(mon["mats"]) > 0.0:
+			lines.append("· 材料 +%d (同 怪物卡 材料 预估)" % int(ceil(float(mon["mats"]))))
+		var dl: String = tower_affix_drop_line(mon, tower)
+		if dl != "":
+			lines.append("· " + dl)
+		if tower == "endless":
+			lines.append("· 每日 首胜: %s" % tower_daily_first_line())
+		if tower == "fixed" and floor_n == 1000 and not tower_fixed_clear and not tower_clear_reward_got:
+			lines.append("· 首通 一次性 大奖: 称号 + 灵石 %s + 永久 atk/def +%.0f%% + 顶级(传说) 词缀 x%d" % [
+				fmt(TOWER_CLEAR_BONUS_STONE), TOWER_CLEAR_BUFF * 100.0, TOWER_CLEAR_BONUS_AFFIX_COUNT])
+		if has_poison:
+			lines.append("· 剧毒 特性: 战胜 后 玩家 ATK -15%% 持续 %d 场 (可 刷新)" % TOWER_POISON_BATTLES)
+	return "\n".join(lines)
+
 # M5-4: 镇妖塔 通关 称号 (顶栏/爬塔页 展示; 未通关 空串; 只读 无 状态/存档/统计 副作用)
 func tower_clear_title() -> String:
 	return "镇妖塔·通关者" if tower_fixed_clear else ""
