@@ -181,6 +181,7 @@ func _ready() -> void:
 	await _assert_tower_win_float()  # 打磨-107: 塔战斗 胜利 浮动提示 (M5-3 规格 浮动 段)
 	await _assert_auto_tower_feedback()  # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行
 	await _assert_auto_tower_affix_session()  # 打磨-122: 自动爬塔 会话 词缀 段 (状态行 会话 段 词缀 累计/tooltip 口径/节流)
+	await _assert_auto_tower_session_tip()  # 打磨-125: 自动爬塔开关 tooltip 会话 统计 段 (开关悬停 展示 本次 运行 会话 累计)
 	await _assert_endless_demon()  # 打磨-102: 登天梯 500 层后 全部 默认 魔化 (怪物卡 前缀/战力对比/胜局 消息)
 	await _assert_tower_rounds()  # 打磨-105: 战斗时长 预估 行 (M5 数值 模型 rounds 仅 展示: 双塔 卡片 文案/恒等 口径/败 预测 追加/剧毒 联动/节流)
 	await _assert_milestone_chest()  # 打磨-103: 登天梯 里程碑 宝箱 保底 高品质 词缀 (tooltip 保底 段/卡片 口径/胜局 掉落 品质)
@@ -5621,6 +5622,98 @@ func _assert_auto_tower_affix_session() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g._auto_tower_affixes == 0 and g._auto_tower_wins == 0, "打磨-122 收尾 干净 基准 (会话 词缀 清零)")
+
+
+# 打磨-125: 自动爬塔开关 tooltip 会话 统计 段 UI 断言 (挂机 期间 自动 爬塔 胜局/灵石/材料/词缀
+# 累计 的 悬停 展示 位: 开关 tooltip 动态段 追加 "本次 运行 会话" 行 = auto_tower_next_tip 接口
+# 恒等, 0 胜局 显 口径 说明 / 会话 态 动态 同步 / 只读 节流 无 副作用; 收尾 干净 基准 防 污染)
+func _assert_auto_tower_session_tip() -> void:
+	var g := GameData
+	g.set_process(false)
+	g.auto_tower = false
+	ui._tab.current_tab = 4
+	# 干净 基准 (同 打磨-95/122 口径 + 会话 归零)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	ui._refresh()
+	await get_tree().process_frame
+	# 1) 初始 0 胜局: 开关 tooltip 含 会话 段 口径 说明 = 接口 恒等
+	check(str(ui._tw_auto_btn.tooltip_text).find("本次 运行 会话: 0 胜局 (内存态 不 持久化, 读档 归零)") >= 0,
+			"打磨-125 0 胜局 开关 tooltip 会话 段 口径 说明 (实际 %s)" % str(ui._tw_auto_btn.tooltip_text).left(60))
+	check(str(ui._tw_auto_btn.tooltip_text) == ui._tw_auto_tip_static + g.auto_tower_next_tip(),
+			"打磨-125 开关 tooltip = 静态 前缀 + 接口 恒等")
+	# 2) 手动 会话 态: _refresh 动态 同步 会话 段 = 接口 恒等 (含 词缀 段)
+	g._auto_tower_wins = 2
+	g._auto_tower_stone = 1234.0
+	g._auto_tower_mats = 7
+	g._auto_tower_affixes = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_auto_btn.tooltip_text).find("本次 运行 会话: 自动 胜 2 场 (灵石 %s) · 材料 7 · 词缀 3 件" % g.fmt(1234.0)) >= 0,
+			"打磨-125 会话 态 tooltip 会话 段 含 四 累计 (实际 %s)" % str(ui._tw_auto_btn.tooltip_text).left(80))
+	check(str(ui._tw_auto_btn.tooltip_text) == ui._tw_auto_tip_static + g.auto_tower_next_tip(),
+			"打磨-125 会话 态 tooltip = 接口 恒等")
+	# 3) 0 词缀: 会话 段 不 追加 词缀 段 (旧 口径 同 状态行)
+	g._auto_tower_affixes = 0
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_auto_btn.tooltip_text).find("词缀 ") < 0,
+			"打磨-125 0 词缀 tooltip 会话 段 无 词缀 段 旧 口径 (实际 %s)" % str(ui._tw_auto_btn.tooltip_text).left(80))
+	# 4) 只读: 同 会话 态 _refresh 无 资源/统计 副作用 + tooltip 稳定
+	var stats_snap125: Dictionary = g.stats.duplicate(true)
+	var tip125: String = str(ui._tw_auto_btn.tooltip_text)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_auto_btn.tooltip_text) == tip125 and g.stats == stats_snap125,
+			"打磨-125 同 会话 态 节流 无 资源/统计 副作用")
+	# 收尾: 恢复 干净 基准 + 会话 清零 (防 污染 后续 段)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.essence = 0.0
+	g.stones = 0.0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g._auto_tower_wins == 0 and g._auto_tower_affixes == 0, "打磨-125 收尾 干净 基准 (会话 清零)")
 
 
 # 打磨-102: 登天梯 500 层后 全部 怪物 默认 魔化 (M5 规格落地: 数值 x3 + 追加 1 特性 + 「魔化·」前缀,

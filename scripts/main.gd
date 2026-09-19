@@ -1668,8 +1668,8 @@ func _build_tower_page(page: Panel) -> void:
 	_tw_auto_btn.toggle_mode = true
 	_tw_auto_btn.pressed.connect(_on_tower_auto)
 	_tw_auto_tip_static = ("开启后 挂机时 镇妖塔+登天梯 每帧 自动 挑战 (胜=层数推进+灵石奖励, 败=停留本层 无消耗 无惩罚, 可 无限重试, 与 手动 挑战 按钮 同口径 同结算)。\n"
-		+ "每帧 双塔 各 至多 挑战一次, 层数 单调 推进/停留 无热循环; 开关 存档 持久化 默认 关, 离线期间 不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
-		+ "【双塔 当前 挑战 层 (动态)】")
+		+ "每帧 双塔 各 至多 挑战一次, 层数 单调 推进/停留 无热循环; 开关 存档 持久化 默认 关, 离线期间 不触发 (离线只结算收益, 重新进入游戏后生效)。\n"
+		+ "【双塔 当前 挑战 层 (动态)】\n")
 	_tw_auto_btn.tooltip_text = _tw_auto_tip_static
 	outer.add_child(_tw_auto_btn)
 

@@ -7947,6 +7947,116 @@ func _init() -> void:
 	g.set_process(true)
 	g.save_game()
 
+	# ---------- 打磨-125: 自动爬塔开关 tooltip 会话 统计 段 (M5-3 自动系列 动态段 体系
+	# 会话 缺口 — 挂机 期间 自动 爬塔 胜局/灵石/材料/词缀 累计 原 只 随 状态行 会话 段
+	# 展示, 开启 开关 后 悬停 只 见 双塔 当前层 + 胜负 预测, 不知 本次 运行 已 赢 多少;
+	# 段 文案 单源 auto_tower_session_text 恒等 不 二重 拼接, 0 胜局 显 口径 说明) ----------
+	g.set_process(false)
+	g.auto_tower = false
+	# 会话/塔 态 干净 基准 (前段 124 已 归零 再 防御 性 重置 防 跨段 残留)
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	var snap125: Dictionary = g.stats.duplicate(true)
+	# 1) 0 胜局: tooltip 会话 段 显 口径 说明 (非 空 段 防 误读 为 断档)
+	var tip125a: String = g.auto_tower_next_tip()
+	check(tip125a.find("本次 运行 会话: 0 胜局 (内存态 不 持久化, 读档 归零)") >= 0,
+			"打磨-125 0 胜局 tooltip 会话 段 口径 说明 (实际 %s)" % tip125a)
+	check(tip125a.find("自动 胜") < 0, "打磨-125 0 胜局 无 会话 统计 段 (实际 %s)" % tip125a)
+	# 2) 手动 会话 态 (词缀 > 0): 会话 段 = auto_tower_session_text 单源 恒等
+	g._auto_tower_wins = 2
+	g._auto_tower_stone = 1234.0
+	g._auto_tower_mats = 7
+	g._auto_tower_affixes = 3
+	var sess125: String = g.auto_tower_session_text()
+	var tip125b: String = g.auto_tower_next_tip()
+	check(tip125b.find("本次 运行 会话: " + sess125) >= 0,
+			"打磨-125 会话 段 = auto_tower_session_text 单源 恒等 (实际 %s)" % tip125b)
+	check(tip125b.find("自动 胜 2 场 (灵石 %s)" % g.fmt(1234.0)) >= 0
+			and tip125b.find("材料 7") >= 0 and tip125b.find("词缀 3 件") >= 0,
+			"打磨-125 会话 段 含 胜局/灵石/材料/词缀 四 累计 (实际 %s)" % tip125b)
+	check(tip125b.find("0 胜局") < 0, "打磨-125 有 胜局 态 无 口径 说明 段 (实际 %s)" % tip125b)
+	# 3) wins=0 stone>0 边界: 会话 文案 仍 空串 (0 胜局 门控) → tooltip 回 口径 说明 段
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 55.0
+	var tip125c: String = g.auto_tower_next_tip()
+	check(g.auto_tower_session_text() == "" and tip125c.find("0 胜局 (内存态 不 持久化, 读档 归零)") >= 0,
+			"打磨-125 wins=0 stone>0 会话 文案 空串 tooltip 回 口径 段 (实际 %s)" % tip125c)
+	# 4) 只读 连读 恒定 无 状态/存档/统计 副作用 (会话 值/塔 态 不变)
+	g.auto_tower_next_tip()
+	g.auto_tower_next_tip()
+	check(g.auto_tower_next_tip() == tip125c and g._auto_tower_wins == 0
+			and g._auto_tower_stone == 55.0 and g.stats == snap125,
+			"打磨-125 只读 连读 恒定 无 副作用")
+	# 5) 真实 链路: 道祖 自动爬塔 双塔 全胜 (1000 层 Boss + 100 层 里程碑 Boss) →
+	# tooltip 会话 段 = 会话 文案 恒等 (文案 随 真实 结算 动态 同步)
+	g.learned.clear()
+	for id125 in g.skill_ids:
+		var s125: Dictionary = g.skill_by_id[id125]
+		if str(s125.get("type", "")) == "passive" and str(s125.get("effect", "")) in ["atk", "all_mult"]:
+			g.learned.append(id125)
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_fixed_floor = 999
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 100
+	g.tower_endless_best = 99
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.affix_bag = {}
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g.auto_tower = true
+	g._process(0.016)
+	check(g._auto_tower_wins == 2, "打磨-125 道祖 自动 双塔 全胜 胜局 +2 (实际 %d)" % g._auto_tower_wins)
+	check(g.auto_tower_next_tip().find("本次 运行 会话: " + g.auto_tower_session_text()) >= 0,
+			"打磨-125 真实 链路 tooltip 会话 段 = 会话 文案 恒等 (实际 %s)" % g.auto_tower_next_tip().left(80))
+	# 6) 会话 读档 归零: tooltip 会话 段 回 口径 说明 (不 持久化, 同 灵石 口径)
+	g.auto_tower = false
+	g.save_game()
+	g._auto_tower_wins = 4
+	g._auto_tower_stone = 99.0
+	g.load_game()
+	check(g._auto_tower_wins == 0 and g.auto_tower_next_tip().find("0 胜局 (内存态 不 持久化, 读档 归零)") >= 0,
+			"打磨-125 读档 归零 tooltip 会话 段 回 口径 说明 (实际 %s)" % g.auto_tower_next_tip().left(80))
+	# 收尾: 会话/塔 态/强玩家 态 归零 落盘 (防 污染 后续 段)
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.affix_bag = {}
+	g.affix_materials = 0
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.clear()
+	g.set_process(true)
+	g.save_game()
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

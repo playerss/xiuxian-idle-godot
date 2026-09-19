@@ -2814,8 +2814,13 @@ func tower_rounds_line(mon_hp: float, mon_def: float, win: bool) -> String:
 		txt += " (本层 战力 不足)"
 	return txt
 
-# M5-3: 自动爬塔按钮 tooltip 动态段 (只读; 双塔 当前 挑战 层 + 胜负 预测 + 层数进度;
-# 口径 与 爬塔页 怪物卡/战力对比 同源; 不 改 状态/存档/统计; 供 按钮 悬停 动态 刷新, 同 打磨-84/85/86)
+# M5-3: 自动爬塔按钮 tooltip 动态段 (只读; 双塔 当前 挑战 层 + 胜负 预测 + 层数进度
+# + 本次 运行 会话 统计 段; 口径 与 爬塔页 怪物卡/战力对比 同源; 不 改 状态/存档/统计;
+# 供 按钮 悬停 动态 刷新, 同 打磨-84/85/86)
+# 打磨-125: 追加 本次 运行 会话 统计 段 — 挂机 期间 自动 爬塔 胜局/灵石/材料/词缀 累计
+# 原 只 随 状态行 会话 段 展示 (须 在 爬塔页 且 滚动 可见), 开启 开关 后 悬停 不知 已 赢 多少;
+# 会话 为 内存态 读档 归零 不 持久化 (打磨-95/100/122 口径), 段 文案 单源 auto_tower_session_text
+# 恒等 不 二重 拼接; 0 胜局 显 口径 说明 防 误读 为 断档
 func auto_tower_next_tip() -> String:
 	var p: Dictionary = tower_challenge_preview()
 	var lines: Array[String] = []
@@ -2827,6 +2832,8 @@ func auto_tower_next_tip() -> String:
 	lines.append("登天梯 第 %d 层「%s」→ %s (历史最高 %d 层)" % [
 		int(p["endless_floor"]), str(p["endless_mon"]["name"]),
 		("可胜" if bool(p["endless_win"]) else "战力不足"), tower_endless_best])
+	var sess: String = auto_tower_session_text()
+	lines.append("本次 运行 会话: " + (sess if sess != "" else "0 胜局 (内存态 不 持久化, 读档 归零)"))
 	return "\n".join(lines)
 
 # 打磨-94: 塔战斗 词缀掉落 展示 文案 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 缺 词缀 段:
