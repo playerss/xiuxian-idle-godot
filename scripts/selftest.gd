@@ -8499,6 +8499,131 @@ func _init() -> void:
 	g.tower_endless_floor = 1
 	g.tower_endless_best = 0
 	g.save_game()
+	# ---------- 打磨-132: 自动爬塔 会话 新纪录 累计 段 (登天梯 新纪录 单场 只 显 浮动/底部消息,
+	# 挂机 回来看 会话 不知 本次 运行 创 几 个 新纪录 爬到 第 几 层 — 会话 段 累计 次数 + 最高层;
+	# _auto_tower_new_records/_auto_tower_new_best 内存态, 读档 归零 同 灵石 口径; 仅 登天梯
+	# 胜局 new_record 字段 口径 结算 字典 同源 [镇妖塔/败局 恒 false], auto_tower_session_text
+	# 单源 恒等 不 二重 拼接 [状态行/徽标 tooltip 复用 本 接口 段 自动 覆盖]) ----------
+	g.set_process(false)
+	g.auto_tower = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ascended = true
+	g.dao_level = 8
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.poison_battles = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 2   # 挑战 第 2 层 (强 玩家 恒胜, 打磨-126 数据 锚定)
+	g.tower_endless_best = 1    # 历史 最高 1 层 -> 胜 第 2 层 创 新纪录
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_new_records = 0
+	g._auto_tower_new_best = 0
+	# 1) 初始 0 胜局: 会话 文案 空串 (无 新纪录 段)
+	check(g.auto_tower_session_text() == "", "打磨-132 初始 0 胜局 会话 文案 空串 (无 新纪录 段)")
+	# 2) 真实 链路 登天梯 新纪录 帧 (强 玩家 恒胜): _process 驱动 _try_auto_tower 累计 新纪录
+	#    (镇妖塔 1 层 弱? 强 玩家 双塔 全胜; 镇妖塔 胜局 new_record=false 不 计入, 登天梯 胜局 计入)
+	var mon132: Dictionary = g.tower_monster_stats(g.get_endless_floor(2))
+	check(g.player_atk_effective() >= float(mon132["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-132 强 玩家 登天梯 第 2 层 判定=胜 (数据 锚定)")
+	g.auto_tower = true
+	g._process(0.016)
+	# 登天梯 胜 第 2 层 创 新纪录 (2 > best 1); 镇妖塔 1 层 胜 但 new_record=false 不 计入
+	check(g._auto_tower_new_records == 1,
+			"打磨-132 真实 链路 登天梯 新纪录 累计 =1 (实际 %d)" % g._auto_tower_new_records)
+	check(g._auto_tower_new_best == 2,
+			"打磨-132 真实 链路 新纪录 最高层 =2 (实际 %d)" % g._auto_tower_new_best)
+	check(g._auto_tower_wins == 2,
+			"打磨-132 真实 链路 双塔 全胜 wins=2 (实际 %d)" % g._auto_tower_wins)
+	# 会话 文案 含 新纪录 段 (单源 口径, 段 在 词缀/败局 段 之间)
+	check(g.auto_tower_session_text().find("新纪录 1 次 (最高 第 2 层)") >= 0,
+			"打磨-132 会话 文案 含 新纪录 段 (实际 %s)" % g.auto_tower_session_text())
+	# 3) 再 胜 第 3 层 (登天梯 floor 已 推进 到 3): 新纪录 累计 2 最高 3
+	g._process(0.016)
+	check(g._auto_tower_new_records == 2 and g._auto_tower_new_best == 3,
+			"打磨-132 再 胜 第 3 层 新纪录 累计 2 最高 3 (实际 %d/%d)" % [g._auto_tower_new_records, g._auto_tower_new_best])
+	check(g.auto_tower_session_text().find("新纪录 2 次 (最高 第 3 层)") >= 0,
+			"打磨-132 会话 文案 新纪录 段 动态 同步 (实际 %s)" % g.auto_tower_session_text())
+	# 状态行 会话 段 单源 恒等 含 新纪录 段 (tower_status_line 复用 auto_tower_session_text)
+	check(g.tower_status_line().find("新纪录 2 次 (最高 第 3 层)") >= 0,
+			"打磨-132 状态行 会话 段 含 新纪录 段 单源 恒等 (实际 %s)" % g.tower_status_line())
+	g.auto_tower = false
+	# 4) 手动 置态 0 新纪录: 不 追加 段 旧 口径 (防 回归 影响 打磨-95/128 既有 断言)
+	g._auto_tower_wins = 2
+	g._auto_tower_stone = 1234.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_new_records = 0
+	g._auto_tower_new_best = 0
+	check(g.auto_tower_session_text() == "自动 胜 2 场 (灵石 %s)" % g.fmt(1234.0),
+			"打磨-132 0 新纪录 不 追加 段 旧 口径 (实际 %s)" % g.auto_tower_session_text())
+	# 5) 手动 置态 新纪录 段 位置 恒等 (词缀 后 败局 前, 与 接口 恒等)
+	g._auto_tower_affixes = 3
+	g._auto_tower_losses = 4
+	g._auto_tower_new_records = 5
+	g._auto_tower_new_best = 88
+	check(g.auto_tower_session_text() == "自动 胜 2 场 (灵石 %s) · 词缀 3 件 · 新纪录 5 次 (最高 第 88 层) · 败 4 场" % g.fmt(1234.0),
+			"打磨-132 新纪录 段 位置/文案 恒等 (实际 %s)" % g.auto_tower_session_text())
+	# 6) 0 胜局 全败 态 恒 无 新纪录 段 (新纪录 必 伴随 胜局, 0 胜局 分支 不 进 累计)
+	g._auto_tower_wins = 0
+	g._auto_tower_losses = 6
+	g._auto_tower_new_records = 0
+	check(g.auto_tower_session_text() == "自动 败 6 场 (未 推进, 提升 战力 后 自动 再 试)",
+			"打磨-132 0 胜局 全败 态 无 新纪录 段 旧 口径 (实际 %s)" % g.auto_tower_session_text())
+	# 7) 会话 新纪录 读档 归零 (不 持久化, 同 灵石 口径)
+	g._auto_tower_wins = 3
+	g._auto_tower_new_records = 5
+	g._auto_tower_new_best = 88
+	g.save_game()
+	g.load_game()
+	check(g._auto_tower_new_records == 0 and g._auto_tower_new_best == 0 and g._auto_tower_wins == 0,
+			"打磨-132 会话 新纪录/胜局 读档 归零 (不 持久化, 实际 %d/%d)" % [g._auto_tower_new_records, g._auto_tower_new_best])
+	# 8) 只读 连读 恒定 无 状态/统计 副作用
+	g._auto_tower_wins = 1
+	g._auto_tower_new_records = 2
+	g._auto_tower_new_best = 40
+	var snap132: Dictionary = g.stats.duplicate(true)
+	var v132: String = g.auto_tower_session_text()
+	g.tower_status_line()
+	g.auto_tower_session_text()
+	check(v132 == g.auto_tower_session_text() and g.stats == snap132 and g._auto_tower_new_records == 2,
+			"打磨-132 只读 连读 恒定 无 状态/统计 副作用")
+	# 收尾: 会话 归零 + 塔 态 归零 落盘 (防 污染 后续 段/冒烟)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_new_records = 0
+	g._auto_tower_new_best = 0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.ascended = false
+	g.dao_level = 0
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.save_game()
+	g.set_process(true)
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
