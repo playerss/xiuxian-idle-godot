@@ -2720,6 +2720,15 @@ func tower_milestone_eta(tower: String, cur_floor: int, mon: Dictionary, win: bo
 		return head + fmt_time(sec) + " (%s 本层 预估 回合 x %.0f 秒/层, 估算 口径 见 tooltip)" % [lab, TOWER_MILESTONE_FLOOR_SEC]
 	return head + fmt_time(sec) + " (约 %d 层 x 本层 预估 回合 x %.0f 秒/层, 估算 口径 见 tooltip)" % [floors, TOWER_MILESTONE_FLOOR_SEC]
 
+# 打磨-129: 登天梯 段 进度 (距 下一 100 层 里程碑 段 进度, 单点 口径 — 登天梯 卡片 进度条
+# 填充 + 自测/ui_test 共用; 原 卡片 条 恒 满条 无 进度 信息 [无尽 无 上限, 旧 口径 为
+# 装饰 满条]): 返回 (层 % 100) / 100, 100 倍数 层 (里程碑 Boss 层, 就在 里程碑) = 1.0
+# 满条, 过 层 后 绕回 0.01; <1 层 钳制 为 1 层. 只读 无 状态/存档/统计 副作用.
+func tower_endless_mile_ratio(cur_floor: int) -> float:
+	var f: int = maxi(cur_floor, 1)
+	var m: int = f % 100
+	return (1.0 if m == 0 else float(m) / 100.0)
+
 # 打磨-121: 里程碑 标签 类型+倍率 后缀 (精英层 无 倍率 只 给 类型 / 小 Boss x10 / 主题 x20 /
 # 最终 x50; 与 TOWER_BOSS_MULT_* 常量 同源, 只 展示 不 改 数值; 精英 x3 口径 见 结构 行 不 重复)
 func _ms_boss_mult(lab: String) -> String:

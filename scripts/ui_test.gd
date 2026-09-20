@@ -193,6 +193,7 @@ func _ready() -> void:
 	await _assert_tower_daily_first()  # 打磨-116: 登天梯 每日首胜 当日 状态 行 (未触发 无 段/触发 追加 段/恒等/跨日 消失/tooltip 口径/节流/收尾)
 	await _assert_tower_new_record()  # 打磨-126: 登天梯 新纪录 展示位 (new_record 字段/浮动 新纪录 段/底部消息 同源 段/镇妖塔·败局 恒 false/收尾)
 	await _assert_tower_def_line()  # 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段: 双塔 节点/恒等/剧毒 不 变/DEF 变化 同步/升层 同步/tooltip/节流)
+	await _assert_endless_mile_bar()  # 打磨-129: 登天梯 卡片 进度条 接入 下一 里程碑 段 进度 (条 填充 = tower_endless_mile_ratio 单点 口径/100 倍数 层 满条/绕回/升层 动态 同步/条 tooltip 口径/镇妖塔 旧 口径 不变/节流/收尾)
 
 	await _assert_equip_score_sort()  # 打磨-109: 装备页 按评分排序 开关 (M6 规格 装备列表按评分排序: 开关/降序/同分/筛选叠加/装配联动/节流/收尾)
 
@@ -4094,6 +4095,93 @@ func _assert_tower_milestone_eta() -> void:
 	await get_tree().process_frame
 	check(str(eta.text) == ref127 and g.stats == snap127, "打磨-127 同态 节流 无 统计 副作用")
 	# 收尾: 恢复 干净 基准 (塔 态/玩家 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.learned.clear()
+	g.equipped = {}
+	g.owned.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+
+# 打磨-129: 登天梯 卡片 进度条 接入 下一 100 层 里程碑 段 进度 (M5 规格 双塔卡片 进度 条 的
+# 登天梯 段 缺口 — 原 登天梯 条 恒 满条 装饰 无 进度 信息, 无尽 无 上限 玩家 扫视 扫不到
+# 段 内 进度; 现 条 填充 = tower_endless_mile_ratio 单点 口径 [(层%100)/100, 100 倍数 层
+# 满条, 过层 绕回]; 镇妖塔 条 旧 口径 [层数/1000, 通关 恒 满条 金] 不变; 断言:
+# 条 填充 比例 = 接口 恒等 (像素 级) / 100 倍数 层 满条 / 升层 动态 同步 / 条 tooltip 口径
+# 双塔 区分 / 镇妖塔 旧 口径 回归 不变 / 同态 节流 无 副作用 / 收尾 干净 基准)
+func _assert_endless_mile_bar() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 登天梯 第 1 层 (段 进度 0.01), 镇妖塔 第 40 层 (层数/1000 = 0.04)
+	g.tower_fixed_floor = 40
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	# 等 布局 落定: 2 连续 帧 bg 宽 不变 (>0, 同 打磨-58 口径 — headless 高负载 切页 首帧 宽 0)
+	var ebar0: ColorRect = ui._tw_cards["endless"]["bar_bg"]
+	var wprev129 := -1
+	for _i129 in 40:
+		await get_tree().process_frame
+		var wcur129: int = int(ebar0.size.x)
+		if wcur129 > 0 and wcur129 == wprev129:
+			break
+		wprev129 = wcur129
+	# 宽 落定 后 清 刷新键 强制 全量 刷 (绕过 节流; 确保 填充 按 稳定 宽 写入 再 断言)
+	ui._tw_key = ""
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var ebar: ColorRect = ui._tw_cards["endless"]["bar_bg"]
+	var efill: ColorRect = ui._tw_cards["endless"]["bar_fill"]
+	var fbar: ColorRect = ui._tw_cards["fixed"]["bar_bg"]
+	var ffill: ColorRect = ui._tw_cards["fixed"]["bar_fill"]
+	check(ebar != null and efill != null and fbar != null and ffill != null, "打磨-129 双塔 进度条 节点 齐全 (bg/fill)")
+	# 1) 登天梯 第 1 层: 条 填充 = 接口 比例 (像素 级 恒等, 填充宽 = bg 宽 x 比例)
+	var w129: float = ebar.size.x
+	check(w129 > 0.0, "打磨-129 登天梯 进度条 布局 宽 >0 (实际 %.1f)" % w129)
+	var ex129: float = g.tower_endless_mile_ratio(1)
+	check(absf(efill.size.x - w129 * ex129) < 1.0 and absf(efill.size.y - ebar.size.y) < 1.0,
+		"打磨-129 登天梯 第 1 层 条 填充 = 接口 段 进度 0.01 (实际 填充 %.2f / bg %.2f)" % [efill.size.x, w129])
+	# 2) 镇妖塔 旧 口径 回归 不变: 填充 = 层数/1000 比例 (第 40 层 = 0.04)
+	check(absf(ffill.size.x - fbar.size.x * (40.0 / 1000.0)) < 1.0,
+		"打磨-129 镇妖塔 条 旧 口径 回归 (第 40 层 填充 = 0.04 x 宽, 实际 %.2f / bg %.2f)" % [ffill.size.x, fbar.size.x])
+	# 3) 升层 动态 同步: 登天梯 升 第 42 层 -> 填充 比例 = 0.42 (层数 入 刷新键 天然 感知)
+	g.tower_endless_floor = 42
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(absf(efill.size.x - w129 * g.tower_endless_mile_ratio(42)) < 1.0,
+		"打磨-129 登天梯 升 第 42 层 条 填充 动态 同步 = 0.42 x 宽 (实际 %.2f)" % efill.size.x)
+	# 4) 100 倍数 层 满条 + 过层 绕回: 第 100 层 填充 = 满条, 第 101 层 绕回 0.01
+	g.tower_endless_floor = 100
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(absf(efill.size.x - w129) < 1.0, "打磨-129 登天梯 第 100 层 (里程碑 层) 条 满条 = bg 宽 (实际 %.2f / %.2f)" % [efill.size.x, w129])
+	g.tower_endless_floor = 101
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(absf(efill.size.x - w129 * 0.01) < 1.0, "打磨-129 登天梯 第 101 层 条 绕回 = 0.01 x 宽 (实际 %.2f)" % efill.size.x)
+	# 5) 条 tooltip 口径 双塔 区分 (登天梯 = 段 进度 口径, 镇妖塔 = 层数/1000 口径 旧 不变)
+	check(str(ebar.tooltip_text).find("里程碑 Boss 的 段 进度") >= 0 and str(ebar.tooltip_text).find("绕回") >= 0,
+		"打磨-129 登天梯 条 tooltip 含 段 进度 口径 + 绕回 说明 (实际 %s)" % str(ebar.tooltip_text).left(40))
+	check(str(fbar.tooltip_text).find("层数/1000") >= 0,
+		"打磨-129 镇妖塔 条 tooltip 含 层数/1000 口径 (实际 %s)" % str(fbar.tooltip_text).left(40))
+	# 6) 同态 节流: 无 塔 态 变化 再 刷 不 改 填充 + 无 统计 副作用
+	var snap129: Dictionary = g.stats.duplicate(true)
+	var fillref129: float = efill.size.x
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(efill.size.x == fillref129 and g.stats == snap129, "打磨-129 同态 节流 无 统计 副作用")
+	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
 	g.tower_fixed_floor = 0
 	g.tower_fixed_clear = false
 	g.tower_endless_floor = 1

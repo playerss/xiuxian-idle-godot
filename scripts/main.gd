@@ -1701,6 +1701,11 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	bar_bg.custom_minimum_size = Vector2(0, 10)
 	bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar_bg.size_flags_stretch_ratio = 1.0
+	# 打磨-129: 进度条 tooltip (镇妖塔 = 层数/1000 口径 旧 不变; 登天梯 = 下一 100 层 里程碑 段
+	# 进度 口径 [原 恒 满条 装饰, 现 接入 tower_endless_mile_ratio 段 进度 信息])
+	bar_bg.tooltip_text = ("进度: 当前 层数/1000 (通关 恒 满条 金色, 守塔 模式 反复 挑战 1000 层 Boss)"
+		if tid == "fixed"
+		else "进度: 距 下一 100 层 里程碑 Boss 的 段 进度 (满条 = 就在 100 倍数 里程碑 Boss 层, 过 层 后 绕回 重新 累计; 无尽 无 上限, 每 100 层 一 段)")
 	row1.add_child(bar_bg)
 	var bar_fill := ColorRect.new()
 	bar_fill.color = CYAN
@@ -1849,10 +1854,12 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 	var g := GameData
 	var c: Dictionary = _tw_cards[tid]
 	(c["floor"] as Label).text = ("守塔 模式 · 1000 层 Boss" if is_clear else floor_txt)
-	# 进度条: 镇妖塔 层数/1000 (通关 恒 满); 登天梯 无 进度 概念 恒 满条 青色 (装饰)
+	# 进度条: 镇妖塔 层数/1000 (通关 恒 满); 登天梯 打磨-129 起 接入 下一 100 层 里程碑 段
+	# 进度 (tower_endless_mile_ratio 单点 口径: (层%100)/100, 100 倍数 层 满条, 过层 绕回)
+	# — 原 无尽 恒 满条 装饰 无 进度 信息, 现 给 挂机 扫视 段 内 进度 反馈
 	var fill: ColorRect = c["bar_fill"]
 	var bg: ColorRect = c["bar_bg"]
-	var r: float = (1.0 if is_clear else clampf(ratio, 0.0, 1.0)) if tid == "fixed" else 1.0
+	var r: float = (1.0 if is_clear else clampf(ratio, 0.0, 1.0)) if tid == "fixed" else g.tower_endless_mile_ratio(floor_n)
 	fill.size = Vector2(bg.size.x * r, bg.size.y)
 	fill.color = GOLD if is_clear else CYAN
 	# 怪物卡 (名 + 精英/Boss 标记; tooltip 特性 说明)

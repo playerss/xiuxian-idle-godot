@@ -8383,6 +8383,30 @@ func _init() -> void:
 	g.save_game()
 	g.set_process(true)
 
+	# ---------- 打磨-129: 登天梯 段 进度 (下一 100 层 里程碑 段 进度, 单点 口径) ----------
+	var me1: float = g.tower_endless_mile_ratio(1)
+	check(absf(me1 - 0.01) < 1e-9, "打磨-129 第 1 层 段 进度 = 0.01 (实际 %s)" % me1)
+	check(absf(g.tower_endless_mile_ratio(42) - 0.42) < 1e-9, "打磨-129 第 42 层 段 进度 = 0.42 (实际 %s)" % g.tower_endless_mile_ratio(42))
+	check(absf(g.tower_endless_mile_ratio(99) - 0.99) < 1e-9, "打磨-129 第 99 层 段 进度 = 0.99 (实际 %s)" % g.tower_endless_mile_ratio(99))
+	check(absf(g.tower_endless_mile_ratio(100) - 1.0) < 1e-9, "打磨-129 第 100 层 (100 倍数 里程碑 层) 段 进度 满条 = 1.0 (实际 %s)" % g.tower_endless_mile_ratio(100))
+	check(absf(g.tower_endless_mile_ratio(101) - 0.01) < 1e-9, "打磨-129 第 101 层 段 绕回 = 0.01 (实际 %s)" % g.tower_endless_mile_ratio(101))
+	check(absf(g.tower_endless_mile_ratio(500) - 1.0) < 1e-9 and absf(g.tower_endless_mile_ratio(5000) - 1.0) < 1e-9, "打磨-129 500/5000 层 (100 倍数) 满条 1.0")
+	check(absf(g.tower_endless_mile_ratio(0) - 0.01) < 1e-9 and absf(g.tower_endless_mile_ratio(-3) - 0.01) < 1e-9, "打磨-129 越界 层 (<1) 钳制 为 1 层 = 0.01")
+	var mono129 := true
+	for i in range(1, 100):
+		if g.tower_endless_mile_ratio(i + 1) <= g.tower_endless_mile_ratio(i):
+			mono129 = false
+	check(mono129, "打磨-129 段 进度 1..99 层 严格 单调 递增")
+	var rng129 := true
+	for i in range(1, 2001, 7):
+		var rv129: float = g.tower_endless_mile_ratio(i)
+		if rv129 < 0.01 - 1e-9 or rv129 > 1.0 + 1e-9:
+			rng129 = false
+	check(rng129, "打磨-129 2000 层 扫描 段 进度 恒 在 区间 [0.01, 1.0]")
+	var snap129: Dictionary = g.stats.duplicate(true)
+	var v129: float = g.tower_endless_mile_ratio(233)
+	g.tower_endless_mile_ratio(233)
+	check(v129 == g.tower_endless_mile_ratio(233) and g.stats == snap129, "打磨-129 只读 连读 恒定 无 状态/统计 副作用")
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
