@@ -195,6 +195,7 @@ func _ready() -> void:
 	await _assert_tower_new_record()  # 打磨-126: 登天梯 新纪录 展示位 (new_record 字段/浮动 新纪录 段/底部消息 同源 段/镇妖塔·败局 恒 false/收尾)
 	await _assert_tower_def_line()  # 打磨-111: 战力对比 DEF 行 (M5 规格 "玩家 atk/def vs 怪物" DEF 段: 双塔 节点/恒等/剧毒 不 变/DEF 变化 同步/升层 同步/tooltip/节流)
 	await _assert_endless_mile_bar()  # 打磨-129: 登天梯 卡片 进度条 接入 下一 里程碑 段 进度 (条 填充 = tower_endless_mile_ratio 单点 口径/100 倍数 层 满条/绕回/升层 动态 同步/条 tooltip 口径/镇妖塔 旧 口径 不变/节流/收尾)
+	await _assert_tower_prog_tip_dyn()  # 打磨-131: 顶栏 双塔 进度 徽标 tooltip 动态段 (会话 单源 恒等/开关门控/动态同步/节流/收尾)
 
 	await _assert_equip_score_sort()  # 打磨-109: 装备页 按评分排序 开关 (M6 规格 装备列表按评分排序: 开关/降序/同分/筛选叠加/装配联动/节流/收尾)
 
@@ -5557,7 +5558,7 @@ func _assert_tower_progress_badge() -> void:
 			"打磨-130 双塔 并排 通关 追加 标注 (实际 %s)" % str(badge.text))
 	# tooltip 含 双塔 口径 + 点击 直达 爬塔页
 	var tip130: String = str(badge.tooltip_text)
-	check(tip130 == g.tower_progress_badge_tip(), "打磨-130 徽标 tooltip = 接口 恒等")
+	check(tip130 == g.tower_progress_badge_tip() + g.tower_progress_badge_tip_dyn(), "打磨-130 徽标 tooltip = 静态 + 动态段 恒等")
 	check(tip130.find("双塔") >= 0 and tip130.find("镇妖塔") >= 0 and tip130.find("登天") >= 0,
 			"打磨-130 tooltip 含 双塔/镇妖塔/登天 口径 (实际 %s)" % tip130.left(40))
 	check(tip130.find("点击") >= 0 and tip130.find("爬塔页") >= 0, "打磨-130 tooltip 含 点击 直达 爬塔页 口径")
@@ -5597,6 +5598,86 @@ func _assert_tower_progress_badge() -> void:
 	await get_tree().process_frame
 	check(badge.visible == false and str(badge.text) == "", "打磨-130 收尾 双塔 归零 徽标 隐藏 (visible=%s 文本=%s)" % [str(badge.visible), str(badge.text)])
 
+
+# 打磨-131: 顶栏 双塔 进度 徽标 tooltip 动态段 断言 (挂机 扫视 顶栏 悬停 徽标 查看 本次 运行 自动
+# 爬塔 会话 统计; 段 文案 单源 auto_tower_session_text 恒等. 断言: 初始 会话 空 + 关 开关 无 段
+# tooltip=静态前缀 / 会话 胜局 态 + 开 开关 _refresh 动态 同步 含 四 累计 = 静态 + 接口 恒等 /
+# 败局 清零 无 段 旧 口径 / 开关 关 段 消失 (会话 保留) / 开关 回 开 恢复 / 同态 节流 无 副作用 /
+# 收尾 干净 基准 防 污染)
+func _assert_tower_prog_tip_dyn() -> void:
+	var g := GameData
+	# 基准: 双塔 有 进度 + 会话 清零 + 开关 关 + 冻结 (防 挂机/自动 爬塔 竞争)
+	g.tower_fixed_floor = 5
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 12
+	g.auto_tower = false
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g.set_process(false)
+	var badge: Button = ui._tower_progress_badge
+	ui._refresh()
+	await get_tree().process_frame
+	check(badge.visible, "打磨-131 基准 有 进度 徽标 显示 (visible=%s)" % str(badge.visible))
+	check(str(badge.tooltip_text) == g.tower_progress_badge_tip() and g.tower_progress_badge_tip_dyn() == "",
+				"打磨-131 初始 会话 空 + 关 开关 tooltip = 静态 前缀 无 动态段 (实际 %s)" % str(badge.tooltip_text).left(48))
+	# 会话 胜局 态 + 开关 开: _refresh 动态 同步 含 四 累计 = 静态 + 接口 恒等
+	g._auto_tower_wins = 2
+	g._auto_tower_stone = 888.0
+	g._auto_tower_mats = 3
+	g._auto_tower_affixes = 1
+	g.auto_tower = true
+	ui._refresh()
+	await get_tree().process_frame
+	var tip131: String = str(badge.tooltip_text)
+	check(tip131 == g.tower_progress_badge_tip() + g.tower_progress_badge_tip_dyn(),
+				"打磨-131 会话 态 tooltip = 静态 前缀 + 动态段 恒等")
+	check(tip131.find("自动 胜 2 场 (灵石 888)") >= 0 and tip131.find("材料 3") >= 0 and tip131.find("词缀 1 件") >= 0
+				and tip131.find("【本次 运行 自动 爬塔 会话 (内存态 不 持久化, 读档 归零)】") >= 0,
+				"打磨-131 动态段 含 胜局/灵石/材料/词缀 四 累计 (实际 %s)" % tip131.left(60))
+	# 会话 败局 清零 无 败局 段 (旧 口径)
+	check(tip131.find("败 0 场") < 0, "打磨-131 0 败局 无 败局 段 旧 口径")
+	# 开关 关: 动态段 消失 (会话 保留 不 清零)
+	g.auto_tower = false
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(badge.tooltip_text) == g.tower_progress_badge_tip() and g._auto_tower_wins == 2,
+				"打磨-131 关 开关 动态段 消失 会话 保留 (tooltip=%s wins=%d)" % [str(badge.tooltip_text).left(48), g._auto_tower_wins])
+	# 开关 回 开: 动态段 恢复 恒等
+	g.auto_tower = true
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(badge.tooltip_text) == g.tower_progress_badge_tip() + g.tower_progress_badge_tip_dyn(),
+				"打磨-131 开关 回 开 动态段 恢复 恒等")
+	# 同态 节流: 无 会话 变化 再 刷 不 重写 (文本 稳定 + 无 统计 副作用)
+	var snap131: Dictionary = g.stats.duplicate(true)
+	var txt131: String = str(badge.tooltip_text)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(badge.tooltip_text) == txt131 and g.stats == snap131, "打磨-131 同态 节流 无 统计 副作用")
+	# 收尾: 会话 归零 + 开关 关 + 双塔 归零 (防 残留 污染 后续 段)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(badge.visible == false and str(badge.tooltip_text) == "" and g.tower_progress_badge_tip_dyn() == "",
+			"打磨-131 收尾 会话 归零 + 双塔 归零 徽标 隐藏 tooltip 空 (visible=%s)" % str(badge.visible))
 
 
 # 打磨-94: 塔战斗 词缀掉落 底部消息 展示 断言 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 词缀 段:

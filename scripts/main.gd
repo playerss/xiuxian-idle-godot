@@ -128,6 +128,7 @@ var _poison_float_count := 0      # 打磨-93: 剧毒浮动提示次数 (自测�
 var _poison_last_text := ""       # 打磨-93: 最近一次 剧毒浮动 文案 (自测断言用)
 var _tower_progress_badge: Button # 打磨-130: 顶栏 双塔 进度 徽标 (青色圆角 "塔 镇妖 N/1000 · 登天 M", 任一塔 有 进度 显示 全 0 隐藏; 点击 直达 爬塔页)
 var _tower_progress_key := ""     # 打磨-130: 双塔 进度 徽标 刷新键 (镇妖层|通关|登天 纪录, 变化才刷 文本/显隐)
+var _tw_prog_tip := ""            # 打磨-131: 双塔 进度 徽标 tooltip 动态段 缓存 (会话 文案 变化才刷; 同 打磨-84/85/86/89 缓存口径)
 var _idle_badge_on := false        # 打磨-90: 已刷过的 全开 态 缓存 (变化才刷 显隐; 与 按钮 全开态 同口径 auto_all_on)
 var _idle_btn_hi_tween: Tween      # 打磨-90: 一键挂机按钮 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
 var _idle_btn_sb_rest: StyleBoxFlat  # 打磨-90: 一键挂机按钮 构建时 normal 样式缓存 (高亮后 恢复 用)
@@ -2417,11 +2418,21 @@ func _refresh() -> void:
 		if twp_txt != "":
 			_tower_progress_badge.visible = true
 			_tower_progress_badge.text = twp_txt
-			_tower_progress_badge.tooltip_text = g.tower_progress_badge_tip()
+			# 打磨-131: tooltip = 静态 前缀 + 当前 动态段 缓存 (显示 翻转 时 全量 重写, 防 动态段
+			# 先变 后 显 态 下 漏 写 静态 段; 隐藏 态 清空)
+			_tower_progress_badge.tooltip_text = g.tower_progress_badge_tip() + _tw_prog_tip
 		else:
 			_tower_progress_badge.visible = false
 			_tower_progress_badge.text = ""
 			_tower_progress_badge.tooltip_text = ""
+	# 打磨-131: 双塔 进度 徽标 tooltip 动态段 (会话 文案 变化 才 刷; 静态 前缀 走 接口 恒等,
+	# 与 打磨-89 一键挂机 动态段 同 缓存 口径, 挂机 恒定 无 每帧 重建; 隐藏 态 不 写 [显示 翻转
+	# 时 上 分支 全量 重写 覆盖])
+	var tp_tip: String = g.tower_progress_badge_tip_dyn()
+	if tp_tip != _tw_prog_tip:
+		_tw_prog_tip = tp_tip
+		if _tower_progress_badge.visible:
+			_tower_progress_badge.tooltip_text = g.tower_progress_badge_tip() + tp_tip
 	# 打磨-88: 一键挂机 按钮 态 (全开 态 变化才刷; 读档恢复/外部 单开关 改 同步;
 	# 按压=全开, 文本 全开/全关; 纯展示 无 存档/统计 副作用)
 	var idle_on: bool = g.auto_all_on()

@@ -2178,6 +2178,19 @@ func tower_progress_badge_tip() -> String:
 	return ("双塔 爬塔 进度 (与 爬塔页 状态行 同源 字段): 镇妖塔 = 最高 已过层 (1000 层 通关 后 守塔 模式 反复 挑战 1000 层 Boss), 登天 = 历史 最高 纪录 层 (无尽 无 上限, 每 100 层 里程碑 Boss + 宝箱 保底 稀有+ 词缀)。"
 			+ "\n挂机 扫视 顶栏 查看 进度, 点击: 直达 爬塔页 (查看 双塔 卡片/怪物卡/战力对比/自动爬塔 开关)")
 
+# 打磨-131: 顶栏 双塔 进度 徽标 tooltip 动态段 (挂机 扫视 顶栏 悬停 徽标 时 查看 本次 运行 自动 爬塔
+# 会话 统计; 原 tooltip 只有 静态 口径, 开启 自动爬塔 后 挂机 悬停 徽标 只见 双塔 进度 不知 本次
+# 已 赢 多少/赚 多少 [会话 统计 原 只在 爬塔页 状态行/自动爬塔 开关 tooltip — 需 切页 才 见];
+# 段 文案 单源 复用 auto_tower_session_text [与 爬塔页 状态行 会话 段/自动爬塔 开关 tooltip
+# 动态段 打磨-95/100/122/125/128 同 表达式 恒等, 不 二重 拼接]; 未 开启 自动爬塔 或 会话 为
+# 空 [未 触发 过 自动 挑战] = 空串 不 追加 段; 只读 无 状态/存档/统计 副作用)
+func tower_progress_badge_tip_dyn() -> String:
+	var sess: String = auto_tower_session_text()
+	if not auto_tower or sess == "":
+		return ""
+	return "\n【本次 运行 自动 爬塔 会话 (内存态 不 持久化, 读档 归零)】\n" + sess
+
+
 func use_active_skill(id: String) -> String:
 	var s: Dictionary = skill_by_id.get(id, {})
 	if s.is_empty() or s.get("type", "") != "active":

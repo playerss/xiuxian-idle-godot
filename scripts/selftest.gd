@@ -8448,6 +8448,57 @@ func _init() -> void:
 	g.tower_endless_best = 0
 	g.save_game()
 	g.set_process(true)
+	# ---------- 打磨-131: 顶栏 双塔 进度 徽标 tooltip 动态段 (自动爬塔 会话 单源 复用) ----------
+	# 基准 会话 空 + 自动爬塔 关: 动态段 空串
+	g.auto_tower = false
+	g._auto_tower_wins = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_stone = 0.0
+	check(g.tower_progress_badge_tip_dyn() == "", "打磨-131 会话 空 + 关 动态段 空串")
+	# 自动爬塔 开 但 会话 空: 仍 空串 (会话 门控 不 显示 空 会话)
+	g.auto_tower = true
+	check(g.tower_progress_badge_tip_dyn() == "", "打磨-131 开 但 会话 空 动态段 空串 (会话 门控)")
+	# 会话 胜局 态: 动态段 = 头 + auto_tower_session_text 单源 恒等 (含 四 累计 段)
+	g._auto_tower_wins = 3
+	g._auto_tower_stone = 888.0  # fmt int 截断 坑: 12345 显 "1", 选 <1e4 档 动态 恒等
+	g._auto_tower_mats = 7
+	g._auto_tower_affixes = 2
+	var sess131: String = g.auto_tower_session_text()
+	check(g.tower_progress_badge_tip_dyn() == "\n【本次 运行 自动 爬塔 会话 (内存态 不 持久化, 读档 归零)】\n" + sess131, "打磨-131 会话 胜局 态 动态段 = 头 + 会话 文案 单源 恒等 (实际 %s)" % g.tower_progress_badge_tip_dyn())
+	check(g.tower_progress_badge_tip_dyn().find("自动 胜 3 场 (灵石 888)") >= 0 and g.tower_progress_badge_tip_dyn().find("材料 7") >= 0 and g.tower_progress_badge_tip_dyn().find("词缀 2 件") >= 0, "打磨-131 动态段 含 胜局/灵石/材料/词缀 四 累计")
+	# 会话 胜局+败局 态: 败局 段 末尾 追加 动态 同步
+	g._auto_tower_losses = 2
+	check(g.tower_progress_badge_tip_dyn() == "\n【本次 运行 自动 爬塔 会话 (内存态 不 持久化, 读档 归零)】\n" + g.auto_tower_session_text() and g.tower_progress_badge_tip_dyn().find("败 2 场") >= 0, "打磨-131 败局 段 末尾 追加 动态 同步")
+	# 自动爬塔 关: 动态段 空串 (开关 门控, 会话 保留 不 清零)
+	g.auto_tower = false
+	check(g.tower_progress_badge_tip_dyn() == "", "打磨-131 关 开关 动态段 空串 (会话 保留 不 清零)")
+	# 开关 回 开: 动态段 恢复 恒等
+	g.auto_tower = true
+	check(g.tower_progress_badge_tip_dyn() == "\n【本次 运行 自动 爬塔 会话 (内存态 不 持久化, 读档 归零)】\n" + g.auto_tower_session_text(), "打磨-131 开关 回 开 动态段 恢复 恒等")
+	# 败局 清零 后 败局 段 消失 (旧 口径 不 追加)
+	g._auto_tower_losses = 0
+	check(g.tower_progress_badge_tip_dyn().find("败 0 场") < 0, "打磨-131 败局 清零 后 无 败局 段 旧 口径")
+	# 只读 连读 恒定 无 状态/统计 副作用 (会话 内存态 不被 读 接口 改动)
+	var snap131b: Dictionary = g.stats.duplicate(true)
+	var v131: String = g.tower_progress_badge_tip_dyn()
+	g.tower_progress_badge_tip_dyn()
+	check(v131 == g.tower_progress_badge_tip_dyn() and g.stats == snap131b and g._auto_tower_wins == 3 and g._auto_tower_losses == 0, "打磨-131 只读 连读 恒定 无 状态/统计 副作用")
+	# 收尾: 会话 归零 + 开关 关 (防 污染 冒烟 场景)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
