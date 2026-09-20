@@ -8407,6 +8407,47 @@ func _init() -> void:
 	var v129: float = g.tower_endless_mile_ratio(233)
 	g.tower_endless_mile_ratio(233)
 	check(v129 == g.tower_endless_mile_ratio(233) and g.stats == snap129, "打磨-129 只读 连读 恒定 无 状态/统计 副作用")
+	# ---------- 打磨-130: 顶栏 双塔 进度 徽标 文案 接口 (只读, 口径 与 tower_status_line 同源 字段) ----------
+	# 全新档 双塔 均 0 层 (上段 收尾 已 归零): 空串 (UI 隐藏 防 空 占位)
+	check(g.tower_progress_badge_text() == "", "打磨-130 双塔 均 0 层 徽标 文案 空串 (实际 %s)" % g.tower_progress_badge_text())
+	# 仅 镇妖塔 有 进度: 显示 镇妖 层数 + 登天 0
+	g.tower_fixed_floor = 5
+	g.tower_fixed_clear = false
+	g.tower_endless_best = 0
+	check(g.tower_progress_badge_text() == "塔 镇妖 5/1000 · 登天 0", "打磨-130 仅 镇妖 5 层 文案 (实际 %s)" % g.tower_progress_badge_text())
+	# 仅 登天梯 有 纪录: 镇妖 0 + 登天 纪录
+	g.tower_fixed_floor = 0
+	g.tower_endless_best = 233
+	check(g.tower_progress_badge_text() == "塔 镇妖 0/1000 · 登天 233", "打磨-130 仅 登天 233 层 文案 (实际 %s)" % g.tower_progress_badge_text())
+	# 两塔 均有 进度: 并排
+	g.tower_fixed_floor = 1000
+	g.tower_fixed_clear = false
+	g.tower_endless_best = 500
+	check(g.tower_progress_badge_text() == "塔 镇妖 1000/1000 · 登天 500", "打磨-130 双塔 并排 文案 (实际 %s)" % g.tower_progress_badge_text())
+	# 镇妖塔 通关: 追加 (通关) 标注
+	g.tower_fixed_clear = true
+	check(g.tower_progress_badge_text() == "塔 镇妖 1000/1000 (通关) · 登天 500", "打磨-130 通关 追加 标注 文案 (实际 %s)" % g.tower_progress_badge_text())
+	# 登天 纪录 数值 跨档 动态 同步 (233 -> 5000)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_best = 5000
+	check(g.tower_progress_badge_text() == "塔 镇妖 0/1000 · 登天 5000", "打磨-130 登天 5000 层 文案 (实际 %s)" % g.tower_progress_badge_text())
+	# tooltip 口径: 含 双塔/镇妖/登天/点击 直达 爬塔页 关键 词
+	var tip130: String = g.tower_progress_badge_tip()
+	check(tip130.find("双塔") >= 0 and tip130.find("镇妖塔") >= 0 and tip130.find("登天") >= 0, "打磨-130 tooltip 含 双塔/镇妖塔/登天 口径 (实际 %s)" % tip130.left(40))
+	check(tip130.find("点击") >= 0 and tip130.find("爬塔页") >= 0, "打磨-130 tooltip 含 点击 直达 爬塔页 口径")
+	# 只读 连读 恒定 无 状态/统计 副作用
+	var snap130: Dictionary = g.stats.duplicate(true)
+	var v130: String = g.tower_progress_badge_text()
+	g.tower_progress_badge_text()
+	check(v130 == g.tower_progress_badge_text() and g.stats == snap130, "打磨-130 只读 连读 恒定 无 状态/统计 副作用")
+	# 收尾: 双塔 归零 (防 污染 冒烟 场景)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.save_game()
+	g.set_process(true)
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

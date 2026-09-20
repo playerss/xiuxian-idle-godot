@@ -178,6 +178,7 @@ func _ready() -> void:
 	await _assert_ach_nofilter()
 	await _assert_tower_clear()  # M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 称号 徽标
 	await _assert_poison_debuff()  # 打磨-93: 剧毒 debuff 顶栏徽标 + 触发浮动
+	await _assert_tower_progress_badge()  # 打磨-130: 顶栏 双塔 进度 徽标 (节点/隐藏/文案/tooltip/点击直达/节流/收尾)
 	await _assert_tower_affix_drop()  # 打磨-94: 塔战斗 词缀掉落 底部消息 展示
 	await _assert_tower_win_float()  # 打磨-107: 塔战斗 胜利 浮动提示 (M5-3 规格 浮动 段)
 	await _assert_auto_tower_feedback()  # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行
@@ -5489,6 +5490,113 @@ func _assert_poison_debuff() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g.poison_battles == 0 and g.poison_events.is_empty() and ui._poison_float_count > 0, "打磨-93 收尾 干净 基准 (徽标/事件 清零)")
+
+
+# 打磨-130: 顶栏 双塔 进度 徽标 断言 (挂机 扫视 顶栏 的 爬塔 进度 展示位 — 进度 此前 只在
+# 爬塔页 状态行, 挂机 在 其他 页 扫视 顶栏 需 切页 才 见; 与 剧毒/通关 徽标 同 定位 同父 同风格,
+# 青色 区分 减益 剧毒 [紫]/终态 通关 [金]. 断言: 节点 存在/同父 顶栏/青色 字色/手型 光标/
+# 平铺 flat + 青色 圆角 样式 / 初始 双塔 均 0 隐藏 无 热区 / 仅 镇妖 层 / 仅 登天 纪录 / 双塔 并排 /
+# 通关 追加 标注 / 文案=接口 恒等 / tooltip 含 双塔 口径+点击 直达 / 升层 动态 同步 / 点击 直达
+# 爬塔页 (tab=4) + 状态行 金边 高亮+自动恢复 / 同态 节流 无 资源 统计 副作用 / 收尾 干净 基准)
+func _assert_tower_progress_badge() -> void:
+	var g := GameData
+	# 基准: 双塔 归零 冻结 (与 剧毒/通关 段 收尾 同口径, 防 挂机/自动 爬塔 竞争)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.set_process(false)
+	var badge: Button = ui._tower_progress_badge
+	check(badge != null, "打磨-130 顶栏 双塔 进度 徽标 节点 存在")
+	check(badge != null and badge.get_parent() == ui._auto_badge.get_parent(),
+			"打磨-130 徽标 挂在 顶栏 容器 (与 自动 徽标 同父; 实际父节点 %s)" % str(badge.get_parent()))
+	check(badge != null and badge.flat and not badge.toggle_mode,
+			"打磨-130 徽标 flat 可点击 (非 按压 切换)")
+	check(badge != null and badge.mouse_default_cursor_shape == Control.CURSOR_POINTING_HAND,
+			"打磨-130 徽标 手型 光标 (实际 %d)" % badge.mouse_default_cursor_shape)
+	check(badge != null and badge.get_theme_color("font_color") == Color(0.6, 0.85, 0.85),
+			"打磨-130 徽标 字色 青色 (实际 %s)" % str(badge.get_theme_color("font_color")))
+	var nb: StyleBoxFlat = badge.get_theme_stylebox("normal")
+	check(nb != null and nb.bg_color == Color(0.07, 0.13, 0.13)
+			and nb.get_corner_radius(0) == 4,
+			"打磨-130 徽标 青色 圆角 底 (normal 背景 0.07,0.13,0.13 圆角 4; 实际 bg=%s 圆角=%d)"
+			% [str(nb.bg_color if nb != null else "null"), nb.get_corner_radius(0) if nb != null else -1])
+	ui._refresh()
+	await get_tree().process_frame
+	check(badge.visible == false and str(badge.text) == "" and str(badge.tooltip_text) == "",
+			"打磨-130 初始 双塔 均 0 徽标 隐藏 无 热区 (visible=%s 文本=%s)" % [str(badge.visible), str(badge.text)])
+	# 仅 镇妖塔 有 进度: 显示 镇妖 层数 + 登天 0 (文案=接口 恒等)
+	g.tower_fixed_floor = 5
+	g.tower_endless_best = 0
+	ui._refresh()
+	await get_tree().process_frame
+	check(badge.visible and str(badge.text) == "塔 镇妖 5/1000 · 登天 0",
+			"打磨-130 仅 镇妖 5 层 徽标 显示 文案 (实际 %s)" % str(badge.text))
+	check(str(badge.text) == g.tower_progress_badge_text(), "打磨-130 徽标 文案 = 接口 恒等")
+	# 仅 登天梯 有 纪录: 镇妖 0 + 登天 纪录
+	g.tower_fixed_floor = 0
+	g.tower_endless_best = 233
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(badge.text) == "塔 镇妖 0/1000 · 登天 233", "打磨-130 仅 登天 233 层 文案 (实际 %s)" % str(badge.text))
+	# 升层 动态 同步 (登天 233 -> 5000)
+	g.tower_endless_best = 5000
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(badge.text) == "塔 镇妖 0/1000 · 登天 5000", "打磨-130 登天 升层 动态 同步 (实际 %s)" % str(badge.text))
+	# 双塔 并排 + 通关 追加 标注
+	g.tower_fixed_floor = 1000
+	g.tower_fixed_clear = true
+	g.tower_endless_best = 500
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(badge.text) == "塔 镇妖 1000/1000 (通关) · 登天 500",
+			"打磨-130 双塔 并排 通关 追加 标注 (实际 %s)" % str(badge.text))
+	# tooltip 含 双塔 口径 + 点击 直达 爬塔页
+	var tip130: String = str(badge.tooltip_text)
+	check(tip130 == g.tower_progress_badge_tip(), "打磨-130 徽标 tooltip = 接口 恒等")
+	check(tip130.find("双塔") >= 0 and tip130.find("镇妖塔") >= 0 and tip130.find("登天") >= 0,
+			"打磨-130 tooltip 含 双塔/镇妖塔/登天 口径 (实际 %s)" % tip130.left(40))
+	check(tip130.find("点击") >= 0 and tip130.find("爬塔页") >= 0, "打磨-130 tooltip 含 点击 直达 爬塔页 口径")
+	# 点击 直达 爬塔页 (tab 4) + 状态行 金边 高亮 (复用 自动汇总行 金边 口径)
+	var tw130: int = int(g.stats.get("tower_win", 0.0))
+	var f130: int = g.tower_fixed_floor
+	var pb130: int = g.poison_battles
+	ui._on_tower_progress_badge()
+	await get_tree().process_frame
+	check(ui._tab.current_tab == 4, "打磨-130 点击 切 爬塔页 (tab=4, 实际 %d)" % ui._tab.current_tab)
+	var tsb: StyleBox = ui._tw_status_panel.get_theme_stylebox("panel")
+	check(tsb != null and tsb.border_width_left == 2, "打磨-130 点击 后 状态行 金边 高亮 (边框宽=%d)" % (tsb.border_width_left if tsb != null else -1))
+	check(tsb != null and tsb.border_color == Color(0.98, 0.86, 0.5), "打磨-130 高亮 边框色=金 (实际 %s)" % str(tsb.border_color if tsb != null else "null"))
+	# 恢复 终态 (手动 回调; headless 不 依赖 tween 自然 跑完, 同 M5-4/93 高亮 断言 口径)
+	ui._restore_tower_status_panel()
+	var tsb2: StyleBox = ui._tw_status_panel.get_theme_stylebox("panel")
+	check(tsb2 != null and tsb2.border_width_left == 0, "打磨-130 恢复 后 状态行 无边框 (边框宽=%d)" % (tsb2.border_width_left if tsb2 != null else -1))
+	# 无 资源/统计 副作用 (点击 导航 不改 存档: 塔 层/胜利 统计/debuff 场数 不变)
+	check(g.tower_fixed_floor == f130 and int(g.stats.get("tower_win", 0.0)) == tw130 and g.poison_battles == pb130,
+			"打磨-130 点击 无 塔/统计 副作用 (实际 层=%d 胜=%d 场=%d)" % [g.tower_fixed_floor, tw130, g.poison_battles])
+	# 同态 节流: 无 塔 态 变化 再 刷 不 重写 文本 (锚定 文本 引用 不变 + 无 统计 副作用)
+	var snap130: Dictionary = g.stats.duplicate(true)
+	var txt130: String = str(badge.text)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(badge.text) == txt130 and g.stats == snap130, "打磨-130 同态 节流 无 统计 副作用")
+	# 收尾: 双塔 归零 + 冻结 恢复 + 切回 成就页 (防 残留 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(badge.visible == false and str(badge.text) == "", "打磨-130 收尾 双塔 归零 徽标 隐藏 (visible=%s 文本=%s)" % [str(badge.visible), str(badge.text)])
+
 
 
 # 打磨-94: 塔战斗 词缀掉落 底部消息 展示 断言 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 词缀 段:

@@ -2159,6 +2159,25 @@ func poison_badge_tip() -> String:
 		+ "\n点击: 直达 爬塔页 (查看 剧毒 提醒 与 战力对比)")
 	return txt
 
+# 打磨-130: 顶栏 双塔 进度 徽标 文案 (挂机 扫视 顶栏 时 查看 双塔 爬塔 进度; 与 剧毒/通关 徽标
+# 同 定位 — 进度 此前 只在 爬塔页 状态行, 挂机 在其他 页 扫视 顶栏 需 切页 才 见; 只读 无 副作用)
+# 口径 单源 与 tower_status_line 同源字段: 镇妖塔 最高 层数 (通关 时 恒 1000 + 通关 标注) /
+# 登天梯 历史 最高 纪录 层 (tower_endless_best, 无尽 无 上限)。
+# 两塔 均 0 层 (全新档 未 登塔) = 空串, UI 隐藏 徽标 避免 空 占位 (与 play_time_text 口径 一致)。
+func tower_progress_badge_text() -> String:
+	if tower_fixed_floor <= 0 and tower_endless_best <= 0:
+		return ""
+	var s: String = "塔 镇妖 %d/1000" % tower_fixed_floor
+	if tower_fixed_clear:
+		s += " (通关)"
+	s += " · 登天 %d" % tower_endless_best
+	return s
+
+# 打磨-130: 顶栏 双塔 进度 徽标 tooltip (口径 说明 + 点击 直达 爬塔页; 拼接 口径 防 字面 % 坑)
+func tower_progress_badge_tip() -> String:
+	return ("双塔 爬塔 进度 (与 爬塔页 状态行 同源 字段): 镇妖塔 = 最高 已过层 (1000 层 通关 后 守塔 模式 反复 挑战 1000 层 Boss), 登天 = 历史 最高 纪录 层 (无尽 无 上限, 每 100 层 里程碑 Boss + 宝箱 保底 稀有+ 词缀)。"
+			+ "\n挂机 扫视 顶栏 查看 进度, 点击: 直达 爬塔页 (查看 双塔 卡片/怪物卡/战力对比/自动爬塔 开关)")
+
 func use_active_skill(id: String) -> String:
 	var s: Dictionary = skill_by_id.get(id, {})
 	if s.is_empty() or s.get("type", "") != "active":

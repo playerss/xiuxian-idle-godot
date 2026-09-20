@@ -126,6 +126,8 @@ var _poison_float_label: Label    # 打磨-93: 剧毒 触发/刷新 浮动提示
 var _poison_float_tween: Tween
 var _poison_float_count := 0      # 打磨-93: 剧毒浮动提示次数 (自测断言用)
 var _poison_last_text := ""       # 打磨-93: 最近一次 剧毒浮动 文案 (自测断言用)
+var _tower_progress_badge: Button # 打磨-130: 顶栏 双塔 进度 徽标 (青色圆角 "塔 镇妖 N/1000 · 登天 M", 任一塔 有 进度 显示 全 0 隐藏; 点击 直达 爬塔页)
+var _tower_progress_key := ""     # 打磨-130: 双塔 进度 徽标 刷新键 (镇妖层|通关|登天 纪录, 变化才刷 文本/显隐)
 var _idle_badge_on := false        # 打磨-90: 已刷过的 全开 态 缓存 (变化才刷 显隐; 与 按钮 全开态 同口径 auto_all_on)
 var _idle_btn_hi_tween: Tween      # 打磨-90: 一键挂机按钮 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
 var _idle_btn_sb_rest: StyleBoxFlat  # 打磨-90: 一键挂机按钮 构建时 normal 样式缓存 (高亮后 恢复 用)
@@ -164,6 +166,7 @@ var _tw_status_label: Label      # 爬塔 状态汇总行 (镇妖塔最高/登�
 var _tw_status_panel: Panel      # 打磨-93: 状态行 透明 Panel 外壳 (剧毒 徽标 点击直达 紫边高亮 载体, 默认 无边框)
 var _poison_status_hi_tween: Tween  # 打磨-93: 状态行 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
 var _tw_status_text := ""
+var _tw_status_hi_tween: Tween   # 打磨-130: 状态行 金边高亮 tween (双塔 进度 徽标 点击直达 1.2s 自动恢复)
 var _tw_auto_btn: Button         # M5-3: 自动爬塔开关 (toggle, 存档持久化, 一键挂机 5 开关 之 5)
 var _tw_auto_on := false         # M5-3: 上帧 自动爬塔 开关 缓存 (变化才刷 按钮态)
 var _tw_auto_tip := ""           # M5-3: 自动爬塔 按钮 tooltip 动态段 缓存
@@ -460,6 +463,37 @@ func _build_ui() -> void:
 	_poison_badge.pressed.connect(_on_poison_badge)
 	_poison_badge.visible = false
 	top.add_child(_poison_badge)
+	# 打磨-130: 顶栏 双塔 进度 徽标 (青色圆角 "塔 镇妖 N/1000 · 登天 M": 任一塔 有 进度 显示,
+	# 全 0 [全新档 未 登塔] 隐藏 — 与 剧毒/通关 徽标 同 定位 同父 同风格, 给 挂机 扫视 顶栏 的
+	# 爬塔 进度 展示位; 青色 区分 减益 剧毒 [紫]/终态 通关 [金]; flat Button 可点击热区:
+	# 点击 = 切 爬塔页 + 状态行 金边高亮 1.2s (复用 自动汇总行/法器区 高亮 口径); 纯展示+导航
+	# 无 存档/统计 副作用; 刷新 键 (镇妖层|通关|登天 纪录) 变化才刷 文本/显隐 [挂机 低频])
+	_tower_progress_badge = Button.new()
+	_tower_progress_badge.flat = true
+	_tower_progress_badge.toggle_mode = false
+	_tower_progress_badge.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_tower_progress_badge.text = ""
+	_tower_progress_badge.add_theme_font_size_override("font_size", 15)
+	_tower_progress_badge.add_theme_color_override("font_color", Color(0.6, 0.85, 0.85))
+	var twp_sb := StyleBoxFlat.new()
+	twp_sb.bg_color = Color(0.07, 0.13, 0.13)
+	twp_sb.set_border_width_all(1)
+	twp_sb.border_color = Color(0.5, 0.8, 0.8)
+	twp_sb.set_corner_radius_all(4)
+	twp_sb.content_margin_left = 6.0
+	twp_sb.content_margin_right = 6.0
+	twp_sb.content_margin_top = 2.0
+	twp_sb.content_margin_bottom = 2.0
+	_tower_progress_badge.add_theme_stylebox_override("normal", twp_sb)
+	var twp_sb_hover := twp_sb.duplicate() as StyleBoxFlat
+	twp_sb_hover.bg_color = Color(0.11, 0.21, 0.21)
+	twp_sb_hover.border_color = Color(0.75, 0.95, 0.95)
+	_tower_progress_badge.add_theme_stylebox_override("hover", twp_sb_hover)
+	_tower_progress_badge.add_theme_stylebox_override("pressed", twp_sb_hover)
+	_tower_progress_badge.add_theme_stylebox_override("focus", twp_sb_hover)
+	_tower_progress_badge.pressed.connect(_on_tower_progress_badge)
+	_tower_progress_badge.visible = false
+	top.add_child(_tower_progress_badge)
 	# 打磨-75: 顶栏 一键系列 状态汇总 徽标 (六项 可执行数 一览; 各段 可点击 热区:
 	# 领悟/神通/法器/装备/最佳 = 直达对应页 并重置 筛选 (口径 同 打磨-44 收集直达),
 	# 施展 = 直接 执行 一键施展 (核心批量 点击 反馈, 与 各页 一键 按钮 完全 同口径);
@@ -2373,6 +2407,21 @@ func _refresh() -> void:
 			_poison_badge.visible = false
 			_poison_badge.text = ""
 			_poison_badge.tooltip_text = ""
+	# 打磨-130: 顶栏 双塔 进度 徽标 (镇妖 层数/通关/登天 纪录 任一 变化才刷 文本/显隐;
+	# 挂机 扫视 顶栏 的 爬塔 进度 展示位, 与 剧毒/通关 徽标 同 定位; 全 0 隐藏 防 空 占位;
+	# 纯展示 无 存档/统计 副作用; 读档恢复 层数 经 _refresh 同步)
+	var twp_key: String = "%d|%d|%d" % [g.tower_fixed_floor, 1 if g.tower_fixed_clear else 0, g.tower_endless_best]
+	if twp_key != _tower_progress_key:
+		_tower_progress_key = twp_key
+		var twp_txt: String = g.tower_progress_badge_text()
+		if twp_txt != "":
+			_tower_progress_badge.visible = true
+			_tower_progress_badge.text = twp_txt
+			_tower_progress_badge.tooltip_text = g.tower_progress_badge_tip()
+		else:
+			_tower_progress_badge.visible = false
+			_tower_progress_badge.text = ""
+			_tower_progress_badge.tooltip_text = ""
 	# 打磨-88: 一键挂机 按钮 态 (全开 态 变化才刷; 读档恢复/外部 单开关 改 同步;
 	# 按压=全开, 文本 全开/全关; 纯展示 无 存档/统计 副作用)
 	var idle_on: bool = g.auto_all_on()
@@ -3874,6 +3923,42 @@ func _on_poison_badge() -> void:
 	_tab.current_tab = 4
 	_flash_poison_status()
 	_show_msg("直达 爬塔页·剧毒提醒 (期间 战力对比 按 ATK -15% 口径 预测)")
+
+
+# 打磨-130: 顶栏 双塔 进度 徽标 点击直达 — 点击 = 切 爬塔页 + 状态行 金边高亮 1.2s
+# (复用 自动汇总行 高亮 口径: 状态行 Panel 换 金边 2px 样式, 1.2s 自动恢复; 重入 kill 旧 tween;
+# 纯导航 无 存档/统计 副作用; 隐藏态 全 0 无热区 不 点击)
+func _on_tower_progress_badge() -> void:
+	_tab.current_tab = 4
+	_flash_tower_status_panel()
+	_show_msg("直达 爬塔页·双塔进度 (镇妖塔 最高层 + 登天梯 历史 纪录)")
+
+
+# 打磨-130: 爬塔页 状态汇总行 金边高亮 1.2s (双塔 进度 徽标 点击直达; 复用 自动汇总行 高亮 口径:
+# Panel 外壳 换 金边 2px 样式, 1.2s 自动恢复; 重入 kill 旧 tween; 仅 展示 无 副作用)
+func _flash_tower_status_panel() -> void:
+	if _tw_status_panel == null:
+		return
+	if _tw_status_hi_tween != null and _tw_status_hi_tween.is_valid():
+		_tw_status_hi_tween.kill()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = GOLD
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(6)
+	_tw_status_panel.add_theme_stylebox_override("panel", sb)
+	_tw_status_hi_tween = create_tween()
+	_tw_status_hi_tween.tween_interval(1.2)
+	_tw_status_hi_tween.tween_callback(_restore_tower_status_panel)
+
+
+func _restore_tower_status_panel() -> void:
+	if _tw_status_panel == null:
+		return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.set_corner_radius_all(6)
+	_tw_status_panel.add_theme_stylebox_override("panel", sb)
 
 
 # 打磨-93: 爬塔页 状态汇总行 紫边高亮 1.2s (剧毒 徽标 点击直达; 复用 自动汇总行/法器区 高亮 口径:
