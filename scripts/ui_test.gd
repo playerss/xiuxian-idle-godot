@@ -1514,10 +1514,16 @@ func _assert_cd_bars() -> void:
 	g.essence = 0.0
 	g.stones = 0.0
 	ui._skill_cd_acc = 0.0
+	# 审查修复 (打磨-58 flake): 前段 残留 的 可见 冷却条 + 陈旧 缓存键 会 泄漏 到 本段 —
+	# 本段 清零 _skill_cd_acc 后 _refresh() 不跨 节流档, 不 重跑 条 刷新, 残留 可见 条
+	# 使 「初始 未学 隐藏」 假失败, 陈旧 键 使 填充 不 重算 (高负载 偶发); 显式 收口 全部
+	# 条 到 hidden (填充 清零 + 键 hidden) 使 本段 初始 态 自包含, 与 前段 收尾 解耦
+	for _id58 in ui._skill_cd_bars:
+		ui._hide_cd_bar(_id58)
 	ui._tab.current_tab = 1
 	ui._refresh()
 	await get_tree().process_frame
-	# 节点: 24 个主动神通 均有 {bg, fill} 结构, 挂在行内信息 VBox, 初始 全部隐藏 (未学)
+	# 节点: 24 个主动神通 均有 {bg, fill} 结构, 挂在行内信息 VBox, 初始 全部 隐藏 (未学)
 	var n_active := 0
 	for id in g.skill_ids:
 		var s: Dictionary = g.skill_by_id[id]
@@ -1560,11 +1566,19 @@ func _assert_cd_bars() -> void:
 	var bg2: ColorRect = r2["bg"]
 	check(bg1.visible, "打磨-58 a1 冷却中 进度条 显示")
 	check(bg2.visible, "打磨-58 a2 冷却中 进度条 显示")
-	# 等 布局落定 (宽度 0 -> 实际 宽, headless 高负载时 1 帧可能不够, 上限 20 帧; 顺带修既有 flake)
-	for _i58 in 20:
+	# 等 布局落定 + 缓存键 按 最终 宽 重算 (宽度 0 -> 实际 宽, headless 高负载时 布局 落定 慢;
+	# 缓存键 = 宽|档 — 宽 变 后 必须 等 到 键 已 重算 否则 填充 仍 为 首显 0 (打磨-58 flake:
+	# 旧 20 帧 窗口 只 等 宽>0, 宽 已 落定 但 键 未 重算 时 第二次 直调 命中 旧键 跳过 写 填充);
+	# 预算 40 帧, 宽 两 帧 稳定 + 键 = 宽|当前 档 即 收敛)
+	for _i58 in 40:
 		await get_tree().process_frame
-		if bg1.size.x > 0.0 and bg2.size.x > 0.0:
-			break
+		var w1s: int = int(bg1.size.x)
+		var w2s: int = int(bg2.size.x)
+		if w1s > 0 and w2s > 0 and w1s == int(bg1.size.x) and w2s == int(bg2.size.x):
+			var k1e: String = "%d|50" % w1s
+			var k2e: String = "%d|50" % w2s
+			if str(ui._skill_cd_q.get(a1, "")) == k1e and str(ui._skill_cd_q.get(a2, "")) == k2e:
+				break
 	check(bg1.size.x > 0.0, "打磨-58 a1 布局落定 宽度>0 (实际 %.1f)" % bg1.size.x)
 	check(bg2.size.x > 0.0, "打磨-58 a2 布局落定 宽度>0 (实际 %.1f)" % bg2.size.x)
 	# 宽度落定后 再 直调 一次 由 宽变化缓存键 触发 填充
