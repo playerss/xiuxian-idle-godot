@@ -8257,6 +8257,132 @@ func _init() -> void:
 	g.poison_battles = 0
 	g.poison_events.clear()
 
+	# ---------- 打磨-128: 自动爬塔 会话 败局/卡层 段 (挂机 自动 爬塔 会话 统计 展示位 缺口:
+	# 原 会话 只 累计 胜局/灵石/材料/词缀, 0 胜局 全败 帧 整段 不 显 致 卡层 无感;
+	# _auto_tower_losses 内存态 累计 败局 (读档 归零 同 灵石 口径), 0 胜局 全败 态 状态行 显
+	# "自动 败 N 场 (未 推进, 提升 战力 后 自动 再 试)", 有 胜局 时 会话 段 末尾 追加 "· 败 N 场",
+	# auto_tower_session_text 单源 恒等 不 二重 拼接) ----------
+	g.set_process(false)
+	g.auto_tower = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 11  # 挑战 第 12 层 (数据 锚定: 阈值 3.23 > 弱玩家 2.0, 打磨-123)
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 2   # 挑战 第 2 层 (数据 锚定: 阈值 1.53 < 2.0, 弱玩家 可胜, 打磨-95)
+	g.tower_endless_best = 1
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	# 数据 锚定: 弱玩家 (有效 atk 2.0) 镇妖塔 12 层 判 败 / 登天梯 15 层 判 败 / 2 层 判 胜
+	var pa128: float = g.player_atk_effective()
+	check(pa128 < float(g.tower_monster_stats(g.get_fixed_floor(12))["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-128 数据 锚定 镇妖塔 12 层 判 败 (实际 atk %s)" % str(pa128))
+	check(pa128 < float(g.tower_monster_stats(g.get_endless_floor(15))["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-128 数据 锚定 登天梯 15 层 判 败 (实际 atk %s)" % str(pa128))
+	check(pa128 >= float(g.tower_monster_stats(g.get_endless_floor(2))["atk"]) * g.TOWER_WIN_RATIO,
+			"打磨-128 数据 锚定 登天梯 2 层 判 胜 (实际 atk %s)" % str(pa128))
+	# 1) 初始 0 胜局 0 败局: 会话 文案 空串 + 状态行 无 败局 段
+	check(g.auto_tower_session_text() == "", "打磨-128 初始 0 胜局 0 败局 会话 文案 空串")
+	check(g.tower_status_line().find("自动 败") < 0, "打磨-128 初始 状态行 无 败局 段")
+	# 2) 0 胜局 全败 态: 卡层 文案 恒等 + 状态行 段 = 会话 文案 单源 恒等
+	g._auto_tower_losses = 5
+	var st128a: String = g.auto_tower_session_text()
+	check(st128a == "自动 败 5 场 (未 推进, 提升 战力 后 自动 再 试)",
+			"打磨-128 0 胜局 全败 态 卡层 文案 恒等 (实际 %s)" % st128a)
+	check(g.tower_status_line().find("· " + st128a) >= 0,
+			"打磨-128 0 胜局 全败 态 状态行 段 = 会话 文案 单源 恒等 (实际 %s)" % g.tower_status_line())
+	# 3) 有 胜局 + 有 败局: 会话 文案 末尾 追加 "· 败 N 场" 段
+	g._auto_tower_wins = 2
+	g._auto_tower_stone = 1234.0
+	g._auto_tower_mats = 7
+	g._auto_tower_affixes = 3
+	g._auto_tower_losses = 4
+	check(g.auto_tower_session_text() == "自动 胜 2 场 (灵石 %s) · 材料 7 · 词缀 3 件 · 败 4 场" % g.fmt(1234.0),
+			"打磨-128 胜局 态 会话 文案 末尾 败局 段 (实际 %s)" % g.auto_tower_session_text())
+	check(g.tower_status_line().find("自动 胜 2 场 (灵石 ") >= 0 and g.tower_status_line().find("败 4 场") >= 0,
+			"打磨-128 状态行 含 胜局 段 + 败局 段 (实际 %s)" % g.tower_status_line())
+	# 4) 败局 = 0 不 追加 段 (旧 口径)
+	g._auto_tower_losses = 0
+	check(g.auto_tower_session_text() == "自动 胜 2 场 (灵石 %s) · 材料 7 · 词缀 3 件" % g.fmt(1234.0),
+			"打磨-128 0 败局 不 追加 段 旧 口径 (实际 %s)" % g.auto_tower_session_text())
+	# 5) 真实 链路 全败 帧: 镇妖塔 12 层 败 + 登天梯 15 层 败 (双败 → 败局 +2, 胜局 不 变 不 增 事件)
+	g.tower_endless_floor = 15
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	var l128_0: int = g._auto_tower_losses
+	var seq128_0: int = g._auto_tower_seq
+	g.auto_tower = true
+	g._process(0.016)
+	check(g._auto_tower_losses == l128_0 + 2, "打磨-128 全败 帧 败局 +2 (实际 %d)" % g._auto_tower_losses)
+	check(g._auto_tower_wins == 0 and g._auto_tower_seq == seq128_0,
+			"打磨-128 全败 帧 胜局 不 变 不 增 事件 (seq %d)" % g._auto_tower_seq)
+	check(g.auto_tower_session_text() == "自动 败 2 场 (未 推进, 提升 战力 后 自动 再 试)",
+			"打磨-128 真实 链路 卡层 文案 恒等 (实际 %s)" % g.auto_tower_session_text())
+	check(g.tower_status_line().find("· 自动 败 2 场") >= 0,
+			"打磨-128 真实 链路 状态行 卡层 段 (实际 %s)" % g.tower_status_line())
+	check(g.tower_fixed_floor == 11 and g.tower_endless_floor == 15,
+			"打磨-128 全败 帧 塔 态 停留 (镇妖塔 %d / 登天梯 %d)" % [g.tower_fixed_floor, g.tower_endless_floor])
+	# 6) 真实 链路 混合 帧: 镇妖塔 12 层 败 + 登天梯 2 层 胜 → 败局 +1 胜局 +1
+	g.tower_endless_floor = 2
+	g._process(0.016)
+	check(g._auto_tower_losses == l128_0 + 3 and g._auto_tower_wins == 1,
+			"打磨-128 混合 帧 败局 +1 胜局 +1 (败 %d 胜 %d)" % [g._auto_tower_losses, g._auto_tower_wins])
+	check(g.auto_tower_session_text().find("败 3 场") >= 0 and g.auto_tower_session_text().find("自动 胜 1 场") >= 0,
+			"打磨-128 混合 帧 会话 文案 胜局 + 败局 段 (实际 %s)" % g.auto_tower_session_text())
+	g.auto_tower = false
+	# 7) 会话 败局 读档 归零 (不 持久化, 同 灵石 口径)
+	g.save_game()
+	g._auto_tower_losses = 7
+	g._auto_tower_wins = 3
+	g.load_game()
+	check(g._auto_tower_losses == 0 and g._auto_tower_wins == 0,
+			"打磨-128 会话 败局/胜局 读档 归零 (不 持久化, 实际 %d/%d)" % [g._auto_tower_losses, g._auto_tower_wins])
+	check(g.auto_tower_session_text() == "" and g.tower_status_line().find("自动 败") < 0,
+			"打磨-128 读档 后 会话 文案 空串 状态行 无 败局 段")
+	# 8) 只读 连读 恒定 无 状态/统计 副作用
+	g._auto_tower_wins = 1
+	g._auto_tower_losses = 4
+	var snap128: Dictionary = g.stats.duplicate(true)
+	g.tower_status_line()
+	g.auto_tower_session_text()
+	check(g._auto_tower_losses == 4 and g.stats == snap128, "打磨-128 只读 连读 恒定 无 状态/统计 副作用")
+	# 收尾: 会话 归零 + 塔 态 归零 落盘 (防 污染 冒烟 场景)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.save_game()
+	g.set_process(true)
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

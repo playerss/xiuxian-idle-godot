@@ -106,6 +106,7 @@ func _ready() -> void:
 	g0._auto_tower_stone = 0.0
 	g0._auto_tower_mats = 0  # 打磨-100: 防御性 重置 会话 材料 累计
 	g0._auto_tower_affixes = 0  # 打磨-122: 防御性 重置 会话 词缀 累计
+	g0._auto_tower_losses = 0  # 打磨-128: 防御性 重置 会话 败局 累计
 	# M6-3: 防御性 重置 DIY 词缀 状态 (autoload 启动 load_game 读 残留档, 词缀 背包/装配/收集 可能 非空;
 	# 残留 会 让 成就 检查 触发 DIY 成就 泄漏 [affix_legend/affix_120/diy_first/resonance_first],
 	# 致 收集 计数/只看未解锁 断言 偏多 — 每轮 强制 干净 基准, 同 打磨-71/72 自动开关/离线收益 口径)
@@ -182,6 +183,7 @@ func _ready() -> void:
 	await _assert_auto_tower_feedback()  # 打磨-95: 自动爬塔 胜局 汇总 底部消息 + 会话 统计 状态行
 	await _assert_auto_tower_affix_session()  # 打磨-122: 自动爬塔 会话 词缀 段 (状态行 会话 段 词缀 累计/tooltip 口径/节流)
 	await _assert_auto_tower_session_tip()  # 打磨-125: 自动爬塔开关 tooltip 会话 统计 段 (开关悬停 展示 本次 运行 会话 累计)
+	await _assert_auto_tower_loss_feedback()  # 打磨-128: 自动爬塔 会话 败局/卡层 段 (状态行 卡层 提示/会话 段 败局 段/tooltip 口径/节流)
 	await _assert_endless_demon()  # 打磨-102: 登天梯 500 层后 全部 默认 魔化 (怪物卡 前缀/战力对比/胜局 消息)
 	await _assert_tower_rounds()  # 打磨-105: 战斗时长 预估 行 (M5 数值 模型 rounds 仅 展示: 双塔 卡片 文案/恒等 口径/败 预测 追加/剧毒 联动/节流)
 	await _assert_milestone_chest()  # 打磨-103: 登天梯 里程碑 宝箱 保底 高品质 词缀 (tooltip 保底 段/卡片 口径/胜局 掉落 品质)
@@ -5831,6 +5833,7 @@ func _assert_auto_tower_session_tip() -> void:
 	g._auto_tower_stone = 0.0
 	g._auto_tower_mats = 0
 	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0  # 打磨-128: 防御性 清零 会话 败局 累计 (防 残留 污染 后续 段)
 	g._auto_tower_last_txt = ""
 	g.auto_tower = false
 	g.tower_fixed_floor = 0
@@ -5851,6 +5854,122 @@ func _assert_auto_tower_session_tip() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(g._auto_tower_wins == 0 and g._auto_tower_affixes == 0, "打磨-125 收尾 干净 基准 (会话 清零)")
+
+
+# 打磨-128: 自动爬塔 会话 败局/卡层 段 UI 断言 (挂机 自动 爬塔 会话 统计 展示位 缺口落地:
+# 0 胜局 全败 态 状态行 显 卡层 提示 / 有 胜局 时 会话 段 末尾 追加 败局 段 / 开关 tooltip 会话
+# 段 恒等 口径 / 状态行 tooltip 口径 说明 / 刷新键 感知 败局 变化 才 刷 (手动 置态 不 升层);
+# 收尾 干净 基准 防 污染)
+func _assert_auto_tower_loss_feedback() -> void:
+	var g := GameData
+	g.set_process(false)
+	g.auto_tower = false
+	ui._tab.current_tab = 4
+	# 干净 基准 (同 打磨-95 口径 + 会话 全部 归零 含 败局)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.ascended = false
+	g.dao_level = 0
+	ui._refresh()
+	await get_tree().process_frame
+	# 1) 初始 0 胜局 0 败局: 状态行 无 会话 段 无 卡层 段
+	check(str(ui._tw_status_label.text).find("自动 败") < 0 and str(ui._tw_status_label.text).find("自动 胜") < 0,
+			"打磨-128 初始 状态行 无 会话/卡层 段 (实际 %s)" % str(ui._tw_status_label.text))
+	# 2) 0 胜局 全败 态 (手动 置态 不 升层): 刷新键 感知 败局 变化 自动 刷 卡层 段 = 接口 恒等
+	g._auto_tower_losses = 3
+	ui._refresh()
+	await get_tree().process_frame
+	var sess128: String = g.auto_tower_session_text()
+	check(str(ui._tw_status_label.text).find("· " + sess128) >= 0,
+			"打磨-128 全败 态 状态行 卡层 段 = auto_tower_session_text 单源 恒等 (实际 %s)" % str(ui._tw_status_label.text))
+	check(sess128.find("未 推进") >= 0 and sess128.find("败 3 场") >= 0,
+			"打磨-128 卡层 文案 含 败局 数 + 未 推进 口径 (实际 %s)" % sess128)
+	# 3) 有 胜局 态: 会话 段 末尾 追加 败局 段 (与 状态行 单源 恒等)
+	g._auto_tower_wins = 2
+	g._auto_tower_stone = 5678.0
+	g._auto_tower_mats = 7
+	g._auto_tower_affixes = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_status_label.text).find("自动 胜 2 场 (灵石 ") >= 0 and str(ui._tw_status_label.text).find("败 3 场") >= 0,
+			"打磨-128 胜局 态 状态行 含 败局 段 (实际 %s)" % str(ui._tw_status_label.text))
+	check(str(ui._tw_status_label.text).find(g.auto_tower_session_text()) >= 0,
+			"打磨-128 胜局 态 状态行 会话 段 = 接口 恒等 (实际 %s)" % str(ui._tw_status_label.text))
+	# 4) 败局 = 0 不 追加 段 (旧 口径)
+	g._auto_tower_losses = 0
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_status_label.text).find("败 ") < 0,
+			"打磨-128 0 败局 状态行 无 败局 段 旧 口径 (实际 %s)" % str(ui._tw_status_label.text))
+	# 5) 开关 tooltip 会话 段 = 静态 前缀 + 接口 恒等 (卡层 态 亦 同步)
+	g._auto_tower_wins = 0
+	g._auto_tower_losses = 6
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_auto_btn.tooltip_text) == ui._tw_auto_tip_static + g.auto_tower_next_tip(),
+			"打磨-128 卡层 态 开关 tooltip = 静态 前缀 + 接口 恒等")
+	check(str(ui._tw_auto_btn.tooltip_text).find("本次 运行 会话: " + g.auto_tower_session_text()) >= 0,
+			"打磨-128 开关 tooltip 会话 段 含 卡层 文案 (实际 %s)" % str(ui._tw_auto_btn.tooltip_text).left(120))
+	# 6) 状态行 tooltip 含 败局/卡层 口径 说明
+	check(ui._tw_status_panel.tooltip_text.find("自动 败局 卡层 段") >= 0
+			and ui._tw_status_panel.tooltip_text.find("未 推进") >= 0
+			and ui._tw_status_panel.tooltip_text.find("败 N 场") >= 0,
+			"打磨-128 状态行 tooltip 含 败局/卡层 口径 说明 (实际 %s)" % ui._tw_status_panel.tooltip_text.left(60))
+	# 7) 只读: 同 会话 态 _refresh 无 资源/统计 副作用 + 标签 稳定
+	var stats_snap128: Dictionary = g.stats.duplicate(true)
+	var txt128: String = str(ui._tw_status_label.text)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_status_label.text) == txt128 and g.stats == stats_snap128,
+			"打磨-128 同 会话 态 节流 无 资源/统计 副作用")
+	# 收尾: 恢复 干净 基准 + 会话 清零 (防 污染 后续 段)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.essence = 0.0
+	g.stones = 0.0
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(g._auto_tower_losses == 0 and g._auto_tower_wins == 0, "打磨-128 收尾 干净 基准 (会话 败局 清零)")
 
 
 # 打磨-102: 登天梯 500 层后 全部 怪物 默认 魔化 (M5 规格落地: 数值 x3 + 追加 1 特性 + 「魔化·」前缀,
