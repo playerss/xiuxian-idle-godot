@@ -143,6 +143,10 @@ var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
 var _stone_tip := ""              # 打磨-49: 顶栏灵石行 tooltip 缓存 (变化才刷, 速率/缺口随挂机变化)
 var _primary_tip := ""            # 打磨-87: 顶栏主资源行 tooltip 缓存 (变化才刷, 与灵石行同口径)
+# M7-2 打磨-135a: 顶栏/Tab 9-slice 皮肤 (assets/ui Kenney CC0; modulate 调深色仙侠;
+# 顶栏 panel_border.png 底 + TabContainer 5 页签五态 (tab/tab_unselected/tab_hovered/tab_focus/tab_disabled)
+var _top_panel: Panel            # 打磨-135a: 顶栏 9-slice 面板外壳 (panel_border.png)
+var _tab_sb: Dictionary = {}     # 打磨-135a: Tab 页签五态 StyleBoxTexture (tab/tab_unselected/tab_hovered/tab_focus/tab_disabled)
 var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
 var _btn_sb_gold: StyleBoxFlat    # 打磨-32: 突破按钮"可突破"金边高亮样式
 var _break_ready := false         # 打磨-32: 上帧可突破状态缓存 (变化才刷样式)
@@ -333,10 +337,25 @@ func _build_ui() -> void:
 	root.add_theme_constant_override("separation", 10)
 	add_child(root)
 
-	# 顶栏
+	# 顶栏 (打磨-135a: 9-slice 面板底 panel_border.png, modulate 青灰调暗融入深色仙侠;
+	# top HBox 仍为 顶栏 内容容器, 徽标/标签 同父 断言 口径 不变)
+	_top_panel = Panel.new()
+	var _top_sb := StyleBoxTexture.new()
+	_top_sb.texture = load("res://assets/ui/panel_border.png")
+	_top_sb.texture_margin_left = 14.0
+	_top_sb.texture_margin_right = 14.0
+	_top_sb.texture_margin_top = 14.0
+	_top_sb.texture_margin_bottom = 14.0
+	_top_sb.content_margin_left = 14.0
+	_top_sb.content_margin_right = 14.0
+	_top_sb.content_margin_top = 8.0
+	_top_sb.content_margin_bottom = 8.0
+	_top_sb.modulate_color = Color(0.5, 0.62, 0.68)
+	_top_panel.add_theme_stylebox_override("panel", _top_sb)
+	root.add_child(_top_panel)
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 24)
-	root.add_child(top)
+	_top_panel.add_child(top)
 	top.add_child(_label("修 仙 挂 机", 26, GOLD))
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -594,9 +613,32 @@ func _build_ui() -> void:
 	_goalbar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_goalbar_bg.add_child(_goalbar_fill)
 
-	# Tab
+	# Tab (打磨-135a: 页签 9-slice 皮肤 btn_secondary.png, modulate 调深色仙侠;
+	# Godot 4 TabContainer stylebox 名: tab=选中 / tab_unselected / tab_hovered / tab_focus / tab_disabled;
+	# 选中=暖金 区分 未选 深底, 文字色/字号/布局 用引擎默认 不变)
 	_tab = TabContainer.new()
 	_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var _tab_states := {
+		"tab": Color(0.75, 0.63, 0.32),            # 选中: 暖金
+		"tab_unselected": Color(0.28, 0.3, 0.34),  # 未选中: 深底
+		"tab_hovered": Color(0.45, 0.52, 0.6),     # 悬停: 提亮
+		"tab_focus": Color(0.45, 0.62, 0.68),      # 获焦: 青色
+		"tab_disabled": Color(0.2, 0.21, 0.25),    # 禁用: 最暗
+	}
+	for state in _tab_states:
+		var tsb := StyleBoxTexture.new()
+		tsb.texture = load("res://assets/ui/btn_secondary.png")
+		tsb.texture_margin_left = 14.0
+		tsb.texture_margin_right = 14.0
+		tsb.texture_margin_top = 14.0
+		tsb.texture_margin_bottom = 4.0
+		tsb.content_margin_left = 12.0
+		tsb.content_margin_right = 12.0
+		tsb.content_margin_top = 3.0
+		tsb.content_margin_bottom = 3.0
+		tsb.modulate_color = _tab_states[state]
+		_tab.add_theme_stylebox_override(state, tsb)
+		_tab_sb[state] = tsb
 	root.add_child(_tab)
 	var page1 := _make_page("修行")
 	var page2 := _make_page("技能")

@@ -219,6 +219,8 @@ func _ready() -> void:
 	await _assert_challenge_btn_tip()  # 打磨-124: 爬塔 挑战 按钮 tooltip 动态段 (胜败 预测+胜利 结算 预览 灵石/材料/词缀 掉率/每日 首胜/剧毒 警告 + 败 预测 阈值/缺口 行: 双塔 按钮 tooltip=接口 恒等/一败一胜 双向/结算 预览 段 数值 恒等/升层 动态 同步/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_auto_tower_new_record_session()  # 打磨-132: 自动爬塔 会话 新纪录 累计 段 (登天梯 新纪录 单场 只 显 浮动/底部消息, 会话 段 累计 次数+最高层 展示位: 状态行 会话 段 单源 恒等 含 新纪录 段/0 新纪录 旧 口径/节流 无 副作用/收尾 干净 基准)
 	await _assert_auto_tower_mile_session()  # 打磨-133: 自动爬塔 会话 里程碑 宝箱 累计 段 (登天梯 里程碑 Boss 宝箱 单场 只 显 浮动/底部消息 [打磨-115], 会话 段 累计 次数: 状态行 会话 段 单源 恒等 含 宝箱 段/0 宝箱 旧 口径/tooltip 口径/节流 无 副作用/收尾 干净 基准)
+	_assert_m135a_skins()  # M7-2 打磨-135a: 顶栏 Panel + Tab 按钮 9-slice 皮肤 (StyleBoxTexture/texture 路径/五态 齐全/选中 暖金 区分/顶栏 内容 同父 布局 不变/Tab 切换 功能 不变)
+
 	_finish()
 
 
@@ -8018,3 +8020,60 @@ func _assert_boss_tier_tag() -> void:
 	await get_tree().process_frame
 	check(int(g.tower_fixed_floor) == 0 and int(g.tower_endless_floor) == 1,
 			"打磨-118 收尾 干净 基准 (塔 态 归零)")
+
+# M7-2 打磨-135a: 顶栏 Panel + Tab 页签 9-slice 皮肤 (assets/ui Kenney CC0; modulate 调 深色仙侠;
+# 顶栏 panel_border.png 底 + TabContainer 五态 StyleBoxTexture btn_secondary.png; 布局/文字/功能 口径 不变)
+# 断言: 顶栏 Panel + StyleBoxTexture + texture=panel_border + 9-slice 边距 + 调暗口径 /
+# 顶栏 内容 同父 口径 不变 (徽标/境界 同 HBox, 布局 断言 兼容) /
+# Tab 五态 (tab/tab_unselected/tab_hovered/tab_focus/tab_disabled) stylebox 齐全 + texture=btn_secondary /
+# 选中 暖金 区分 未选 深底 / Tab 切换 功能 不变 (current_tab 0..4 往返) + 收尾 成就页
+func _assert_m135a_skins() -> void:
+	# 1) 顶栏 Panel: 节点 + StyleBoxTexture + 纹理 路径 + 9-slice 边距 + 调暗 口径
+	var tp: Panel = ui._top_panel
+	check(tp != null, "135a 顶栏 Panel 节点 存在")
+	if tp == null:
+		return
+	check(int(tp.size.x) > 100, "135a 顶栏 Panel 布局 宽 >100 (实际 %d)" % int(tp.size.x))
+	var top_sb: StyleBox = tp.get_theme_stylebox("panel")
+	check(top_sb != null and top_sb is StyleBoxTexture, "135a 顶栏 panel stylebox = StyleBoxTexture")
+	var tbt: StyleBoxTexture = top_sb as StyleBoxTexture
+	check(tbt != null and tbt.texture != null, "135a 顶栏 9-slice 纹理 已 加载")
+	if tbt != null and tbt.texture != null:
+		check(str(tbt.texture.resource_path) == "res://assets/ui/panel_border.png",
+					"135a 顶栏 纹理 = panel_border.png (实际 %s)" % str(tbt.texture.resource_path))
+		check(tbt.texture_margin_left > 0.0 and tbt.texture_margin_top > 0.0
+					and tbt.texture_margin_right > 0.0 and tbt.texture_margin_bottom > 0.0,
+					"135a 顶栏 9-slice 四边 边距 非 0 (l=%.0f t=%.0f r=%.0f b=%.0f)" % [tbt.texture_margin_left, tbt.texture_margin_top, tbt.texture_margin_right, tbt.texture_margin_bottom])
+		check(tbt.modulate_color.r < 0.7,
+					"135a 顶栏 纹理 modulate 调暗 融入 深色底 (r<0.7; 实际 %s)" % str(tbt.modulate_color))
+	# 2) 顶栏 内容 同父 口径 不变 (换皮 后 徽标/境界/灵石 仍 同 顶栏 HBox — 既有 布局 断言 兼容)
+	check(ui._auto_badge.get_parent() == ui._realm_label.get_parent(),
+				"135a 顶栏 内容 同父 口径 不变 (自动 徽标 与 境界 标签 同 父)")
+	check(ui._realm_label.get_parent() is HBoxContainer,
+				"135a 顶栏 内容 容器 = HBox (布局 不变; 实际 %s)" % str(ui._realm_label.get_parent().get_class()))
+	# 3) Tab 五态 stylebox 齐全 + texture = btn_secondary.png
+	var states := ["tab", "tab_unselected", "tab_hovered", "tab_focus", "tab_disabled"]
+	for st in states:
+		var sb2: StyleBox = ui._tab.get_theme_stylebox(st)
+		check(sb2 != null and sb2 is StyleBoxTexture, "135a Tab %s stylebox = StyleBoxTexture" % st)
+		var stt: StyleBoxTexture = sb2 as StyleBoxTexture
+		if stt != null and stt.texture != null:
+			check(str(stt.texture.resource_path) == "res://assets/ui/btn_secondary.png",
+						"135a Tab %s 纹理 = btn_secondary.png (实际 %s)" % [st, str(stt.texture.resource_path)])
+			check(stt.texture_margin_left > 0.0, "135a Tab %s 9-slice 左边距 非 0" % st)
+	# 4) 选中 暖金 区分 未选 深底
+	var tab_sel: StyleBoxTexture = ui._tab.get_theme_stylebox("tab") as StyleBoxTexture
+	var tab_un: StyleBoxTexture = ui._tab.get_theme_stylebox("tab_unselected") as StyleBoxTexture
+	check(tab_sel != null and tab_un != null and tab_sel.modulate_color != tab_un.modulate_color,
+				"135a Tab 选中 与 未选中 颜色 区分 (sel=%s unsel=%s)" % [str(tab_sel.modulate_color), str(tab_un.modulate_color)])
+	check(tab_sel != null and tab_sel.modulate_color.r > tab_sel.modulate_color.b,
+				"135a Tab 选中 暖金 口径 (r>b; 实际 %s)" % str(tab_sel.modulate_color))
+	check(tab_un != null and tab_un.modulate_color.r < 0.4,
+				"135a Tab 未选中 深底 口径 (r<0.4; 实际 %s)" % str(tab_un.modulate_color))
+	# 5) Tab 切换 功能 不变: current_tab 0..4 往返 (皮肤 不 影响 页 切换)
+	for i in range(5):
+		ui._tab.current_tab = i
+		check(ui._tab.current_tab == i, "135a Tab 切换 至 %d 成功 (实际 %d)" % [i, ui._tab.current_tab])
+	ui._tab.current_tab = 3
+	ui._refresh()
+	check(ui._tab.current_tab == 3, "135a Tab 收尾 恢复 成就 页 (实际 %d)" % ui._tab.current_tab)

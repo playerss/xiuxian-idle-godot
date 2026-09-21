@@ -193,7 +193,7 @@
 - [x] Godot import 验证：10 张 .import + ctex 缓存生成无纹理错误（headless import 的 progress_dialog 报错为引擎噪声），`scripts/texture_check.gd` 12 项验证 PASS（尺寸/非空/中心透明度语义），主场景冒烟 0 报错
 
 ### M7-2 主框架换皮（打磨-135，按子任务拆，每轮只做一段）
-- [ ] 135a：顶栏 Panel + Tab 按钮换 9-slice 皮肤（StyleBoxTexture 替代 StyleBoxFlat，hover/pressed/disabled 四态，保留现有 文字色/字号/布局，像素断言 ui_test 更新）
+- [x] 135a：顶栏 Panel + Tab 按钮换 9-slice 皮肤（StyleBoxTexture 替代 StyleBoxFlat，hover/pressed/disabled 四态，保留现有 文字色/字号/布局，像素断言 ui_test 更新）（实现: 顶栏 Panel 外壳 panel_border.png 9-slice 底 [modulate_color 青灰调暗 融入 深色底, texture_margin 14px] 包 顶栏 HBox [徽标/标签 同父 口径 不变]; TabContainer 5 页签 五态 stylebox (Godot 4 名: tab/tab_unselected/tab_hovered/tab_focus/tab_disabled) 全部 btn_secondary.png 9-slice [texture_margin l14/t14/b4 + content 12/3], modulate_color 调 深色仙侠 配色 [选中 暖金/未选 深底/悬停 提亮/获焦 青/禁用 最暗], 文字色/字号/布局 不变 [引擎 默认 口径]; 坑: StyleBoxTexture 无 modulate 属性 (4.4 为 modulate_color, 实测 get_property_list 确认); ui_test 新增 _assert_m135a_skins 33 项 [顶栏 Panel+StyleBoxTexture+纹理 路径+9-slice 边距+调暗 口径/顶栏 内容 同父 HBox 口径 不变/Tab 五态 齐全+纹理 路径+边距/选中 暖金 区分 未选 深底 两态/Tab 切换 0..4 往返 功能 不变/收尾 成就页]; selftest 10952 / ui_test 2624 / stress 646 / 冒烟 0 报错)
 - [ ] 135b：各页卡片/行容器 背景换面板纹理（修行/技能/装备/成就/爬塔 5 页大容器，行内 状态高亮金框 [打磨-1] 保持不变）
 - [ ] 135c：按钮族统一换皮（突破/挑战/一键系列/筛选 toggle 等所有 Button 的 normal/hover/pressed/disabled 样式，金边高亮样式 [打磨-32] 适配纹理底）
 - [ ] 135d：进度条族换皮（境界阶梯/突破/成就/收集/冷却 等全部 bar 的 底+填充 StyleBoxTexture，填充色档 金/青 逻辑不变）
