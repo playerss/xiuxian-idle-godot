@@ -176,7 +176,39 @@
 | 旧存档不兼容 | `parsed.get(key, 默认)` 兜底，缺字段即空 |
 | JSON 数据量大 | 数据驱动，改数值不碰逻辑，git 可 diff |
 
+## M7 美术资源（2026-09-21 定稿，Kenney CC0 路线）
+
+> 背景：游戏本体 0 图片 0 音频，UI 全代码绘制（纯文字风）。小焕确认路线：免费 CC0 素材 + CREDITS.md 署名管理。
+> 素材源（已实测下载通道可用，curl 可达）：
+> - Kenney UI Pack (CC0)：`https://kenney.nl/media/pages/assets/ui-pack/f651646eab-1718203990/kenney_ui-pack.zip`（已下 /tmp/kenney_ui-pack.zip，**/tmp 会被清，正式落盘后删除**）
+> - Kenney Fantasy UI Borders (CC0，古风边框更配仙侠)：`https://kenney.nl/media/pages/assets/fantasy-ui-borders/ab29cd0165-1701602367/kenney_fantasy-ui-borders.zip`
+> - 备选：Kenney RPG 包 / OpenGameArt（按作品许可逐件确认）/ Freesound（CC-BY 须署名）。itch.io 本机 curl 不通，game-icons.net 是 SPA 抓取困难，均非首选。
+> 纪律：① 每轮只做一个小任务（dev cron 常规纪律不变）② 素材只收 `assets/<用途>/` 下实际被代码引用的文件，禁止整包 1343 文件入库 ③ CREDITS.md 逐件记录 来源URL+许可+作者，CC0 也要记（Steam credits 直接可填）④ 视觉改动后 4 张 Steam 商店截图 Xvfb 重跑（store/README 口径）⑤ 4 项测试全过 + git 干净才算完成。
+> 主题基调：深色仙侠（当前 UI 深底 + 金/青 双色体系），素材颜色优先用 Gold/Blue 系，红/绿 仅用于状态色。
+
+### M7-1 素材入库管线（打磨-134）
+- [ ] 建 `assets/` 目录结构：`assets/ui/`（面板/按钮/滑条 9-slice）+ `assets/icons/`（小图标）+ `assets/sfx/`（预留）
+- [ ] 下载 Fantasy UI Borders zip，与 UI Pack 一起解压；逐件审查风格（预览图 Preview.png），选定 主面板 9-slice / 按钮 9-slice / 按钮 hover/pressed 态 / 进度条 底+填充 各 1 套（Gold 或 Grey 系，与深色底协调）
+- [ ] 只复制选中的 ~10-20 张 PNG 进 `assets/ui/`（重命名语义化 如 panel_bg.png / btn_primary.png / bar_fill_gold.png），写 `CREDITS.md`（Kenney, CC0, 两包 URL + 选中清单）
+- [ ] Godot import 验证：`~/.local/share/godot/app_userdata` 下生成 .import 无报错，主场景冒烟 0 报错（纹理可加载、无紫块）
+
+### M7-2 主框架换皮（打磨-135，按子任务拆，每轮只做一段）
+- [ ] 135a：顶栏 Panel + Tab 按钮换 9-slice 皮肤（StyleBoxTexture 替代 StyleBoxFlat，hover/pressed/disabled 四态，保留现有 文字色/字号/布局，像素断言 ui_test 更新）
+- [ ] 135b：各页卡片/行容器 背景换面板纹理（修行/技能/装备/成就/爬塔 5 页大容器，行内 状态高亮金框 [打磨-1] 保持不变）
+- [ ] 135c：按钮族统一换皮（突破/挑战/一键系列/筛选 toggle 等所有 Button 的 normal/hover/pressed/disabled 样式，金边高亮样式 [打磨-32] 适配纹理底）
+- [ ] 135d：进度条族换皮（境界阶梯/突破/成就/收集/冷却 等全部 bar 的 底+填充 StyleBoxTexture，填充色档 金/青 逻辑不变）
+- [ ] 135e：重跑 4 张 Steam 商店截图（Xvfb 真实渲染，store/shots/ 更新 + 程序化校验 面板纹理像素存在）
+
+### M7-3 图标与背景（打磨-136~138，按需推进）
+- [ ] 136：顶栏资源图标（灵石/灵气(道行)/境界 3 个 16-24px 小图标，Kenney icon 系列 或 程序化单字徽章「石」「气」「界」，二选一风格统一）
+- [ ] 137：主背景 程序化水墨山水（零素材零许可风险：代码画 渐变夜空 + 远山 2-3 层 视差 + 灵气粒子 缓慢上浮；低饱和度不抢前景文字；可关开关 存档 设置项）
+- [ ] 138：品质徽章 6 档 小图标（凡~神，行首 4px 色条 [打磨-41] 升级为 16px 徽章图标；素材 或 程序化 单字「凡灵玄地天仙神」徽章）
+
+### M7-4 音效（打磨-139，最后做）
+- [ ] 突破成功/失败、成就解锁、一键系列、塔胜利/新纪录 5-8 个短音效（Freesound CC-BY 选 3-5 个 古琴/磬声 类，逐件 CREDITS 署名；程序合成兜底；AudioStreamPlayer 事件挂现有 浮动提示 路径，只触发不新增逻辑）
+
 ## 打磨期（M4 之后）
+
 M1-M4 已全部完成（2026-09-03）。后续按以下小项推进，每次一个小改动 + 自测 + push：
 - [x] 打磨-1：技能/装备行显示当前已穿戴/已学状态的视觉区分（高亮边框）（金色边框, 状态变化时才刷样式）
 - [x] 打磨-2：突破成功/失败时短暂浮动提示（突破按钮闪烁）
