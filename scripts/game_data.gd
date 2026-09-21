@@ -176,6 +176,7 @@ var _auto_tower_affixes := 0    # 打磨-122: 本次 运行 自动 爬塔 胜局
 var _auto_tower_losses := 0     # 打磨-128: 本次 运行 自动 爬塔 败局 场数 累计 (内存态, 读档 归零 同 灵石 口径; 败 = 停留 本层 无 消耗 无 惩罚)
 var _auto_tower_new_records := 0  # 打磨-132: 本次 运行 自动 爬塔 登天梯 新纪录 次数 累计 (内存态, 读档 归零 同 灵石 口径)
 var _auto_tower_new_best := 0     # 打磨-132: 本次 运行 自动 爬塔 登天梯 新纪录 最高 层 (内存态, 读档 归零 同 灵石 口径)
+var _auto_tower_milestones := 0   # 打磨-133: 本次 运行 自动 爬塔 登天梯 里程碑 Boss 宝箱 次数 累计 (内存态, 读档 归零 同 灵石 口径)
 var _auto_cast_last_n := 0      # 打磨-69: 上轮 施展 神通 数 (内存态, 供 auto_cast_last_text)
 var _auto_cast_last_burst := 0.0  # 打磨-69: 上轮 爆发 总量 (内存态, 供 auto_cast_last_text)
 var stats: Dictionary = {}  # 打磨-14: 修行统计 (累计时长/突破/道行/神通/法器/装备/爬塔, 读档时 _load_stats 兜底)
@@ -1423,6 +1424,12 @@ func _try_auto_tower() -> void:
 		if bool(r.get("new_record", false)):
 			_auto_tower_new_records += 1
 			_auto_tower_new_best = maxi(_auto_tower_new_best, int(r["floor"]))
+	# 打磨-133: 会话 里程碑 宝箱 次数 累计 (登天梯 里程碑 Boss 宝箱 单场 只 显 浮动/底部消息 [打磨-115],
+	# 挂机 回来看 会话 不知 本次 运行 触发 了 几次 宝箱; 仅 登天梯 100 倍数 Boss 胜局 is_milestone
+	# 字段 口径 结算 字典 同源 [镇妖塔/普通层/败局 恒 false], 读档 归零 同 灵石 口径)
+	for r in [wf, we]:
+		if bool(r.get("is_milestone", false)):
+			_auto_tower_milestones += 1
 	var parts: Array = []
 	for r in [wf, we]:
 		if bool(r["win"]):
@@ -3166,6 +3173,9 @@ func auto_tower_last_text() -> String:
 # 打磨-132: 追加 登天梯 新纪录 累计 段 (0 胜局 分支 恒 0 新纪录 [新纪录 必 伴随 胜局],
 # 0 新纪录 不 追加 段 旧 口径; 段 = "· 新纪录 N 次 (最高 第 M 层)", 新纪录 必 为 登天梯
 # 胜局 [new_record 仅 登天梯 可 true], 镇妖塔 胜局 不 计入 — 口径 与 _try_auto_tower 累计 同源)
+# 打磨-133: 追加 登天梯 里程碑 宝箱 累计 段 (段 = "· 里程碑宝箱 N 次", 0 不 追加 旧 口径,
+# 段 在 词缀 后 新纪录 前; 里程碑 Boss 宝箱 必 为 登天梯 100 倍数 Boss 胜局 [is_milestone 同源],
+# 镇妖塔/普通层/败局 不 计入 — 口径 与 _try_auto_tower 累计 同源)
 func auto_tower_session_text() -> String:
 	if _auto_tower_wins <= 0:
 		return ("自动 败 %d 场 (未 推进, 提升 战力 后 自动 再 试)" % _auto_tower_losses) if _auto_tower_losses > 0 else ""
@@ -3175,13 +3185,16 @@ func auto_tower_session_text() -> String:
 	var af_s := ""
 	if _auto_tower_affixes > 0:
 		af_s = " · 词缀 %d 件" % _auto_tower_affixes
+	var ms_s := ""
+	if _auto_tower_milestones > 0:
+		ms_s = " · 里程碑宝箱 %d 次" % _auto_tower_milestones
 	var nr_s := ""
 	if _auto_tower_new_records > 0:
 		nr_s = " · 新纪录 %d 次 (最高 第 %d 层)" % [_auto_tower_new_records, _auto_tower_new_best]
 	var loss_s := ""
 	if _auto_tower_losses > 0:
 		loss_s = " · 败 %d 场" % _auto_tower_losses
-	return "自动 胜 %d 场 (灵石 %s)%s%s%s%s" % [_auto_tower_wins, fmt(_auto_tower_stone), mat_s, af_s, nr_s, loss_s]
+	return "自动 胜 %d 场 (灵石 %s)%s%s%s%s%s" % [_auto_tower_wins, fmt(_auto_tower_stone), mat_s, af_s, ms_s, nr_s, loss_s]
 
 # 打磨-70: 自动系列 状态汇总 — 状态键 (只读; "1|0|1|1|0" = 突破|购置|施展|领悟|爬塔, 1=开 0=关;
 # M5-3 起 5 开关: 第 5 段=自动爬塔; UI 仅 键变化 时 刷 汇总行 文本/颜色; 无 存档/统计 副作用)
@@ -3913,6 +3926,7 @@ func load_game() -> void:
 	_auto_tower_losses = 0  # 打磨-128: 会话 败局 累计 读档 归零 (同 灵石 口径)
 	_auto_tower_new_records = 0  # 打磨-132: 会话 新纪录 次数 读档 归零 (同 灵石 口径)
 	_auto_tower_new_best = 0  # 打磨-132: 会话 新纪录 最高层 读档 归零 (同 灵石 口径)
+	_auto_tower_milestones = 0  # 打磨-133: 会话 里程碑 宝箱 次数 读档 归零 (同 灵石 口径)
 	# M6-2: DIY 词缀 (旧档缺字段 默认 空; 非法 项 丢弃 防 污染)
 	# 顺序: 先 槽位升级 (affix_load 校验 依赖 槽位 上限), 再 库存, 最后 装配
 	slot_upgrades = {}

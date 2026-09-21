@@ -109,6 +109,7 @@ func _ready() -> void:
 	g0._auto_tower_losses = 0  # 打磨-128: 防御性 重置 会话 败局 累计
 	g0._auto_tower_new_records = 0  # 打磨-132: 防御性 重置 会话 新纪录 次数 累计
 	g0._auto_tower_new_best = 0  # 打磨-132: 防御性 重置 会话 新纪录 最高层 累计
+	g0._auto_tower_milestones = 0  # 打磨-133: 防御性 重置 会话 里程碑 宝箱 次数 累计
 	# M6-3: 防御性 重置 DIY 词缀 状态 (autoload 启动 load_game 读 残留档, 词缀 背包/装配/收集 可能 非空;
 	# 残留 会 让 成就 检查 触发 DIY 成就 泄漏 [affix_legend/affix_120/diy_first/resonance_first],
 	# 致 收集 计数/只看未解锁 断言 偏多 — 每轮 强制 干净 基准, 同 打磨-71/72 自动开关/离线收益 口径)
@@ -217,6 +218,7 @@ func _ready() -> void:
 	await _assert_tower_milestone_eta()  # 打磨-127: 双塔 卡片 下一里程碑 ETA 行 (M5 规格 战斗 节奏 ≤2 秒/层 时间 预期: 层距 x 本层 预估 回合 x 2s, 7天+ 封顶/败 预测 战力 不足 提示/升层 动态 同步/剧毒 联动/守塔 隐藏/tooltip 口径/节流/收尾)
 	await _assert_challenge_btn_tip()  # 打磨-124: 爬塔 挑战 按钮 tooltip 动态段 (胜败 预测+胜利 结算 预览 灵石/材料/词缀 掉率/每日 首胜/剧毒 警告 + 败 预测 阈值/缺口 行: 双塔 按钮 tooltip=接口 恒等/一败一胜 双向/结算 预览 段 数值 恒等/升层 动态 同步/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_auto_tower_new_record_session()  # 打磨-132: 自动爬塔 会话 新纪录 累计 段 (登天梯 新纪录 单场 只 显 浮动/底部消息, 会话 段 累计 次数+最高层 展示位: 状态行 会话 段 单源 恒等 含 新纪录 段/0 新纪录 旧 口径/节流 无 副作用/收尾 干净 基准)
+	await _assert_auto_tower_mile_session()  # 打磨-133: 自动爬塔 会话 里程碑 宝箱 累计 段 (登天梯 里程碑 Boss 宝箱 单场 只 显 浮动/底部消息 [打磨-115], 会话 段 累计 次数: 状态行 会话 段 单源 恒等 含 宝箱 段/0 宝箱 旧 口径/tooltip 口径/节流 无 副作用/收尾 干净 基准)
 	_finish()
 
 
@@ -5764,6 +5766,95 @@ func _assert_auto_tower_new_record_session() -> void:
 	await get_tree().process_frame
 	check(str(ui._tw_status_label.text) == g.tower_status_line(),
 			"打磨-132 收尾 状态行 = 接口 恒等 (干净 基准)")
+
+
+# 打磨-133: 自动爬塔 会话 里程碑 宝箱 累计 段 断言 (登天梯 里程碑 Boss 宝箱 单场 只 显
+# 浮动/底部消息 [打磨-115], 挂机 回来看 会话 不知 本次 运行 触发 几次 宝箱 — 会话 段 累计 次数;
+# 状态行 会话 段 单源 auto_tower_session_text 复用 自动 覆盖; 冻结 _process 防 挂机/自动 爬塔
+# 竞争, 手动 置态 驱动 刷新键 变化 路径, 验证 状态行 文本 动态 同步 + 0 宝箱 旧 口径 + tooltip 口径
+# + 节流 无 副作用)
+func _assert_auto_tower_mile_session() -> void:
+	var g := GameData
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.auto_tower = false
+	g._auto_tower_seq = 0
+	g._auto_tower_last_txt = ""
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_new_records = 0
+	g._auto_tower_new_best = 0
+	g._auto_tower_milestones = 0
+	g.set_process(false)
+	# 切 爬塔页 tab4 确保 状态行 构建可见
+	ui._tab.current_tab = 4
+	ui._refresh()
+	await get_tree().process_frame
+	# 1) 初始 0 胜局: 状态行 无 会话 段 (无 宝箱 段)
+	check(str(ui._tw_status_label.text).find("里程碑宝箱") < 0 and str(ui._tw_status_label.text) == g.tower_status_line(),
+			"打磨-133 初始 0 胜局 状态行 无 会话 段 = 接口 恒等 (实际 %s)" % str(ui._tw_status_label.text))
+	# 2) 会话 胜局 态 + 宝箱 3 次: _refresh 动态 同步 状态行 含 宝箱 段 单源 恒等 (与新纪录 段 并存)
+	g._auto_tower_wins = 3
+	g._auto_tower_stone = 888.0
+	g._auto_tower_affixes = 1
+	g._auto_tower_milestones = 3
+	g._auto_tower_new_records = 2
+	g._auto_tower_new_best = 100
+	ui._refresh()
+	await get_tree().process_frame
+	var st133: String = str(ui._tw_status_label.text)
+	check(st133 == g.tower_status_line(), "打磨-133 会话 态 状态行 = 接口 恒等 (实际 %s)" % st133.left(60))
+	check(st133.find("里程碑宝箱 3 次") >= 0 and st133.find("新纪录 2 次 (最高 第 100 层)") >= 0,
+			"打磨-133 状态行 含 宝箱 段 + 新纪录 段 单源 恒等 (实际 %s)" % st133)
+	# 3) 0 宝箱 旧 口径: 宝箱 清零 后 状态行 无 宝箱 段 (防 回归 打磨-95/128/132 既有 段)
+	g._auto_tower_milestones = 0
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_status_label.text).find("里程碑宝箱") < 0,
+			"打磨-133 0 宝箱 状态行 无 段 旧 口径 (实际 %s)" % str(ui._tw_status_label.text))
+	# 4) 同态 节流: 无 会话 变化 再 刷 不 重写 (文本 稳定 + 无 统计 副作用)
+	var snap133: Dictionary = g.stats.duplicate(true)
+	var txt133: String = str(ui._tw_status_label.text)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_status_label.text) == txt133 and g.stats == snap133,
+			"打磨-133 同态 节流 无 统计 副作用")
+	# 5) 状态行 tooltip 含 里程碑 宝箱 口径 说明行 (打磨-133 追加)
+	check(str(ui._tw_status_panel.tooltip_text).find("里程碑 宝箱 段 (打磨-133)") >= 0,
+			"打磨-133 状态行 tooltip 含 宝箱 段 口径 (实际 %s)" % str(ui._tw_status_panel.tooltip_text).right(60))
+	# 收尾: 会话 归零 + 开关 关 + 双塔 归零 (防 残留 污染 后续 段)
+	g._auto_tower_seq = 0
+	g._auto_tower_wins = 0
+	g._auto_tower_stone = 0.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 0
+	g._auto_tower_losses = 0
+	g._auto_tower_new_records = 0
+	g._auto_tower_new_best = 0
+	g._auto_tower_milestones = 0
+	g._auto_tower_last_txt = ""
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._tw_status_label.text) == g.tower_status_line(),
+			"打磨-133 收尾 状态行 = 接口 恒等 (干净 基准)")
 
 
 # 打磨-94: 塔战斗 词缀掉落 底部消息 展示 断言 (M5-3 规格 "战斗后 掉落展示 灵石/材料/词缀" 词缀 段:

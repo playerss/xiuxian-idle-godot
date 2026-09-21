@@ -8602,6 +8602,69 @@ func _init() -> void:
 	g.auto_tower_session_text()
 	check(v132 == g.auto_tower_session_text() and g.stats == snap132 and g._auto_tower_new_records == 2,
 			"打磨-132 只读 连读 恒定 无 状态/统计 副作用")
+	# ---------- 打磨-133: 自动爬塔 会话 里程碑 宝箱 累计 段 (登天梯 里程碑 Boss 宝箱 单场 只 显
+	# 浮动/底部消息 [打磨-115], 挂机 回来看 会话 不知 本次 运行 触发 几次 宝箱 — 会话 段 累计 次数;
+	# _auto_tower_milestones 内存态, 读档 归零 同 灵石 口径; 仅 登天梯 100 倍数 Boss 胜局 is_milestone
+	# 字段 口径 结算 字典 同源 [镇妖塔/普通层/败局 恒 false], auto_tower_session_text 单源 恒等
+	# 不 二重 拼接 [段 在 词缀 后 新纪录 前, 状态行/徽标 tooltip 复用 本 接口 段 自动 覆盖]) ----------
+	# 9) 真实 链路 登天梯 100 层 里程碑 Boss 帧 (强 玩家 恒胜 [打磨-132 状态 沿用 道祖]):
+	#    挑战 层 = 99 (非 里程碑) 胜 推进 100 -> 再 帧 挑战 100 层 Boss is_milestone=true 宝箱 +1
+	g.tower_endless_floor = 99
+	g.tower_endless_best = 98
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g._auto_tower_milestones = 0
+	g._auto_tower_new_records = 0
+	g._auto_tower_new_best = 0
+	g.auto_tower = true
+	g._process(0.016)
+	g._process(0.016)
+	check(g._auto_tower_milestones == 1,
+			"打磨-133 真实 链路 登天梯 100 层 里程碑 Boss 宝箱 累计 =1 (实际 %d) %s" % [g._auto_tower_milestones, g.auto_tower_last_text()])
+	check(g._auto_tower_new_records >= 2,
+			"打磨-133 真实 链路 新纪录 累计 不受 宝箱 段 干扰 (实际 %d)" % g._auto_tower_new_records)
+	check(g.auto_tower_session_text().find("里程碑宝箱 1 次") >= 0,
+			"打磨-133 真实 链路 会话 文案 含 里程碑 宝箱 段 (实际 %s)" % g.auto_tower_session_text())
+	check(g.tower_status_line().find("里程碑宝箱 1 次") >= 0,
+			"打磨-133 真实 链路 状态行 会话 段 含 里程碑 宝箱 段 单源 恒等 (实际 %s)" % g.tower_status_line())
+	g.auto_tower = false
+	# 10) 手动 置态 宝箱 段 位置/文案 恒等 (词缀 后 新纪录 前)
+	g._auto_tower_wins = 2
+	g._auto_tower_stone = 1234.0
+	g._auto_tower_mats = 0
+	g._auto_tower_affixes = 3
+	g._auto_tower_milestones = 7
+	g._auto_tower_new_records = 5
+	g._auto_tower_new_best = 88
+	g._auto_tower_losses = 4
+	check(g.auto_tower_session_text() == "自动 胜 2 场 (灵石 %s) · 词缀 3 件 · 里程碑宝箱 7 次 · 新纪录 5 次 (最高 第 88 层) · 败 4 场" % g.fmt(1234.0),
+			"打磨-133 宝箱 段 位置/文案 恒等 (实际 %s)" % g.auto_tower_session_text())
+	# 11) 0 宝箱 不 追加 段 旧 口径 (防 回归 打磨-95/122/128/132 既有 段)
+	g._auto_tower_milestones = 0
+	check(g.auto_tower_session_text() == "自动 胜 2 场 (灵石 %s) · 词缀 3 件 · 新纪录 5 次 (最高 第 88 层) · 败 4 场" % g.fmt(1234.0),
+			"打磨-133 0 宝箱 不 追加 段 旧 口径 (实际 %s)" % g.auto_tower_session_text())
+	# 12) 0 胜局 全败 态 恒 无 宝箱 段 (宝箱 必 伴随 胜局, 0 胜局 分支 不 进 累计)
+	g._auto_tower_wins = 0
+	g._auto_tower_losses = 6
+	g._auto_tower_milestones = 0
+	check(g.auto_tower_session_text() == "自动 败 6 场 (未 推进, 提升 战力 后 自动 再 试)",
+			"打磨-133 0 胜局 全败 态 无 宝箱 段 旧 口径 (实际 %s)" % g.auto_tower_session_text())
+	# 13) 会话 宝箱 读档 归零 (不 持久化, 同 灵石 口径)
+	g._auto_tower_wins = 3
+	g._auto_tower_milestones = 5
+	g.save_game()
+	g.load_game()
+	check(g._auto_tower_milestones == 0 and g._auto_tower_wins == 0,
+			"打磨-133 会话 宝箱/胜局 读档 归零 (不 持久化, 实际 %d/%d)" % [g._auto_tower_milestones, g._auto_tower_wins])
+	# 14) 只读 连读 恒定 无 状态/统计 副作用
+	g._auto_tower_wins = 1
+	g._auto_tower_milestones = 2
+	var snap133: Dictionary = g.stats.duplicate(true)
+	var v133: String = g.auto_tower_session_text()
+	g.tower_status_line()
+	g.auto_tower_session_text()
+	check(v133 == g.auto_tower_session_text() and g.stats == snap133 and g._auto_tower_milestones == 2,
+			"打磨-133 只读 连读 恒定 无 状态/统计 副作用")
 	# 收尾: 会话 归零 + 塔 态 归零 落盘 (防 污染 后续 段/冒烟)
 	g._auto_tower_seq = 0
 	g._auto_tower_wins = 0
@@ -8611,6 +8674,7 @@ func _init() -> void:
 	g._auto_tower_losses = 0
 	g._auto_tower_new_records = 0
 	g._auto_tower_new_best = 0
+	g._auto_tower_milestones = 0
 	g._auto_tower_last_txt = ""
 	g.auto_tower = false
 	g.ascended = false
