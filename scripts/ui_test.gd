@@ -220,6 +220,7 @@ func _ready() -> void:
 	await _assert_auto_tower_new_record_session()  # 打磨-132: 自动爬塔 会话 新纪录 累计 段 (登天梯 新纪录 单场 只 显 浮动/底部消息, 会话 段 累计 次数+最高层 展示位: 状态行 会话 段 单源 恒等 含 新纪录 段/0 新纪录 旧 口径/节流 无 副作用/收尾 干净 基准)
 	await _assert_auto_tower_mile_session()  # 打磨-133: 自动爬塔 会话 里程碑 宝箱 累计 段 (登天梯 里程碑 Boss 宝箱 单场 只 显 浮动/底部消息 [打磨-115], 会话 段 累计 次数: 状态行 会话 段 单源 恒等 含 宝箱 段/0 宝箱 旧 口径/tooltip 口径/节流 无 副作用/收尾 干净 基准)
 	_assert_m135a_skins()  # M7-2 打磨-135a: 顶栏 Panel + Tab 按钮 9-slice 皮肤 (StyleBoxTexture/texture 路径/五态 齐全/选中 暖金 区分/顶栏 内容 同父 布局 不变/Tab 切换 功能 不变)
+	_assert_m135b_page_skins()  # M7-2 打磨-135b: 5 页大容器 9-slice 面板底 (panel_frame_frost.png/9-slice 边距/modulate 深色仙侠/行内 卡片 样式 不变/布局 偏移 不变)
 
 	_finish()
 
@@ -8077,3 +8078,55 @@ func _assert_m135a_skins() -> void:
 	ui._tab.current_tab = 3
 	ui._refresh()
 	check(ui._tab.current_tab == 3, "135a Tab 收尾 恢复 成就 页 (实际 %d)" % ui._tab.current_tab)
+
+# M7-2 打磨-135b: 各页卡片/行容器 背景 换 面板 纹理 — 5 页 大容器 (修行/技能/装备/成就/爬塔)
+# 换 9-slice 面板底 panel_frame_frost.png (Kenney CC0, 中心 半透明 磨砂 + 013 角饰;
+# modulate 到 PANEL_BG 深色仙侠, 边框线 随 modulate 显 青灰; 行内 状态 高亮 金框 打磨-1 不变).
+# 断言: 5 页 panel stylebox = StyleBoxTexture + 纹理 路径 + 9-slice 边距 + modulate 深色 口径 /
+#       页 内容 布局 偏移 不变 (各页 首 子 容器 offset 口径) / 行内 卡片 样式 不变 (StyleBoxFlat) /
+#       Tab 切换 功能 不变 / 收尾 恢复
+func _assert_m135b_page_skins() -> void:
+	# 1) 5 页 大容器 = StyleBoxTexture + 纹理 路径 + 9-slice 边距 + modulate 深色仙侠
+	var pages := ["修行", "技能", "装备", "成就", "爬塔"]
+	for pn in pages:
+		var pg: Panel = ui._tab.get_node(pn)
+		check(pg != null and pg is Panel, "135b 页面 %s 节点 存在 (实际 %s)" % [pn, str(pg.get_class()) if pg != null else "null"])
+		if pg == null:
+			continue
+		var pgsb: StyleBox = pg.get_theme_stylebox("panel")
+		check(pgsb != null and pgsb is StyleBoxTexture, "135b 页 %s panel stylebox = StyleBoxTexture (实际 %s)" % [pn, str(pgsb.get_class()) if pgsb != null else "null"])
+		var pgt: StyleBoxTexture = pgsb as StyleBoxTexture
+		if pgt != null:
+			check(pgt.texture != null and str(pgt.texture.resource_path) == "res://assets/ui/panel_frame_frost.png",
+						"135b 页 %s 纹理 = panel_frame_frost.png (实际 %s)" % [pn, str(pgt.texture.resource_path) if pgt.texture != null else "null"])
+			check(pgt.texture_margin_left > 0.0 and pgt.texture_margin_top > 0.0
+						and pgt.texture_margin_right > 0.0 and pgt.texture_margin_bottom > 0.0,
+						"135b 页 %s 9-slice 四边 边距 非 0 (l=%.0f t=%.0f r=%.0f b=%.0f)" % [pn, pgt.texture_margin_left, pgt.texture_margin_top, pgt.texture_margin_right, pgt.texture_margin_bottom])
+			check(pgt.modulate_color.b > pgt.modulate_color.r and pgt.modulate_color.r < 0.6,
+						"135b 页 %s modulate 深色仙侠 口径 (b>r, r<0.6; 实际 %s)" % [pn, str(pgt.modulate_color)])
+	# 2) 页 内容 布局 偏移 不变 (各页 首 子 容器 offset 口径 = 构建 时 设定, 换皮 不 改 布局)
+	for pn in pages:
+		var pg2: Control = ui._tab.get_node(pn)
+		if pg2 == null or pg2.get_child_count() == 0:
+			check(false, "135b 页 %s 有 内容 子 容器" % pn)
+			continue
+		var inner: Control = pg2.get_child(0)
+		check(inner.offset_left == 10.0 and inner.offset_top == 8.0,
+					"135b 页 %s 内容 容器 布局 偏移 不变 (l=%.0f t=%.0f)" % [pn, inner.offset_left, inner.offset_top])
+	# 3) 行内 卡片 样式 不变 (技能/装备/成就/爬塔 行 卡片 仍 用 构建 时 缓存 StyleBoxFlat, 金框 高亮 口径 打磨-1 保持)
+	check(ui._card_sb_normal != null and ui._card_sb_normal is StyleBoxFlat, "135b 行 卡片 默认 样式 = StyleBoxFlat (行 高亮 金框 口径 不变)")
+	var any_row_flat := true
+	for k in ui._skill_row_nodes:
+		var row: PanelContainer = ui._skill_row_nodes[k]
+		var rsb: StyleBox = row.get_theme_stylebox("panel")
+		if rsb == null or not (rsb is StyleBoxFlat):
+			any_row_flat = false
+			break
+	check(any_row_flat, "135b 技能 行 卡片 仍 为 StyleBoxFlat (行 样式 不 随 页 换皮 变)")
+	# 4) Tab 切换 功能 不变 (皮肤 不 影响 页 切换)
+	for i in range(5):
+		ui._tab.current_tab = i
+		check(ui._tab.current_tab == i, "135b Tab 切换 至 %d 成功 (实际 %d)" % [i, ui._tab.current_tab])
+	ui._tab.current_tab = 3
+	ui._refresh()
+	check(ui._tab.current_tab == 3, "135b Tab 收尾 恢复 成就 页 (实际 %d)" % ui._tab.current_tab)

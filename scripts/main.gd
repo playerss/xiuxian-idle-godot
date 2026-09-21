@@ -755,8 +755,20 @@ func _build_ui() -> void:
 
 func _make_page(title: String) -> Panel:
 	var p := Panel.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0, 0, 0, 0)
+	# M7-2 打磨-135b: 页面大容器 9-slice 面板底 panel_frame_frost.png (Kenney CC0,
+	# 中心半透明磨砂 + 013 同款角饰; modulate 到 PANEL_BG 深色仙侠, 边框线 随 modulate 显青灰;
+	# 行内 状态高亮 金框 (打磨-1) 保持不变, 页内容 布局 偏移 不变)
+	var sb := StyleBoxTexture.new()
+	sb.texture = load("res://assets/ui/panel_frame_frost.png")
+	sb.texture_margin_left = 16.0
+	sb.texture_margin_right = 16.0
+	sb.texture_margin_top = 16.0
+	sb.texture_margin_bottom = 16.0
+	sb.content_margin_left = 18.0
+	sb.content_margin_right = 18.0
+	sb.content_margin_top = 14.0
+	sb.content_margin_bottom = 12.0
+	sb.modulate_color = Color(0.42, 0.45, 0.55)
 	p.add_theme_stylebox_override("panel", sb)
 	p.name = title
 	return p
