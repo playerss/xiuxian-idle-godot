@@ -221,6 +221,7 @@ func _ready() -> void:
 	await _assert_auto_tower_mile_session()  # 打磨-133: 自动爬塔 会话 里程碑 宝箱 累计 段 (登天梯 里程碑 Boss 宝箱 单场 只 显 浮动/底部消息 [打磨-115], 会话 段 累计 次数: 状态行 会话 段 单源 恒等 含 宝箱 段/0 宝箱 旧 口径/tooltip 口径/节流 无 副作用/收尾 干净 基准)
 	_assert_m135a_skins()  # M7-2 打磨-135a: 顶栏 Panel + Tab 按钮 9-slice 皮肤 (StyleBoxTexture/texture 路径/五态 齐全/选中 暖金 区分/顶栏 内容 同父 布局 不变/Tab 切换 功能 不变)
 	_assert_m135b_page_skins()  # M7-2 打磨-135b: 5 页大容器 9-slice 面板底 (panel_frame_frost.png/9-slice 边距/modulate 深色仙侠/行内 卡片 样式 不变/布局 偏移 不变)
+	_assert_m135c_btn_skins()  # M7-2 打磨-135c-1: 按钮族 核心 9-slice 换皮 (_make_button 默认 btn_primary 三态/金边高亮 适配纹理底/一键挂机 flat 保留/微光/闪烁 恢复 纹理 默认)
 
 	_finish()
 
@@ -1720,11 +1721,11 @@ func _assert_ready_flash() -> void:
 			break
 	ui._refresh_skill_cd_bars()
 	check(fill1.size.x > 0.0 and fill2.size.x > 0.0, "打磨-59 冷却中 填充>0 (a1=%.1f a2=%.1f)" % [fill1.size.x, fill2.size.x])
-	# 记 按钮 默认样式 边框色 (恢复后 normal 边框 须 回到 默认; 用 颜色 断言 而非 对象引用 —
-	# get_theme_stylebox 返回 拷贝, 对象引用 不稳定, 颜色 才是 语义 判据)
+	# 记 按钮 默认样式 (恢复后 normal 须 回到 默认; 打磨-135c-1 后 默认 = 9-slice 纹理,
+	# 微光中 = StyleBoxFlat 金边; 用 类型+边框色 断言 而非 对象引用 — get_theme_stylebox 返回 拷贝)
 	var btn_a1: Button = ui._skill_btns[a1]
 	var btn_a2: Button = ui._skill_btns[a2]
-	var DEF_BORDER := Color(0.3, 0.35, 0.45)  # _make_btn_sb_normal 边框色
+	# 默认 = 9-slice 纹理 (打磨-135c-1), 微光中 = StyleBoxFlat 金边 (打磨-32 口径)
 	# --- a1 归零: tick 90 秒 -> a1 就绪 (a2 余 45 不就绪) ---
 	g._tick_active_cd(90.0)
 	check(g.active_ready(a1) and not g.active_ready(a2), "打磨-59 tick 后 a1 就绪 a2 仍冷却")
@@ -1755,8 +1756,8 @@ func _assert_ready_flash() -> void:
 	check(not ui._skill_active_close.has(a1), "打磨-59 a1 收口标记 已清除")
 	# --- 微光 终态 手动驱动 (驱动 微光结束回调, 恢复 默认样式) ---
 	ui._skill_glow_done(a1)
-	var sb_n_after: StyleBoxFlat = btn_a1.get_theme_stylebox("normal")
-	check(sb_n_after is StyleBoxFlat and sb_n_after.border_color == DEF_BORDER, "打磨-59 a1 微光结束 normal 边框 恢复 默认 (实际 %s)" % str(sb_n_after))
+	var sb_n_after: StyleBox = btn_a1.get_theme_stylebox("normal")
+	check(sb_n_after is StyleBoxTexture and sb_n_after.texture != null and str((sb_n_after as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_primary.png", "打磨-59 a1 微光结束 normal 恢复 默认 9-slice 纹理 (实际 %s)" % str(sb_n_after))
 	check(not ui._skill_active_glow.has(a1), "打磨-59 a1 微光标记 已清除")
 	# 恢复后 冷却 刷新 可再次 驱动 a1 (无残留 卡死)
 	g._active_cd[a1] = 45.0
@@ -1778,10 +1779,10 @@ func _assert_ready_flash() -> void:
 	check(not ui._skill_active_close.has(a1) and not ui._skill_active_close.has(a2), "打磨-59 同批 收口 全部完成")
 	check(not ui._skill_active_glow.has(a1) and not ui._skill_active_glow.has(a2), "打磨-59 同批 微光 全部完成")
 	check(not bg1.visible and not bg2.visible, "打磨-59 同批 双条 终态 隐藏")
-	var sb_a1_after: StyleBoxFlat = btn_a1.get_theme_stylebox("normal")
-	check(sb_a1_after is StyleBoxFlat and sb_a1_after.border_color == DEF_BORDER, "打磨-59 同批 a1 样式 恢复 默认 (边框 %s)" % str(sb_a1_after))
-	var sb_a2_after: StyleBoxFlat = btn_a2.get_theme_stylebox("normal")
-	check(sb_a2_after is StyleBoxFlat and sb_a2_after.border_color == DEF_BORDER, "打磨-59 同批 a2 样式 恢复 默认 (边框 %s)" % str(sb_a2_after))
+	var sb_a1_after: StyleBox = btn_a1.get_theme_stylebox("normal")
+	check(sb_a1_after is StyleBoxTexture and str((sb_a1_after as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_primary.png", "打磨-59 同批 a1 样式 恢复 默认 9-slice 纹理 (实际 %s)" % str(sb_a1_after))
+	var sb_a2_after: StyleBox = btn_a2.get_theme_stylebox("normal")
+	check(sb_a2_after is StyleBoxTexture and str((sb_a2_after as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_primary.png", "打磨-59 同批 a2 样式 恢复 默认 9-slice 纹理 (实际 %s)" % str(sb_a2_after))
 	# 只读: 收口/微光 不改动 资源/统计
 	check(absf(g.essence) < 1e-9 and g.stats == stats_b, "打磨-59 收口/微光 无 资源/统计 副作用")
 	# 收尾: 恢复基准态 + 解冻 UI
@@ -8130,3 +8131,68 @@ func _assert_m135b_page_skins() -> void:
 	ui._tab.current_tab = 3
 	ui._refresh()
 	check(ui._tab.current_tab == 3, "135b Tab 收尾 恢复 成就 页 (实际 %d)" % ui._tab.current_tab)
+
+
+# M7-2 打磨-135c-1: 按钮族 核心 9-slice 换皮 — _make_button 默认 三态 换 btn_primary 纹理
+# (Kenney CC0, 状态 由 纹理 本身 区分 hover 提亮/pressed 压暗, 无 modulate; 金边高亮/微光/闪烁
+# 系统 保持 StyleBoxFlat 叠加, 结束 恢复 纹理 默认; 一键挂机 flat 保留 [打磨-90 border 断言]).
+# 断言: 突破/技能 按钮 三态 纹理+9-slice 边距/三态 互 不同/一键挂机 flat/可突破 金边 叠加/微光 恢复.
+func _assert_m135c_btn_skins() -> void:
+	# 1) 突破按钮 (代表 默认 _make_button): normal/hover/pressed = btn_primary 三态 9-slice
+	var bb: Button = ui._break_btn
+	check(bb != null, "135c-1 突破按钮 节点 存在")
+	if bb == null:
+		return
+	var bn: StyleBox = bb.get_theme_stylebox("normal")
+	check(bn is StyleBoxTexture and (bn as StyleBoxTexture).texture != null and str((bn as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_primary.png",
+			"135c-1 突破按钮 normal = btn_primary.png 9-slice (实际 %s)" % str(bn))
+	var bh: StyleBox = bb.get_theme_stylebox("hover")
+	check(bh is StyleBoxTexture and str((bh as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_primary_hover.png",
+			"135c-1 突破按钮 hover = btn_primary_hover.png (实际 %s)" % str(bh))
+	var bp: StyleBox = bb.get_theme_stylebox("pressed")
+	check(bp is StyleBoxTexture and str((bp as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_primary_pressed.png",
+			"135c-1 突破按钮 pressed = btn_primary_pressed.png (实际 %s)" % str(bp))
+	if bn is StyleBoxTexture:
+		var bt: StyleBoxTexture = bn as StyleBoxTexture
+		check(bt.texture_margin_left > 0.0 and bt.texture_margin_top > 0.0 and bt.texture_margin_right > 0.0 and bt.texture_margin_bottom > 0.0,
+				"135c-1 突破按钮 9-slice 四边 边距 非 0 (l=%.0f t=%.0f r=%.0f b=%.0f)" % [bt.texture_margin_left, bt.texture_margin_top, bt.texture_margin_right, bt.texture_margin_bottom])
+	check(bn != bh and bh != bp, "135c-1 三态 纹理 互 不 同 (状态 区分)")
+	# 2) 技能 领悟 按钮 同 默认 口径 (非 微光 态 = 纹理)
+	var sid: String = ""
+	for k in ui._skill_btns:
+		sid = str(k)
+		break
+	var skill_btn: Button = ui._skill_btns.get(sid) if sid != "" else null
+	check(skill_btn != null, "135c-1 技能 领悟 按钮 存在")
+	if skill_btn != null:
+		var skn: StyleBox = skill_btn.get_theme_stylebox("normal")
+		check(skn is StyleBoxTexture and str((skn as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_primary.png",
+				"135c-1 技能 按钮 normal = 默认 9-slice 纹理 (实际 %s)" % str(skn))
+	# 3) 一键挂机 按钮 flat 保留 (打磨-90 border_width 断言 依赖)
+	var ibn: StyleBox = ui._auto_idle_btn.get_theme_stylebox("normal")
+	check(ibn is StyleBoxFlat and (ibn as StyleBoxFlat).border_color == Color(0.3, 0.35, 0.45),
+			"135c-1 一键挂机 按钮 flat 保留 默认 (border=默认; 实际 %s)" % str(ibn))
+	# 4) 金边高亮 适配 纹理 底: 可突破 时 突破按钮 normal 换 StyleBoxFlat 金边
+	var ready_before: bool = ui._break_ready
+	ui._break_ready = true
+	ui._apply_break_btn_style()
+	var gdn: StyleBox = bb.get_theme_stylebox("normal")
+	check(gdn is StyleBoxFlat and (gdn as StyleBoxFlat).border_color == Color(0.98, 0.86, 0.5) and (gdn as StyleBoxFlat).border_width_left == 2,
+			"135c-1 可突破 突破按钮 normal = 金边 StyleBoxFlat (叠加 纹理底; 实际 %s)" % str(gdn))
+	ui._break_ready = ready_before
+	ui._apply_break_btn_style()
+	# 5) 微光 适配: 技能 按钮 微光中 = 金边, 结束 恢复 纹理 默认 (打磨-59 口径 在 135c-1 后 成立)
+	if skill_btn != null:
+		ui._btn_glow59(sid, skill_btn)
+		var gl: StyleBox = skill_btn.get_theme_stylebox("normal")
+		check(gl is StyleBoxFlat and (gl as StyleBoxFlat).border_color == Color(0.98, 0.86, 0.5),
+				"135c-1 技能 按钮 微光中 normal = 金边 (实际 %s)" % str(gl))
+		ui._skill_glow_done(sid)
+		var rest: StyleBox = skill_btn.get_theme_stylebox("normal")
+		check(rest is StyleBoxTexture and str((rest as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_primary.png",
+				"135c-1 技能 按钮 微光结束 恢复 纹理 默认 (实际 %s)" % str(rest))
+	# 收尾: 清 残留 微光 标记 + 恢复 基准 态
+	ui._skill_active_glow.clear()
+	ui._break_ready = ready_before
+	ui._apply_break_btn_style()
+	ui._refresh()

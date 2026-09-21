@@ -147,8 +147,11 @@ var _primary_tip := ""            # 打磨-87: 顶栏主资源行 tooltip 缓存
 # 顶栏 panel_border.png 底 + TabContainer 5 页签五态 (tab/tab_unselected/tab_hovered/tab_focus/tab_disabled)
 var _top_panel: Panel            # 打磨-135a: 顶栏 9-slice 面板外壳 (panel_border.png)
 var _tab_sb: Dictionary = {}     # 打磨-135a: Tab 页签五态 StyleBoxTexture (tab/tab_unselected/tab_hovered/tab_focus/tab_disabled)
-var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用)
+var _btn_sb_normal: StyleBoxFlat  # 突破按钮默认样式 (闪烁后恢复用; 兼 flat 按钮默认 打磨-135c-1)
 var _btn_sb_gold: StyleBoxFlat    # 打磨-32: 突破按钮"可突破"金边高亮样式
+var _btn_tex_normal: StyleBoxTexture  # 打磨-135c-1: 按钮默认 9-slice 纹理 (btn_primary.png)
+var _btn_tex_hover: StyleBoxTexture   # 打磨-135c-1: 按钮 hover 9-slice (btn_primary_hover.png)
+var _btn_tex_pressed: StyleBoxTexture # 打磨-135c-1: 按钮 pressed 9-slice (btn_primary_pressed.png)
 var _break_ready := false         # 打磨-32: 上帧可突破状态缓存 (变化才刷样式)
 var _flash_sb: StyleBoxFlat       # 闪烁用样式 (成功绿/失败红)
 var _flash_left := 0              # 剩余闪烁帧数
@@ -290,6 +293,10 @@ func _ready() -> void:
 	_card_sb_hi = _make_card_sb(true)
 	_btn_sb_normal = _make_btn_sb_normal()
 	_btn_sb_gold = _make_btn_sb_gold()
+	# 打磨-135c-1: 按钮 默认 9-slice 三态 (btn_primary 系列, Kenney CC0)
+	_btn_tex_normal = _make_btn_tex_sb("res://assets/ui/btn_primary.png")
+	_btn_tex_hover = _make_btn_tex_sb("res://assets/ui/btn_primary_hover.png")
+	_btn_tex_pressed = _make_btn_tex_sb("res://assets/ui/btn_primary_pressed.png")
 	_build_ui()
 	if GameData.offline_msg != "":
 		_show_msg(GameData.offline_msg)
@@ -906,7 +913,7 @@ func _build_training_page(page: Panel) -> void:
 	# toggle 反映 全开 态: 全开="一键挂机: 全开" 按压, 未全开/部分开="一键挂机: 全关" 未按压;
 	# 点击 方向: 未全开 → 全开 (补齐 至 全开, 含 部分开 场景), 全开 → 全关;
 	# 各开关 口径/存档/反馈 不变 [复用 各 _on_auto_* 文案 底部消息 合并 提示]; 纯 开关 动作 无 资源/统计 副作用)
-	_auto_idle_btn = _make_button("一键挂机: 全关")
+	_auto_idle_btn = _make_button("一键挂机: 全关", true)  # 打磨-135c-1: flat (打磨-90 高亮 基于 border_width, 须 flat 默认)
 	_auto_idle_btn.toggle_mode = true
 	_auto_idle_btn.pressed.connect(_on_auto_idle)
 	# 打磨-89: tooltip = 静态口径 + 动态段 (各 开启中 开关 动态 状态 汇总, 随 开关 状态/资源/
@@ -4275,10 +4282,17 @@ func _apply_break_btn_style() -> void:
 		return
 	if _flash_left > 0:
 		return
-	var sb := _btn_sb_gold if _break_ready else _btn_sb_normal
-	_break_btn.add_theme_stylebox_override("normal", sb)
-	_break_btn.add_theme_stylebox_override("hover", sb.duplicate() if _break_ready else _btn_sb_normal.duplicate())
-	_break_btn.add_theme_stylebox_override("pressed", sb.duplicate() if _break_ready else _btn_sb_normal.duplicate())
+	# 打磨-135c-1: 默认 状态 = 9-slice 纹理 三态 (btn_primary 系列), 非 原 flat
+	# 可突破 时 金边高亮 StyleBoxFlat (打磨-32), 否则 恢复 纹理 默认 三态
+	if _break_ready:
+		var sb := _btn_sb_gold
+		_break_btn.add_theme_stylebox_override("normal", sb)
+		_break_btn.add_theme_stylebox_override("hover", sb.duplicate())
+		_break_btn.add_theme_stylebox_override("pressed", sb.duplicate())
+	else:
+		_break_btn.add_theme_stylebox_override("normal", _btn_tex_normal)
+		_break_btn.add_theme_stylebox_override("hover", _btn_tex_hover)
+		_break_btn.add_theme_stylebox_override("pressed", _btn_tex_pressed)
 
 
 # 突破按钮闪烁: 成功绿闪 / 失败红闪, 闪烁后恢复默认样式
@@ -4353,19 +4367,22 @@ func _add_panel(parent: Control) -> VBoxContainer:
 	return box
 
 
-func _make_button(text: String) -> Button:
+func _make_button(text: String, flat := false) -> Button:
+	# 打磨-135c-1: 默认 9-slice 按钮 纹理 (btn_primary 三态); flat=true 走 原 StyleBoxFlat
+	# 口径 (仅 一键挂机 用 — 其 打磨-90 高亮 基于 border_width 断言, 须 保持 flat 默认)
 	var b := Button.new()
 	b.text = text
 	b.add_theme_color_override("font_color", GOLD)
 	b.add_theme_color_override("font_hover_color", Color(1, 0.95, 0.7))
 	b.add_theme_color_override("font_pressed_color", Color(1, 0.9, 0.5))
-	b.add_theme_stylebox_override("normal", _btn_sb_normal)
-	var sh := _btn_sb_normal.duplicate() as StyleBoxFlat
-	sh.bg_color = Color(0.2, 0.22, 0.3)
-	b.add_theme_stylebox_override("hover", sh)
-	var spb := _btn_sb_normal.duplicate() as StyleBoxFlat
-	spb.bg_color = Color(0.05, 0.06, 0.08)
-	b.add_theme_stylebox_override("pressed", spb)
+	if flat:
+		b.add_theme_stylebox_override("normal", _btn_sb_normal)
+		b.add_theme_stylebox_override("hover", _btn_sb_normal.duplicate())
+		b.add_theme_stylebox_override("pressed", _btn_sb_normal.duplicate())
+	else:
+		b.add_theme_stylebox_override("normal", _btn_tex_normal)
+		b.add_theme_stylebox_override("hover", _btn_tex_hover)
+		b.add_theme_stylebox_override("pressed", _btn_tex_pressed)
 	return b
 
 
@@ -4393,4 +4410,21 @@ func _make_btn_sb_gold() -> StyleBoxFlat:
 	s.content_margin_right = 12
 	s.content_margin_top = 8
 	s.content_margin_bottom = 8
+	return s
+
+
+# 打磨-135c-1: 按钮 9-slice 纹理 样式 (btn_primary 三态 之一, Kenney CC0).
+# 中心 实心 填充 (角饰 在 内 ~8px), 状态 由 纹理 本身 区分 (hover 提亮 / pressed 压暗),
+# 无 modulate. 9-slice 边距 防 角饰 拉伸; content 内边距 保留 原 文字 留白 口径.
+func _make_btn_tex_sb(tex_path: String) -> StyleBoxTexture:
+	var s := StyleBoxTexture.new()
+	s.texture = load(tex_path)
+	s.texture_margin_left = 10.0
+	s.texture_margin_right = 10.0
+	s.texture_margin_top = 8.0
+	s.texture_margin_bottom = 8.0
+	s.content_margin_left = 12.0
+	s.content_margin_right = 12.0
+	s.content_margin_top = 6.0
+	s.content_margin_bottom = 6.0
 	return s
