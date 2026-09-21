@@ -138,6 +138,10 @@ var _onekey_badge: Button          # 顶栏 一键系列 汇总徽标 (HBox: 前
 var _onekey_segs: Array = []       # 6 个段标签 (领悟/神通/施展/法器/装备/最佳; 可执行=金 0=灰)
 var _onekey_btns: Array = []       # 6 个段热区 flat Button (点击=直达对应页 或 直接执行 对应批量操作)
 var _onekey_sb_hover: StyleBoxFlat # 段热区 hover (淡底+金边 可点提示, 同 打磨-71 汇总段)
+var _btn2_n: StyleBoxTexture  # 打磨-135c-2: 词缀背包格 btn_secondary 9-slice 底 (未选中 深色仙侠)
+var _btn2_h: StyleBoxTexture  # 打磨-135c-2: 词缀格 hover 提亮
+var _btn2_p: StyleBoxTexture  # 打磨-135c-2: 词缀格 pressed 压暗
+var _btn2_f: StyleBoxTexture  # 打磨-135c-2: 词缀格 focus (同 pressed 档 防 抢 视觉)
 var _onekey_key := ""              # 已刷过的 状态键 (onekey_summary_key, 变化才刷 文本/颜色)
 var _break_flash_seq := 0
 var _realm_tip := ""              # 境界标签 tooltip 缓存 (变化时才刷新)
@@ -297,6 +301,17 @@ func _ready() -> void:
 	_btn_tex_normal = _make_btn_tex_sb("res://assets/ui/btn_primary.png")
 	_btn_tex_hover = _make_btn_tex_sb("res://assets/ui/btn_primary_hover.png")
 	_btn_tex_pressed = _make_btn_tex_sb("res://assets/ui/btn_primary_pressed.png")
+	# 打磨-135c-2: btn_secondary 9-slice 按钮 纹理 三态 (词缀背包格 换皮底; Kenney CC0).
+	# 中心 实心 填充, 状态 由 modulate_color 深色仙侠 调色 区分 (无 hover 纹理 变体, 135a Tab 同 思路);
+	# 9-slice 边距 12/12/10/10: 角饰 占 外 4~5px, 12px 内 全 不透明 不 拉伸.
+	_btn2_n = _make_btn_tex_sb_btn2()
+	_btn2_n.modulate_color = Color(0.26, 0.3, 0.36)    # 未选中: 深色仙侠 底
+	_btn2_h = _make_btn_tex_sb_btn2()
+	_btn2_h.modulate_color = Color(0.42, 0.5, 0.58)   # 悬停: 提亮
+	_btn2_p = _make_btn_tex_sb_btn2()
+	_btn2_p.modulate_color = Color(0.2, 0.23, 0.28)   # 按下: 压暗
+	_btn2_f = _make_btn_tex_sb_btn2()
+	_btn2_f.modulate_color = Color(0.2, 0.23, 0.28)   # 获焦: 同 按下 档
 	_build_ui()
 	if GameData.offline_msg != "":
 		_show_msg(GameData.offline_msg)
@@ -3820,6 +3835,12 @@ func _rebuild_m63_bag_grid() -> void:
 		cell.tooltip_text = "「%s」 %s · %s\n数值 +%.2f%% (装备 总属性 = 基础 x (1+Σ词缀) 同池 乘算独立项)\n点击 选中/取消; 选中后 点 装备行 槽位 chip 装配" % [
 			str(a.get("name", "")), g.affix_tier_name(int(a.get("tier", 0))), str(a.get("pool_name", "")),
 			float(a.get("value", 0.0))]
+		# 打磨-135c-2: 词缀格 换皮 — 未选中 = btn_secondary 9-slice 纹理 底 (深色仙侠 调色 三态),
+		# 选中 = 金边 StyleBoxFlat 叠加 (M6-3 口径 不变, 断言 边框=2); flat 保留 防 引擎 默认 底 叠 纹理
+		cell.add_theme_stylebox_override("normal", _btn2_n)
+		cell.add_theme_stylebox_override("hover", _btn2_h)
+		cell.add_theme_stylebox_override("pressed", _btn2_p)
+		cell.add_theme_stylebox_override("focus", _btn2_f)
 		if _m63_sel == str(aid):
 			var sb := _make_btn_sb_gold()
 			cell.add_theme_stylebox_override("normal", sb)
@@ -4410,6 +4431,26 @@ func _make_btn_sb_gold() -> StyleBoxFlat:
 	s.content_margin_right = 12
 	s.content_margin_top = 8
 	s.content_margin_bottom = 8
+	return s
+
+
+# 打磨-135c-2: btn_secondary 9-slice 按钮 纹理 样式 (词缀背包格 底; Kenney CC0).
+# 边距 12/12/10/10 防 角饰 拉伸 (角饰 占 外 4~5px, 12px 内 全 不透明); 状态 由 调用方
+# modulate_color 深色仙侠 调色 区分 (无 hover 纹理 变体). 残留 flat 排查 (135c-2 口径):
+# 内联 Button.new() 族中 顶栏 徽标 族 (自动/挂机/通关/剧毒/双塔进度/一键 汇总, 语义色 圆角 徽标)
+# /段 热区 (一键 段/自动 汇总 段/收集 行, 透明 热区+独立 hover 链) /顶栏 进度条 底 /一键挂机
+# /均为 flat 有意 保留 (语义 色板 与 动作 按钮 区分, 防 纹理 底 抢 视觉), ui_test 135c-2 段 固化 清单.
+func _make_btn_tex_sb_btn2() -> StyleBoxTexture:
+	var s := StyleBoxTexture.new()
+	s.texture = load("res://assets/ui/btn_secondary.png")
+	s.texture_margin_left = 12.0
+	s.texture_margin_right = 12.0
+	s.texture_margin_top = 10.0
+	s.texture_margin_bottom = 10.0
+	s.content_margin_left = 10.0
+	s.content_margin_right = 10.0
+	s.content_margin_top = 6.0
+	s.content_margin_bottom = 6.0
 	return s
 
 

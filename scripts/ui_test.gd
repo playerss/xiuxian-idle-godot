@@ -222,6 +222,7 @@ func _ready() -> void:
 	_assert_m135a_skins()  # M7-2 打磨-135a: 顶栏 Panel + Tab 按钮 9-slice 皮肤 (StyleBoxTexture/texture 路径/五态 齐全/选中 暖金 区分/顶栏 内容 同父 布局 不变/Tab 切换 功能 不变)
 	_assert_m135b_page_skins()  # M7-2 打磨-135b: 5 页大容器 9-slice 面板底 (panel_frame_frost.png/9-slice 边距/modulate 深色仙侠/行内 卡片 样式 不变/布局 偏移 不变)
 	_assert_m135c_btn_skins()  # M7-2 打磨-135c-1: 按钮族 核心 9-slice 换皮 (_make_button 默认 btn_primary 三态/金边高亮 适配纹理底/一键挂机 flat 保留/微光/闪烁 恢复 纹理 默认)
+	await _assert_m135c2_skins()  # M7-2 打磨-135c-2: 词缀背包格 btn_secondary 9-slice 换皮 (未选中 纹理 三态/选中 金边 叠加/flat 保留) + 内联 Button.new() 族 残留 flat 默认 排查固化 (徽标/段热区/进度条底/收集行 有意 保留)
 
 	_finish()
 
@@ -8137,6 +8138,86 @@ func _assert_m135b_page_skins() -> void:
 # (Kenney CC0, 状态 由 纹理 本身 区分 hover 提亮/pressed 压暗, 无 modulate; 金边高亮/微光/闪烁
 # 系统 保持 StyleBoxFlat 叠加, 结束 恢复 纹理 默认; 一键挂机 flat 保留 [打磨-90 border 断言]).
 # 断言: 突破/技能 按钮 三态 纹理+9-slice 边距/三态 互 不同/一键挂机 flat/可突破 金边 叠加/微光 恢复.
+# M7-2 打磨-135c-2: 词缀背包格 btn_secondary 9-slice 换皮 + 内联 Button.new() 族 残留 flat 排查
+# 口径: 未选中 = btn_secondary 9-slice 纹理 底 (modulate 深色仙侠 三态), 选中 = 金边 叠加 (M6-3 口径 不变);
+# 徽标/段热区/进度条底/收集行/一键挂机 = flat 有意 保留 (语义 色板 与 动作 按钮 区分, 防 纹理 底 抢 视觉)
+func _assert_m135c2_skins() -> void:
+	var g := GameData
+	# 基准 清理: 清 前序 段 词缀 残留 (防 背包 计数 断言 污染; 本段 为 最末 UI 段 无 后续 依赖)
+	g.affix_decompose_all()
+	g.affix_bag.clear()
+	g.affix_materials = 0
+	# 1) 词缀格 纹理 换皮 (需 背包 非空 构建 格子)
+	g.affix_add("af_qi_rate_0_0", 2)
+	g.affix_add("af_atk_1_0", 1)
+	ui._refresh()
+	await get_tree().process_frame
+	check(ui._m63_bag_cells.size() == 2, "135c-2 词缀背包 2 格 构建 (实际 %d)" % ui._m63_bag_cells.size())
+	var c1: Button = ui._m63_bag_cells.get("af_qi_rate_0_0")
+	var c2: Button = ui._m63_bag_cells.get("af_atk_1_0")
+	check(c1 != null and c2 != null, "135c-2 词缀格 节点 存在")
+	if c1 == null:
+		return
+	# 2) 未选中 格 = btn_secondary 9-slice 纹理 三态 (modulate 深色仙侠 调色 区分)
+	var bn: StyleBox = c1.get_theme_stylebox("normal")
+	var bh: StyleBox = c1.get_theme_stylebox("hover")
+	var bp: StyleBox = c1.get_theme_stylebox("pressed")
+	var bf: StyleBox = c1.get_theme_stylebox("focus")
+	check(bn is StyleBoxTexture and str((bn as StyleBoxTexture).texture.resource_path) == "res://assets/ui/btn_secondary.png",
+			"135c-2 词缀格 未选中 normal = btn_secondary 9-slice (实际 %s)" % str(bn))
+	check(bn is StyleBoxTexture and (bn as StyleBoxTexture).texture_margin_left > 0,
+			"135c-2 词缀格 9-slice 边距 非 0 (实际 %.1f)" % (bn as StyleBoxTexture).texture_margin_left)
+	check(bh != null and bp != null and bf != null,
+			"135c-2 词缀格 四态 齐全 (normal/hover/pressed/focus)")
+	check(bh is StyleBoxTexture and bf is StyleBoxTexture
+			and (bh as StyleBoxTexture).texture == (bn as StyleBoxTexture).texture
+			and (bf as StyleBoxTexture).texture == (bn as StyleBoxTexture).texture,
+			"135c-2 词缀格 三态 同源 纹理 (状态 由 modulate 区分)")
+	check((bh as StyleBoxTexture).modulate_color.r > (bn as StyleBoxTexture).modulate_color.r,
+			"135c-2 词缀格 悬停 提亮 区分 未选中 (n=%s h=%s)" % [str((bn as StyleBoxTexture).modulate_color), str((bh as StyleBoxTexture).modulate_color)])
+	check((bp as StyleBoxTexture).modulate_color.r < (bn as StyleBoxTexture).modulate_color.r,
+			"135c-2 词缀格 按下 压暗 区分 未选中 (n=%s p=%s)" % [str((bn as StyleBoxTexture).modulate_color), str((bp as StyleBoxTexture).modulate_color)])
+	check((bn as StyleBoxTexture).modulate_color.b > (bn as StyleBoxTexture).modulate_color.r,
+			"135c-2 词缀格 深色仙侠 底 口径 (b>r; 实际 %s)" % str((bn as StyleBoxTexture).modulate_color))
+	check(c1.flat, "135c-2 词缀格 flat 保留 (防 引擎 默认 底 叠 纹理)")
+	# 3) 选中 格 = 金边 StyleBoxFlat 叠加 (M6-3 口径 不变: 边框宽=2)
+	c1.pressed.emit()
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._m63_sel) == "af_qi_rate_0_0", "135c-2 点击 选中 词缀 记录 (实际 %s)" % str(ui._m63_sel))
+	var cell_sel: Button = ui._m63_bag_cells.get("af_qi_rate_0_0")
+	check(cell_sel != null, "135c-2 选中 格 重建 存在")
+	if cell_sel != null:
+		var sn: StyleBox = cell_sel.get_theme_stylebox("normal")
+		check(sn is StyleBoxFlat and (sn as StyleBoxFlat).border_width_left == 2 and (sn as StyleBoxFlat).border_color == ui.GOLD,
+				"135c-2 选中 格 normal = 金边 叠加 (M6-3 口径; 实际 %s)" % str(sn))
+	# 4) 残留 flat 默认 排查固化 (135c-2: 内联 Button.new() 族 有意 保留 flat 清单)
+	var flat_keep: Dictionary = {
+			"auto": ui._auto_badge, "idle": ui._idle_badge, "clear": ui._clear_badge,
+			"poison": ui._poison_badge, "twprog": ui._tower_progress_badge, "onekey": ui._onekey_badge,
+			"goalbar": ui._goalbar_bg,
+	}
+	for key in flat_keep:
+		var b: Button = flat_keep[key]
+		check(b != null and b.flat, "135c-2 残留 flat 排查 %s 徽标/进度条 flat 保留 (实际 %s)" % [key, str(b != null and b.flat)])
+	for i in ui._onekey_btns.size():
+		check((ui._onekey_btns[i] as Button).flat, "135c-2 残留 flat 排查 一键段 %d flat 保留" % i)
+	for i in ui._auto_sum_btns.size():
+		check((ui._auto_sum_btns[i] as Button).flat, "135c-2 残留 flat 排查 自动汇总段 %d flat 保留" % i)
+	for i in ui._collect_btns.size():
+		check((ui._collect_btns[i] as Button).flat, "135c-2 残留 flat 排查 收集行 %d flat 保留" % i)
+	check(ui._auto_idle_btn != null and ui._auto_idle_btn.flat,
+			"135c-2 残留 flat 排查 一键挂机 按钮 flat 保留 (打磨-90 高亮 基于 border_width 断言 口径)")
+	# 收尾: 清 词缀 残留 防 污染 后续 段 (M6-3/收集 计数 断言)
+	ui._m63_sel = ""
+	g.affix_decompose_all()
+	g.affix_bag.clear()
+	g.seen_affixes.clear()
+	g.affix_materials = 0
+	ui._refresh()
+	await get_tree().process_frame
+
+
 func _assert_m135c_btn_skins() -> void:
 	# 1) 突破按钮 (代表 默认 _make_button): normal/hover/pressed = btn_primary 三态 9-slice
 	var bb: Button = ui._break_btn
