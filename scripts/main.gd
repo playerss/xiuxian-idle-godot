@@ -4393,6 +4393,7 @@ func _make_button(text: String, flat := false) -> Button:
 	# 口径 (仅 一键挂机 用 — 其 打磨-90 高亮 基于 border_width 断言, 须 保持 flat 默认)
 	var b := Button.new()
 	b.text = text
+	b.flat = flat  # 审查修复: flat=true 须 置 属性 (仅 override 不够; 135c-2 断言 依赖)
 	b.add_theme_color_override("font_color", GOLD)
 	b.add_theme_color_override("font_hover_color", Color(1, 0.95, 0.7))
 	b.add_theme_color_override("font_pressed_color", Color(1, 0.9, 0.5))

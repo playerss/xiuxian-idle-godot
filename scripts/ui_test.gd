@@ -8204,8 +8204,9 @@ func _assert_m135c2_skins() -> void:
 		check((ui._onekey_btns[i] as Button).flat, "135c-2 残留 flat 排查 一键段 %d flat 保留" % i)
 	for i in ui._auto_sum_btns.size():
 		check((ui._auto_sum_btns[i] as Button).flat, "135c-2 残留 flat 排查 自动汇总段 %d flat 保留" % i)
-	for i in ui._collect_btns.size():
-		check((ui._collect_btns[i] as Button).flat, "135c-2 残留 flat 排查 收集行 %d flat 保留" % i)
+	for ckey in ui._collect_btns:
+		var cbtn: Button = ui._collect_btns[ckey]
+		check(cbtn != null and cbtn.flat, "135c-2 残留 flat 排查 收集行 %s flat 保留 (实际 %s)" % [ckey, str(cbtn != null and cbtn.flat)])
 	check(ui._auto_idle_btn != null and ui._auto_idle_btn.flat,
 			"135c-2 残留 flat 排查 一键挂机 按钮 flat 保留 (打磨-90 高亮 基于 border_width 断言 口径)")
 	# 收尾: 清 词缀 残留 防 污染 后续 段 (M6-3/收集 计数 断言)
