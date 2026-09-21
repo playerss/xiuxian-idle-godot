@@ -186,11 +186,11 @@
 > 纪律：① 每轮只做一个小任务（dev cron 常规纪律不变）② 素材只收 `assets/<用途>/` 下实际被代码引用的文件，禁止整包 1343 文件入库 ③ CREDITS.md 逐件记录 来源URL+许可+作者，CC0 也要记（Steam credits 直接可填）④ 视觉改动后 4 张 Steam 商店截图 Xvfb 重跑（store/README 口径）⑤ 4 项测试全过 + git 干净才算完成。
 > 主题基调：深色仙侠（当前 UI 深底 + 金/青 双色体系），素材颜色优先用 Gold/Blue 系，红/绿 仅用于状态色。
 
-### M7-1 素材入库管线（打磨-134）
-- [ ] 建 `assets/` 目录结构：`assets/ui/`（面板/按钮/滑条 9-slice）+ `assets/icons/`（小图标）+ `assets/sfx/`（预留）
-- [ ] 下载 Fantasy UI Borders zip，与 UI Pack 一起解压；逐件审查风格（预览图 Preview.png），选定 主面板 9-slice / 按钮 9-slice / 按钮 hover/pressed 态 / 进度条 底+填充 各 1 套（Gold 或 Grey 系，与深色底协调）
-- [ ] 只复制选中的 ~10-20 张 PNG 进 `assets/ui/`（重命名语义化 如 panel_bg.png / btn_primary.png / bar_fill_gold.png），写 `CREDITS.md`（Kenney, CC0, 两包 URL + 选中清单）
-- [ ] Godot import 验证：`~/.local/share/godot/app_userdata` 下生成 .import 无报错，主场景冒烟 0 报错（纹理可加载、无紫块）
+### M7-1 素材入库管线（打磨-134，2026-09-21 完成）
+- [x] 建 `assets/` 目录结构：`assets/ui/`（面板/按钮/滑条 9-slice）+ `assets/icons/`（小图标）+ `assets/sfx/`（预留）
+- [x] 下载 Fantasy UI Borders zip，与 UI Pack 一起解压；逐件审查风格（像素级 alpha 分析 + 深色底预览：Panel 系全实心白不可用，Border 系中心全透明可 9-slice；选定 013 号 L 括号角饰）
+- [x] 只复制选中的 10 张 PNG 进 `assets/ui/`（panel_border/panel_border_slim/panel_frame_frost/divider/btn_primary+hover+pressed/btn_secondary/bar_track/bar_fill），写 `CREDITS.md`（Kenney CC0 两包 URL + 逐件 原文件→本地 映射表）
+- [x] Godot import 验证：10 张 .import + ctex 缓存生成无纹理错误（headless import 的 progress_dialog 报错为引擎噪声），`scripts/texture_check.gd` 12 项验证 PASS（尺寸/非空/中心透明度语义），主场景冒烟 0 报错
 
 ### M7-2 主框架换皮（打磨-135，按子任务拆，每轮只做一段）
 - [ ] 135a：顶栏 Panel + Tab 按钮换 9-slice 皮肤（StyleBoxTexture 替代 StyleBoxFlat，hover/pressed/disabled 四态，保留现有 文字色/字号/布局，像素断言 ui_test 更新）
