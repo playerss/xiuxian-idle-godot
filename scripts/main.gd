@@ -37,6 +37,8 @@ var _res_realm_icon: Panel     # 打磨-136: 顶栏 资源图标 程序化 单�
 var _res_qi_icon: Panel        # 打磨-136: 顶栏 资源图标 程序化 单字 徽章 ("气" 金色, 主资源行 前; 飞升后 换 "道")
 var _res_stone_icon: Panel     # 打磨-136: 顶栏 资源图标 程序化 单字 徽章 ("石" 白, 灵石行 前)
 var _qi_icon_char := "气"      # 打磨-136: 主资源 徽章 当前 字符 (仅 飞升 翻转 时 重写, 防每帧 重绘)
+var _bg: CanvasItem            # 打磨-137: 水墨山水 背景 (程序化 渐变夜空+远山视差+灵气粒子, 最底层; 开关 GameData.bg_on 存档)
+var _bg_key := "1"            # 打磨-137: 背景 开关 同步 缓存键 (与 bg_on 同态 不重复 调用 set_bg_enabled)
 var _play_text := ""           # 打磨-77: 挂机时长 文本缓存 (变化才刷, 空串=隐藏)
 var _play_tip := ""            # 打磨-83: 挂机时长 悬停 离线收益 预估 tooltip 缓存 (变化才刷)
 var _rate_label: Label         # 打磨-78: 顶栏 主资源速率 常显 ("+X/秒", 未飞升=灵气 飞升后=道行, 文本变化 才刷)
@@ -342,6 +344,11 @@ func _show_auto_restore_msg() -> void:
 
 
 func _process(_delta: float) -> void:
+	# 打磨-137: 水墨山水 背景 开关 同步 (缓存键 幂等, 仅 bg_on 翻转 时 生效; 读档 恢复 经 本 路径)
+	var bkg: String = str(int(GameData.bg_on))
+	if bkg != _bg_key:
+		_bg_key = bkg
+		_bg.set_bg_enabled(GameData.bg_on)
 	_refresh()
 	_flash_step()
 
@@ -349,6 +356,10 @@ func _process(_delta: float) -> void:
 # ---------- UI 构建 ----------
 
 func _build_ui() -> void:
+	# 打磨-137: 水墨山水 背景 (程序化 自绘, 最底层; 渐变夜空+远山 3 层 视差+灵气 粒子 上浮,
+	# 低 饱和 深色 不 抢 前景; 开关 GameData.bg_on 存档 持久化, 旧档 缺字段 默认 开)
+	_bg = load("res://scripts/ink_bg.gd").new()
+	add_child(_bg)
 	var bg := ColorRect.new()
 	bg.color = BG
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)

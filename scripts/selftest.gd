@@ -8688,6 +8688,81 @@ func _init() -> void:
 	g.poison_battles = 0
 	g.save_game()
 	g.set_process(true)
+	# ---------- 打磨-137: 水墨山水 背景 (数据层 存读档 + 渲染核心 纯函数/节流/开关) ----------
+	# 1) 新档 默认 开 (存档 含 bg_on=true)
+	g.save_game()
+	check(_save_json().get("bg_on", false) == true, "打磨-137 新档 bg_on 默认 开 (实际 %s)" % str(_save_json().get("bg_on")))
+	# 2) 关 态 存读档 往返
+	g.bg_on = false
+	g.save_game()
+	g.load_game()
+	check(g.bg_on == false, "打磨-137 bg_on=false 存读档 往返 (实际 %s)" % str(g.bg_on))
+	# 3) 旧档 缺 字段 默认 开 (删 bg_on 键 模拟 旧 存档)
+	var old137: Dictionary = _save_json()
+	old137.erase("bg_on")
+	var of137 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	if of137 != null:
+		of137.store_string(JSON.stringify(old137))
+		of137.close()
+	g.bg_on = false  # 先置 false 证明 是 读档 默认 开 而非 内存 残留
+	g.load_game()
+	check(g.bg_on == true, "打磨-137 旧档 缺 bg_on 字段 默认 开 (实际 %s)" % str(g.bg_on))
+	# 4) 复原 默认 开 + 再 存读档 往返
+	g.bg_on = true
+	g.save_game()
+	g.load_game()
+	check(g.bg_on == true, "打磨-137 复原 默认 开 往返 (实际 %s)" % str(g.bg_on))
+	# 5) 渲染核心 ink_bg.gd: 节点 构建/开关/纯函数 恒等/视差/粒子 上浮/节流
+	var bg_script: GDScript = load("res://scripts/ink_bg.gd")
+	var bgd: CanvasItem = bg_script.new()
+	root.add_child(bgd)
+	await process_frame
+	check(bgd.visible, "打磨-137 背景 节点 初始 开 可见 (默认 开)")
+	check(int(bgd.PARTICLE_N) == 14 and bgd._parts.size() == 14, "打磨-137 粒子 常量 14 + 状态 初始化 14 项 (实际 %d)" % bgd._parts.size())
+	var d137a: int = bgd.draw_count
+	bgd._draw()
+	check(bgd.draw_count == d137a + 1 and bgd.draw_count >= 1, "打磨-137 _draw 执行 计数 递增 (实际 %d)" % bgd.draw_count)
+	var r137_ok := true
+	for lay in 3:
+		for xx in [10.0, 123.0, 456.0]:
+			var va: float = bgd._ridge(lay, xx, 3.5)
+			var vb: float = bgd._ridge(lay, xx, 3.5)
+			if not (va == vb and is_finite(va)):
+				r137_ok = false
+	check(r137_ok, "打磨-137 山脊线 _ridge 纯函数 同输入 恒等 + 有限 (3 层 x 3 点)")
+	var rp137_ok := true
+	for lay in 3:
+		var v0: float = bgd._ridge(lay, 100.0, 0.0)
+		var v1: float = bgd._ridge(lay, 100.0, 180.0 / float(bgd.MOUNT_SPEED[lay]))
+		if v0 == v1:
+			rp137_ok = false
+	check(rp137_ok, "打磨-137 视差 横移 同 x 不同 t 山脊线 变化 (3 层)")
+	# 粒子 上浮: 无 环绕 时 y 比例 严格 递增 (屏幕 坐标 上浮), 1 秒 = sp[0] 0.008
+	var py137: float = float(bgd._parts[0].y)
+	bgd._advance(1.0)
+	check(absf(float(bgd._parts[0].y) - (py137 + 0.008)) < 1e-9, "打磨-137 粒子 上浮 y 比例 递增 = 1s x sp (实际 %.4f -> %.4f)" % [py137, float(bgd._parts[0].y)])
+	bgd._parts[0].y = 0.999
+	bgd._advance(1.0)
+	check(float(bgd._parts[0].y) >= 0.0 and float(bgd._parts[0].y) < 0.02, "打磨-137 粒子 顶部 环绕 回底 y 归 0..0.02 (实际 %.4f)" % float(bgd._parts[0].y))
+	# 开关: 关=隐藏 停 推进 (零开销) / 开=恢复 幂等
+	bgd.set_bg_enabled(false)
+	check(not bgd.visible, "打磨-137 背景 关 隐藏 (visible=false)")
+	var t137: float = bgd._t
+	bgd._process(0.5)
+	check(bgd._t == t137, "打磨-137 背景 关 _process 零 开销 不 推进 (t=%.3f)" % t137)
+	bgd.set_bg_enabled(false)  # 幂等
+	bgd.set_bg_enabled(true)
+	check(bgd.visible, "打磨-137 背景 再 开 可见 (visible=true)")
+	# 节流: 0.05s < 0.1s 阈值 不 推进; 累计 0.1s 推进 一次
+	bgd._t = 0.0
+	bgd._process(0.05)
+	check(absf(bgd._t) < 1e-9, "打磨-137 节流 0.05s 低于 0.1s 阈值 _t 不 推进 (实际 %.4f)" % bgd._t)
+	bgd._process(0.05)
+	check(absf(bgd._t - 0.1) < 1e-6, "打磨-137 节流 累计 0.1s 推进 一次 (实际 %.4f)" % bgd._t)
+	bgd.queue_free()
+	# 收尾: bg_on 复原 默认 开 落盘 (防 污染 后续 段/冒烟)
+	g.bg_on = true
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
