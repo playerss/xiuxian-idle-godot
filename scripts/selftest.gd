@@ -8719,9 +8719,12 @@ func _init() -> void:
 	await process_frame
 	check(bgd.visible, "打磨-137 背景 节点 初始 开 可见 (默认 开)")
 	check(int(bgd.PARTICLE_N) == 14 and bgd._parts.size() == 14, "打磨-137 粒子 常量 14 + 状态 初始化 14 项 (实际 %d)" % bgd._parts.size())
+	# 审查修复: 原 bgd._draw() 直调 触发 引擎 ERROR (Drawing is only allowed inside _draw, x43);
+	# 改 queue_redraw 走 真实 重绘 路径 (headless 1 帧内 可多次 _draw, 断言 增量 >=1)
 	var d137a: int = bgd.draw_count
-	bgd._draw()
-	check(bgd.draw_count == d137a + 1 and bgd.draw_count >= 1, "打磨-137 _draw 执行 计数 递增 (实际 %d)" % bgd.draw_count)
+	bgd.queue_redraw()
+	await process_frame
+	check(bgd.draw_count >= d137a + 1, "打磨-137 _draw 执行 计数 递增 (实际 %d -> %d)" % [d137a, bgd.draw_count])
 	var r137_ok := true
 	for lay in 3:
 		for xx in [10.0, 123.0, 456.0]:

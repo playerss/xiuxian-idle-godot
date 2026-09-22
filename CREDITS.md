@@ -33,6 +33,21 @@
 | `assets/ui/panel_frame_frost.png` | PNG/Default/Transparent center/panel-transparent-center-013.png (48x48) | 面板 9-slice (中心半透明磨砂 + 013 同款角饰; 运行时 modulate 到 PANEL_BG 深色) |
 | `assets/ui/divider.png` | PNG/Default/Divider/divider-000.png (96x22) | 页内横向分隔饰线 (居中拉伸) |
 
+## 音效（打磨-139a）— 程序合成，无第三方素材
+
+- 6 个短音效，全部由 `scripts/gen_sfx.py` 确定性合成（固定 LCG 噪声种子，重跑逐字节一致），44.1kHz 16bit 单声道 WAV。
+- 许可：程序合成，无第三方来源，无需署名（Freesound CC-BY 抓取为备选路线，本轮用程序合成兜底以满足「零许可风险」纪律）。
+- 校验：`scripts/sfx_check.gd` 12 项（6 文件 × 格式/时长/非静音），headless 跑通。
+
+| 本地文件 | 用途 | 触发点（打磨-139c 挂接） |
+|---|---|---|
+| `assets/sfx/break_win.wav` | 突破成功 | 修行页突破按钮成功分支 |
+| `assets/sfx/break_fail.wav` | 突破失败 | 修行页突破按钮失败分支 |
+| `assets/sfx/achieve.wav` | 成就解锁 | 成就解锁浮动提示 |
+| `assets/sfx/tower_win.wav` | 塔胜利 | 爬塔挑战胜利浮动提示 |
+| `assets/sfx/new_record.wav` | 登天梯新纪录 | 登天梯创纪录浮动提示 |
+| `assets/sfx/onekey.wav` | 一键系列 | 一键挂机/一键系列按钮 |
+
 ## 说明
 
 - 全部素材为单色浅灰白线稿，深色底上运行时用 `StyleBoxTexture.modulate` / `TextureRect` 着色（金 0.98,0.86,0.5 / 青 0.62,0.9,0.95），不改 PNG 原色。
