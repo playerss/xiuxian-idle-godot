@@ -39,6 +39,8 @@ var _res_stone_icon: Panel     # 打磨-136: 顶栏 资源图标 程序化 单�
 var _qi_icon_char := "气"      # 打磨-136: 主资源 徽章 当前 字符 (仅 飞升 翻转 时 重写, 防每帧 重绘)
 var _bg: CanvasItem            # 打磨-137: 水墨山水 背景 (程序化 渐变夜空+远山视差+灵气粒子, 最底层; 开关 GameData.bg_on 存档)
 var _bg_key := "1"            # 打磨-137: 背景 开关 同步 缓存键 (与 bg_on 同态 不重复 调用 set_bg_enabled)
+var _bg_btn: Button            # 打磨-137-2: 水墨山水 背景 开关 按钮 (toggle, 存档 持久化, 修行页 自动 系列 区 末位)
+var _bg_btn_on := true          # 打磨-137-2: 水墨背景 按钮 上帧 状态 缓存 (变化 才 刷 按钮态, 读档 同步)
 var _play_text := ""           # 打磨-77: 挂机时长 文本缓存 (变化才刷, 空串=隐藏)
 var _play_tip := ""            # 打磨-83: 挂机时长 悬停 离线收益 预估 tooltip 缓存 (变化才刷)
 var _rate_label: Label         # 打磨-78: 顶栏 主资源速率 常显 ("+X/秒", 未飞升=灵气 飞升后=道行, 文本变化 才刷)
@@ -358,12 +360,14 @@ func _process(_delta: float) -> void:
 func _build_ui() -> void:
 	# 打磨-137: 水墨山水 背景 (程序化 自绘, 最底层; 渐变夜空+远山 3 层 视差+灵气 粒子 上浮,
 	# 低 饱和 深色 不 抢 前景; 开关 GameData.bg_on 存档 持久化, 旧档 缺字段 默认 开)
-	_bg = load("res://scripts/ink_bg.gd").new()
-	add_child(_bg)
+	# 打磨-137-2: z-order 修复 — BG ColorRect 先 入树, _bg 后 add_child 叠其 上
+	# (137-1 原序 _bg 先/BG 后 致 全屏 不透明 BG 遮挡 水墨 背景 不可见)
 	var bg := ColorRect.new()
 	bg.color = BG
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
+	_bg = load("res://scripts/ink_bg.gd").new()
+	add_child(_bg)
 
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -952,6 +956,18 @@ func _build_training_page(page: Panel) -> void:
 		+ "【当前 可学/下一 门槛 (动态)】")
 	_auto_learn_btn.tooltip_text = _auto_learn_tip_static
 	break_box.add_child(_auto_learn_btn)
+
+	# 打磨-137-2: 水墨山水 背景 开关 (toggle; 默认 开; 与 自动 系列 按钮 同区 末位;
+	# 装饰 开关 无 离线 触发 语义, 文案 不 挂 离线 提示; 状态 变化 才 刷, _process 幂等 同步)
+	_bg_btn = _make_button("水墨背景: 开" if GameData.bg_on else "水墨背景: 关")
+	_bg_btn.toggle_mode = true
+	_bg_btn.set_pressed_no_signal(GameData.bg_on)  # 构建时 初始 态 与 存档 同步 (默认 开)
+	_bg_btn_on = GameData.bg_on
+	_bg_btn.tooltip_text = "程序化 水墨山水 主背景 (渐变 夜空 + 远山 3 层 视差 缓慢 横移 + 灵气 粒子 缓慢 上浮)。\n" \
+		+ "低 饱和 深色系 不 抢 前景 文字; 0.1s 量化 重绘 10fps, 关闭 时 节点 隐藏 零 开销。\n" \
+		+ "开关 存档 持久化, 默认 开 (旧档 缺字段 默认 开)。"
+	_bg_btn.pressed.connect(_on_bg_toggle)
+	break_box.add_child(_bg_btn)
 	# 打磨-88: 一键挂机 按钮 (一键 全开/全关 自动系列 4 开关 [突破/购置/施展/领悟];
 	# toggle 反映 全开 态: 全开="一键挂机: 全开" 按压, 未全开/部分开="一键挂机: 全关" 未按压;
 	# 点击 方向: 未全开 → 全开 (补齐 至 全开, 含 部分开 场景), 全开 → 全关;
@@ -2441,6 +2457,11 @@ func _refresh() -> void:
 		_tw_auto_on = g.auto_tower
 		_tw_auto_btn.set_pressed_no_signal(g.auto_tower)
 		_tw_auto_btn.text = ("自动爬塔: 开" if g.auto_tower else "自动爬塔: 关")
+	# 打磨-137-2: 水墨背景开关 按钮态 (状态 变化 才 刷; 读档 恢复/外部改 同步)
+	if g.bg_on != _bg_btn_on:
+		_bg_btn_on = g.bg_on
+		_bg_btn.set_pressed_no_signal(g.bg_on)
+		_bg_btn.text = ("水墨背景: 开" if g.bg_on else "水墨背景: 关")
 	# M5-3: 自动爬塔按钮 tooltip 动态段 (双塔 当前 挑战 层 + 胜负 预测, 随 层数/怪物/战力 变化 才刷; 同 打磨-84/85/86 缓存口径)
 	var at_tip: String = g.auto_tower_next_tip()
 	if at_tip != _tw_auto_tip:
@@ -3429,6 +3450,15 @@ func _on_auto_sum_tower() -> void:
 	_tw_auto_btn.set_pressed_no_signal(GameData.auto_tower)
 	_tw_auto_btn.text = ("自动爬塔: 开" if GameData.auto_tower else "自动爬塔: 关")
 	_show_msg("自动爬塔已开启, 挂机时镇妖塔/登天梯将自动挑战 (胜推进 败停留, 可存档, 离线期间不触发)" if GameData.auto_tower else "自动爬塔已关闭, 恢复手动点击挑战")
+
+
+# 打磨-137-2: 水墨山水 背景 开关 — 点击 切 开/关 (存档 持久化, 纯 装饰 无 资源/统计 副作用;
+# 底部消息 确认 口径 同 自动 系列; 实际 渲染 由 _process 的 缓存键 幂等 同步 驱动)
+func _on_bg_toggle() -> void:
+	GameData.bg_on = not GameData.bg_on
+	_bg_btn.set_pressed_no_signal(GameData.bg_on)
+	_bg_btn.text = ("水墨背景: 开" if GameData.bg_on else "水墨背景: 关")
+	_show_msg("水墨山水 背景 已开启" if GameData.bg_on else "水墨山水 背景 已关闭, 恢复 纯色 深底")
 
 
 # 打磨-88: 一键挂机 — 点击 一键 全开/全关 自动系列 4 开关 (突破/购置/施展/领悟);

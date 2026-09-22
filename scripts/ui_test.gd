@@ -225,6 +225,7 @@ func _ready() -> void:
 	await _assert_m135c2_skins()  # M7-2 打磨-135c-2: 词缀背包格 btn_secondary 9-slice 换皮 (未选中 纹理 三态/选中 金边 叠加/flat 保留) + 内联 Button.new() 族 残留 flat 默认 排查固化 (徽标/段热区/进度条底/收集行 有意 保留)
 	await _assert_m135d_bar_skins()  # M7-2 打磨-135d: 进度条 族 9-slice 换皮 (7 族 bar 底 bar_track + 填充 bar_fill 9-slice 裁带/金青 档 modulate 逻辑 不变/细条 完整 渲染/节流/收尾)
 	await _assert_m136_res_icons()  # M7-3 打磨-136: 顶栏 资源图标 程序化 单字 徽章 (界/气/石 3 枚 Panel 壳+单字 同父 顶栏/顺序 在行 前/圆角深底边色=字色 语义/纯装饰 无热区/飞升 翻转 气->道 动态 同步/收尾 复原)
+	await _assert_m137_bg_toggle()  # M7-3 打磨-137-2: 水墨山水 背景 开关 按钮 (toggle 默认开/z-order _bg 在 BG ColorRect 上/点击 翻转 状态+可见性+底部消息/读档 同步 按钮态/无 资源/统计 副作用/收尾 复位 开)
 
 	_finish()
 
@@ -4407,6 +4408,103 @@ func _assert_m136_res_icons() -> void:
 	g.dao_level = 0
 	ui._refresh()
 	check(str(ui._res_qi_icon.get_child(0).text) == "气", "打磨-136 收尾 复位 主资源 徽章=气 (实际 %s)" % str(ui._res_qi_icon.get_child(0).text))
+	await get_tree().process_frame
+
+
+# M7-3 打磨-137-2: 水墨山水 背景 开关 按钮 断言 —
+# 修行页 自动 系列 区 末位 toggle (默认 开): 节点/toggle/初始 文本+pressed / z-order 修复
+# (_bg 必须 在 全屏 不透明 BG ColorRect 之 上 才 可见, 137-1 原序 被 遮挡) / 点击 切 关:
+# bg_on=false + _bg 隐藏 + 按钮 文本/pressed 同步 + 底部 消息 确认 / 点击 恢复 开 /
+# 同态 节流 稳定 / 读档 同步 按钮态+可见性 / 整段 快照 无 资源/统计 副作用 / 收尾 复位 开
+func _assert_m137_bg_toggle() -> void:
+	var g := GameData
+	# 冻结 UI 自动 _process + GameData 挂机 累积 (本段 手动 驱动 _process/_refresh;
+	# GameData._process 可能被 前段 恢复 运行, 不冻结 会 致 资源/统计 断言 见 累积 增量;
+	# 段尾 双 恢复, 同 136/135d 段 冻结 口径)
+	var gproc: bool = g.is_processing()
+	ui.set_process(false)
+	g.set_process(false)
+	# 1) 节点 + 基本 态
+	check(ui._bg_btn != null, "打磨-137-2 水墨背景 开关 按钮 节点 存在")
+	if ui._bg_btn == null or ui._bg == null:
+		g.set_process(gproc)
+		ui.set_process(true)
+		return
+	check(ui._bg_btn.toggle_mode, "打磨-137-2 按钮 toggle_mode=true (实际 %s)" % str(ui._bg_btn.toggle_mode))
+	check(ui._bg_btn.text == "水墨背景: 开" and ui._bg_btn.button_pressed,
+			"打磨-137-2 初始 默认 开: 文本+pressed (实际 %s pressed=%s)" % [str(ui._bg_btn.text), str(ui._bg_btn.button_pressed)])
+	check(str(ui._bg_btn.tooltip_text).contains("水墨山水 主背景"), "打磨-137-2 tooltip 含 口径 说明 (实际 %s)" % str(ui._bg_btn.tooltip_text).left(30))
+	check(ui._bg_btn.get_parent() == ui._auto_learn_btn.get_parent(),
+			"打磨-137-2 按钮 与 自动 系列 按钮 同 容器 (实际 %s)" % str(ui._bg_btn.get_parent().get_class()))
+	# 2) z-order 修复: _bg 在 BG ColorRect 之后 (index 更大 渲染 在 上, 不 被 遮挡)
+	var bgcr: Control = null
+	for c in ui.get_children():
+		if c is ColorRect and (c as ColorRect).color == ui.BG:
+			bgcr = c
+			break
+	check(bgcr != null, "打磨-137-2 全屏 BG ColorRect 存在 (底色 0.07/0.08/0.11)")
+	if bgcr == null:
+		g.set_process(gproc)
+		ui.set_process(true)
+		return
+	var kids: Array = ui.get_children()
+	check(kids.find(ui._bg) > kids.find(bgcr),
+			"打磨-137-2 _bg z-order 在 BG ColorRect 之上 (bg 序 %d > CR 序 %d)" % [kids.find(ui._bg), kids.find(bgcr)])
+	check(ui._bg.visible and g.bg_on, "打磨-137-2 初始 开: _bg 可见 + bg_on=true")
+	# 3) 点击 切 关 (emit pressed 走 真实 _on_bg_toggle 路径; 副作用 断言 基准 在 load 后 取, 见 段 7)
+	ui._bg_btn.emit_signal("pressed")
+	check(g.bg_on == false, "打磨-137-2 点击 切关: bg_on=false (实际 %s)" % str(g.bg_on))
+	ui._process(0.0)  # 手动 驱动 缓存键 同步 可见性 (冻结 态 下 确定性)
+	check(not ui._bg.visible, "打磨-137-2 切关 后 _bg 隐藏 (零 开销 口径)")
+	check(ui._bg_btn.text == "水墨背景: 关" and not ui._bg_btn.button_pressed,
+			"打磨-137-2 切关 后 按钮 文本+pressed 同步 (实际 %s pressed=%s)" % [str(ui._bg_btn.text), str(ui._bg_btn.button_pressed)])
+	check(str(ui._msg_label.text).contains("水墨山水"), "打磨-137-2 切关 底部 消息 确认 (实际 %s)" % str(ui._msg_label.text))
+	# 4) 点击 恢复 开
+	ui._bg_btn.emit_signal("pressed")
+	ui._process(0.0)
+	check(g.bg_on and ui._bg.visible, "打磨-137-2 点击 恢复 开: bg_on=true + _bg 可见")
+	check(ui._bg_btn.text == "水墨背景: 开" and ui._bg_btn.button_pressed,
+			"打磨-137-2 恢复 后 按钮 态=开 (实际 %s)" % str(ui._bg_btn.text))
+	# 5) 同态 节流 稳定
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(g.bg_on and ui._bg_btn.text == "水墨背景: 开" and ui._bg.visible,
+			"打磨-137-2 同态 节流 稳定 无 抖动 (实际 %s)" % str(ui._bg_btn.text))
+	# 6) 读档 同步: 存档 bg_on=false -> load_game -> 按钮态+可见性 同步
+	g.save_game()
+	var fp: String = g.SAVE_PATH
+	var fsr := FileAccess.open(fp, FileAccess.READ)
+	var sj: Dictionary = JSON.parse_string(fsr.get_as_text())
+	fsr.close()
+	sj["bg_on"] = false
+	var fsw := FileAccess.open(fp, FileAccess.WRITE)
+	fsw.store_string(JSON.stringify(sj))
+	fsw.close()
+	g.load_game()
+	check(g.bg_on == false, "打磨-137-2 读档 恢复 bg_on=false (实际 %s)" % str(g.bg_on))
+	ui._refresh()
+	ui._process(0.0)
+	check(ui._bg_btn.text == "水墨背景: 关" and not ui._bg_btn.button_pressed,
+			"打磨-137-2 读档 后 按钮态 同步=关 (实际 %s pressed=%s)" % [str(ui._bg_btn.text), str(ui._bg_btn.button_pressed)])
+	check(not ui._bg.visible, "打磨-137-2 读档 后 _bg 可见性 同步 隐藏")
+	# 7) 无 资源/统计 副作用: 开关 动作 (点击 切 关/开 两轮) 不 改 资源/统计 —
+	# load_game 会 舍入 float 存读档 往返 (~3e-6 误差, 打磨-66 已知 口径) 且 重读 stats,
+	# 故 断言 基准 取 load 后 快照, 只 覆盖 load 之后 收尾 复位 点击 窗口
+	var st1: float = g.stones
+	var es1: float = g.essence
+	var stats1: Dictionary = g.stats.duplicate(true)
+	# 收尾: 复位 开 (点击 切回 走 真实 路径 + 手动 驱动 同步)
+	ui._bg_btn.emit_signal("pressed")
+	ui._process(0.0)
+	ui._refresh()
+	check(g.bg_on and ui._bg_btn.text == "水墨背景: 开" and ui._bg.visible,
+			"打磨-137-2 收尾 复位 开 (实际 %s)" % str(ui._bg_btn.text))
+	check(g.stones == st1 and g.essence == es1,
+			"打磨-137-2 收尾 点击 无 资源 副作用 (stones=%s essence=%s)" % [str(g.stones), str(g.essence)])
+	check(g.stats == stats1, "打磨-137-2 收尾 点击 无 统计 副作用")
+	g.set_process(gproc)
+	ui.set_process(true)
 	await get_tree().process_frame
 
 

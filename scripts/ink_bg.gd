@@ -31,8 +31,12 @@ var draw_count := 0  # _draw 执行 次数 (自测 断言 用)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE  # 纯 装饰 无 热区
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# set_anchors_and_offsets_preset (而非 set_anchors_preset): _ready 期 父 节点 布局 未 定,
+	# 仅 设 anchors 会 把 offsets 算 成 -父 尺寸 (实测 SubViewport/全屏 场景 下 size 恒 0 不 渲染,
+	# 水墨 层 被 全屏 BG ColorRect 覆盖 不可见); 显式 锚点+偏移 归 零 保证 全屏 铺满
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_init_particles()
+	queue_redraw()  # 首帧 立即 出图 (挂机 冻结 [如 store_shots 演示档] 时 _process 不 推进, 不 主动 重绘 会 空帧)
 
 
 func _process(delta: float) -> void:
