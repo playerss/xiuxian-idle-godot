@@ -1985,6 +1985,10 @@ func skill_tier_name(t: int) -> String:
 func equip_tier_name(t: int) -> String:
 	return ["凡品", "灵品", "玄品", "地品", "天品", "仙品", "神品"][clampi(t, 0, 6)]
 
+# 打磨-138: 品质徽章 单字 (凡~神 7 档, 行首 16px 徽章 字符; 越界 钳制; 只读 无副作用)
+func tier_badge_char(t: int) -> String:
+	return ["凡", "灵", "玄", "地", "天", "仙", "神"][clampi(t, 0, 6)]
+
 func can_learn(id: String) -> bool:
 	var s: Dictionary = skill_by_id.get(id, {})
 	if s.is_empty():

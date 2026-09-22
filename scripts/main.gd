@@ -1144,8 +1144,8 @@ func _add_shop_row(it: Dictionary) -> void:
 	row.add_theme_constant_override("separation", 12)
 	row.tooltip_text = GameData.item_detail(it["id"] as String)
 	_shop_box.add_child(row)
-	# 打磨-41: 行首品质色竖条 (法器无 tier 字段, 按价格档着色: <1k 凡灰 / <100k 玄蓝 / <1M 仙紫 / 以上 神金)
-	_add_tier_bar(row, _item_tier_color(float(it["cost"])))
+	# 打磨-41→138: 行首品质徽章 (法器无 tier 字段, 按价格档着色: <1k 凡 / <100k 玄 / <1M 仙 / 以上 神)
+	_add_tier_badge(row, _item_tier_idx(float(it["cost"])))
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)
@@ -1261,8 +1261,8 @@ func _add_skill_row(id: String) -> void:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
 	row.add_child(hb)
-	# 打磨-41: 行首品质色竖条 (4px, 颜色随数据 tier 固定, 构建一次)
-	_add_tier_bar(hb, GameData.TIER_COLOR[int(s["tier"])])
+	# 打磨-41→138: 行首品质徽章 (颜色/字 随数据 tier 固定, 构建一次)
+	_add_tier_badge(hb, int(s["tier"]))
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)
@@ -1739,8 +1739,8 @@ func _add_equip_row(id: String) -> void:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
 	row.add_child(hb)
-	# 打磨-41: 行首品质色竖条 (4px, 颜色随数据 tier 固定, 构建一次)
-	_add_tier_bar(hb, GameData.TIER_COLOR[int(e["tier"])])
+	# 打磨-41→138: 行首品质徽章 (颜色/字 随数据 tier 固定, 构建一次)
+	_add_tier_badge(hb, int(e["tier"]))
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)
@@ -3353,26 +3353,45 @@ func primary_progress_value() -> float:
 	return GameData.dao if GameData.ascended else GameData.essence
 
 
-# 打磨-41: 行首品质色竖条 (4px, 构建后颜色不变, 无每帧刷新)
-func _add_tier_bar(parent: Control, color: Color) -> void:
-	var bar := ColorRect.new()
-	bar.color = color
-	bar.custom_minimum_size = Vector2(4, 18)
-	bar.size_flags_vertical = Control.SIZE_FILL
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(bar)
-	parent.move_child(bar, 0)
+# 打磨-138: 行首品质徽章 (16px 圆角 深底 细边 单字徽章「凡~神」, 打磨-41 4px 色条 升级版;
+# 零素材 程序化 单字, 与 顶栏 资源图标徽章 [打磨-136] 同风格 [深底 细边 字色 语义 同源, 尺寸缩小 适配 行高];
+# tier_idx 越界 钳制 0..6 (与 TIER_COLOR/tier_badge_char 口径 单点); 构建一次 无 每帧 刷新)
+func _add_tier_badge(parent: Control, tier_idx: int) -> Panel:
+	var c: Color = GameData.TIER_COLOR[clampi(tier_idx, 0, 6)]
+	var p := Panel.new()
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	p.custom_minimum_size = Vector2(16, 16)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.1, 0.12)
+	sb.set_border_width_all(1)
+	sb.border_color = c
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 1.5
+	sb.content_margin_right = 1.5
+	sb.content_margin_top = 0.0
+	sb.content_margin_bottom = 0.0
+	p.add_theme_stylebox_override("panel", sb)
+	var l := Label.new()
+	l.text = GameData.tier_badge_char(tier_idx)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_size_override("font_size", 11)
+	l.add_theme_color_override("font_color", c)
+	p.add_child(l)
+	parent.add_child(p)
+	parent.move_child(p, 0)
+	return p
 
 
-# 打磨-41: 法器无品质字段, 按价格档近似着色 (与 TIER_COLOR 复用, 断言/文案口径一致)
-func _item_tier_color(cost: float) -> Color:
+# 打磨-41: 法器无品质字段, 按价格档近似着色 (与 TIER_COLOR 复用, 断言/文案口径一致; 打磨-138 改返回档索引)
+func _item_tier_idx(cost: float) -> int:
 	if cost < 1000.0:
-		return GameData.TIER_COLOR[0]    # 凡灰
+		return 0    # 凡
 	if cost < 100000.0:
-		return GameData.TIER_COLOR[2]   # 玄蓝
+		return 2    # 玄
 	if cost < 1000000.0:
-		return GameData.TIER_COLOR[5]   # 仙紫
-	return GameData.TIER_COLOR[6]       # 神金
+		return 5    # 仙
+	return 6                   # 神
 
 
 func _make_card_sb(hi: bool) -> StyleBoxFlat:

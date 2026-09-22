@@ -463,10 +463,11 @@ func _count_rows(c: Container) -> int:
 	return rows
 
 
-# 打磨-41: 技能/装备/法器 行首品质色竖条 (120+140+10 行, 颜色与 数据tier/价格档 一致)
+# 打磨-41→138: 技能/装备/法器 行首品质徽章 (16px 单字 徽章「凡~神」; Panel 壳+Label 字,
+# 边色=字色=TIER_COLOR[tier], 法器 按 价格档 0/2/5/6; 断言 节点结构/字符/边色/尺寸/覆盖档)
 func _assert_tier_bars() -> void:
 	var g := GameData
-	# 技能页 (tab 1): 色条 = TIER_COLOR[s.tier]
+	# 技能页 (tab 1): 徽章 = tier_badge_char(s.tier), 边色 = TIER_COLOR[s.tier]
 	ui._tab.current_tab = 1
 	ui._refresh()
 	await get_tree().process_frame
@@ -474,13 +475,20 @@ func _assert_tier_bars() -> void:
 		var s: Dictionary = g.skill_by_id[id]
 		var rown: Node = ui._skill_row_nodes[id]
 		var hb: HBoxContainer = rown.get_child(0)
-		check(hb.get_child_count() > 0 and hb.get_child(0) is ColorRect, "技能 %s 色条为首子节点" % id)
-		if hb.get_child_count() == 0 or not (hb.get_child(0) is ColorRect):
+		check(hb.get_child_count() > 0 and hb.get_child(0) is Panel, "技能 %s 徽章为首子节点 (Panel)" % id)
+		if hb.get_child_count() == 0 or not (hb.get_child(0) is Panel):
 			continue
-		var bar: ColorRect = hb.get_child(0)
-		check(bar.color == g.TIER_COLOR[int(s["tier"])], "技能 %s 色条色=%s tier=%s" % [id, str(bar.color), str(s["tier"])])
-		check(bar.size.y >= 16.0, "技能 %s 色条高>16 (实际 %.0f)" % [id, bar.size.y])
-	# 装备页 (tab 2): 色条 = TIER_COLOR[e.tier]
+		var p: Panel = hb.get_child(0)
+		var lab: Label = p.get_child(0) if p.get_child_count() > 0 else null
+		check(lab != null and lab is Label, "技能 %s 徽章 含 单字 Label" % id)
+		if lab == null:
+			continue
+		check(lab.text == g.tier_badge_char(int(s["tier"])), "技能 %s 徽章字=%s tier=%s (实际 %s)" % [id, g.tier_badge_char(int(s["tier"])), str(s["tier"]), lab.text])
+		var sbg := p.get_theme_stylebox("panel") as StyleBoxFlat
+		check(sbg != null and sbg.border_color == g.TIER_COLOR[int(s["tier"])], "技能 %s 徽章边色=TIER_COLOR tier=%s" % [id, str(s["tier"])])
+		check(sbg != null and lab.get_theme_color("font_color") == sbg.border_color, "技能 %s 徽章字色=边色 语义同源" % id)
+		check(p.custom_minimum_size.x >= 16.0 and p.custom_minimum_size.y >= 16.0, "技能 %s 徽章 16px 尺寸口径 (实际 %s)" % [id, str(p.custom_minimum_size)])
+	# 装备页 (tab 2): 徽章 = tier_badge_char(e.tier)
 	ui._tab.current_tab = 2
 	ui._refresh()
 	await get_tree().process_frame
@@ -488,28 +496,41 @@ func _assert_tier_bars() -> void:
 		var e: Dictionary = g.equip_by_id[id]
 		var rown: Node = ui._equip_row_nodes[id]
 		var hb: HBoxContainer = rown.get_child(0)
-		check(hb.get_child_count() > 0 and hb.get_child(0) is ColorRect, "装备 %s 色条为首子节点" % id)
-		if hb.get_child_count() == 0 or not (hb.get_child(0) is ColorRect):
+		check(hb.get_child_count() > 0 and hb.get_child(0) is Panel, "装备 %s 徽章为首子节点 (Panel)" % id)
+		if hb.get_child_count() == 0 or not (hb.get_child(0) is Panel):
 			continue
-		var bar: ColorRect = hb.get_child(0)
-		check(bar.color == g.TIER_COLOR[int(e["tier"])], "装备 %s 色条色=%s tier=%s" % [id, str(bar.color), str(e["tier"])])
-	# 修行页 (tab 0): 法器色条 = 价格档 (1k/100k/1M -> 凡灰/玄蓝/仙紫/神金)
+		var p: Panel = hb.get_child(0)
+		var lab: Label = p.get_child(0) if p.get_child_count() > 0 else null
+		check(lab != null and lab is Label, "装备 %s 徽章 含 单字 Label" % id)
+		if lab == null:
+			continue
+		check(lab.text == g.tier_badge_char(int(e["tier"])), "装备 %s 徽章字=%s tier=%s (实际 %s)" % [id, g.tier_badge_char(int(e["tier"])), str(e["tier"]), lab.text])
+		var sbg := p.get_theme_stylebox("panel") as StyleBoxFlat
+		check(sbg != null and sbg.border_color == g.TIER_COLOR[int(e["tier"])], "装备 %s 徽章边色=TIER_COLOR tier=%s" % [id, str(e["tier"])])
+	# 修行页 (tab 0): 法器徽章 = 价格档 (1k/100k/1M -> 凡/玄/仙/神)
 	ui._tab.current_tab = 0
 	ui._refresh()
 	await get_tree().process_frame
 	var tier_seen := {0: 0, 2: 0, 5: 0, 6: 0}
+	var char_expect := {0: "凡", 2: "玄", 5: "仙", 6: "神"}
 	for it in g.ITEMS:
 		var iid: String = str(it["id"])
 		var row: Node = ui._shop_row_nodes[iid]
-		check(row.get_child_count() > 0 and row.get_child(0) is ColorRect, "法器 %s 色条为首子节点" % iid)
-		if row.get_child_count() == 0 or not (row.get_child(0) is ColorRect):
+		check(row.get_child_count() > 0 and row.get_child(0) is Panel, "法器 %s 徽章为首子节点 (Panel)" % iid)
+		if row.get_child_count() == 0 or not (row.get_child(0) is Panel):
 			continue
-		var bar: ColorRect = row.get_child(0)
+		var p: Panel = row.get_child(0)
+		var lab: Label = p.get_child(0) if p.get_child_count() > 0 else null
+		check(lab != null and lab is Label, "法器 %s 徽章 含 单字 Label" % iid)
+		if lab == null:
+			continue
 		var cost: float = float(it["cost"])
 		var expect_idx := 0 if cost < 1000.0 else (2 if cost < 100000.0 else (5 if cost < 1000000.0 else 6))
-		check(bar.color == g.TIER_COLOR[expect_idx], "法器 %s 价格档色=%s 期望档%d" % [iid, str(bar.color), expect_idx])
+		check(lab.text == char_expect[expect_idx], "法器 %s 徽章字=%s 价格档%d (实际 %s)" % [iid, char_expect[expect_idx], expect_idx, lab.text])
+		var sbg := p.get_theme_stylebox("panel") as StyleBoxFlat
+		check(sbg != null and sbg.border_color == g.TIER_COLOR[expect_idx], "法器 %s 徽章边色=TIER_COLOR 档%d" % [iid, expect_idx])
 		tier_seen[expect_idx] = tier_seen[expect_idx] + 1
-	check(tier_seen[0] > 0 and tier_seen[2] > 0 and tier_seen[5] > 0 and tier_seen[6] > 0, "法器四档价格色标均有覆盖 (实际 %s)" % str(tier_seen))
+	check(tier_seen[0] > 0 and tier_seen[2] > 0 and tier_seen[5] > 0 and tier_seen[6] > 0, "法器四档价格徽章均有覆盖 (实际 %s)" % str(tier_seen))
 
 
 # 打磨-44→92: 收集进度一览 点击直达 — 6 条 flat Button (手型光标/tooltip), 点击切 Tab+重置筛选,

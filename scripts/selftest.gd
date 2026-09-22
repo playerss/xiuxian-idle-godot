@@ -8763,6 +8763,37 @@ func _init() -> void:
 	# 收尾: bg_on 复原 默认 开 落盘 (防 污染 后续 段/冒烟)
 	g.bg_on = true
 	g.save_game()
+	# ---------- 打磨-138: 品质徽章 单字 tier_badge_char (凡~神 7 档, 越界 钳制, 只读) ----------
+	# 7 档 逐档 字符 (与 TIER_COLOR 0..6 档 一一对应)
+	var chars138 := ["凡", "灵", "玄", "地", "天", "仙", "神"]
+	for i in 7:
+		check(str(g.tier_badge_char(i)) == chars138[i], "打磨-138 tier_badge_char(%d)=%s (实际 %s)" % [i, chars138[i], str(g.tier_badge_char(i))])
+	# 越界 钳制: 负数 -> 凡(0), 超上 -> 神(6)
+	check(str(g.tier_badge_char(-1)) == "凡", "打磨-138 tier_badge_char(-1) 钳制 凡 (实际 %s)" % str(g.tier_badge_char(-1)))
+	check(str(g.tier_badge_char(7)) == "神", "打磨-138 tier_badge_char(7) 钳制 神 (实际 %s)" % str(g.tier_badge_char(7)))
+	check(str(g.tier_badge_char(100)) == "神", "打磨-138 tier_badge_char(100) 钳制 神 (实际 %s)" % str(g.tier_badge_char(100)))
+	# 与 equip_tier_name/skill_tier_name 前缀 一致 (装备 7 档 全覆盖; 技能 前 6 档)
+	var name_sync_ok := true
+	for i in 7:
+		if not (str(g.equip_tier_name(i)).begins_with(str(g.tier_badge_char(i)))):
+			name_sync_ok = false
+	check(name_sync_ok, "打磨-138 徽章字 = equip_tier_name 首字 (7 档 同源)")
+	var skill_sync_ok := true
+	for i in 6:
+		if not (str(g.skill_tier_name(i)).begins_with(str(g.tier_badge_char(i)))):
+			skill_sync_ok = false
+	check(skill_sync_ok, "打磨-138 徽章字 = skill_tier_name 首字 (技能 前 6 档 同源)")
+	# 只读: 连读 恒定 + 无 状态/存档 副作用
+	var a138a := str(g.tier_badge_char(3))
+	var a138b := str(g.tier_badge_char(3))
+	check(a138a == a138b and a138a == "地", "打磨-138 tier_badge_char 只读 连读 恒定 (地)")
+	var ess138: float = g.essence
+	var stat138: Dictionary = g.stats
+	for i in 7:
+		g.tier_badge_char(i)
+	check(g.essence == ess138 and g.stats == stat138, "打磨-138 tier_badge_char 无 资源/统计 副作用")
+	# 收尾: 落盘 干净 基准 (防 污染 冒烟)
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
