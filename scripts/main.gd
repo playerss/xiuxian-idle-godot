@@ -33,6 +33,10 @@ var _goal_text := ""           # 下一目标文本缓存 (变化时才刷)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
 var _stats_text := ""          # 统计文本缓存 (变化时才刷)
 var _play_label: Label         # 打磨-77: 顶栏 挂机时长 常显 ("⏳ X小时Y分", 随 play_sec 分钟档 变化 才刷)
+var _res_realm_icon: Panel     # 打磨-136: 顶栏 资源图标 程序化 单字 徽章 ("界" 青色, 境界行 前)
+var _res_qi_icon: Panel        # 打磨-136: 顶栏 资源图标 程序化 单字 徽章 ("气" 金色, 主资源行 前; 飞升后 换 "道")
+var _res_stone_icon: Panel     # 打磨-136: 顶栏 资源图标 程序化 单字 徽章 ("石" 白, 灵石行 前)
+var _qi_icon_char := "气"      # 打磨-136: 主资源 徽章 当前 字符 (仅 飞升 翻转 时 重写, 防每帧 重绘)
 var _play_text := ""           # 打磨-77: 挂机时长 文本缓存 (变化才刷, 空串=隐藏)
 var _play_tip := ""            # 打磨-83: 挂机时长 悬停 离线收益 预估 tooltip 缓存 (变化才刷)
 var _rate_label: Label         # 打磨-78: 顶栏 主资源速率 常显 ("+X/秒", 未飞升=灵气 飞升后=道行, 文本变化 才刷)
@@ -383,13 +387,22 @@ func _build_ui() -> void:
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(sp)
 	_realm_label = _label("", 19, CYAN)
+	# 打磨-136: 顶栏 资源图标 (程序化 单字 徽章, 零素材; 境界行 前 "界" 青, 与 行 字色 语义 同源)
+	_res_realm_icon = _res_icon_badge("界", CYAN)
+	top.add_child(_res_realm_icon)
 	top.add_child(_realm_label)
 	_essence_label = _label("灵气 0", 19, GOLD)
+	# 打磨-136: 主资源行 前 "气" 金 徽章 (飞升后 _refresh 换 "道", 见 下方 飞升 翻转)
+	_res_qi_icon = _res_icon_badge("气", GOLD)
+	top.add_child(_res_qi_icon)
 	# 打磨-87: 顶栏 主资源行 悬停 下一目标 动态 tooltip (构建时 取 初始值, _refresh 变化才刷;
 	# 与 顶栏灵石行 tooltip 打磨-49 同 模式, 口径=primary_next_target_tip)
 	_essence_label.tooltip_text = GameData.primary_next_target_tip()
 	top.add_child(_essence_label)
 	_stones_label = _label("灵石 0", 19, WHITEISH)
+	# 打磨-136: 灵石行 前 "石" 白 徽章
+	_res_stone_icon = _res_icon_badge("石", WHITEISH)
+	top.add_child(_res_stone_icon)
 	top.add_child(_stones_label)
 	# 打磨-77: 顶栏 挂机时长 常显 (灰色小字 "⏳ X小时Y分", 分钟档 变化 才刷;
 	# 0 时长 隐藏 避免 空文本 占位; 与 修行页 修行统计 时长 同 口径 stats.play_sec)
@@ -2261,6 +2274,13 @@ func _refresh() -> void:
 		_realm_tip = tip
 		_realm_label.tooltip_text = tip
 	_essence_label.text = g.primary_res_text()  # 打磨-19: 顶栏主资源 (未飞升=灵气 / 飞升后=道行)
+	# 打磨-136: 主资源 徽章 字符 随 飞升 翻转 气->道 (仅 翻转 时 重写, 挂机 恒定 无 每帧 重绘)
+	if g.ascended and _qi_icon_char != "道":
+		_qi_icon_char = "道"
+		_res_qi_icon.get_child(0).text = _qi_icon_char
+	elif not g.ascended and _qi_icon_char != "气":
+		_qi_icon_char = "气"
+		_res_qi_icon.get_child(0).text = _qi_icon_char
 	_stones_label.text = "灵石 %s" % g.fmt(g.stones)
 	# 打磨-87: 顶栏主资源行 悬停 下一目标 动态 tooltip (速率/缺口/ETA/成功率 随 境界/资源/功法装备 变化才刷;
 	# 与 灵石行 tooltip 打磨-49 同 节流 口径; 纯展示 无 存档/统计 副作用)
@@ -4350,6 +4370,33 @@ func _flash_step() -> void:
 
 
 # ---------- 小工具 ----------
+
+# 打磨-136: 顶栏 资源图标 程序化 单字 徽章 (20px 圆角 深底 细边 Panel 壳 + 13px 单字, 零素材 零许可风险;
+# 与 顶栏 徽标 族 同 深色仙侠 调色 口径: 深底 + 细边 + 字色 语义 青/金/白, 不 抢 前景 文字;
+# mouse_filter=IGNORE 纯装饰 无热区; SHRINK_CENTER 居中 不 拉伸 满高)
+func _res_icon_badge(char: String, c: Color) -> Panel:
+	var p := Panel.new()
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	p.custom_minimum_size = Vector2(20, 20)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.1, 0.12)
+	sb.set_border_width_all(1)
+	sb.border_color = c
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 2.5
+	sb.content_margin_right = 2.5
+	sb.content_margin_top = 0.5
+	sb.content_margin_bottom = 0.5
+	p.add_theme_stylebox_override("panel", sb)
+	var l := Label.new()
+	l.text = char
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_size_override("font_size", 13)
+	l.add_theme_color_override("font_color", c)
+	p.add_child(l)
+	return p
+
 
 func _label(text: String, size: int, color: Color) -> Label:
 	var l := Label.new()

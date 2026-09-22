@@ -224,6 +224,7 @@ func _ready() -> void:
 	_assert_m135c_btn_skins()  # M7-2 打磨-135c-1: 按钮族 核心 9-slice 换皮 (_make_button 默认 btn_primary 三态/金边高亮 适配纹理底/一键挂机 flat 保留/微光/闪烁 恢复 纹理 默认)
 	await _assert_m135c2_skins()  # M7-2 打磨-135c-2: 词缀背包格 btn_secondary 9-slice 换皮 (未选中 纹理 三态/选中 金边 叠加/flat 保留) + 内联 Button.new() 族 残留 flat 默认 排查固化 (徽标/段热区/进度条底/收集行 有意 保留)
 	await _assert_m135d_bar_skins()  # M7-2 打磨-135d: 进度条 族 9-slice 换皮 (7 族 bar 底 bar_track + 填充 bar_fill 9-slice 裁带/金青 档 modulate 逻辑 不变/细条 完整 渲染/节流/收尾)
+	await _assert_m136_res_icons()  # M7-3 打磨-136: 顶栏 资源图标 程序化 单字 徽章 (界/气/石 3 枚 Panel 壳+单字 同父 顶栏/顺序 在行 前/圆角深底边色=字色 语义/纯装饰 无热区/飞升 翻转 气->道 动态 同步/收尾 复原)
 
 	_finish()
 
@@ -4321,6 +4322,92 @@ func _assert_challenge_btn_tip() -> void:
 	g.dao_level = 0
 	g.set_process(true)
 	ui._tab.current_tab = 3
+
+
+# M7-3 打磨-136: 顶栏 资源图标 断言 — 程序化 单字 徽章 (零素材 零许可风险, 二选一风格中 选 程序化):
+# 3 枚 Panel 壳 (20x20 圆角 深底 细边) + 内嵌 13px 单字 Label (界=青/气=金/石=白, 与 行 字色 语义 同源),
+# 插在 各行 标签 前 (同父 顶栏 HBox 口径 保持); 纯装饰 无热区 (mouse_filter IGNORE + 无 tooltip),
+# 主资源 徽章 字符 随 飞升 翻转 气->道 (仅 翻转 时 重写); 断言: 3 枚 节点/同父/顺序 在行 前/
+# 壳 StyleBoxFlat 圆角+深底+边色=字色 语义/字符 字色/飞升 翻转 气->道->气 动态 同步/翻转 后
+# 同态 节流 无 副作用/无 存档 副作用/收尾 复原。渲染 像素 入帧 由 136c 商店截图 复核
+func _assert_m136_res_icons() -> void:
+	var g := GameData
+	# 1) 3 枚 节点 存在 + Panel 壳 20x20 + 同父 顶栏 HBox (与 行 标签 同父 口径 不变)
+	check(ui._res_realm_icon != null, "打磨-136 境界行 徽章 节点 存在")
+	check(ui._res_qi_icon != null, "打磨-136 主资源行 徽章 节点 存在")
+	check(ui._res_stone_icon != null, "打磨-136 灵石行 徽章 节点 存在")
+	if ui._res_realm_icon == null or ui._res_qi_icon == null or ui._res_stone_icon == null:
+		return
+	check(ui._res_realm_icon is Panel and ui._res_qi_icon is Panel and ui._res_stone_icon is Panel,
+			"打磨-136 徽章 壳 = Panel (实际 %s)" % str(ui._res_realm_icon.get_class()))
+	check(ui._res_realm_icon.get_parent() == ui._realm_label.get_parent(),
+			"打磨-136 境界 徽章 与 境界行 标签 同父 (实际 %s)" % str(ui._res_realm_icon.get_parent()))
+	check(ui._res_qi_icon.get_parent() == ui._essence_label.get_parent(),
+			"打磨-136 主资源 徽章 与 主资源行 标签 同父 (实际 %s)" % str(ui._res_qi_icon.get_parent()))
+	check(ui._res_stone_icon.get_parent() == ui._stones_label.get_parent(),
+			"打磨-136 灵石 徽章 与 灵石行 标签 同父 (实际 %s)" % str(ui._res_stone_icon.get_parent()))
+	# 2) 顺序: 徽章 紧跟在 各自 行 标签 前 (HBox 内 前一 兄弟)
+	var top_hb: HBoxContainer = ui._realm_label.get_parent() as HBoxContainer
+	var kids: Array = top_hb.get_children()
+	check(kids.size() > 0 and top_hb.get_child(kids.find(ui._realm_label) - 1) == ui._res_realm_icon,
+			"打磨-136 境界 徽章 在 境界行 标签 前 (实际 前兄弟 %s)" % str(top_hb.get_child(kids.find(ui._realm_label) - 1)))
+	check(top_hb.get_child(kids.find(ui._essence_label) - 1) == ui._res_qi_icon,
+			"打磨-136 主资源 徽章 在 主资源行 标签 前 (实际 %s)" % str(top_hb.get_child(kids.find(ui._essence_label) - 1)))
+	check(top_hb.get_child(kids.find(ui._stones_label) - 1) == ui._res_stone_icon,
+			"打磨-136 灵石 徽章 在 灵石行 标签 前 (实际 %s)" % str(top_hb.get_child(kids.find(ui._stones_label) - 1)))
+	# 3) 壳 StyleBoxFlat: 圆角 4 + 深底 (b 略 > r 深色仙侠) + 边色 = 字色 语义 同源 + 尺寸口径
+	var icons: Array = [ui._res_realm_icon, ui._res_qi_icon, ui._res_stone_icon]
+	var names: Array = ["界", "气", "石"]
+	var idx: Array = [0, 1, 2]
+	for i in idx:
+		var pn: Panel = icons[i]
+		var sbb: StyleBoxFlat = pn.get_theme_stylebox("panel") as StyleBoxFlat
+		check(sbb != null, "打磨-136 %s 徽章 壳 StyleBoxFlat (实际 %s)" % [names[i], str(pn.get_theme_stylebox("panel"))])
+		if sbb == null:
+			continue
+		check(sbb.get_corner_radius(0) >= 4.0, "打磨-136 %s 徽章 圆角 >=4 (实际 %.0f)" % [names[i], sbb.get_corner_radius(0)])
+		check(sbb.bg_color.b >= sbb.bg_color.r and sbb.bg_color.r < 0.15,
+				"%s 徽章 深底 深色仙侠 (实际 %s)" % [names[i], str(sbb.bg_color)])
+		var lbb: Label = pn.get_child(0) as Label
+		check(lbb != null and lbb.text == names[i], "打磨-136 %s 徽章 字符=%s (实际 %s)" % [names[i], names[i], str(lbb.text) if lbb != null else "null"])
+		if lbb == null:
+			continue
+		check(lbb.get_theme_color("font_color") == sbb.border_color,
+				"%s 徽章 字色 = 边色 语义 同源 (实际 %s vs %s)" % [names[i], str(lbb.get_theme_color("font_color")), str(sbb.border_color)])
+	# 字色 语义: 界=青 / 气=金 / 石=白 (与 顶栏 行 字色 同源 CYAN/GOLD/WHITEISH)
+	check(ui._res_realm_icon.get_child(0).get_theme_color("font_color") == ui.CYAN,
+			"打磨-136 界 徽章 字色=青 (实际 %s)" % str(ui._res_realm_icon.get_child(0).get_theme_color("font_color")))
+	check(ui._res_qi_icon.get_child(0).get_theme_color("font_color") == ui.GOLD,
+			"打磨-136 气 徽章 字色=金 (实际 %s)" % str(ui._res_qi_icon.get_child(0).get_theme_color("font_color")))
+	check(ui._res_stone_icon.get_child(0).get_theme_color("font_color") == ui.WHITEISH,
+			"打磨-136 石 徽章 字色=白 (实际 %s)" % str(ui._res_stone_icon.get_child(0).get_theme_color("font_color")))
+	# 4) 纯装饰 无热区: mouse_filter IGNORE + 无 tooltip + 尺寸 20x20 口径
+	for i in idx:
+		var pn2: Panel = icons[i]
+		check(pn2.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+				"%s 徽章 mouse_filter=IGNORE 无热区 (实际 %d)" % [names[i], int(pn2.mouse_filter)])
+		check(str(pn2.tooltip_text) == "", "%s 徽章 无 tooltip 纯装饰 (实际 %s)" % [names[i], str(pn2.tooltip_text)])
+		check(int(pn2.custom_minimum_size.x) == 20 and int(pn2.custom_minimum_size.y) == 20,
+				"%s 徽章 尺寸 20x20 口径 (实际 %dx%d)" % [names[i], int(pn2.custom_minimum_size.x), int(pn2.custom_minimum_size.y)])
+	# 5) 飞升 翻转 气->道 (动态 同步, 与 主资源行 口径 同源 primary_res_name)
+	check(str(ui._res_qi_icon.get_child(0).text) == "气", "打磨-136 初始 主资源 徽章=气 (实际 %s)" % str(ui._res_qi_icon.get_child(0).text))
+	g.ascended = true
+	g.dao_level = 1
+	ui._refresh()
+	check(str(ui._res_qi_icon.get_child(0).text) == "道", "打磨-136 飞升 后 主资源 徽章=道 (实际 %s)" % str(ui._res_qi_icon.get_child(0).text))
+	# 翻转 后 同态 节流: 再 刷 两帧 字符 稳定 无 变化 (挂机 恒定)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(str(ui._res_qi_icon.get_child(0).text) == "道", "打磨-136 翻转 后 同态 节流 稳定 (实际 %s)" % str(ui._res_qi_icon.get_child(0).text))
+	# 无 存档 副作用: 飞升 翻转 仅 改 展示 字符, 不 改 资源/统计
+	check(g.essence >= 0 and g.stones >= 0, "打磨-136 翻转 无 资源 副作用 (essence=%s stones=%s)" % [str(g.essence), str(g.stones)])
+	# 收尾: 复位 飞升 -> 徽章 恢复 气 + 缓存 复位
+	g.ascended = false
+	g.dao_level = 0
+	ui._refresh()
+	check(str(ui._res_qi_icon.get_child(0).text) == "气", "打磨-136 收尾 复位 主资源 徽章=气 (实际 %s)" % str(ui._res_qi_icon.get_child(0).text))
+	await get_tree().process_frame
 
 
 # M7-2 打磨-135d: 进度条 族 9-slice 换皮 断言 —
