@@ -40,14 +40,14 @@ var _rate_text := ""           # 打磨-78: 主资源速率 文本缓存 (变化
 var _sr_label: Label           # 打磨-79: 顶栏 灵石速率 常显 ("+X/秒", 与 修行页 灵石速率 行 同口径, 文本变化 才刷)
 var _sr_text := ""             # 打磨-79: 灵石速率 文本缓存 (变化才刷, 空串=隐藏)
 var _goalbar_bg: Button        # 打磨-81/82: 顶栏 下一目标 渐变进度条 背景 (5px, 全宽; 打磨-82 起 升级 flat Button 可点击热区)
-var _goalbar_fill: ColorRect   # 打磨-81: 进度条 填充 (青色 渐变, 按 next_goal_ratio 0..1)
+var _goalbar_fill: Panel       # 打磨-81: 进度条 填充 (打磨-135d: bar_fill 9-slice 纹理 青色, 按 next_goal_ratio 0..1)
 var _goalbar_cache_key := ""   # 打磨-81: 进度条 缓存键 "宽|2%量化档" (变化才写 fill, 防 每帧 重绘)
 var _goalbar_tip := ""         # 打磨-81: 进度条 tooltip 缓存 (与 下一目标 行 同 节流 路径)
 var _break_panel: Panel        # 打磨-82: 突破区 透明 Panel 外壳 (顶栏 进度条 点击直达 时 金边高亮 1.2s, 复用 法器区/汇总行 口径)
 var _break_hi_tween: Tween     # 打磨-82: 突破区 高亮 tween (1.2s 后 自动恢复, 重入 kill 旧 tween)
 var _progress_label: Label
-var _bar_bg: ColorRect
-var _bar_fill: ColorRect
+var _bar_bg: Panel
+var _bar_fill: Panel
 var _break_btn: Button
 var _auto_break_btn: Button     # 打磨-67: 自动突破开关 (toggle, 存档持久化)
 var _auto_break_on := false     # 打磨-67: 上帧开关状态缓存 (变化才刷按钮态)
@@ -614,9 +614,13 @@ func _build_ui() -> void:
 	_goalbar_bg.toggle_mode = false
 	_goalbar_bg.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_goalbar_bg.tooltip_text = "下一目标 进度 (与 修行页 下一目标 行 同 口径: 当前 主资源 / 突破消耗, 攒满即 可 点击 突破; 跨境界/飞升 后 目标 自动 切换, 道祖 封顶 恒 满条; 纯展示, 无 存档/统计 副作用)\n点击: 直达 修行页·突破区 (金边高亮)"
-	var gb_sb := StyleBoxFlat.new()
-	gb_sb.bg_color = Color(0.18, 0.19, 0.25, 0.0)
-	gb_sb.set_border_width_all(0)
+	# 打磨-135d: 底 换 bar_track 9-slice 纹理 (hover 金边 StyleBoxFlat 保留 叠加 纹理底, 与 135c-1 同口径)
+	var gb_sb := StyleBoxTexture.new()
+	gb_sb.texture = load("res://assets/ui/bar_track.png")
+	gb_sb.region_rect = Rect2(0, 4, 96, 8)
+	gb_sb.texture_margin_left = 4.0
+	gb_sb.texture_margin_right = 4.0
+	gb_sb.modulate_color = Color(0.5, 0.55, 0.65, 0.85)
 	_goalbar_bg.add_theme_stylebox_override("normal", gb_sb)
 	var gb_hv := StyleBoxFlat.new()
 	gb_hv.bg_color = Color(0.98, 0.86, 0.5, 0.12)
@@ -629,8 +633,8 @@ func _build_ui() -> void:
 	_goalbar_bg.custom_minimum_size = Vector2(0, 5)
 	_goalbar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(_goalbar_bg)
-	_goalbar_fill = ColorRect.new()
-	_goalbar_fill.color = Color(0.62, 0.9, 0.95, 0.9)
+	# 打磨-135d: 填充 换 bar_fill.png 9-slice 纹理 (裁亮带 防 细条 压扁, 青档 modulate 口径 不变)
+	_goalbar_fill = _bar_fill_panel(Color(0.62, 0.9, 0.95, 0.9))
 	_goalbar_fill.position = Vector2.ZERO
 	_goalbar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_goalbar_bg.add_child(_goalbar_fill)
@@ -864,13 +868,13 @@ func _build_training_page(page: Panel) -> void:
 	_goal_label = _label("", 14, GOLD)
 	break_col.add_child(_goal_label)
 	_goal_label.tooltip_text = "当前最优先的下一步: 攒够突破资源即点击突破; 飞升后改为道行精进。"
-	_bar_bg = ColorRect.new()
-	_bar_bg.color = Color(0.18, 0.19, 0.25)
+	# 打磨-135d: 突破条 底+填充 换 9-slice 纹理 (bar_track 底 / bar_fill 填充 青档, 色档 逻辑 不变)
+	_bar_bg = Panel.new()
+	_bar_bg.add_theme_stylebox_override("panel", _bar_track_sb())
 	_bar_bg.custom_minimum_size = Vector2(0, 14)
 	_bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	break_col.add_child(_bar_bg)
-	_bar_fill = ColorRect.new()
-	_bar_fill.color = CYAN
+	_bar_fill = _bar_fill_panel(CYAN)
 	_bar_fill.position = Vector2.ZERO
 	_bar_bg.add_child(_bar_fill)
 	_break_btn = _make_button("尝试突破")
@@ -1241,14 +1245,13 @@ func _add_skill_row(id: String) -> void:
 		_burst_previews_key[id] = ""
 		# 打磨-58: 冷却进度条 (细 6px, 青色按 剩余/总冷却 填充; 冷却中显示, 归零隐藏;
 		# 1 秒节流 + 2% 量化档 + 布局宽变化才刷, 防挂机每帧重绘)
-		var cd_bg := ColorRect.new()
-		cd_bg.color = Color(0.22, 0.24, 0.31)
+		var cd_bg := Panel.new()
+		cd_bg.add_theme_stylebox_override("panel", _bar_track_sb())
 		cd_bg.custom_minimum_size = Vector2(0, 6)
 		cd_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cd_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cd_bg.visible = false
-		var cd_fill := ColorRect.new()
-		cd_fill.color = CYAN
+		var cd_fill := _bar_fill_panel(CYAN)
 		cd_fill.position = Vector2.ZERO
 		cd_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cd_bg.add_child(cd_fill)
@@ -1807,8 +1810,8 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	var floor_l := _label("", 13, WHITEISH)
 	floor_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row1.add_child(floor_l)
-	var bar_bg := ColorRect.new()
-	bar_bg.color = Color(0.18, 0.19, 0.25)
+	var bar_bg := Panel.new()
+	bar_bg.add_theme_stylebox_override("panel", _bar_track_sb())
 	bar_bg.custom_minimum_size = Vector2(0, 10)
 	bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar_bg.size_flags_stretch_ratio = 1.0
@@ -1818,8 +1821,7 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 		if tid == "fixed"
 		else "进度: 距 下一 100 层 里程碑 Boss 的 段 进度 (满条 = 就在 100 倍数 里程碑 Boss 层, 过 层 后 绕回 重新 累计; 无尽 无 上限, 每 100 层 一 段)")
 	row1.add_child(bar_bg)
-	var bar_fill := ColorRect.new()
-	bar_fill.color = CYAN
+	var bar_fill := _bar_fill_panel(CYAN)
 	bar_fill.position = Vector2.ZERO
 	bar_bg.add_child(bar_fill)
 	# 怪物卡 (名 + 精英/Boss 标记 + 特性 tooltip; 键变化才刷)
@@ -1970,11 +1972,11 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 	# 进度条: 镇妖塔 层数/1000 (通关 恒 满); 登天梯 打磨-129 起 接入 下一 100 层 里程碑 段
 	# 进度 (tower_endless_mile_ratio 单点 口径: (层%100)/100, 100 倍数 层 满条, 过层 绕回)
 	# — 原 无尽 恒 满条 装饰 无 进度 信息, 现 给 挂机 扫视 段 内 进度 反馈
-	var fill: ColorRect = c["bar_fill"]
-	var bg: ColorRect = c["bar_bg"]
+	var fill: Panel = c["bar_fill"]
+	var bg: Panel = c["bar_bg"]
 	var r: float = (1.0 if is_clear else clampf(ratio, 0.0, 1.0)) if tid == "fixed" else g.tower_endless_mile_ratio(floor_n)
 	fill.size = Vector2(bg.size.x * r, bg.size.y)
-	fill.color = GOLD if is_clear else CYAN
+	_bar_set_fill(fill, GOLD if is_clear else CYAN)
 	# 怪物卡 (名 + 精英/Boss 标记; tooltip 特性 说明)
 	var tag: String = ""
 	if bool(mon["is_elite"]):
@@ -2136,13 +2138,12 @@ func _build_ach_page(page: Panel) -> void:
 		crow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var cl := _label("", 14, CYAN)
 		crow.add_child(cl)
-		var cbar_bg := ColorRect.new()
-		cbar_bg.color = Color(0.22, 0.24, 0.31)
+		var cbar_bg := Panel.new()
+		cbar_bg.add_theme_stylebox_override("panel", _bar_track_sb())
 		cbar_bg.custom_minimum_size = Vector2(72, 6)
 		cbar_bg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		cbar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var cbar_fill := ColorRect.new()
-		cbar_fill.color = CYAN
+		var cbar_fill := _bar_fill_panel(CYAN)
 		cbar_fill.position = Vector2.ZERO
 		cbar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cbar_bg.add_child(cbar_fill)
@@ -2173,13 +2174,12 @@ func _build_ach_page(page: Panel) -> void:
 	trow.add_theme_constant_override("separation", 5)
 	trow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	trow.add_child(tt)
-	var tbg := ColorRect.new()
-	tbg.color = Color(0.22, 0.24, 0.31)
+	var tbg := Panel.new()
+	tbg.add_theme_stylebox_override("panel", _bar_track_sb())
 	tbg.custom_minimum_size = Vector2(72, 6)
 	tbg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tfill := ColorRect.new()
-	tfill.color = CYAN
+	var tfill := _bar_fill_panel(CYAN)
 	tfill.position = Vector2.ZERO
 	tfill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tbg.add_child(tfill)
@@ -2230,13 +2230,12 @@ func _add_ach_row(id: String) -> void:
 	var prog_l := _label(GameData.ach_progress(id), 13, DIM)
 	info.add_child(prog_l)
 	# 打磨-40: 进度条 (已解锁=满条金色 / 未解锁=青色按进度比例填充, 与按进度降序排序视觉呼应)
-	var bar_bg := ColorRect.new()
-	bar_bg.color = Color(0.22, 0.24, 0.31)
+	var bar_bg := Panel.new()
+	bar_bg.add_theme_stylebox_override("panel", _bar_track_sb())
 	bar_bg.custom_minimum_size = Vector2(0, 6)
 	bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bar_fill := ColorRect.new()
-	bar_fill.color = CYAN
+	var bar_fill := _bar_fill_panel(CYAN)
 	bar_fill.position = Vector2.ZERO
 	bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar_bg.add_child(bar_fill)
@@ -2962,8 +2961,8 @@ func _refresh_collect() -> void:
 		else:
 			c = cs[k]
 		var it: Dictionary = _collect_items[k]
-		var bg: ColorRect = it["bar_bg"]
-		var fill: ColorRect = it["bar_fill"]
+		var bg: Panel = it["bar_bg"]
+		var fill: Panel = it["bar_fill"]
 		var got: int = int(c["got"])
 		var tot: int = int(c["total"])
 		var rt: float = 0.0 if tot <= 0 else clampf(float(got) / float(tot), 0.0, 1.0)
@@ -2976,7 +2975,7 @@ func _refresh_collect() -> void:
 		var full: bool = q >= 100
 		(it["label"] as Label).text = txt
 		(it["label"] as Label).add_theme_color_override("font_color", GOLD if full else CYAN)
-		fill.color = GOLD if full else CYAN
+		_bar_set_fill(fill, GOLD if full else CYAN)
 		if int(bg.size.x) > 0:
 			fill.size = Vector2(bg.size.x * float(q) / 100.0, bg.size.y)
 		# 打磨-44: Button 非 Container, 子行 label/bar 的 min-size 不会上抛 -> FlowContainer 视为 0 宽不换行;
@@ -2985,7 +2984,7 @@ func _refresh_collect() -> void:
 
 
 # 打磨-44: 按 行内 label+bar 的 min-size 同步收集按钮 min-size (让 FlowContainer 正确换行)
-func _collect_btn_min(k: String, cl: Label, bg: ColorRect) -> void:
+func _collect_btn_min(k: String, cl: Label, bg: Panel) -> void:
 	var it: Dictionary = _collect_items[k]
 	var b: Button = it.get("btn", null)
 	if b == null:
@@ -3000,8 +2999,8 @@ func _collect_btn_min(k: String, cl: Label, bg: ColorRect) -> void:
 func _ach_bar_refresh(id: Variant) -> void:
 	var g := GameData
 	var r40: Dictionary = _ach_rows[id]
-	var bg40: ColorRect = r40["bar_bg"]
-	var fill40: ColorRect = r40["bar_fill"]
+	var bg40: Panel = r40["bar_bg"]
+	var fill40: Panel = r40["bar_fill"]
 	var hi40: bool = g.ach_done.has(str(id))
 	var rv40: float = 1.0 if hi40 else g.ach_progress_ratio(str(id))
 	var cl40: float = minf(maxf(rv40, 0.0), 1.0)
@@ -3010,7 +3009,7 @@ func _ach_bar_refresh(id: Variant) -> void:
 	if str(_ach_bar_q.get(id, "")) == key40:
 		return
 	_ach_bar_q[id] = key40
-	fill40.color = GOLD if hi40 else CYAN
+	_bar_set_fill(fill40, GOLD if hi40 else CYAN)
 	fill40.size = Vector2(bg40.size.x * float(q40) / 50.0, bg40.size.y)
 	var a40: Dictionary = g.ach_by_id.get(str(id), {})
 	var pct40: int = int(round(cl40 * 100.0))
@@ -3112,8 +3111,8 @@ func _refresh_skill_cd_bars() -> void:
 			# 就绪: 收口动画 负责 收窄+隐藏 (打磨-59); 条 已 隐藏 则 无需 处理
 			continue
 		var r58: Dictionary = _skill_cd_bars[id]
-		var bg58: ColorRect = r58["bg"]
-		var fill58: ColorRect = r58["fill"]
+		var bg58: Panel = r58["bg"]
+		var fill58: Panel = r58["fill"]
 		if not bg58.visible:
 			bg58.visible = true
 		var q58: int = int(ceil(clampf(g.active_cd_ratio(id), 0.0, 1.0) * 50.0))
@@ -3121,7 +3120,7 @@ func _refresh_skill_cd_bars() -> void:
 		if str(_skill_cd_q.get(id, "")) == key58:
 			continue
 		_skill_cd_q[id] = key58
-		fill58.color = CYAN
+		_bar_set_fill(fill58, CYAN)
 		fill58.size = Vector2(bg58.size.x * float(q58) / 50.0, bg58.size.y)
 
 
@@ -3130,8 +3129,8 @@ func _hide_cd_bar(id: String) -> void:
 	var r59: Dictionary = _skill_cd_bars.get(id, {})
 	if r59.is_empty():
 		return
-	var bg59: ColorRect = r59["bg"]
-	var fill59: ColorRect = r59["fill"]
+	var bg59: Panel = r59["bg"]
+	var fill59: Panel = r59["fill"]
 	if bg59.visible:
 		bg59.visible = false
 		fill59.size = Vector2.ZERO
@@ -3153,8 +3152,8 @@ func _skill_ready_flash(fresh: Array[String]) -> void:
 		var r59: Dictionary = _skill_cd_bars.get(sid, {})
 		if r59.is_empty():
 			continue
-		var bg59: ColorRect = r59["bg"]
-		var fill59: ColorRect = r59["fill"]
+		var bg59: Panel = r59["bg"]
+		var fill59: Panel = r59["fill"]
 		if not bg59.visible:
 			continue
 		var old: Tween = _skill_active_close.get(sid)
@@ -3172,8 +3171,8 @@ func _skill_close_done(id: String) -> void:
 	var r59: Dictionary = _skill_cd_bars.get(id, {})
 	if r59.is_empty():
 		return
-	var bg59: ColorRect = r59["bg"]
-	var fill59: ColorRect = r59["fill"]
+	var bg59: Panel = r59["bg"]
+	var fill59: Panel = r59["fill"]
 	fill59.size = Vector2.ZERO
 	bg59.visible = false
 	_skill_cd_q[id] = "hidden"
@@ -4458,6 +4457,42 @@ func _make_btn_tex_sb_btn2() -> StyleBoxTexture:
 # 打磨-135c-1: 按钮 9-slice 纹理 样式 (btn_primary 三态 之一, Kenney CC0).
 # 中心 实心 填充 (角饰 在 内 ~8px), 状态 由 纹理 本身 区分 (hover 提亮 / pressed 压暗),
 # 无 modulate. 9-slice 边距 防 角饰 拉伸; content 内边距 保留 原 文字 留白 口径.
+# 打磨-135d: 进度条 底 9-slice 样式 (bar_track.png 裁 实心带 y4..11, 水平边距 4 保 端部 倒角,
+# 垂直 边距 0 = 中心 条带 纯 拉伸 — 防 细条 [5/6/10px] 被 纹理 上下 透明 空隙 压扁, Xvfb 实测 5/6/10/14px 均 完整 渲染)
+func _bar_track_sb() -> StyleBoxTexture:
+	var sb := StyleBoxTexture.new()
+	sb.texture = load("res://assets/ui/bar_track.png")
+	sb.region_rect = Rect2(0, 4, 96, 8)
+	sb.texture_margin_left = 4.0
+	sb.texture_margin_right = 4.0
+	sb.modulate_color = Color(0.5, 0.55, 0.65, 0.85)
+	return sb
+
+
+# 打磨-135d: 进度条 填充 Panel (bar_fill.png 9-slice 裁 亮带 y16..47, modulate 上色: 金/青 档 逻辑 不变)
+func _bar_fill_panel(col: Color) -> Panel:
+	var p := Panel.new()
+	var sb := StyleBoxTexture.new()
+	sb.texture = load("res://assets/ui/bar_fill.png")
+	sb.region_rect = Rect2(0, 16, 192, 32)
+	sb.texture_margin_left = 4.0
+	sb.texture_margin_right = 4.0
+	sb.modulate_color = col
+	p.add_theme_stylebox_override("panel", sb)
+	return p
+
+
+# 打磨-135d: 进度条 填充 换色 (重建 stylebox, modulate = 金/青 档 逻辑 不变)
+func _bar_set_fill(fill: Panel, col: Color) -> void:
+	var sb := StyleBoxTexture.new()
+	sb.texture = load("res://assets/ui/bar_fill.png")
+	sb.region_rect = Rect2(0, 16, 192, 32)
+	sb.texture_margin_left = 4.0
+	sb.texture_margin_right = 4.0
+	sb.modulate_color = col
+	fill.add_theme_stylebox_override("panel", sb)
+
+
 func _make_btn_tex_sb(tex_path: String) -> StyleBoxTexture:
 	var s := StyleBoxTexture.new()
 	s.texture = load(tex_path)

@@ -223,8 +223,18 @@ func _ready() -> void:
 	_assert_m135b_page_skins()  # M7-2 打磨-135b: 5 页大容器 9-slice 面板底 (panel_frame_frost.png/9-slice 边距/modulate 深色仙侠/行内 卡片 样式 不变/布局 偏移 不变)
 	_assert_m135c_btn_skins()  # M7-2 打磨-135c-1: 按钮族 核心 9-slice 换皮 (_make_button 默认 btn_primary 三态/金边高亮 适配纹理底/一键挂机 flat 保留/微光/闪烁 恢复 纹理 默认)
 	await _assert_m135c2_skins()  # M7-2 打磨-135c-2: 词缀背包格 btn_secondary 9-slice 换皮 (未选中 纹理 三态/选中 金边 叠加/flat 保留) + 内联 Button.new() 族 残留 flat 默认 排查固化 (徽标/段热区/进度条底/收集行 有意 保留)
+	await _assert_m135d_bar_skins()  # M7-2 打磨-135d: 进度条 族 9-slice 换皮 (7 族 bar 底 bar_track + 填充 bar_fill 9-slice 裁带/金青 档 modulate 逻辑 不变/细条 完整 渲染/节流/收尾)
 
 	_finish()
+
+
+# 打磨-135d: 进度条 填充 Panel modulate 色读取 (bar_fill 9-slice 纹理底, 金/青 档 = modulate;
+# 未 命中 stylebox 返回 空 Color 供 断言 显示)
+func _fill_modulate(fill: Panel) -> Color:
+	var sb = fill.get_theme_stylebox("panel")
+	if sb == null or not (sb is StyleBoxTexture):
+		return Color(-1, -1, -1)
+	return (sb as StyleBoxTexture).modulate_color
 
 
 # 初始态 (全新档, 未成就页): 17 条进度条, 未解锁青色 0 填充, tooltip 进度 0%, 顶栏计数 0/17
@@ -234,15 +244,15 @@ func _assert_initial() -> void:
 	check(ui._ach_rows.size() == g.ach_ids.size(), "成就行数量=%d (实际 %d)" % [g.ach_ids.size(), ui._ach_rows.size()])
 	for id in g.ach_ids:
 		var r: Dictionary = ui._ach_rows.get(id, {})
-		var bg: ColorRect = r.get("bar_bg", null)
-		var fill: ColorRect = r.get("bar_fill", null)
+		var bg: Panel = r.get("bar_bg", null)
+		var fill: Panel = r.get("bar_fill", null)
 		check(bg != null and fill != null, "成就 %s 进度条节点存在" % id)
 		if bg == null or fill == null:
 			continue
 		check(int(bg.size.x) > 0, "成就 %s 进度条背景布局宽>0 (实际 %d)" % [id, int(bg.size.x)])
 		check(int(fill.size.x) == 0, "成就 %s 未解锁进度条 0 填充 (实际 %d)" % [id, int(fill.size.x)])
 		check(fill.size.y == bg.size.y, "成就 %s 进度条高与背景一致" % id)
-		check(fill.color == ui.CYAN, "成就 %s 未解锁填充色=青" % id)
+		check(_fill_modulate(fill) == ui.CYAN, "成就 %s 未解锁填充色=青 (modulate)" % id)
 		var rown: Node = r["row"]
 		check(rown.tooltip_text.find("进度: 0%") >= 0, "成就 %s tooltip 含 进度: 0%% (实际 %s)" % [id, rown.tooltip_text])
 	check(str(ui._ach_count_label.text) == "成就 0/%d" % g.ach_ids.size(), "顶栏成就计数 0/%d (实际 %s)" % [g.ach_ids.size(), ui._ach_count_label.text])
@@ -262,12 +272,12 @@ func _assert_collect_bars_initial() -> void:
 		check(it.has("label") and it.has("bar_bg") and it.has("bar_fill"), "收集 %s 节点 (label/bar_bg/bar_fill) 存在" % k)
 		if it.is_empty() or not it.has("bar_bg"):
 			continue
-		var bg: ColorRect = it["bar_bg"]
-		var fill: ColorRect = it["bar_fill"]
+		var bg: Panel = it["bar_bg"]
+		var fill: Panel = it["bar_fill"]
 		check(int(bg.size.x) > 0, "收集 %s 进度条背景布局宽>0 (实际 %d)" % [k, int(bg.size.x)])
 		check(bg.size.y >= 5.0, "收集 %s 进度条高>=5 (实际 %.0f)" % [k, bg.size.y])
 		check(int(fill.size.x) == 0, "收集 %s 初始 0 填充 (实际 %d)" % [k, int(fill.size.x)])
-		check(fill.color == ui.CYAN, "收集 %s 初始填充色=青" % k)
+		check(_fill_modulate(fill) == ui.CYAN, "收集 %s 初始填充色=青 (modulate)" % k)
 		check(str((it["label"] as Label).text) == expect_txt[k], "收集 %s 计数文本 (实际 %s)" % [k, str(it["label"].text)])
 		var lc: Color = (it["label"] as Label).get_theme_color("font_color")
 		check(lc == ui.CYAN, "收集 %s 未集齐 文字色=青" % k)
@@ -310,18 +320,18 @@ func _mutate_state() -> void:
 	# 已解锁: 金满条 + 100% tooltip
 	for id in done:
 		var r: Dictionary = ui._ach_rows[id]
-		var bg: ColorRect = r["bar_bg"]
-		var fill: ColorRect = r["bar_fill"]
+		var bg: Panel = r["bar_bg"]
+		var fill: Panel = r["bar_fill"]
 		check(int(fill.size.x) == int(bg.size.x), "已解锁 %s 满条 (fill=%d bg=%d)" % [id, int(fill.size.x), int(bg.size.x)])
-		check(fill.color == ui.GOLD, "已解锁 %s 金色" % id)
+		check(_fill_modulate(fill) == ui.GOLD, "已解锁 %s 金色 (modulate)" % id)
 		var rown: Node = r["row"]
 		check(rown.tooltip_text.find("进度: 100%") >= 0, "已解锁 %s tooltip 100%% (实际 %s)" % [id, rown.tooltip_text])
 	# rich_100k 未解锁 50%: 青条 fill = bg*ceil(0.5*50)/50 = bg
 	var rr: Dictionary = ui._ach_rows["rich_100k"]
-	var rbg: ColorRect = rr["bar_bg"]
-	var rfill: ColorRect = rr["bar_fill"]
+	var rbg: Panel = rr["bar_bg"]
+	var rfill: Panel = rr["bar_fill"]
 	check(int(rfill.size.x) == int(rbg.size.x * 0.5), "rich_100k 50%% 填充=半条 (fill=%d bg=%d)" % [int(rfill.size.x), int(rbg.size.x)])
-	check(rfill.color == ui.CYAN, "rich_100k 青色 (未解锁)")
+	check(_fill_modulate(rfill) == ui.CYAN, "rich_100k 青色 (未解锁, modulate)")
 	var rrow: Node = rr["row"]
 	check(rrow.tooltip_text.find("进度: 50%") >= 0, "rich_100k tooltip 50%% (实际 %s)" % rrow.tooltip_text)
 	# 排序: 已解锁 5 个在前
@@ -354,11 +364,11 @@ func _assert_collect_bars_mutated() -> void:
 		var got: int = int(expect[k][0])
 		var tot: int = int(expect[k][1])
 		var q: int = int(ceil(clampf(float(got) / float(tot), 0.0, 1.0) * 100.0))
-		var bg: ColorRect = it["bar_bg"]
-		var fill: ColorRect = it["bar_fill"]
+		var bg: Panel = it["bar_bg"]
+		var fill: Panel = it["bar_fill"]
 		check(str((it["label"] as Label).text) == "%s %d/%d" % [names[k], got, tot], "收集 %s 计数文本 (实际 %s)" % [k, str((it["label"] as Label).text)])
 		check(int(fill.size.x) == int(bg.size.x * float(q) / 100.0), "收集 %s 填充=1%%档 %d%% (fill=%d bg=%d)" % [k, q, int(fill.size.x), int(bg.size.x)])
-		check(fill.color == ui.CYAN, "收集 %s 未满填充色=青" % k)
+		check(_fill_modulate(fill) == ui.CYAN, "收集 %s 未满填充色=青 (modulate)" % k)
 		check((it["label"] as Label).get_theme_color("font_color") == ui.CYAN, "收集 %s 未满文字色=青" % k)
 	check(str(ui._collect_text).find("(总 10/%d)" % total_collect) >= 0, "收集汇总文本含 总 10/总量 (实际 %s)" % str(ui._collect_text))
 	# 满态: 学全技能 + 全法器 -> 技能/法器 满条金色, 装备/成就 仍青色 (金/青 混合二态)
@@ -371,25 +381,25 @@ func _assert_collect_bars_mutated() -> void:
 	ui._refresh()
 	for k in ["skill", "item"]:
 		var it: Dictionary = ui._collect_items[k]
-		var bg: ColorRect = it["bar_bg"]
-		var fill: ColorRect = it["bar_fill"]
+		var bg: Panel = it["bar_bg"]
+		var fill: Panel = it["bar_fill"]
 		check(int(fill.size.x) == int(bg.size.x), "收集 %s 满条 (fill=%d bg=%d)" % [k, int(fill.size.x), int(bg.size.x)])
-		check(fill.color == ui.GOLD, "收集 %s 满态金色" % k)
+		check(_fill_modulate(fill) == ui.GOLD, "收集 %s 满态金色 (modulate)" % k)
 		check((it["label"] as Label).get_theme_color("font_color") == ui.GOLD, "收集 %s 满态文字金" % k)
 		check(str((it["label"] as Label).text) == "%s %d/%d" % [names[k], int(expect[k][1]), int(expect[k][1])], "收集 %s 满态计数 (实际 %s)" % [k, str((it["label"] as Label).text)])
 	for k in ["equip", "ach"]:
 		var it: Dictionary = ui._collect_items[k]
-		check((it["bar_fill"] as ColorRect).color == ui.CYAN, "收集 %s 未满分态保持青" % k)
+		check(_fill_modulate(it["bar_fill"]) == ui.CYAN, "收集 %s 未满分态保持青 (modulate)" % k)
 	# 满态 总计 分子 = 全技能 + 全法器 + 2 装备 + 5 成就
 	var full_got := g.skill_ids.size() + g.ITEMS.size() + 2 + 5
 	check(str(ui._collect_text).find("(总 %d/%d)" % [full_got, total_collect]) >= 0, "满态汇总文本含 总 %d/总量 (实际 %s)" % [full_got, str(ui._collect_text)])
 	# 打磨-43: 总计条 满态 分子/总量 — 青色 (未满保持青, 与 4 类同口径)
 	var t2: Dictionary = ui._collect_items["total"]
-	var tb2: ColorRect = t2["bar_bg"]
-	var tf2: ColorRect = t2["bar_fill"]
+	var tb2: Panel = t2["bar_bg"]
+	var tf2: Panel = t2["bar_fill"]
 	var q2: int = int(ceil(clampf(float(full_got) / float(total_collect), 0.0, 1.0) * 100.0))
 	check(int(tf2.size.x) == int(tb2.size.x * float(q2) / 100.0), "总计条 %d/总量 填充=1%%档 %d%% (fill=%d bg=%d)" % [full_got, q2, int(tf2.size.x), int(tb2.size.x)])
-	check(tf2.color == ui.CYAN, "总计条 %d/总量 未满=青" % full_got)
+	check(_fill_modulate(tf2) == ui.CYAN, "总计条 %d/总量 未满=青 (modulate)" % full_got)
 	await _assert_collect_total_wrap()
 
 
@@ -413,7 +423,7 @@ func _assert_collect_total_wrap() -> void:
 	var full_txt := "总计 %d/%d" % [total_collect, total_collect]
 	var it_all: Dictionary = ui._collect_items["total"]
 	check(str((it_all["label"] as Label).text) == full_txt, "总计条 全收集 %s (实际 %s)" % [full_txt, str((it_all["label"] as Label).text)])
-	check((it_all["bar_fill"] as ColorRect).color == ui.GOLD, "总计条 全收集=金")
+	check(_fill_modulate(it_all["bar_fill"]) == ui.GOLD, "总计条 全收集=金 (modulate)")
 	# 宽态: 6 条目全部布局在位 (1280 窄屏下天然可能 2~3 行, 记录自然行数供 roundtrip 对比; 1920 宽屏实测单行)
 	var rows_nat := _count_rows(wrap)
 	check(wrap.get_child_count() == 6, "宽态 6 条目全在 (实际 %d, 自然 %d 行)" % [wrap.get_child_count(), rows_nat])
@@ -1547,10 +1557,11 @@ func _assert_cd_bars() -> void:
 		check(r58.size() >= 2 and r58.get("bg") != null and r58.get("fill") != null, "打磨-58 %s 进度条节点 {bg,fill} 存在" % str(id))
 		if r58.size() < 2:
 			continue
-		var bg58: ColorRect = r58["bg"]
+		var bg58: Panel = r58["bg"]
 		check(bg58.get_parent() is VBoxContainer, "打磨-58 %s 进度条 挂 行内信息 VBox" % str(id))
 		check(bg58.size.y >= 5.0, "打磨-58 %s 进度条高>=5 (实际 %.1f)" % [str(id), bg58.size.y])
-		check(bg58.color == Color(0.22, 0.24, 0.31), "打磨-58 %s 进度条底色 (实际 %s)" % [str(id), str(bg58.color)])
+		var _sb58 = bg58.get_theme_stylebox("panel")
+		check(_sb58 is StyleBoxTexture and str((_sb58 as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_track.png", "打磨-58 %s 进度条底=bar_track 纹理 (打磨-135d)" % str(id))
 		check(not bg58.visible, "打磨-58 %s 初始 未学 进度条隐藏" % str(id))
 	check(n_active == 24, "打磨-58 主动神通行数量=24 (实际 %d)" % n_active)
 	# 找 两个 凡品主动神通 (cd 90s), 手动注入 冷却 (不同同步: a1 余 45 / a2 余 90=满)
@@ -1575,8 +1586,8 @@ func _assert_cd_bars() -> void:
 	ui._refresh_skill_cd_bars()
 	var r1: Dictionary = ui._skill_cd_bars[a1]
 	var r2: Dictionary = ui._skill_cd_bars[a2]
-	var bg1: ColorRect = r1["bg"]
-	var bg2: ColorRect = r2["bg"]
+	var bg1: Panel = r1["bg"]
+	var bg2: Panel = r2["bg"]
 	check(bg1.visible, "打磨-58 a1 冷却中 进度条 显示")
 	check(bg2.visible, "打磨-58 a2 冷却中 进度条 显示")
 	# 等 布局落定 + 缓存键 按 最终 宽 重算 (宽度 0 -> 实际 宽, headless 高负载时 布局 落定 慢;
@@ -1596,7 +1607,7 @@ func _assert_cd_bars() -> void:
 	check(bg2.size.x > 0.0, "打磨-58 a2 布局落定 宽度>0 (实际 %.1f)" % bg2.size.x)
 	# 宽度落定后 再 直调 一次 由 宽变化缓存键 触发 填充
 	ui._refresh_skill_cd_bars()
-	check(r1["fill"].color == ui.CYAN, "打磨-58 a1 填充色=青")
+	check(_fill_modulate(r1["fill"]) == ui.CYAN, "打磨-58 a1 填充色=青 (modulate)")
 	check(absf(r1["fill"].size.x - bg1.size.x * 0.5) < 0.5, "打磨-58 a1 填充=50%% 宽 (余45/总90, 期望 %.1f 实际 %.1f)" % [bg1.size.x * 0.5, r1["fill"].size.x])
 	check(absf(r2["fill"].size.x - bg2.size.x) < 0.5, "打磨-58 a2 填充=100%% 宽 (满冷却, 期望 %.1f 实际 %.1f)" % [bg2.size.x, r2["fill"].size.x])
 	# 节流门: 未跨 1 秒档时 _refresh() 内 不触发 _refresh_skill_cd_bars (缓存键/填充 不变)
@@ -1710,10 +1721,10 @@ func _assert_ready_flash() -> void:
 	ui._refresh_skill_cd_bars()
 	var r1: Dictionary = ui._skill_cd_bars[a1]
 	var r2: Dictionary = ui._skill_cd_bars[a2]
-	var bg1: ColorRect = r1["bg"]
-	var bg2: ColorRect = r2["bg"]
-	var fill1: ColorRect = r1["fill"]
-	var fill2: ColorRect = r2["fill"]
+	var bg1: Panel = r1["bg"]
+	var bg2: Panel = r2["bg"]
+	var fill1: Panel = r1["fill"]
+	var fill2: Panel = r2["fill"]
 	check(bg1.visible and bg2.visible, "打磨-59 冷却中 两行 进度条 可见 (a1=%s a2=%s)" % [str(bg1.visible), str(bg2.visible)])
 	# 等 布局落定 (宽度 0 -> 实际 宽, headless 高负载时 1 帧可能不够, 上限 20 帧; 与 打磨-58 同款加固)
 	for _i59 in 20:
@@ -4141,7 +4152,7 @@ func _assert_endless_mile_bar() -> void:
 	g.poison_battles = 0
 	g.poison_events.clear()
 	# 等 布局 落定: 2 连续 帧 bg 宽 不变 (>0, 同 打磨-58 口径 — headless 高负载 切页 首帧 宽 0)
-	var ebar0: ColorRect = ui._tw_cards["endless"]["bar_bg"]
+	var ebar0: Panel = ui._tw_cards["endless"]["bar_bg"]
 	var wprev129 := -1
 	for _i129 in 40:
 		await get_tree().process_frame
@@ -4153,10 +4164,10 @@ func _assert_endless_mile_bar() -> void:
 	ui._tw_key = ""
 	ui._refresh_tower()
 	await get_tree().process_frame
-	var ebar: ColorRect = ui._tw_cards["endless"]["bar_bg"]
-	var efill: ColorRect = ui._tw_cards["endless"]["bar_fill"]
-	var fbar: ColorRect = ui._tw_cards["fixed"]["bar_bg"]
-	var ffill: ColorRect = ui._tw_cards["fixed"]["bar_fill"]
+	var ebar: Panel = ui._tw_cards["endless"]["bar_bg"]
+	var efill: Panel = ui._tw_cards["endless"]["bar_fill"]
+	var fbar: Panel = ui._tw_cards["fixed"]["bar_bg"]
+	var ffill: Panel = ui._tw_cards["fixed"]["bar_fill"]
 	check(ebar != null and efill != null and fbar != null and ffill != null, "打磨-129 双塔 进度条 节点 齐全 (bg/fill)")
 	# 1) 登天梯 第 1 层: 条 填充 = 接口 比例 (像素 级 恒等, 填充宽 = bg 宽 x 比例)
 	var w129: float = ebar.size.x
@@ -4310,6 +4321,106 @@ func _assert_challenge_btn_tip() -> void:
 	g.dao_level = 0
 	g.set_process(true)
 	ui._tab.current_tab = 3
+
+
+# M7-2 打磨-135d: 进度条 族 9-slice 换皮 断言 —
+# 7 族 bar (顶栏 goalbar/突破条/冷却条 24/双塔 2/收集 mini 6/成就 N 行) 底 = bar_track.png 9-slice
+# (裁 实心带 region_rect + 水平边距 4 保 端部 倒角 + 垂直 0 纯 拉伸 防 细条 压扁, Xvfb 实测 5/6/10/14px
+# 均 完整 渲染), 填充 = bar_fill.png 9-slice (裁 亮带, modulate 上色 金/青 档 逻辑 不变); 断言: 7 族
+# 底 纹理 路径+裁带 region+水平边距 恒等 / 填充 纹理 路径+modulate 青档(金档 随 满态) / goalbar 攒满
+# 动态 满条+modulate 不变 / 同态 节流 无 统计 副作用 / 收尾 复原 0 填充。渲染 高度 属 容器 布局
+# (HBox 行 拉伸) 非 换皮 口径, 不 断言 (与 旧 ColorRect 行为 一致 防 误报)
+func _assert_m135d_bar_skins() -> void:
+	var g := GameData
+	# --- 顶栏 goalbar (5px, Button 底 纹理 normal 态 + 填充 Panel) ---
+	var gb: Button = ui._goalbar_bg
+	var gnorm = gb.get_theme_stylebox("normal")
+	check(gnorm is StyleBoxTexture and str((gnorm as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_track.png",
+		"打磨-135d goalbar 底=bar_track 纹理 (实际 %s)" % str(gnorm))
+	check((gnorm as StyleBoxTexture).texture_margin_left == 4.0 and (gnorm as StyleBoxTexture).texture_margin_right == 4.0,
+		"打磨-135d goalbar 底 9-slice 水平边距=4 (保 端部 倒角)")
+	check((gnorm as StyleBoxTexture).region_rect == Rect2(0, 4, 96, 8),
+		"打磨-135d goalbar 底 裁 实心带 region (实际 %s)" % str((gnorm as StyleBoxTexture).region_rect))
+	check(gb.get_theme_stylebox("hover") is StyleBoxFlat and (gb.get_theme_stylebox("hover") as StyleBoxFlat).border_width_left == 1,
+		"打磨-135d goalbar hover 金边 StyleBoxFlat 保留 (135c-1 同口径, 叠加 纹理底)")
+	var gfill: Panel = ui._goalbar_fill
+	check(gfill.get_parent() == gb, "打磨-135d goalbar 填充 挂 背景 下")
+	var gfill_sb = gfill.get_theme_stylebox("panel")
+	check(gfill_sb is StyleBoxTexture and str((gfill_sb as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_fill.png",
+		"打磨-135d goalbar 填充=bar_fill 纹理 (实际 %s)" % str(gfill_sb))
+	check(_fill_modulate(gfill) == Color(0.62, 0.9, 0.95, 0.9), "打磨-135d goalbar 填充 青档 modulate (实际 %s)" % str(_fill_modulate(gfill)))
+	# --- 突破条 (14px, 修行页) ---
+	var bb = ui._bar_bg
+	var bsb = bb.get_theme_stylebox("panel")
+	check(bsb is StyleBoxTexture and str((bsb as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_track.png"
+			and (bsb as StyleBoxTexture).region_rect == Rect2(0, 4, 96, 8),
+		"打磨-135d 突破条 底=bar_track 裁带 (实际 %s)" % str(bsb))
+	var bfill: Panel = ui._bar_fill
+	check(bfill.get_parent() == bb, "打磨-135d 突破条 填充 挂 背景 下")
+	check(_fill_modulate(bfill) == ui.CYAN, "打磨-135d 突破条 填充 青档 modulate")
+	check(bb.custom_minimum_size.y == 14.0, "打磨-135d 突破条 高 14px 设计值 不变")
+	# --- 冷却条 (24 行 6px) ---
+	check(ui._skill_cd_bars.size() == 24, "打磨-135d 冷却条 数量=24 (实际 %d)" % ui._skill_cd_bars.size())
+	var cd0: Dictionary = ui._skill_cd_bars.values()[0]
+	var cdbg: Panel = cd0["bg"]
+	var cfill: Panel = cd0["fill"]
+	var csb = cdbg.get_theme_stylebox("panel")
+	check(csb is StyleBoxTexture and str((csb as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_track.png"
+			and (csb as StyleBoxTexture).region_rect == Rect2(0, 4, 96, 8),
+		"打磨-135d 冷却条 底=bar_track 裁带 (实际 %s)" % str(csb))
+	check(_fill_modulate(cfill) == ui.CYAN, "打磨-135d 冷却条 填充 青档 modulate")
+	check(cdbg.custom_minimum_size.y == 6.0, "打磨-135d 冷却条 高 6px 设计值 不变")
+	# --- 双塔 卡片 (10px x2) ---
+	var fbar: Panel = ui._tw_cards["fixed"]["bar_bg"]
+	var ebar: Panel = ui._tw_cards["endless"]["bar_bg"]
+	var fsb = fbar.get_theme_stylebox("panel")
+	check(fsb is StyleBoxTexture and str((fsb as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_track.png"
+			and (fsb as StyleBoxTexture).region_rect == Rect2(0, 4, 96, 8),
+		"打磨-135d 镇妖塔 底=bar_track 裁带 (实际 %s)" % str(fsb))
+	var esb = ebar.get_theme_stylebox("panel")
+	check(esb is StyleBoxTexture and str((esb as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_track.png",
+		"打磨-135d 登天梯 底=bar_track 裁带 (实际 %s)" % str(esb))
+	check(_fill_modulate(ui._tw_cards["fixed"]["bar_fill"]) == ui.CYAN
+			and _fill_modulate(ui._tw_cards["endless"]["bar_fill"]) == ui.CYAN,
+		"打磨-135d 双塔 填充 青档 两 卡 modulate")
+	check(fbar.custom_minimum_size.y == 10.0, "打磨-135d 双塔 条 高 10px 设计值 不变")
+	# --- 收集 mini (6 条 6px) ---
+	var ci: Dictionary = ui._collect_items["skill"]
+	var cbg: Panel = ci["bar_bg"]
+	var cbfill: Panel = ci["bar_fill"]
+	var cs2 = cbg.get_theme_stylebox("panel")
+	check(cs2 is StyleBoxTexture and str((cs2 as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_track.png"
+			and (cs2 as StyleBoxTexture).texture_margin_left == 4.0,
+		"打磨-135d 收集 mini 底=bar_track (实际 %s)" % str(cs2))
+	check(_fill_modulate(cbfill) == ui.CYAN, "打磨-135d 收集 mini 填充 青档 modulate")
+	check(cbg.custom_minimum_size == Vector2(72, 6), "打磨-135d 收集 mini 尺寸 72x6 设计值 不变")
+	# --- 成就 行 (6px x N) ---
+	var aid0: String = g.ach_ids[0]
+	var ar: Dictionary = ui._ach_rows[aid0]
+	var abg: Panel = ar["bar_bg"]
+	var asb = abg.get_theme_stylebox("panel")
+	check(asb is StyleBoxTexture and str((asb as StyleBoxTexture).texture.resource_path) == "res://assets/ui/bar_track.png"
+			and (asb as StyleBoxTexture).region_rect == Rect2(0, 4, 96, 8),
+		"打磨-135d 成就 条 底=bar_track 裁带 (实际 %s)" % str(asb))
+	check(_fill_modulate(ar["bar_fill"]) == ui.CYAN, "打磨-135d 成就 条 填充 青档 modulate")
+	check(abg.custom_minimum_size.y == 6.0, "打磨-135d 成就 条 高 6px 设计值 不变")
+	# --- goalbar 攒满 动态 同步 (0 -> 满条, 填充 随 ratio; 全 同步 路径 无 await 防 _process 累积 干扰) ---
+	var ess135s: float = g.essence
+	g.essence = 0.0
+	ui._refresh()
+	check(int(gfill.size.x) == 0, "打磨-135d goalbar 初始 0 灵气 0 填充 (实际 %d)" % int(gfill.size.x))
+	g.essence = g.breakthrough_cost()
+	ui._refresh()
+	check(gfill.size.x == gb.size.x, "打磨-135d goalbar 攒满 满条 (fill=%.1f 宽=%.1f)" % [gfill.size.x, gb.size.x])
+	check(_fill_modulate(gfill) == Color(0.62, 0.9, 0.95, 0.9), "打磨-135d goalbar 满条 后 modulate 青档 不变")
+	# 同态 节流: 再刷 填充 不 重写 + 无 统计 副作用
+	var f135b: float = gfill.size.x
+	var snap135: Dictionary = g.stats.duplicate(true)
+	ui._refresh()
+	check(gfill.size.x == f135b and g.stats == snap135, "打磨-135d 同态 节流 填充 稳定 无 统计 副作用")
+	# 收尾: 复原 前序 灵气 (0 填充 态 由 键 节流 保持, 防 后续 段 基线 漂移)
+	g.essence = ess135s
+	ui._refresh()
 
 
 func _finish() -> void:
@@ -4965,15 +5076,15 @@ func _assert_primary_next_tip() -> void:
 func _assert_goalbar() -> void:
 	var g := GameData
 	var bg: Node = ui._goalbar_bg
-	var fill: ColorRect = ui._goalbar_fill
+	var fill: Panel = ui._goalbar_fill
 	check(bg != null and fill != null, "打磨-81 顶栏 下一目标 进度条 节点 存在")
 	check(fill.get_parent() == bg, "打磨-81 填充 挂在 背景 下 (实际 %s)" % str(fill.get_parent()))
 	var root_bg: Node = bg.get_parent()
 	check(root_bg.get_children().find(bg) >= 0 and root_bg.get_child(root_bg.get_children().find(bg) + 1) == ui._tab,
 		"打磨-81 进度条 紧随 顶栏 (root 内 顶栏 下一位; 实际 %s)" % str(root_bg))
 	check(bg.custom_minimum_size.y >= 5.0, "打磨-81 进度条 高度>=5px (实际 %s)" % str(bg.custom_minimum_size.y))
-	check(fill.color == Color(0.62, 0.9, 0.95, 0.9),
-		"打磨-81 填充 青色 (实际 %s)" % str(fill.color))
+	check(_fill_modulate(fill) == Color(0.62, 0.9, 0.95, 0.9),
+		"打磨-81 填充 青色 modulate (打磨-135d 9-slice 纹理底, 实际 %s)" % str(_fill_modulate(fill)))
 	check(str(bg.tooltip_text).find("下一目标") >= 0 and str(bg.tooltip_text).find("无 存档/统计 副作用") >= 0,
 		"打磨-81 tooltip 口径 (静态/动态 均含 下一目标+副作用 说明; 实际 %s)" % bg.tooltip_text.left(24))
 	# 等 布局落定 (宽度 0 -> 实际 宽, headless 高负载时 1 帧可能不够, 上限 20 帧; 与 打磨-58 同款加固)
