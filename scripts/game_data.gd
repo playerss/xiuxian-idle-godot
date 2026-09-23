@@ -53,6 +53,18 @@ const TOWER_BOSS_MULT_SMALL := 10.0
 const TOWER_BOSS_MULT_THEME := 20.0
 const TOWER_BOSS_MULT_FINAL := 50.0
 
+# ---------- M7-4 打磨-139: 音效池 (assets/sfx/ 程序合成 6 短音效, 打磨-139a 入库) ----------
+# 名称 -> 文件 映射 单一 来源; 139b 资源池 + 只读接口, 139c UI 层 AudioStreamPlayer 消费
+const SFX_DIR := "res://assets/sfx/"
+const SFX_FILES := {
+	"break_win": "break_win.wav",
+	"break_fail": "break_fail.wav",
+	"achieve": "achieve.wav",
+	"tower_win": "tower_win.wav",
+	"new_record": "new_record.wav",
+	"onekey": "onekey.wav",
+}
+
 # 境界表: 每个境界有若干层, 逐层突破
 const REALMS := [
 	{"name": "练气", "layers": 9},
@@ -131,6 +143,7 @@ var _affix_buckets: Array = []         # M6-2: 掉落 品质 权重 20 桶
 var _affix_sources := {}               # M6-2: 掉落 来源 配置 (normal/elite/boss/milestone)
 var _affix_cfg := {}                   # M6-2: 装配/背包 配置 (bag_capacity/slots_per_equip/slot_max)
 var _affix_mat := {}                   # 打磨-96: 材料 系统 配置 (decomp_base/decomp_per_tier/exchange_base/exchange_step/slot_up_materials)
+var _sfx_cache := {}                   # 打磨-139b: 音效 资源池 懒加载 缓存 (名称 -> AudioStreamWAV/nil)
 
 # ---- 玩家状态 ----
 var realm_idx := 0          # 当前境界索引
@@ -4419,3 +4432,65 @@ func dao_progress_text() -> String:
 		return "已至道祖, 道法自然 ♪"
 	var cost := dao_break_cost()
 	return "道行精进需 %s 道行 (当前 %s)" % [fmt(cost), fmt(dao)]
+
+# ---------- 打磨-139b: 音效 资源池 + 只读接口 (M7-4 逻辑层) ----------
+# 资源池: 6 短音效 (打磨-139a 程序合成 入库 assets/sfx/), 懒加载 缓存 单点,
+# 只读 无 状态/存档/统计 副作用; UI 层 (打磨-139c) AudioStreamPlayer 消费
+
+# 只读: 音效池 全部 名称 (数据 序 确定性, 与 SFX_FILES 键 同源)
+func sfx_names() -> Array:
+	var out: Array = []
+	for n in SFX_FILES:
+		out.append(n)
+	return out
+
+# 只读: 音效 资源 (名称 -> AudioStreamWAV; 未知 名称/资源 缺失/类型 不符 = null, 不 缓存 null)
+# 懒加载: 首次 请求 时 load (headless 可 真 load WAV 资源, 播放 由 UI 层 负责)
+func sfx_stream(name: String) -> AudioStreamWAV:
+	if not SFX_FILES.has(name):
+		return null
+	if _sfx_cache.has(name):
+		var c: Variant = _sfx_cache[name]
+		return c as AudioStreamWAV
+	var p: String = SFX_DIR + str(SFX_FILES[name])
+	if not ResourceLoader.exists(p):
+		return null
+	var res: Resource = load(p)
+	if res == null or not (res is AudioStreamWAV):
+		return null
+	var st := res as AudioStreamWAV
+	_sfx_cache[name] = st
+	return st
+
+# 只读: 音效池 就绪 数 (6 文件 全部 加载 成功 = 6; 与 sfx_check.gd 入库 校验 口径 同源)
+func sfx_ready_count() -> int:
+	var n := 0
+	for nm in SFX_FILES:
+		if sfx_stream(nm) != null:
+			n += 1
+	return n
+
+# 只读: 音效池 单文件 口径 校验 (16bit 44.1kHz 单声道 + 时长 0.05~1.0s + 峰值 >0.05 非静音)
+# 与 scripts/sfx_check.gd 断言 口径 恒等 同源 (139a 入库 校验, 139b 运行期 复核 防 素材 漂移);
+# 返回 "" = 就绪 口径 全过, 否则 返回 失败 原因
+func sfx_check_one(name: String) -> String:
+	var st := sfx_stream(name)
+	if st == null:
+		return "未 就绪 (资源 缺失 或 类型 不符)"
+	if st.format != AudioStreamWAV.FORMAT_16_BITS:
+		return "格式 != 16bit (%d)" % int(st.format)
+	if st.mix_rate != 44100 or st.stereo:
+		return "采样率/声道 不符 (rate=%d stereo=%s)" % [int(st.mix_rate), str(st.stereo)]
+	var dur := float(st.data.size()) / 2.0 / 44100.0
+	if dur < 0.05 or dur > 1.0:
+		return "时长 %.3f 超出 [0.05, 1.0]" % dur
+	var peak := 0.0
+	var data := st.data
+	for i in range(0, data.size() - 1, 2):
+		var raw := int(data[i]) | (int(data[i + 1]) << 8)
+		var v := (raw - 65536 if raw >= 32768 else raw) / 32768.0
+		if absf(v) > peak:
+			peak = absf(v)
+	if peak < 0.05:
+		return "静音 (峰值 %.4f)" % peak
+	return ""

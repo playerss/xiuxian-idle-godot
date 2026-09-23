@@ -8797,6 +8797,58 @@ func _init() -> void:
 	check(g.essence == ess138 and g.stats == stat138, "打磨-138 tier_badge_char 无 资源/统计 副作用")
 	# 收尾: 落盘 干净 基准 (防 污染 冒烟)
 	g.save_game()
+	# ---------- 打磨-139b: 音效 资源池 + 只读接口 (M7-4 逻辑层) ----------
+	# 名称 接口: 6 项 与 139a 入库 文件 恒等 同源
+	var names139: Array = g.sfx_names()
+	check(names139.size() == 6, "打磨-139b sfx_names 6 项 (实际 %d)" % names139.size())
+	var name_set := {
+		"break_win": true, "break_fail": true, "achieve": true,
+		"tower_win": true, "new_record": true, "onekey": true,
+	}
+	var set_ok := true
+	for nm in names139:
+		if not name_set.has(nm):
+			set_ok = false
+	check(set_ok, "打磨-139b sfx_names = 6 音效 名称 恒等 (与 SFX_FILES 同源)")
+	# 资源池: 6 项 懒加载 全部 就绪 (AudioStreamWAV 非 null)
+	var streams139: Dictionary = {}
+	var all_ok := true
+	for nm in name_set:
+		var st: AudioStreamWAV = g.sfx_stream(nm)
+		streams139[nm] = st
+		if st == null:
+			all_ok = false
+	check(all_ok, "打磨-139b 6 音效 资源 全部 就绪 (AudioStreamWAV 非 null)")
+	# 单文件 口径 逐 项 校验 (与 sfx_check.gd 口径 同源: 16bit/44.1kHz/单声道/时长/非静音)
+	var cal_ok := true
+	var cal_bad: String = ""
+	for nm in name_set:
+		var r: String = g.sfx_check_one(nm)
+		if r != "":
+			cal_ok = false
+			cal_bad = "%s: %s" % [nm, r]
+	check(cal_ok, "打磨-139b 6 音效 单文件 口径 全过 (16bit 44.1k 单声道 时长 非静音; 失败: %s)" % cal_bad)
+	# 就绪 数 接口: 6/6
+	check(g.sfx_ready_count() == 6, "打磨-139b sfx_ready_count = 6 (实际 %d)" % g.sfx_ready_count())
+	# 缓存 幂等: 重复 请求 同 对象 (引用 恒等, 懒加载 只 load 一次)
+	var a139a: AudioStreamWAV = g.sfx_stream("break_win")
+	var a139b: AudioStreamWAV = g.sfx_stream("break_win")
+	check(a139a != null and a139a == a139b, "打磨-139b 缓存 幂等 重复 请求 同 对象 (引用 恒等)")
+	# 未知 名称: null 防御 (不 崩溃 不 缓存)
+	check(g.sfx_stream("not_exist") == null, "打磨-139b 未知 名称 sfx_stream = null (防御)")
+	check(g.sfx_check_one("not_exist") != "", "打磨-139b 未知 名称 sfx_check_one = 未 就绪 (防御)")
+	# 只读: 连读 恒定 + 无 资源/统计/存档 副作用
+	var r139a: int = g.sfx_ready_count()
+	for nm in name_set:
+		g.sfx_stream(nm)
+		g.sfx_check_one(nm)
+	var r139b: int = g.sfx_ready_count()
+	var ess139: float = g.essence
+	var stat139: Dictionary = g.stats
+	check(r139a == r139b and r139a == 6, "打磨-139b 音效池 只读 连读 恒定 (6)")
+	check(g.essence == ess139 and g.stats == stat139, "打磨-139b 音效池 无 资源/统计 副作用")
+	# 收尾: 落盘 干净 基准 (防 污染 冒烟)
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

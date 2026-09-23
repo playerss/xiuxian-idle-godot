@@ -208,7 +208,7 @@
 
 ### M7-4 音效（打磨-139，最后做，按子任务拆：139a 数据层 → 139b 逻辑层 → 139c UI/事件层）
 - [x] 139a：音效数据层 — `scripts/gen_sfx.py` 程序合成 6 个古风短音效 WAV（零素材零许可风险，固定 LCG 种子确定性合成，重跑逐字节一致；44.1kHz 16bit 单声道，0.06~0.96s：break_win/break_fail/achieve/tower_win/new_record/onekey）+ `scripts/sfx_check.gd` 12 项入库校验（格式/时长/非静音）+ CREDITS 程序合成备注（Freesound 抓取为备选，本轮用程序合成兜底）；坑：wav import 默认 compress/mode=2(MP3) 须改 mode=0(WAV 16bit) 才能 AudioStreamWAV 16bit 口径
-- [ ] 139b：逻辑层 — game_data.gd 音效资源池 + 只读接口 + selftest 139 段
+- [x] 139b：逻辑层 — game_data.gd 音效资源池 + 只读接口 + selftest 139 段（实现: 打磨-139b 数据层 常量 SFX_DIR/SFX_FILES 6 名称→文件 映射 单一 来源 [与 139a 入库 6 WAV 同源]; 资源池 _sfx_cache 懒加载 缓存 [首次 请求 load, 未知 名称/资源 缺失/类型 不符 = null 不 缓存]; 只读 接口 sfx_names() [6 名称 数据 序]/sfx_stream(name) [名称→AudioStreamWAV 幂等 同 对象]/sfx_ready_count() [6 全 就绪]/sfx_check_one(name) [单文件 口径 16bit 44.1kHz 单声道+时长 0.05~1.0s+峰值>0.05 非静音, 与 sfx_check.gd 口径 恒等 同源 运行期 复核 防 素材 漂移]; 只读 无 状态/存档/统计 副作用; selftest 新增 打磨-139b 段 10 项 = 10992 项 [名称 6 恒等/资源 6 全 就绪/单文件 口径 全过/就绪 数 6/缓存 幂等 同 对象/未知 名称 null 防御 x2/只读 连读 恒定 无 副作用]; ui_test 3464 + stress 646 + 主场景 冒烟 0 报错 回归 全过)
 - [ ] 139c：UI/事件层 — main.gd AudioStreamPlayer 挂现有触发点（突破成/败、成就、塔胜、新纪录、一键）+ ui_test 139 段 + 商店截图复核
 - [ ] 突破成功/失败、成就解锁、一键系列、塔胜利/新纪录 5-8 个短音效（Freesound CC-BY 选 3-5 个 古琴/磬声 类，逐件 CREDITS 署名；程序合成兜底；AudioStreamPlayer 事件挂现有 浮动提示 路径，只触发不新增逻辑）
 
