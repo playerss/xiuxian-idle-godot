@@ -8849,6 +8849,39 @@ func _init() -> void:
 	check(g.essence == ess139 and g.stats == stat139, "打磨-139b 音效池 无 资源/统计 副作用")
 	# 收尾: 落盘 干净 基准 (防 污染 冒烟)
 	g.save_game()
+	# ---------- 打磨-140: 音效 开关 (数据层 存读档; UI 层 _sfx_play 门控 见 ui_test) ----------
+	# 1) 新档 默认 开
+	g.sfx_on = true
+	g.save_game()
+	check(_save_json().get("sfx_on", false) == true, "打磨-140 新档 sfx_on 默认 开 (实际 %s)" % str(_save_json().get("sfx_on")))
+	# 2) 关 存读档 往返
+	g.sfx_on = false
+	g.save_game()
+	g.load_game()
+	check(g.sfx_on == false, "打磨-140 sfx_on=false 存读档 往返 (实际 %s)" % str(g.sfx_on))
+	# 3) 旧档 缺 字段 默认 开 (删 sfx_on 键 模拟 旧 存档, 同 打磨-137 口径)
+	var old140: Dictionary = _save_json()
+	old140.erase("sfx_on")
+	var of140 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	if of140 != null:
+		of140.store_string(JSON.stringify(old140))
+		of140.close()
+	g.sfx_on = false  # 先置 false 证明 是 读档 默认 开 而非 内存 残留
+	g.load_game()
+	check(g.sfx_on == true, "打磨-140 旧档 缺 sfx_on 字段 默认 开 (实际 %s)" % str(g.sfx_on))
+	# 4) 开 往返 复原 基准
+	g.sfx_on = true
+	g.save_game()
+	g.load_game()
+	check(g.sfx_on == true, "打磨-140 复原 默认 开 往返 (实际 %s)" % str(g.sfx_on))
+	# 5) 开关 动作 无 资源/统计 副作用 (纯 设置 字段)
+	var es140: float = g.essence
+	var st140: float = g.stones
+	g.sfx_on = false
+	g.sfx_on = true
+	check(g.essence == es140 and g.stones == st140, "打磨-140 开关 无 资源 副作用")
+	# 收尾: 落盘 干净 基准 (防 污染 冒烟)
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

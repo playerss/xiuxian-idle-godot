@@ -229,6 +229,7 @@ func _ready() -> void:
 	await _assert_m136_res_icons()  # M7-3 打磨-136: 顶栏 资源图标 程序化 单字 徽章 (界/气/石 3 枚 Panel 壳+单字 同父 顶栏/顺序 在行 前/圆角深底边色=字色 语义/纯装饰 无热区/飞升 翻转 气->道 动态 同步/收尾 复原)
 	await _assert_m137_bg_toggle()  # M7-3 打磨-137-2: 水墨山水 背景 开关 按钮 (toggle 默认开/z-order _bg 在 BG ColorRect 上/点击 翻转 状态+可见性+底部消息/读档 同步 按钮态/无 资源/统计 副作用/收尾 复位 开)
 	await _assert_m139c_sfx()  # M7-4 打磨-139c: 音效 播放器 挂 现有 触发点 (player 节点/6 触发点 名称/未知 名称 防御/无 副作用/收尾 复位; 内部含 tower 挑战 await 须 显式 await 防 _finish 抢先 quit)
+	await _assert_m140_sfx_toggle()  # M7-4 打磨-140: 音效 开关 (修行页 开关 按钮 与 水墨背景 同区 同 定位: toggle 默认 开/点击 切 关 _sfx_play 静默 跳过/恢复 开 播放/读档 同步 按钮态/tooltip 口径/同态 节流/无 资源 统计 副作用/收尾 复位 开)
 
 	_finish()
 
@@ -8767,3 +8768,99 @@ func _assert_m139c_sfx() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(int(ui._sfx_played) == 0 and str(ui._sfx_last) == "", "打磨-139c 收尾 复位 0 播放 名称空 (实际 %d/%s)" % [ui._sfx_played, str(ui._sfx_last)])
+
+
+# M7-4 打磨-140: 音效 开关 (139c 6 触发点 无 玩家 开关 入口, 与 水墨背景 开关 137-2 同 定位: 修行页 自动 系列 区 toggle, 存档 持久化)
+# 断言: 按钮 节点/toggle 默认 开/tooltip 口径/点击 切 关 _sfx_play 静默 跳过/恢复 开 播放/读档 同步 按钮态/同态 节流/无 资源 统计 副作用/收尾 复位 开
+func _assert_m140_sfx_toggle() -> void:
+	var g := GameData
+	# 冻结 UI/GameData _process (手动 驱动 确定性; 段尾 双 恢复, 同 打磨-137/139c 段 冻结 口径)
+	var gproc: bool = g.is_processing()
+	ui.set_process(false)
+	g.set_process(false)
+	# 1) 节点 + toggle 初始 态
+	check(ui._sfx_btn != null, "打磨-140 音效 开关 按钮 节点 存在")
+	if ui._sfx_btn == null:
+		g.set_process(gproc)
+		ui.set_process(true)
+		return
+	check(ui._sfx_btn.toggle_mode, "打磨-140 按钮 toggle_mode=true (实际 %s)" % str(ui._sfx_btn.toggle_mode))
+	check(ui._sfx_btn.text == "音效: 开" and ui._sfx_btn.button_pressed,
+			"打磨-140 初始 默认 开: 文本+pressed (实际 %s pressed=%s)" % [str(ui._sfx_btn.text), str(ui._sfx_btn.button_pressed)])
+	check(str(ui._sfx_btn.tooltip_text).contains("6 处 触发 点 短音效"), "打磨-140 tooltip 含 口径 说明 (实际 %s)" % str(ui._sfx_btn.tooltip_text).left(20))
+	check(ui._sfx_btn.get_parent() == ui._bg_btn.get_parent(),
+			"打磨-140 按钮 与 水墨背景 开关 同 容器 同区 (实际 %s)" % str(ui._sfx_btn.get_parent().get_class()))
+	# 2) 基准: 开 态 播放 正常 (139c 收尾 已 清 缓存/计数, 此 处 直调 有效 名称 计数 +1)
+	var base140: int = int(ui._sfx_played)
+	ui._sfx_play("onekey")
+	check(int(ui._sfx_played) == base140 + 1 and str(ui._sfx_last) == "onekey",
+			"打磨-140 开 态 _sfx_play 正常 播放 (实际 +%d/%s)" % [int(ui._sfx_played) - base140, str(ui._sfx_last)])
+	ui._sfx_played = 0
+	ui._sfx_last = ""
+	# 3) 点击 切 关 (emit pressed 走 真实 _on_sfx_toggle 路径): sfx_on=false + 按钮态 + 底部消息 + _sfx_play 静默 跳过
+	ui._sfx_btn.emit_signal("pressed")
+	check(g.sfx_on == false, "打磨-140 点击 切关: sfx_on=false (实际 %s)" % str(g.sfx_on))
+	check(ui._sfx_btn.text == "音效: 关" and not ui._sfx_btn.button_pressed,
+			"打磨-140 切关 后 按钮 文本+pressed 同步 (实际 %s pressed=%s)" % [str(ui._sfx_btn.text), str(ui._sfx_btn.button_pressed)])
+	check(str(ui._msg_label.text).contains("音效"), "打磨-140 切关 底部 消息 确认 (实际 %s)" % str(ui._msg_label.text).left(20))
+	var n0: int = int(ui._sfx_played)
+	ui._sfx_play("onekey")
+	check(int(ui._sfx_played) == n0, "打磨-140 关 态 _sfx_play 静默 跳过 (计数 不变; 实际 +%d)" % (int(ui._sfx_played) - n0))
+	ui._sfx_play("break_win")
+	check(int(ui._sfx_played) == n0, "打磨-140 关 态 有效 名称 仍 静默 跳过 (实际 +%d)" % (int(ui._sfx_played) - n0))
+	# 4) 点击 恢复 开: 播放 恢复
+	ui._sfx_btn.emit_signal("pressed")
+	check(g.sfx_on == true and ui._sfx_btn.text == "音效: 开" and ui._sfx_btn.button_pressed,
+			"打磨-140 恢复 开: 状态+按钮态 (实际 %s pressed=%s)" % [str(g.sfx_on), str(ui._sfx_btn.button_pressed)])
+	var n1: int = int(ui._sfx_played)
+	ui._sfx_play("achieve")
+	check(int(ui._sfx_played) == n1 + 1 and str(ui._sfx_last) == "achieve",
+			"打磨-140 恢复 开 后 播放 恢复 (实际 +%d/%s)" % [int(ui._sfx_played) - n1, str(ui._sfx_last)])
+	ui._sfx_played = 0
+	ui._sfx_last = ""
+	# 5) 读档 同步: 存档 sfx_on=false -> load_game -> _refresh 按钮态 同步 关
+	g.save_game()
+	var fp: String = g.SAVE_PATH
+	var fsr := FileAccess.open(fp, FileAccess.READ)
+	var sj: Dictionary = JSON.parse_string(fsr.get_as_text())
+	fsr.close()
+	sj["sfx_on"] = false
+	var fsw := FileAccess.open(fp, FileAccess.WRITE)
+	fsw.store_string(JSON.stringify(sj))
+	fsw.close()
+	g.load_game()
+	check(g.sfx_on == false, "打磨-140 读档 恢复 sfx_on=false (实际 %s)" % str(g.sfx_on))
+	ui._refresh()
+	check(ui._sfx_btn.text == "音效: 关" and not ui._sfx_btn.button_pressed,
+			"打磨-140 读档 后 按钮态 同步=关 (实际 %s pressed=%s)" % [str(ui._sfx_btn.text), str(ui._sfx_btn.button_pressed)])
+	# 6) 同态 节流 稳定
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(ui._sfx_btn.text == "音效: 关" and not ui._sfx_btn.button_pressed,
+			"打磨-140 同态 节流 稳定 无 抖动 (实际 %s)" % str(ui._sfx_btn.text))
+	# 7) 无 资源/统计 副作用: 开关 动作 (点击 切 关/开 两轮 + 读档) 不 改 资源/统计
+	#    load_game 会 舍入 float 存读档 往返 (打磨-66 已知 口径), 故 基准 取 load 后 快照, 只 覆盖 收尾 点击 窗口
+	var st1: float = g.stones
+	var es1: float = g.essence
+	var stats1: Dictionary = g.stats.duplicate(true)
+	# 收尾: 复位 开 (点击 切回 走 真实 路径 + _refresh 同步)
+	ui._sfx_btn.emit_signal("pressed")
+	check(g.sfx_on == true and ui._sfx_btn.text == "音效: 开" and ui._sfx_btn.button_pressed,
+			"打磨-140 收尾 复位 开 (实际 %s)" % str(g.sfx_on))
+	ui._refresh()
+	check(float(g.stones) == st1 and float(g.essence) == es1 and g.stats == stats1,
+			"打磨-140 开关 动作 无 资源/统计 副作用 (收尾 点击 窗口)")
+	# 收尾: 落盘 + 复位 播放 计数 + 清 音效池 缓存/player stream (防 quit 资源 告警, 同 139c 口径)
+	g.save_game()
+	ui._sfx_played = 0
+	ui._sfx_last = ""
+	ui._sfx_last_player = null
+	if ui._sfx_player != null:
+		ui._sfx_player.stream = null
+	g._sfx_cache.clear()
+	g.set_process(gproc)
+	ui.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(ui._sfx_played) == 0 and g.sfx_on == true, "打磨-140 收尾 复位 0 播放 + sfx_on=开 (实际 %d/%s)" % [ui._sfx_played, str(g.sfx_on)])

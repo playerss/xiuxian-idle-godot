@@ -41,6 +41,8 @@ var _bg: CanvasItem            # 打磨-137: 水墨山水 背景 (程序化 渐�
 var _bg_key := "1"            # 打磨-137: 背景 开关 同步 缓存键 (与 bg_on 同态 不重复 调用 set_bg_enabled)
 var _bg_btn: Button            # 打磨-137-2: 水墨山水 背景 开关 按钮 (toggle, 存档 持久化, 修行页 自动 系列 区 末位)
 var _bg_btn_on := true          # 打磨-137-2: 水墨背景 按钮 上帧 状态 缓存 (变化 才 刷 按钮态, 读档 同步)
+var _sfx_btn: Button            # 打磨-140: 音效 开关 按钮 (toggle, 存档 持久化, 修行页 自动 系列 区; 与 水墨背景 开关 同 定位)
+var _sfx_btn_on := true         # 打磨-140: 音效 按钮 上帧 状态 缓存 (变化 才 刷 按钮态, 读档 同步)
 var _play_text := ""           # 打磨-77: 挂机时长 文本缓存 (变化才刷, 空串=隐藏)
 var _play_tip := ""            # 打磨-83: 挂机时长 悬停 离线收益 预估 tooltip 缓存 (变化才刷)
 var _rate_label: Label         # 打磨-78: 顶栏 主资源速率 常显 ("+X/秒", 未飞升=灵气 飞升后=道行, 文本变化 才刷)
@@ -978,6 +980,17 @@ func _build_training_page(page: Panel) -> void:
 		+ "开关 存档 持久化, 默认 开 (旧档 缺字段 默认 开)。"
 	_bg_btn.pressed.connect(_on_bg_toggle)
 	break_box.add_child(_bg_btn)
+	# 打磨-140: 音效 开关 (toggle; 默认 开; 与 水墨背景 开关 同区 同 定位: 装饰 设置 开关, 存档 持久化,
+	# 状态 变化 才 刷, _refresh 幂等 同步; 关 = _sfx_play 静默 跳过 [触发点 逻辑/浮动/消息 不变])
+	_sfx_btn = _make_button("音效: 开" if GameData.sfx_on else "音效: 关")
+	_sfx_btn.toggle_mode = true
+	_sfx_btn.set_pressed_no_signal(GameData.sfx_on)  # 构建时 初始 态 与 存档 同步 (默认 开)
+	_sfx_btn_on = GameData.sfx_on
+	_sfx_btn.tooltip_text = "6 处 触发 点 短音效 (突破 成/败, 成就 解锁, 一键 系列, 塔 胜利, 登天梯 新纪录, 一键 变更)。\n" \
+		+ "关闭 后 触发 点 静默 跳过 (浮动/底部 消息/结算 逻辑 均 不变, 只 不 播 声); 音量 -6dB 不 盖 音乐 口径 不变。\n" \
+		+ "开关 存档 持久化, 默认 开 (旧档 缺字段 默认 开)。"
+	_sfx_btn.pressed.connect(_on_sfx_toggle)
+	break_box.add_child(_sfx_btn)
 	# 打磨-88: 一键挂机 按钮 (一键 全开/全关 自动系列 4 开关 [突破/购置/施展/领悟];
 	# toggle 反映 全开 态: 全开="一键挂机: 全开" 按压, 未全开/部分开="一键挂机: 全关" 未按压;
 	# 点击 方向: 未全开 → 全开 (补齐 至 全开, 含 部分开 场景), 全开 → 全关;
@@ -2476,6 +2489,11 @@ func _refresh() -> void:
 		_bg_btn_on = g.bg_on
 		_bg_btn.set_pressed_no_signal(g.bg_on)
 		_bg_btn.text = ("水墨背景: 开" if g.bg_on else "水墨背景: 关")
+	# 打磨-140: 音效开关 按钮态 (状态 变化 才 刷; 读档 恢复/外部改 同步, 同 水墨背景 口径)
+	if g.sfx_on != _sfx_btn_on:
+		_sfx_btn_on = g.sfx_on
+		_sfx_btn.set_pressed_no_signal(g.sfx_on)
+		_sfx_btn.text = ("音效: 开" if g.sfx_on else "音效: 关")
 	# M5-3: 自动爬塔按钮 tooltip 动态段 (双塔 当前 挑战 层 + 胜负 预测, 随 层数/怪物/战力 变化 才刷; 同 打磨-84/85/86 缓存口径)
 	var at_tip: String = g.auto_tower_next_tip()
 	if at_tip != _tw_auto_tip:
@@ -2948,6 +2966,8 @@ func _tower_win_float(text: String) -> void:
 # 共享 6 音效 (各 触发点 互斥 不 并发: 突破 成/败 二选一, 成就/塔胜/新纪录/一键 各 单 事件)
 func _sfx_play(name: String) -> void:
 	if _sfx_player == null:
+		return
+	if not GameData.sfx_on:  # 打磨-140: 音效 关 静默 跳过 (触发点 逻辑 不变)
 		return
 	var st := GameData.sfx_stream(name)
 	if st == null:
@@ -3515,6 +3535,15 @@ func _on_bg_toggle() -> void:
 	_bg_btn.set_pressed_no_signal(GameData.bg_on)
 	_bg_btn.text = ("水墨背景: 开" if GameData.bg_on else "水墨背景: 关")
 	_show_msg("水墨山水 背景 已开启" if GameData.bg_on else "水墨山水 背景 已关闭, 恢复 纯色 深底")
+
+
+# 打磨-140: 音效 开关 — 点击 切 开/关 (存档 持久化, 纯 设置 无 资源/统计 副作用;
+# 关 = _sfx_play 静默 跳过, 触发点 浮动/消息/结算 逻辑 均 不变; 底部消息 确认 口径 同 水墨背景)
+func _on_sfx_toggle() -> void:
+	GameData.sfx_on = not GameData.sfx_on
+	_sfx_btn.set_pressed_no_signal(GameData.sfx_on)
+	_sfx_btn.text = ("音效: 开" if GameData.sfx_on else "音效: 关")
+	_show_msg("音效 已开启 (突破/成就/一键/塔 胜利/新纪录 触发 点 恢复 播放)" if GameData.sfx_on else "音效 已关闭, 触发 点 静默 跳过 (浮动/消息 不受 影响)")
 
 
 # 打磨-88: 一键挂机 — 点击 一键 全开/全关 自动系列 4 开关 (突破/购置/施展/领悟);

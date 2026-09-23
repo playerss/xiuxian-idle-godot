@@ -178,6 +178,7 @@ var auto_learn := false         # 打磨-80: 自动领悟 (开=境界提升后�
 var _auto_learn_seq := 0        # 打磨-80: 自动领悟 变更事件计数 (每轮 实际学习 +1, 不持久化, UI 据此刷底部消息)
 var _auto_learn_last_n := 0     # 打磨-80: 上轮 学习 技能 数 (内存态, 供 auto_learn_last_text)
 var bg_on := true               # 打磨-137: 水墨山水 背景 开关 (开=渲染 渐变夜空+远山视差+灵气粒子, 默认开, 存档持久化)
+var sfx_on := true              # 打磨-140: 音效 开关 (开=6 触发点 播放, 关=_sfx_play 静默 跳过; 默认开, 存档持久化)
 # 打磨-95: 自动爬塔 胜局 汇总 (本轮 _try_auto_tower 结算明细, 内存态 不持久化;
 # 挂机 时 自动 爬塔 胜利 原本 静默 无 反馈 (手动 挑战 有 底部消息, 自动 路径 缺位),
 # 由 变更事件 驱动 节流 底部消息 告知 玩家 挂机 期间 爬塔 成果)
@@ -3875,6 +3876,7 @@ func save_game() -> void:
 		"auto_cast": auto_cast,    # 打磨-69: 自动施展开关 (旧档缺字段默认关)
 		"auto_learn": auto_learn,  # 打磨-80: 自动领悟开关 (旧档缺字段默认关)
 		"bg_on": bg_on,  # 打磨-137: 水墨山水 背景 开关 (旧档缺字段默认开)
+		"sfx_on": sfx_on,  # 打磨-140: 音效 开关 (旧档缺字段默认开)
 		"auto_tower": auto_tower,  # M5-3: 自动爬塔开关 (旧档缺字段默认关)
 		# M5-2: 爬塔 状态 (旧档缺字段默认 0 / 未通关)
 		"tower_fixed_floor": tower_fixed_floor,
@@ -3923,6 +3925,7 @@ func load_game() -> void:
 	auto_cast = bool(parsed.get("auto_cast", false))    # 打磨-69: 自动施展开关 (旧档缺字段默认关)
 	auto_learn = bool(parsed.get("auto_learn", false))  # 打磨-80: 自动领悟开关 (旧档缺字段默认关)
 	bg_on = bool(parsed.get("bg_on", true))  # 打磨-137: 水墨山水 背景 开关 (旧档缺字段默认开)
+	sfx_on = bool(parsed.get("sfx_on", true))  # 打磨-140: 音效 开关 (旧档缺字段默认开)
 	auto_tower = bool(parsed.get("auto_tower", false))  # M5-3: 自动爬塔开关 (旧档缺字段默认关)
 	# M5-2: 爬塔 状态 (旧档缺字段 默认 0 / 未通关 / 登天梯 从 1 层 起)
 	tower_fixed_floor = clampi(int(parsed.get("tower_fixed_floor", 0)), 0, 1000)
