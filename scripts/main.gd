@@ -59,6 +59,8 @@ var _progress_label: Label
 var _bar_bg: Panel
 var _bar_fill: Panel
 var _break_btn: Button
+var _break_btn_tip := ""        # 打磨-142: 突破按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84/85 口径)
+var _break_btn_tip_static := "" # 打磨-142: 突破按钮 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑)
 var _auto_break_btn: Button     # 打磨-67: 自动突破开关 (toggle, 存档持久化)
 var _auto_break_on := false     # 打磨-67: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_break_tip := ""        # 打磨-85: 自动突破按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84 口径)
@@ -919,6 +921,10 @@ func _build_training_page(page: Panel) -> void:
 	_bar_bg.add_child(_bar_fill)
 	_break_btn = _make_button("尝试突破")
 	_break_btn.pressed.connect(_on_break)
+	# 打磨-142: 突破按钮 tooltip = 静态口径 + 动态段 (消耗/成功率/缺口/ETA/预期成本, 随 资源/境界/功法装备 变化 由 _refresh 刷新);
+	# 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85 动态段 口径)
+	_break_btn_tip_static = ("点击 尝试 突破/道行精进 (消耗 与 成功率 见 按钮文案, 失败 全耗 重攒). 金边高亮 = 资源 已 攒够 可 点击 (打磨-32).\n\n【本次 突破 预估 (动态)】\n")
+	_break_btn.tooltip_text = _break_btn_tip_static + GameData.break_btn_tip()
 	break_box.add_child(_break_btn)
 	# 打磨-67: 自动突破开关 (资源攒够自动尝试 突破/道行精进; 状态变化才刷按钮态)
 	_auto_break_btn = _make_button("自动突破: 关")
@@ -2423,6 +2429,11 @@ func _refresh() -> void:
 	else:
 		_break_btn.text = "尝试突破 · 耗 %s 灵气 (成功率%0.0f%%)" % [g.fmt(g.breakthrough_cost()), g.breakthrough_chance() * 100.0]
 		_break_btn.disabled = false
+	# 打磨-142: 突破按钮 tooltip 动态段 (消耗/成功率/缺口/ETA/预期成本, 随 资源/境界/功法装备 变化 才刷; 同 打磨-84/85 缓存口径)
+	var bb_tip: String = g.break_btn_tip()
+	if bb_tip != _break_btn_tip:
+		_break_btn_tip = bb_tip
+		_break_btn.tooltip_text = _break_btn_tip_static + bb_tip
 	# 打磨-67: 自动突破开关 按钮态 (开关状态 变化才刷; 读档恢复/外部改 同步)
 	if g.auto_break != _auto_break_on:
 		_auto_break_on = g.auto_break

@@ -8940,6 +8940,66 @@ func _init() -> void:
 	g.essence = es141
 	g.realm_idx = r141
 	g.save_game()
+	# ---------- 打磨-142: 突破按钮 tooltip 动态段 (break_btn_tip 只读接口) ----------
+	# 复用 打磨-24 ETA + 打磨-63 预期成本 口径; 只读 无 状态/存档/统计 副作用
+	g.save_game()
+	g.load_game()
+	var es142: float = g.essence
+	var st142: float = g.stones
+	var r142: int = g.realm_idx
+	var a142: bool = g.ascended
+	var d142: float = g.dao
+	var dl142: int = g.dao_level
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	# 1) 基准: 未飞升 半程 — 头部 含 按钮 同口径 消耗+成功率, 缺口+ETA 段=接口 恒等
+	var c142: float = g.breakthrough_cost()
+	g.essence = c142 * 0.5
+	var t1142: String = g.break_btn_tip()
+	var e142: String = g.breakthrough_eta_text().trim_prefix("突破还需 ")
+	check(t1142.begins_with("突破 耗 ") and ("成功率 %d%%" % int(round(g.primary_break_chance() * 100.0))) in t1142,
+		"打磨-142 基准 头部=按钮口径 消耗+成功率 (实际 %s)" % t1142)
+	check(e142 in t1142 and "还差" in t1142, "打磨-142 基准 缺口+ETA 段=接口 恒等 (实际 %s, 期望含 %s)" % [t1142, e142])
+	# 2) 预期成本 段 — 含 期望次数/期望总消耗 (打磨-63 口径, 失败全耗重攒)
+	check("期望次数 ~" in t1142 and "期望总消耗 ~" in t1142,
+		"打磨-142 基准 含 预期成本 段 (实际 %s)" % t1142)
+	# 3) 攒满 — 已攒够 无 ETA/预期成本 段
+	g.essence = c142
+	check(g.break_btn_tip().ends_with("灵气已攒够, 点击突破"),
+		"打磨-142 攒满 已攒够 无 ETA 段 (实际 %s)" % g.break_btn_tip())
+	# 4) 境界 提升 — 消耗/成功率 变 头部 动态 恒等
+	g.realm_idx = 2
+	g.essence = g.breakthrough_cost() * 0.5
+	var t2142: String = g.break_btn_tip()
+	check(t2142 != t1142 and ("耗 %s 灵气" % g.fmt(g.breakthrough_cost())) in t2142,
+		"打磨-142 境界2 头部 消耗 动态 同步 (实际 %s)" % t2142)
+	# 5) 飞升 口径 — 道行 头部 + 道行 精进 口径 缺口/ETA
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = g.dao_break_cost() * 0.25
+	var t4142: String = g.break_btn_tip()
+	var e4142: String = g.breakthrough_eta_text().trim_prefix("道行精进还需 ")
+	check(t4142.begins_with("修炼道行 耗 ") and "道行" in t4142 and e4142 in t4142,
+		"打磨-142 飞升 道行 口径 头部+缺口 恒等 (实际 %s)" % t4142)
+	# 6) 道祖 封顶 — 圆满 文案 (按钮 禁用)
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	check(g.break_btn_tip().begins_with("已至道祖"),
+		"打磨-142 道祖 封顶 文案 (实际 %s)" % g.break_btn_tip())
+	# 7) 只读 连读 恒定 无 资源/统计 副作用 (道祖 态 下 连读, 快照 防 本段 自身 改态 干扰)
+	var snap142: Dictionary = g.stats.duplicate(true)
+	var es142r: float = g.essence
+	var st142r: float = g.stones
+	var rr142: String = g.break_btn_tip()
+	check(rr142 == g.break_btn_tip() and g.essence == es142r and g.stones == st142r and g.stats == snap142,
+		"打磨-142 只读 连读 恒定 无副作用")
+	# 8) 收尾 复原
+	g.ascended = a142
+	g.dao_level = dl142
+	g.dao = d142
+	g.essence = es142
+	g.realm_idx = r142
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

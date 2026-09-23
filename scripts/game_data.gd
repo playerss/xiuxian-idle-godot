@@ -4351,6 +4351,40 @@ func goalbar_eta_tip() -> String:
 		et2.trim_prefix("突破还需 "), int(round(primary_break_chance() * 100.0))]
 
 
+# ---------- 打磨-142: 突破按钮 tooltip 动态段 (核心 CTA 悬停 消耗/缺口/ETA/预期成本 一览) ----------
+
+# 「尝试突破 / 修炼道行」按钮 tooltip 追加的动态段 (只读; 与 按钮文案 消耗+成功率 同口径,
+# 补 缺口/ETA/预期成本 展示位 — 复用 打磨-24 breakthrough_eta_text + 打磨-63 预期成本 口径):
+# 未飞升 = "突破耗 X 灵气 (成功率 P%) · 还差 Y 灵气 (突破还需 T) · 期望次数 ~N 次 (成功率 P%)\n· 期望总消耗 ~W 灵气";
+# 飞升后 = 道行精进 同结构 (道行 口径); 资源 已攒够 = "已攒够, 点击突破/修炼" (无 ETA/预期成本);
+# 无 主资源 收入 = 标注 无法 估算 (防御 正常 恒不触发, 预期成本 段 仍 展示);
+# 道祖 封顶 = 圆满 文案 (按钮 禁用, 不再 精进). 纯 只读 不 改 状态/存档/统计 (UI 文本 变化 才 写).
+func break_btn_tip() -> String:
+	if ascended:
+		if dao_level >= IMMORTAL_REALMS.size() - 1:
+			return "已至道祖, 道法自然 ♪ (按钮 禁用, 不再 精进)"
+		var cost: float = dao_break_cost()
+		var pct := int(round(primary_break_chance() * 100.0))
+		var head := "修炼道行 耗 %s 道行 (成功率 %d%%)" % [fmt(cost), pct]
+		if dao >= cost:
+			return head + " · 道行已攒够, 点击修炼"
+		var gap: float = cost - dao
+		if breakthrough_eta_seconds() < 0.0:
+			return head + (" · 还差 %s 道行 (当前无道行收入, 无法 估算)" % fmt(gap))
+		var eta: String = breakthrough_eta_text()
+		return head + (" · 还差 %s 道行 (%s) %s" % [fmt(gap), eta.trim_prefix("道行精进还需 "), breakthrough_expect_text()])
+	var cost2: float = breakthrough_cost()
+	var pct2 := int(round(primary_break_chance() * 100.0))
+	var head2 := "突破 耗 %s 灵气 (成功率 %d%%)" % [fmt(cost2), pct2]
+	if essence >= cost2:
+		return head2 + " · 灵气已攒够, 点击突破"
+	var gap2: float = cost2 - essence
+	if breakthrough_eta_seconds() < 0.0:
+		return head2 + (" · 还差 %s 灵气 (当前无灵气收入, 无法 估算)" % fmt(gap2))
+	var eta2: String = breakthrough_eta_text()
+	return head2 + (" · 还差 %s 灵气 (%s) %s" % [fmt(gap2), eta2.trim_prefix("突破还需 "), breakthrough_expect_text()])
+
+
 # ---------- 打磨-32: 突破按钮"可突破"状态 (资源攒够时 UI 金边高亮引导点击) ----------
 
 # 当前是否已可点击突破/精进 (资源 >= 突破消耗且未封顶; 封顶恒 false, 按钮保持禁用)

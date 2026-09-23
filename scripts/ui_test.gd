@@ -231,6 +231,7 @@ func _ready() -> void:
 	await _assert_m137_bg_toggle()  # M7-3 打磨-137-2: 水墨山水 背景 开关 按钮 (toggle 默认开/z-order _bg 在 BG ColorRect 上/点击 翻转 状态+可见性+底部消息/读档 同步 按钮态/无 资源/统计 副作用/收尾 复位 开)
 	await _assert_m139c_sfx()  # M7-4 打磨-139c: 音效 播放器 挂 现有 触发点 (player 节点/6 触发点 名称/未知 名称 防御/无 副作用/收尾 复位; 内部含 tower 挑战 await 须 显式 await 防 _finish 抢先 quit)
 	await _assert_m140_sfx_toggle()  # M7-4 打磨-140: 音效 开关 (修行页 开关 按钮 与 水墨背景 同区 同 定位: toggle 默认 开/点击 切 关 _sfx_play 静默 跳过/恢复 开 播放/读档 同步 按钮态/tooltip 口径/同态 节流/无 资源 统计 副作用/收尾 复位 开)
+	await _assert_break_btn_tip()  # 打磨-142: 突破 按钮 tooltip 动态 段 (核心 CTA 悬停 消耗/成功率/缺口/ETA/预期成本 一览: 静态段 标记+动态段=break_btn_tip 接口 恒等/境界 提升 消耗 段 动态 同步/攒满 已攒够 文案/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 
 	_finish()
 
@@ -8929,3 +8930,81 @@ func _assert_m140_sfx_toggle() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(int(ui._sfx_played) == 0 and g.sfx_on == true, "打磨-140 收尾 复位 0 播放 + sfx_on=开 (实际 %d/%s)" % [ui._sfx_played, str(g.sfx_on)])
+
+
+# 打磨-142: 突破 按钮 tooltip 动态 段 — 核心 CTA 悬停 消耗/成功率/缺口/ETA/预期成本 一览 (break_btn_tip 单源);
+# tooltip = 静态 口径 前缀 (_break_btn_tip_static) + 动态段, _refresh 文本 变化 才 刷 (同 打磨-84/85 口径).
+# 断言 (手动驱动 确定性): 静态段 标记+动态段=接口 恒等 / 境界 提升 头部 消耗 动态 同步 / 攒满 已攒够 文案 /
+# 飞升 道行 口径 / 道祖 圆满 / 同态 节流 无 资源·统计 副作用 / 收尾 干净 基准 (防 污染 后续 段)
+func _assert_break_btn_tip() -> void:
+	var g := GameData
+	var btn: Node = ui._break_btn
+	var tip0: String = str(btn.tooltip_text)
+	check(tip0.find("【本次 突破 预估 (动态)】") >= 0,
+		"打磨-142 tooltip 含 静态段 标记 (实际 %s)" % tip0.left(40))
+	check(tip0.find(g.break_btn_tip()) >= 0,
+		"打磨-142 初始 动态段=接口 恒等 (实际 %s)" % tip0)
+	# 受控 基准: 未飞升 半程 — 动态段=接口 恒等 含 消耗+缺口+ETA+预期成本
+	var r142: int = g.realm_idx
+	var a142: bool = g.ascended
+	var d142: float = g.dao
+	var dl142: int = g.dao_level
+	var es142: float = g.essence
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.essence = g.breakthrough_cost() * 0.5
+	ui._refresh()
+	var tip1: String = str(btn.tooltip_text)
+	check(tip1.find(g.break_btn_tip()) >= 0 and tip1.find("还差") >= 0 and tip1.find("期望次数 ~") >= 0,
+		"打磨-142 基准 动态段=接口 恒等 含 缺口+预期成本 (实际 %s)" % tip1)
+	# 境界 提升 — 消耗/成功率 变 头部 动态 同步
+	g.essence = 0.0
+	g.realm_idx = 2
+	g.essence = g.breakthrough_cost() * 0.5
+	ui._refresh()
+	var tip2: String = str(btn.tooltip_text)
+	check(tip2 != tip1 and tip2.find(g.break_btn_tip()) >= 0,
+		"打磨-142 境界2 头部 动态 同步 (实际 %s)" % tip2)
+	# 攒满 — 已攒够 无 ETA/预期成本 段
+	g.essence = g.breakthrough_cost()
+	ui._refresh()
+	var tip3: String = str(btn.tooltip_text)
+	check(tip3.find("灵气已攒够, 点击突破") >= 0,
+		"打磨-142 攒满 动态段=已攒够 文案 (实际 %s)" % tip3)
+	# 飞升 道行 口径 — 头部 修炼道行 耗 X 道行
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = g.dao_break_cost() * 0.25
+	ui._refresh()
+	var tip4: String = str(btn.tooltip_text)
+	check(tip4.find("修炼道行 耗") >= 0 and tip4.find(g.break_btn_tip()) >= 0,
+		"打磨-142 飞升 道行 口径 动态段 (实际 %s)" % tip4)
+	# 道祖 封顶 — 圆满 文案
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	ui._refresh()
+	var tip5: String = str(btn.tooltip_text)
+	check(tip5.find("已至道祖") >= 0,
+		"打磨-142 道祖 圆满 文案 (实际 %s)" % tip5)
+	# 同态 节流: 再刷 稳定 无 资源/统计 副作用 (UI 挂机 _process 每帧 主动 收益 资源 快照 会 漂移,
+	# 同 打磨-59 口径: set_process(false) 冻结 UI 窗口 内 手动 驱动; stats 快照 覆盖 整个 窗口)
+	var snap142: Dictionary = g.stats.duplicate(true)
+	var gproc142: bool = g.is_processing()
+	var uiproc142: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(str(btn.tooltip_text) == tip5 and g.stats == snap142,
+		"打磨-142 同态 节流 稳定 无 统计 副作用 (窗口内 冻结 UI)")
+	# 收尾 复原 (恢复 挂机 进程, 资源 漂移 不 断言 — 主动 收益 口径)
+	g.ascended = a142
+	g.dao_level = dl142
+	g.dao = d142
+	g.essence = es142
+	g.realm_idx = r142
+	g.set_process(gproc142)
+	ui.set_process(uiproc142)
+	ui._refresh()
+	check(g.stats == snap142, "打磨-142 收尾 复原 无 统计 副作用")
