@@ -4321,6 +4321,36 @@ func next_goal_ratio() -> float:
 		return clampf(dao / dao_break_cost(), 0.0, 1.0)
 	return clampf(essence / breakthrough_cost(), 0.0, 1.0)
 
+# ---------- 打磨-141: 顶栏 下一目标 进度条 tooltip 动态 ETA 段 ----------
+
+# 顶栏 进度条 tooltip 追加 的 动态 ETA 段 (只读; 与 next_goal_ratio/next_goal_text 同目标口径):
+# 主资源 攒够 下一目标 (未飞升=突破至 下一层/境界, 飞升后=道行精进) 的 预计 时间 —
+# 复用 打磨-24 breakthrough_eta_text 单点 口径 (缺口/当前速率, 前缀 突破还需/道行精进还需,
+# 不足1分/分/小时 档位); 资源 已 攒够 (ratio=1) 时 返回 "已攒够, 点击突破/修炼" 无 ETA 段;
+# 无 主资源 收入 (速率<=0, 防御 正常 恒不触发) 返回 标注 文案; 道祖 封顶 = 圆满 文案。
+# 纯 只读 不 改 状态/存档/统计 (供 UI tooltip 动态 刷新, 文本 变化 才 写).
+func goalbar_eta_tip() -> String:
+	if ascended:
+		if dao_level >= IMMORTAL_REALMS.size() - 1:
+			return "已至道祖, 道法自然 ♪ (进度条 恒 满条)"
+		if dao >= dao_break_cost():
+			return "道行已攒够, 点击修炼"
+		var t: float = breakthrough_eta_seconds()
+		if t < 0.0:
+			return "当前无道行收入, 无法 估算"
+		var et: String = breakthrough_eta_text()
+		return "道行精进还需 %s (按 当前 道行/秒 估算, 失败 重耗 不 计入, 成功率 %d%%)" % [
+			et.trim_prefix("道行精进还需 "), int(round(primary_break_chance() * 100.0))]
+	if essence >= breakthrough_cost():
+		return "灵气已攒够, 点击突破"
+	var t2: float = breakthrough_eta_seconds()
+	if t2 < 0.0:
+		return "当前无灵气收入, 无法 估算"
+	var et2: String = breakthrough_eta_text()
+	return "突破还需 %s (按 当前 灵气/秒 估算, 失败 重耗 不 计入, 成功率 %d%%)" % [
+		et2.trim_prefix("突破还需 "), int(round(primary_break_chance() * 100.0))]
+
+
 # ---------- 打磨-32: 突破按钮"可突破"状态 (资源攒够时 UI 金边高亮引导点击) ----------
 
 # 当前是否已可点击突破/精进 (资源 >= 突破消耗且未封顶; 封顶恒 false, 按钮保持禁用)

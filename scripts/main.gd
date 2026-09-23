@@ -3139,6 +3139,8 @@ func _refresh_goalbar() -> void:
 	var pct: int = int(round(rv * 100.0))
 	var tip: String = ("下一目标  %d%%  |  %s" if not g.ascended else "道行精进  %d%%  |  %s") % [
 		pct, g.next_goal_text()]
+	# 打磨-141: 动态 ETA 段 (复用 打磨-24 breakthrough_eta_text 口径, 随 资源/速率/境界 变化才刷)
+	tip += "\n【攒够 下一目标 预计 (动态)】%s" % g.goalbar_eta_tip()
 	tip += "\n(与 修行页 下一目标 行 同 口径: 当前 主资源 / 突破消耗, 攒满 即 可 点击 突破/修炼; 纯展示, 无 存档/统计 副作用)"
 	tip += "\n点击: 直达 修行页·突破区 (金边高亮)"
 	if tip != _goalbar_tip:

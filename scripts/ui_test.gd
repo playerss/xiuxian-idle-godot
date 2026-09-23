@@ -180,6 +180,7 @@ func _ready() -> void:
 	_assert_primary_next_tip()
 	await _assert_goalbar()
 	await _assert_goalbar_jump()
+	await _assert_goalbar_eta_tip()  # 打磨-141: 顶栏 下一目标 进度条 tooltip 动态 ETA 段
 	await _assert_ach_nofilter()
 	await _assert_tower_clear()  # M5-4: 镇妖塔 通关态 (称号/大奖/守塔模式) + 顶栏 称号 徽标
 	await _assert_poison_debuff()  # 打磨-93: 剧毒 debuff 顶栏徽标 + 触发浮动
@@ -5445,6 +5446,70 @@ func _assert_goalbar_jump() -> void:
 	check(g.essence == snap_essence and g.stones == snap_stones and g.stats == snap_stats,
 		"打磨-82 收尾 无 资源/统计 副作用")
 	await get_tree().process_frame
+
+
+# 打磨-141: 顶栏 下一目标 进度条 tooltip 动态 ETA 段 — _refresh_goalbar tooltip 追加
+# "【攒够 下一目标 预计 (动态)】" 段 (GameData.goalbar_eta_tip 只读接口, 复用 打磨-24
+# breakthrough_eta_text 口径 + 成功率 段). 断言 (手动驱动 确定性): 动态段 标记 存在/
+# 基准 = 接口 恒等/境界2 动态 同步/飞升 道行 口径/攒满 已攒够 文案/同态 节流 无副作用/收尾 复原
+func _assert_goalbar_eta_tip() -> void:
+	var g := GameData
+	var bg: Node = ui._goalbar_bg
+	var tip0: String = str(bg.tooltip_text)
+	check(tip0.find("【攒够 下一目标 预计 (动态)】") >= 0,
+		"打磨-141 tooltip 含 动态段 标记 (实际 %s)" % tip0.left(30))
+	check(tip0.find(g.goalbar_eta_tip()) >= 0,
+		"打磨-141 动态段=接口 恒等 (实际 %s)" % tip0)
+	# 同态 节流: 再刷 动态段 稳定 无 资源/统计 副作用
+	var snap141: Dictionary = g.stats.duplicate(true)
+	var ess141: float = g.essence
+	var st141: float = g.stones
+	ui._refresh()
+	check(str(bg.tooltip_text) == tip0 and g.stats == snap141
+			and g.essence == ess141 and g.stones == st141,
+		"打磨-141 同态 节流 动态段 稳定 无副作用")
+	# 受控 基准: 未飞升 半程 — 动态段 = 接口 恒等 (前缀 突破还需 + ETA + 成功率 段)
+	var r141: int = g.realm_idx
+	var a141: bool = g.ascended
+	var d141: float = g.dao
+	var dl141: int = g.dao_level
+	g.ascended = false
+	g.dao_level = 0
+	g.essence = g.breakthrough_cost() * 0.5
+	ui._refresh()
+	var tip1: String = str(bg.tooltip_text)
+	check(tip1.find(g.goalbar_eta_tip()) >= 0 and tip1.find("突破还需") >= 0,
+		"打磨-141 基准 动态段=接口 恒等 含 突破还需 (实际 %s)" % tip1)
+	# 境界 提升 — 消耗变 动态段 动态 同步
+	g.essence = 0.0
+	g.realm_idx = 2
+	g.essence = g.breakthrough_cost() * 0.5
+	ui._refresh()
+	var tip2: String = str(bg.tooltip_text)
+	check(tip2 != tip1 and tip2.find(g.goalbar_eta_tip()) >= 0,
+		"打磨-141 境界2 动态段 同步 (实际 %s)" % tip2)
+	# 攒满 — 已攒够 无 ETA 段
+	g.essence = g.breakthrough_cost()
+	ui._refresh()
+	var tip3: String = str(bg.tooltip_text)
+	check(tip3.find("灵气已攒够, 点击突破") >= 0,
+		"打磨-141 攒满 动态段=已攒够 文案 (实际 %s)" % tip3)
+	# 飞升 道行 口径 — 动态段 前缀 道行精进还需
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = g.dao_break_cost() * 0.25
+	ui._refresh()
+	var tip4: String = str(bg.tooltip_text)
+	check(tip4.find("道行精进还需") >= 0 and tip4.find(g.goalbar_eta_tip()) >= 0,
+		"打磨-141 飞升 道行 口径 动态段 (实际 %s)" % tip4)
+	# 收尾 复原
+	g.ascended = a141
+	g.dao_level = dl141
+	g.dao = d141
+	g.essence = ess141
+	g.realm_idx = r141
+	ui._refresh()
+	check(g.stats == snap141, "打磨-141 收尾 复原 无副作用")
 
 
 # 打磨-91: 成就页 "只看未解锁" 筛选 — 与 打磨-38 技能页 只看可学 同模式: 只显示 未解锁 行

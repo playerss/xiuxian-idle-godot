@@ -8882,6 +8882,64 @@ func _init() -> void:
 	check(g.essence == es140 and g.stones == st140, "打磨-140 开关 无 资源 副作用")
 	# 收尾: 落盘 干净 基准 (防 污染 冒烟)
 	g.save_game()
+	# ---------- 打磨-141: 顶栏 下一目标 进度条 tooltip 动态 ETA 段 (goalbar_eta_tip 只读接口) ----------
+	# 复用 打磨-24 breakthrough_eta_text 口径 + 打磨-36 成功率 段; 只读 无 状态/存档/统计 副作用
+	g.save_game()
+	g.load_game()
+	var es141: float = g.essence
+	var st141: float = g.stones
+	var r141: int = g.realm_idx
+	var a141: bool = g.ascended
+	var d141: float = g.dao
+	var dl141: int = g.dao_level
+	g.essence = 0.0
+	# 1) 基准: 未飞升 半程 — 含 "突破还需" + ETA 档位 + 成功率 段 (与 breakthrough_eta_text 恒等)
+	var b141: float = g.breakthrough_cost()
+	g.essence = b141 * 0.5
+	var t141: String = g.goalbar_eta_tip()
+	var eta141: String = g.breakthrough_eta_text()
+	var eta_tail: String = eta141.trim_prefix("突破还需 ")
+	check(t141.begins_with("突破还需 "), "打磨-141 基准 前缀=突破还需 (实际 %s)" % t141)
+	check(eta_tail in t141, "打磨-141 基准 ETA 段=接口 恒等 (实际 %s, 期望含 %s)" % [t141, eta_tail])
+	check(("成功率 %d%%" % int(round(g.primary_break_chance() * 100.0))) in t141,
+		"打磨-141 基准 含 成功率 段 (实际 %s)" % t141)
+	# 2) 灵气 攒够 — 无 ETA 段 "已攒够, 点击突破"
+	g.essence = b141
+	check(g.goalbar_eta_tip() == "灵气已攒够, 点击突破",
+		"打磨-141 攒够 无 ETA 段 (实际 %s)" % g.goalbar_eta_tip())
+	# 3) 境界 提升 同步 — ETA/消耗 变 文本 动态 恒等
+	g.essence = 0.0
+	var t0141: String = g.goalbar_eta_tip()
+	g.realm_idx = 2
+	g.essence = g.breakthrough_cost() * 0.5
+	var t2141: String = g.goalbar_eta_tip()
+	var eta2: String = g.breakthrough_eta_text().trim_prefix("突破还需 ")
+	check(t0141 != t2141 and eta2 in t2141, "打磨-141 境界2 动态 同步 恒等 (实际 %s)" % t2141)
+	# 4) 飞升 口径 — 道行 前缀 + 道行/秒 估算 段
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = g.dao_break_cost() * 0.25
+	var t4141: String = g.goalbar_eta_tip()
+	var eta4: String = g.breakthrough_eta_text().trim_prefix("道行精进还需 ")
+	check(t4141.begins_with("道行精进还需 ") and eta4 in t4141 and "道行/秒" in t4141,
+		"打磨-141 飞升 道行 口径 恒等 (实际 %s)" % t4141)
+	# 5) 道祖 封顶 — 圆满 文案
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	check(g.goalbar_eta_tip().begins_with("已至道祖"),
+		"打磨-141 道祖 封顶 文案 (实际 %s)" % g.goalbar_eta_tip())
+	# 6) 只读 连读 恒定 无 资源/统计 副作用 (双读前 快照, 防 本段 自身 改态 干扰)
+	var snap141: Dictionary = g.stats.duplicate(true)
+	var es_b: float = g.essence
+	var st_b: float = g.stones
+	var rr141: String = g.goalbar_eta_tip()
+	check(rr141 == g.goalbar_eta_tip() and g.essence == es_b and g.stones == st_b and g.stats == snap141,
+		"打磨-141 只读 连读 恒定 无副作用")
+	g.ascended = a141
+	g.dao = d141
+	g.dao_level = dl141
+	g.essence = es141
+	g.realm_idx = r141
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
