@@ -228,7 +228,7 @@ func _ready() -> void:
 	await _assert_m135d_bar_skins()  # M7-2 打磨-135d: 进度条 族 9-slice 换皮 (7 族 bar 底 bar_track + 填充 bar_fill 9-slice 裁带/金青 档 modulate 逻辑 不变/细条 完整 渲染/节流/收尾)
 	await _assert_m136_res_icons()  # M7-3 打磨-136: 顶栏 资源图标 程序化 单字 徽章 (界/气/石 3 枚 Panel 壳+单字 同父 顶栏/顺序 在行 前/圆角深底边色=字色 语义/纯装饰 无热区/飞升 翻转 气->道 动态 同步/收尾 复原)
 	await _assert_m137_bg_toggle()  # M7-3 打磨-137-2: 水墨山水 背景 开关 按钮 (toggle 默认开/z-order _bg 在 BG ColorRect 上/点击 翻转 状态+可见性+底部消息/读档 同步 按钮态/无 资源/统计 副作用/收尾 复位 开)
-	_assert_m139c_sfx()  # M7-4 打磨-139c: 音效 播放器 挂 现有 触发点 (player 节点/6 触发点 名称/未知 名称 防御/无 副作用/收尾 复位)
+	await _assert_m139c_sfx()  # M7-4 打磨-139c: 音效 播放器 挂 现有 触发点 (player 节点/6 触发点 名称/未知 名称 防御/无 副作用/收尾 复位; 内部含 tower 挑战 await 须 显式 await 防 _finish 抢先 quit)
 
 	_finish()
 
