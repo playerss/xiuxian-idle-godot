@@ -111,6 +111,10 @@ var _tower_win_float_tween: Tween
 var _tower_win_float_count := 0    # 打磨-107: 胜利 浮动提示次数 (自测断言用)
 var _tower_win_last_text := ""     # 打磨-107: 最近一次 胜利 浮动文案 (自测断言用)
 var _onekey_last_text := ""        # 打磨-45: 最近一次浮动文案 (自测断言用)
+var _sfx_player: AudioStreamPlayer    # 打磨-139c: 音效播放器 (M7-4 UI/事件层, UI 构建 入树, 6 音效 共享 通道)
+var _sfx_played := 0                # 打磨-139c: 音效 播放 累计 次数 (0=未触发/资源 缺失; ui_test 断言 用)
+var _sfx_last := ""                 # 打磨-139c: 最近 一次 播放 音效 名称 (断言 用; 未知 名称/null 流 不 记录)
+var _sfx_last_player: AudioStreamPlayer = null  # 打磨-139c: 最近 播放 的 player 对象 (断言 = _sfx_player 同 对象)
 var _ready_float_label: Label      # 打磨-57: 主动神通 冷却完毕转就绪 浮动提示 (顶层, 居中)
 var _ready_float_tween: Tween
 var _ready_float_count := 0        # 打磨-57: 就绪浮动提示次数 (自测断言用)
@@ -368,6 +372,12 @@ func _build_ui() -> void:
 	add_child(bg)
 	_bg = load("res://scripts/ink_bg.gd").new()
 	add_child(_bg)
+	# 打磨-139c: 音效 播放器 (M7-4 UI/事件层) — 单 AudioStreamPlayer 入树; 6 短音效 (均 ≤1s) 共享
+	# 通道 [各 触发点 互斥 不 并发]; 播放 只 经 _sfx_play (资源 缺失/未知 名称 静默 跳过, 不 影响
+	# 既有 逻辑); headless 无 音频 设备 但 play() 不 报错
+	_sfx_player = AudioStreamPlayer.new()
+	_sfx_player.volume_db = -6.0
+	add_child(_sfx_player)
 
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1951,6 +1961,10 @@ func _on_tower_challenge(tid: String) -> void:
 		# 打磨-107: 胜利 居中 绿色 浮动 提示 (M5-3 规格 浮动 段; 文案 = 塔名/层/怪名/灵石+材料/幸运/不屈/首胜/词缀 件数,
 		# 与 底部 消息 口径 一致; 仅 手动 挑战 路径 触发 [自动爬塔 每帧 批量 结算 不 弹 浮动 防 刷屏], 败 局 不 弹)
 		_tower_win_float("✦ %s ✦" % g.tower_win_float_text(r))
+		# 打磨-139c: 新纪录 音效 (登天梯 新纪录 段, 与 浮动/底部消息 新纪录 段 同 口径;
+		# 镇妖塔/普通 胜局 new_record 恒 false 不 播; 与 tower_win 同帧 先后 播, 后播 覆盖 前者 收尾)
+		if bool(r.get("new_record", false)):
+			_sfx_play("new_record")
 	else:
 		_show_msg("✖ %s 第 %d 层「%s」战力不足, 停留本层 (无惩罚, 可重试)" % [
 			tname, int(r["floor"]), str(r["monster"])])
@@ -2887,6 +2901,8 @@ func _ach_float(fresh: Array) -> void:
 	_ach_float_tween = create_tween()
 	_ach_float_tween.tween_property(_ach_float_label, "position:y", -96.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_ach_float_tween.parallel().tween_property(_ach_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
+	# 打磨-139c: 成就解锁音效 (与 浮动 同 路径; 同 一批 多个 解锁 合并 一行 弹 的 同 一次 只 播 一次)
+	_sfx_play("achieve")
 
 
 # 打磨-45: 一键系列统一浮动反馈 — 批量变更 >0 时屏幕中央绿色浮动提示 (文案含数量),
@@ -2902,6 +2918,8 @@ func _onekey_float(text: String) -> void:
 	_onekey_float_tween = create_tween()
 	_onekey_float_tween.tween_property(_onekey_float_label, "position:y", -64.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_onekey_float_tween.parallel().tween_property(_onekey_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
+	# 打磨-139c: 一键系列音效 (与 浮动 同 路径, 变更 >0 才 弹 浮动 的 同 口径; 0 变更 走 底部 消息 不 到 此处)
+	_sfx_play("onekey")
 
 
 # 打磨-107: 塔战斗 胜利 浮动提示 (居中绿色, 与 一键系列 同 口径; 由 手动 挑战 处理器 在
@@ -2920,6 +2938,25 @@ func _tower_win_float(text: String) -> void:
 	_tower_win_float_tween = create_tween()
 	_tower_win_float_tween.tween_property(_tower_win_float_label, "position:y", -64.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_tower_win_float_tween.parallel().tween_property(_tower_win_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
+	# 打磨-139c: 塔胜利音效 (仅 手动 挑战 胜利 路径, 自动爬塔 不 弹 浮动 故 不 播; 与 浮动 同 路径)
+	_sfx_play("tower_win")
+
+
+# 打磨-139c: 音效 播放 — 按 名称 播放 GameData 音效池 资源 (M7-4 UI/事件层, 资源池/只读接口 见 139b)
+# 口径: 未知 名称/资源 缺失/类型 不符 (sfx_stream = null) = 静默 跳过 [计数/last 不 更新, 不 影响
+# 既有 逻辑 与 浮动/消息]; 播放 成功 计数 +1 并 记录 名称/player [ui_test 断言 用]; 单 player
+# 共享 6 音效 (各 触发点 互斥 不 并发: 突破 成/败 二选一, 成就/塔胜/新纪录/一键 各 单 事件)
+func _sfx_play(name: String) -> void:
+	if _sfx_player == null:
+		return
+	var st := GameData.sfx_stream(name)
+	if st == null:
+		return
+	_sfx_player.stream = st
+	_sfx_player.play()
+	_sfx_played += 1
+	_sfx_last = name
+	_sfx_last_player = _sfx_player
 
 
 # 打磨-66: 离线收益 启动浮动 — 启动读档结算离线收益后, 屏幕中央金色浮动 (仅一次, 底部消息并存);
@@ -4374,6 +4411,8 @@ func _float_break() -> void:
 	_float_tween = create_tween()
 	_float_tween.tween_property(_float_label, "position:y", -36.0, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_float_tween.parallel().tween_property(_float_label, "modulate:a", 0.0, 1.6).set_delay(0.5)
+	# 打磨-139c: 突破音效 (成/败 与 浮动 同 路径, 手动/自动 统一 经 break_seq 驱动; 成=1/3/4 含 飞升/精进, 败=2)
+	_sfx_play("break_win" if GameData.last_break_result in [1, 3, 4] else "break_fail")
 
 
 # 打磨-32: 突破按钮样式切换 — 可突破时金边高亮, 否则默认样式 (闪烁动画期间由 _flash_step 接管)

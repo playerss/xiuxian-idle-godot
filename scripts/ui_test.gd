@@ -32,6 +32,8 @@ extends Node
 ## 退出码 0 = 通过, 非 0 = 失败 (失败详情写入 user://ui_test_result.txt)
 ## 说明: 实例化主场景 (UI 全代码构建), 直接驱动 _refresh 断言进度条节点/宽度/颜色/tooltip;
 ##       headless 无真实像素渲染, 故断言布局几何 (size) 而非像素颜色。
+## 打磨-139c: 音效播放器挂接断言 (player 节点/UI 入树/6 触发点 突破成·败/成就/塔胜/新纪录/一键 播放
+##          正确 名称/未知 名称 静默 跳过/无 资源·统计 副作用/收尾 复位)
 
 const UI_SIZE := Vector2(1280, 720)
 
@@ -226,6 +228,7 @@ func _ready() -> void:
 	await _assert_m135d_bar_skins()  # M7-2 打磨-135d: 进度条 族 9-slice 换皮 (7 族 bar 底 bar_track + 填充 bar_fill 9-slice 裁带/金青 档 modulate 逻辑 不变/细条 完整 渲染/节流/收尾)
 	await _assert_m136_res_icons()  # M7-3 打磨-136: 顶栏 资源图标 程序化 单字 徽章 (界/气/石 3 枚 Panel 壳+单字 同父 顶栏/顺序 在行 前/圆角深底边色=字色 语义/纯装饰 无热区/飞升 翻转 气->道 动态 同步/收尾 复原)
 	await _assert_m137_bg_toggle()  # M7-3 打磨-137-2: 水墨山水 背景 开关 按钮 (toggle 默认开/z-order _bg 在 BG ColorRect 上/点击 翻转 状态+可见性+底部消息/读档 同步 按钮态/无 资源/统计 副作用/收尾 复位 开)
+	_assert_m139c_sfx()  # M7-4 打磨-139c: 音效 播放器 挂 现有 触发点 (player 节点/6 触发点 名称/未知 名称 防御/无 副作用/收尾 复位)
 
 	_finish()
 
@@ -8595,3 +8598,172 @@ func _assert_m135c_btn_skins() -> void:
 	ui._break_ready = ready_before
 	ui._apply_break_btn_style()
 	ui._refresh()
+
+
+# M7-4 打磨-139c: 音效 播放器 挂 现有 触发点 (main.gd AudioStreamPlayer + _sfx_play 单 通道;
+# 6 触发点: 突破成/败 [_float_break 路径]/成就解锁 [_ach_float 路径]/一键系列 [_onekey_float 路径]/
+# 塔胜利+新纪录 [_on_tower_challenge 手动 路径, 自动爬塔 不 弹 不 播]; 未知 名称/资源 缺失 静默 跳过;
+# 只 播放 不 改 状态/存档/统计, 无 资源 副作用). 断言 (手动 驱动 确定性, 冻结 UI+GameData _process):
+# player 节点 入树/初始 0 播放/未知 名称 防御/突破成=break_win 败=break_fail/成就=achieve/
+# 一键=onekey (0 变更 不 播)/塔胜=tower_win/登天梯 新纪录 胜局 追加 new_record/镇妖塔 胜局 无 new_record/
+# 无 资源·统计 副作用/收尾 复位 0 播放
+func _assert_m139c_sfx() -> void:
+	var g := GameData
+	# 冻结 UI/GameData _process (手动 驱动 确定性; 段尾 恢复, 同 打磨-137 段 冻结 口径)
+	var gproc: bool = g.is_processing()
+	ui.set_process(false)
+	g.set_process(false)
+	# 1) player 节点: AudioStreamPlayer + 挂 主 UI 下 (UI 构建 入树, 6 音效 共享 通道)
+	check(ui._sfx_player != null and ui._sfx_player is AudioStreamPlayer, "打磨-139c player 节点 存在 (AudioStreamPlayer)")
+	if ui._sfx_player == null:
+		g.set_process(gproc)
+		ui.set_process(true)
+		return
+	check(ui._sfx_player.get_parent() == ui, "打磨-139c player 挂 主 UI 下 (实际 %s)" % str(ui._sfx_player.get_parent().get_class()))
+	check(float(ui._sfx_player.volume_db) <= 0.0, "打磨-139c player volume_db<=0 (音量 压低 不 盖 音乐; 实际 %.1f)" % float(ui._sfx_player.volume_db))
+	# 基准: 前段 既有 触发点 已 播放 (一键 浮动/突破 等 真实 路径 计数 可能 非 0) — 断言 用 增量 口径
+	var sfx_base: int = int(ui._sfx_played)
+	var sfx_last_base: String = str(ui._sfx_last)
+	# 2) _sfx_play 直调: 未知 名称 静默 跳过 (计数/名称 不 更新), 有效 名称 计数 +1 + stream 设置
+	ui._sfx_play("not_exist")
+	check(int(ui._sfx_played) == sfx_base and str(ui._sfx_last) == sfx_last_base,
+			"打磨-139c 未知 名称 静默 跳过 (计数/名称 不 更新; 实际 +%d/%s)" % [int(ui._sfx_played) - sfx_base, str(ui._sfx_last)])
+	ui._sfx_play("break_win")
+	check(int(ui._sfx_played) == sfx_base + 1 and str(ui._sfx_last) == "break_win",
+			"打磨-139c 有效 名称 计数+1 记录 名称 (实际 +%d/%s)" % [int(ui._sfx_played) - sfx_base, str(ui._sfx_last)])
+	check(ui._sfx_last_player == ui._sfx_player and ui._sfx_player.stream != null and ui._sfx_player.stream is AudioStreamWAV,
+			"打磨-139c player 同 对象 + stream=AudioStreamWAV (实际 %s)" % str(ui._sfx_player.stream))
+	# 复位 计数 (后续 触发点 断言 从 0 增量 起)
+	ui._sfx_played = 0
+	ui._sfx_last = ""
+	ui._sfx_last_player = null
+	# 受控 基准: 干净 状态 (防 前段 残留 污染: 成就/境界/塔 态)
+	g.ach_done.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ready_events.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.essence = 0.0
+	g.stones = 0.0
+	g.last_break_result = 0
+	var stats139: Dictionary = g.stats.duplicate(true)
+	# 3) 突破音效: 成功=break_win (成 1/飞升 3/精进 4 同 口径, 取 普通 成功 1) / 失败=break_fail (与 浮动 同 路径)
+	g.essence = 10.0
+	g.try_breakthrough(0.01)
+	ui._float_break()
+	check(int(g.last_break_result) == 1, "打磨-139c 受控 突破 成功 (实际 %d)" % g.last_break_result)
+	check(int(ui._sfx_played) == 1 and str(ui._sfx_last) == "break_win", "打磨-139c 突破成功 播 break_win (实际 %d/%s)" % [ui._sfx_played, str(ui._sfx_last)])
+	# 失败: 成功 已 晋 层 (消耗 10→20 档), 按 当前 突破 消耗 注入 资源 后 必 失败
+	g.essence = g.breakthrough_cost()
+	g.try_breakthrough(0.999)
+	ui._float_break()
+	check(int(g.last_break_result) == 2, "打磨-139c 受控 突破 失败 (实际 %d)" % g.last_break_result)
+	check(int(ui._sfx_played) == 2 and str(ui._sfx_last) == "break_fail", "打磨-139c 突破失败 播 break_fail (实际 %d/%s)" % [ui._sfx_played, str(ui._sfx_last)])
+	# last_break_result=0 不 触发 (与 浮动 同 口径, 计数 不 变)
+	g.last_break_result = 0
+	ui._float_break()
+	check(int(ui._sfx_played) == 2, "打磨-139c 突破 未触发 不 播 (计数 不变)")
+	# 4) 成就解锁音效: _ach_float 新 解锁 弹 浮动 同 路径 播 achieve (同 一批 合并 一行 只 播 一次)
+	var n_ach: int = int(ui._sfx_played)
+	g.ach_done.append("equip_first")
+	ui._ach_float(["equip_first"])
+	check(int(ui._sfx_played) == n_ach + 1 and str(ui._sfx_last) == "achieve", "打磨-139c 成就解锁 播 achieve (实际 %d/%s)" % [ui._sfx_played, str(ui._sfx_last)])
+	# 5) 一键系列音效: 变更>0 弹 浮动 同 路径 播 onekey / 0 变更 走 底部 消息 不 经 浮动 不 播
+	var n_ok: int = int(ui._sfx_played)
+	ui._onekey_float("一键领悟 3 个技能")
+	check(int(ui._sfx_played) == n_ok + 1 and str(ui._sfx_last) == "onekey", "打磨-139c 一键系列 变更>0 播 onekey (实际 %d/%s)" % [ui._sfx_played, str(ui._sfx_last)])
+	# 0 变更: 全部 已 领悟 时 一键领悟 走 _show_msg 分支 (不 经 _onekey_float → 不 播)
+	g.owned.clear()
+	g.learned.clear()
+	for sk139 in g.skill_ids:
+		g.learned.append(str(sk139))
+	ui._on_learn_all()
+	check(str(ui._msg_label.text).find("没有可领悟") >= 0, "打磨-139c 一键 0 变更 走 底部 消息 分支 (实际 %s)" % str(ui._msg_label.text).left(30))
+	check(int(ui._sfx_played) == n_ok + 1, "打磨-139c 一键 0 变更 不 经 浮动 不 播 (计数 不变)")
+	g.learned.clear()
+	# 6) 塔胜利音效: 强 玩家 (飞升 道祖 恒胜) 手动 挑战 登天梯 第 2 层 (best=1 → new_record=true):
+	#    胜局 播 tower_win + 新纪录 追加 new_record (同帧 先后 播, 收尾 last=new_record)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 2
+	g.tower_endless_best = 1
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.ascended = true
+	g.dao_level = 8
+	g.stones = 0.0
+	g.essence = 0.0
+	var mon139: Dictionary = g.tower_monster_stats(g.get_endless_floor(2))
+	check(g.player_atk_effective() >= float(mon139["atk"]) * g.TOWER_WIN_RATIO, "打磨-139c 强 玩家 第 2 层 判定=胜 (数据 锚定)")
+	var n_tw: int = int(ui._sfx_played)
+	ui._on_tower_challenge("endless")
+	await get_tree().process_frame
+	check(bool(g.try_tower_challenge("endless", 0.5)["win"]), "打磨-139c 结算 口径 恒胜 (接口 锚定)")
+	check(int(ui._sfx_played) == n_tw + 2, "打磨-139c 登天梯 新纪录 胜局 播 tower_win+new_record 共 2 次 (实际 +%d)" % (int(ui._sfx_played) - n_tw))
+	check(str(ui._sfx_last) == "new_record", "打磨-139c 新纪录 收尾 last=new_record (实际 %s)" % str(ui._sfx_last))
+	# 7) 镇妖塔 胜局: new_record 恒 false → 只 播 tower_win 不 追加 (计数 +1)
+	var n_fx: int = int(ui._sfx_played)
+	ui._on_tower_challenge("fixed")
+	await get_tree().process_frame
+	check(int(ui._sfx_played) == n_fx + 1 and str(ui._sfx_last) == "tower_win", "打磨-139c 镇妖塔 胜局 只 播 tower_win (实际 +%d/%s)" % [int(ui._sfx_played) - n_fx, str(ui._sfx_last)])
+	# 8) 无 副作用: 音效 只 播放 — 不 新增 统计 键 (既有 埋点 键 的 数值 自 增 属 触发 路径 既有 口径,
+	#    非 音效 引入; 此处 断言 键 集合 无 新增 即 音效 层 无 副作用)
+	var extra_keys: Array[String] = []
+	for k in g.stats:
+		if not stats139.has(k):
+			extra_keys.append(str(k))
+	check(extra_keys.is_empty(), "打磨-139c 音效 不 新增 统计 键 (新增 %s)" % ",".join(extra_keys))
+	check(float(stats139.get("skill_use", 0.0)) == float(g.stats.get("skill_use", 0.0)),
+			"打磨-139c 音效 路径 无 神通 施展 统计 副作用 (skill_use 不变)")
+	# 收尾: 恢复 干净 基准 (塔 态/飞升 态/成就 归零 + 音效 计数 复位, 防 污染 后续)
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.affix_materials = 0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	g.ach_done.clear()
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.last_break_result = 0
+	ui._sfx_played = 0
+	ui._sfx_last = ""
+	ui._sfx_last_player = null
+	# 收尾: 清 音效池 缓存 + player 释放 stream (防 quit 时 资源 仍 被 引用 告警; 缓存 懒 加载 幂等 无 副作用)
+	ui._sfx_player.stream = null
+	g._sfx_cache.clear()
+	g.set_process(gproc)
+	ui.set_process(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(ui._sfx_played) == 0 and str(ui._sfx_last) == "", "打磨-139c 收尾 复位 0 播放 名称空 (实际 %d/%s)" % [ui._sfx_played, str(ui._sfx_last)])
