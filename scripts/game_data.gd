@@ -3803,6 +3803,16 @@ func onekey_segment_tips(cat: String = "", tier: int = -1) -> Array:
 	tips.append(_ok_tip_best())
 	return tips
 
+# ---------- 打磨-143: 各页 一键 按钮 tooltip 动态段 (单源 复用 打磨-76 onekey_segment_tips 明细) ----------
+# 只读: 第 i 段 (0..5 = 领悟/神通/施展/法器/装备/最佳) 明细文本, cat/tier 同 onekey_segment_tips
+# (领悟/神通 受 当前 技能页 筛选 叠加, 施展=就绪数+爆发预览, 法器/装备=可购列表, 最佳=可改进 槽位);
+# 越界 索引 = 空串 防御; 供 各页 一键 按钮 tooltip 动态段 (文本 变化 才 刷, 挂机 恒定 无 每帧 重建),
+# 与 顶栏 一键 徽标 段 tooltip 同口径 同源 (打磨-76), 无 状态/存档/统计 副作用
+func onekey_btn_tip(i: int, cat: String = "", tier: int = -1) -> String:
+	if i < 0 or i > 5:
+		return ""
+	return str(onekey_segment_tips(cat, tier)[i])
+
 # ================= 打磨-10: 道行 (飞升后目标) =================
 
 func dao_break_cost() -> float:

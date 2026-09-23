@@ -61,6 +61,19 @@ var _bar_fill: Panel
 var _break_btn: Button
 var _break_btn_tip := ""        # 打磨-142: 突破按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84/85 口径)
 var _break_btn_tip_static := "" # 打磨-142: 突破按钮 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑)
+# 打磨-143: 6 个 一键 按钮 (领悟/神通/施展/法器/装备/最佳) tooltip 动态段 缓存 (变化才刷, 同打磨-84/85/142 口径)
+var _ok_learn_tip := ""
+var _ok_learn_tip_static := ""
+var _ok_actlearn_tip := ""
+var _ok_actlearn_tip_static := ""
+var _ok_cast_tip := ""
+var _ok_cast_tip_static := ""
+var _ok_item_tip := ""
+var _ok_item_tip_static := ""
+var _ok_buy_tip := ""
+var _ok_buy_tip_static := ""
+var _ok_best_tip := ""
+var _ok_best_tip_static := ""
 var _auto_break_btn: Button     # 打磨-67: 自动突破开关 (toggle, 存档持久化)
 var _auto_break_on := false     # 打磨-67: 上帧开关状态缓存 (变化才刷按钮态)
 var _auto_break_tip := ""        # 打磨-85: 自动突破按钮 tooltip 动态段 缓存 (变化才刷, 同打磨-84 口径)
@@ -1103,7 +1116,9 @@ func _build_training_page(page: Panel) -> void:
 	_items_buy_btn = _make_button("一键购买")
 	_items_buy_btn.pressed.connect(_on_items_buy_all)
 	# 打磨-46: 统一口径 tooltip (动作顺序 / 筛选叠加 / 计数口径)
-	_items_buy_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略)。\n不受筛选影响 (全局口径); 购入后法器加成直接生效; 浮动提示追加 灵气速率 +N/秒 变化量 (购买后速率-购买前速率)。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。"
+	# 打磨-143: 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85 动态段 口径)
+	_ok_item_tip_static = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 法器, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略)。\n不受筛选影响 (全局口径); 购入后法器加成直接生效; 浮动提示追加 灵气速率 +N/秒 变化量 (购买后速率-购买前速率)。\n按钮计数 = 当前灵石单件买得起的未拥有法器数 (连买以预算耗尽为准, 实购数可能略少)。\n\n【本次 一键购买 预估 (动态)】\n"
+	_items_buy_btn.tooltip_text = _ok_item_tip_static
 	item_head.add_child(_items_buy_btn)
 	# 打磨-13: 法器列表可滚动 (10 件避免低分辨率下超出屏幕)
 	var shop_scroll := ScrollContainer.new()
@@ -1241,19 +1256,25 @@ func _build_skill_page(page: Panel) -> void:
 	_learn_all_btn = _make_button("一键领悟")
 	_learn_all_btn.pressed.connect(_on_learn_all)
 	# 打磨-46: 统一口径 tooltip (动作与条件 / 筛选叠加 / 计数口径)
-	_learn_all_btn.tooltip_text = "批量领悟 当前境界/层数足够 的 未学 技能 (境界足够且未领悟); 浮动提示追加 灵气速率 +N/秒 变化量 (学习后速率-学习前速率, 0 变化省略)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的); 不消耗资源; 已领悟的不重复领悟。\n按钮计数 = 筛选范围内可执行技能数 (与实际执行数一致)。"
+	# 打磨-143: 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85 动态段 口径)
+	_ok_learn_tip_static = "批量领悟 当前境界/层数足够 的 未学 技能 (境界足够且未领悟); 浮动提示追加 灵气速率 +N/秒 变化量 (学习后速率-学习前速率, 0 变化省略)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的); 不消耗资源; 已领悟的不重复领悟。\n按钮计数 = 筛选范围内可执行技能数 (与实际执行数一致)。\n\n【本次 一键领悟 预估 (动态)】\n"
+	_learn_all_btn.tooltip_text = _ok_learn_tip_static
 	tier_bar.add_child(_learn_all_btn)
 	# 打磨-56: 一键神通 (只学 筛选范围内 未学+境界足够 的 主动神通, 与 一键领悟 同口径 仅 type 过滤不同)
 	_active_learn_btn = _make_button("一键神通")
 	_active_learn_btn.pressed.connect(_on_active_learn)
 	# 打磨-46 口径 统一 tooltip (动作与条件 / 筛选叠加 / 计数口径)
-	_active_learn_btn.tooltip_text = "批量领悟 当前境界/层数足够 的 未学 主动神通 (境界足够且未领悟); 浮动提示追加 灵气速率 +N/秒 变化量 (本按钮仅学主动神通, 不学被动, 0 变化省略)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的 主动神通); 不消耗资源; 已领悟的不重复领悟; 飞升后 主动神通 爆发口径 道行 不变, 亦可作 飞升后 补齐入口。\n按钮计数 = 筛选范围内可执行 主动神通数 (与实际执行数一致)。"
+	# 打磨-143: 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85 动态段 口径)
+	_ok_actlearn_tip_static = "批量领悟 当前境界/层数足够 的 未学 主动神通 (境界足够且未领悟); 浮动提示追加 灵气速率 +N/秒 变化量 (本按钮仅学主动神通, 不学被动, 0 变化省略)。\n与 类别/品质 筛选 AND 叠加生效 (只学筛选范围内的 主动神通); 不消耗资源; 已领悟的不重复领悟; 飞升后 主动神通 爆发口径 道行 不变, 亦可作 飞升后 补齐入口。\n按钮计数 = 筛选范围内可执行 主动神通数 (与实际执行数一致)。\n\n【本次 一键神通 预估 (动态)】\n"
+	_active_learn_btn.tooltip_text = _ok_actlearn_tip_static
 	tier_bar.add_child(_active_learn_btn)
 	# 打磨-30: 一键施展 (释放所有 已学+冷却完毕 的主动神通)
 	_active_all_btn = _make_button("一键施展")
 	_active_all_btn.pressed.connect(_on_active_all)
 	# 打磨-46: 统一口径 tooltip (动作与顺序 / 爆发口径 / 计数口径)
-	_active_all_btn.tooltip_text = "一次释放所有 已领悟 且 冷却完毕 的主动神通, 各自爆发 (爆发获得 = 当前灵气速率 x 爆发秒数; 飞升后改为获得道行); 浮动提示追加 本批 爆发 获得 总量 \"爆发+N 灵气/道行\" (与 底部消息 爆发 总量 同口径)。\n施展后各自进入冷却; 未领悟或冷却中的不计入, 不受筛选影响 (全局口径)。\n按钮计数 = 当前可施展 (就绪) 的主动神通数。"
+	# 打磨-143: 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85 动态段 口径)
+	_ok_cast_tip_static = "一次释放所有 已领悟 且 冷却完毕 的主动神通, 各自爆发 (爆发获得 = 当前灵气速率 x 爆发秒数; 飞升后改为获得道行); 浮动提示追加 本批 爆发 获得 总量 \"爆发+N 灵气/道行\" (与 底部消息 爆发 总量 同口径)。\n施展后各自进入冷却; 未领悟或冷却中的不计入, 不受筛选影响 (全局口径)。\n按钮计数 = 当前可施展 (就绪) 的主动神通数。\n\n【本次 一键施展 预估 (动态)】\n"
+	_active_all_btn.tooltip_text = _ok_cast_tip_static
 	tier_bar.add_child(_active_all_btn)
 	# 打磨-38: 只看可学 开关 (与 类别/品质 筛选 AND 叠加: 过滤境界/层不足的未学技能, 已学恒显示在最前)
 	_learnable_btn = _make_button("只看可学")
@@ -1616,14 +1637,18 @@ func _build_equip_page(page: Panel) -> void:
 	eq_tier_bar.add_child(eq_sp)
 	_buy_all_btn = _make_button("一键购买")
 	_buy_all_btn.pressed.connect(_on_buy_all)
-	# 打磨-46: 统一口径 tooltip (动作顺序 / 自动穿戴规则 / 计数口径)
-	_buy_all_btn.tooltip_text = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略), 浮动提示追加 灵气速率 +N/秒 变化量 (购买后速率-购买前速率, 0 变化省略)。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。"
+	# 打磨-46: 统一口径 tooltip (动作顺序 / 筛选叠加 / 计数口径)
+	# 打磨-143: 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85 动态段 口径)
+	_ok_buy_tip_static = "按 价格升序 (同价按数据序) 连续购买 当前灵石买得起 的 未拥有 装备, 灵石花到买不起为止; 购入后底部消息追加 共花灵石 与 距下一件 (最便宜未拥有) 缺口 (全拥有省略), 缺口>0 且灵石收入速率>0 时再追加 \"约 X 可购\" (无灵石收入省略), 浮动提示追加 灵气速率 +N/秒 变化量 (购买后速率-购买前速率, 0 变化省略)。\n不受 部位/品质 筛选影响 (全局口径); 该部位槽位为空时自动穿戴, 已有装备的槽位不替换 (换更好的用 一键最佳)。\n按钮计数 = 当前灵石单件买得起的未拥有装备数 (连买以预算耗尽为准, 实购数可能略少)。\n\n【本次 一键购买 预估 (动态)】\n"
+	_buy_all_btn.tooltip_text = _ok_buy_tip_static
 	eq_tier_bar.add_child(_buy_all_btn)
 	# 打磨-26: 一键最佳穿戴 (各槽位穿上拥有的最佳件, 补 一键购买 只穿首件 的缺口)
 	_equip_best_btn = _make_button("一键最佳")
 	_equip_best_btn.pressed.connect(_on_equip_best)
-	# 打磨-46: 统一口径 tooltip (最佳判定 / 作用范围 / 计数口径)
-	_equip_best_btn.tooltip_text = "各部位自动换上 已拥有 的最佳装备: 主属性 (灵气% + 灵石%) > 突破率 > 离线效率 (id 兜底, 确定性); 浮动提示追加 灵气速率 +N/秒 变化量 (换装后速率-换装前速率, 0 变化省略)。\n仅变更 尚未最佳 的槽位; 无拥有件不受影响; 已最佳 = 0 变更 (幂等), 不受 部位/品质 筛选影响 (全局口径)。\n按钮计数 = 可换上更好拥有件的部位槽位数。"
+	# 打磨-46: 统一口径 tooltip (动作与条件 / 筛选叠加 / 计数口径)
+	# 打磨-143: 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85 动态段 口径)
+	_ok_best_tip_static = "各部位自动换上 已拥有 的最佳装备: 主属性 (灵气% + 灵石%) > 突破率 > 离线效率 (id 兜底, 确定性); 浮动提示追加 灵气速率 +N/秒 变化量 (换装后速率-换装前速率, 0 变化省略)。\n仅变更 尚未最佳 的槽位; 无拥有件不受影响; 已最佳 = 0 变更 (幂等), 不受 部位/品质 筛选影响 (全局口径)。\n按钮计数 = 可换上更好拥有件的部位槽位数。\n\n【本次 一键最佳 预估 (动态)】\n"
+	_equip_best_btn.tooltip_text = _ok_best_tip_static
 	eq_tier_bar.add_child(_equip_best_btn)
 	# 打磨-109: 按评分排序 开关 (M6 规格 "装备列表按评分排序": 140 件 现 按 状态序 平铺 [打磨-22],
 	# 买齐/装配 词缀 后 不知 哪件 评分 高 要 逐行 扫 评分; 开启 后 列表 改 按 装备 评分 降序
@@ -2627,6 +2652,34 @@ func _refresh() -> void:
 	if okk != _onekey_key:
 		_onekey_key = okk
 		_apply_onekey_summary(_filter_active, tier_i75)
+		# 打磨-143: 6 个 一键 按钮 (领悟/神通/施展/法器/装备/最佳) tooltip 动态段
+		# (单源 g.onekey_btn_tip 复用 打磨-76 明细; 与 顶栏 一键 徽标 段 同 状态键 节流 —
+		# 可执行数/明细 均 由 键 口径 覆盖 [数变 必 键变], 挂机 恒定 无 每帧 重建;
+		# 无 存档/统计 副作用)
+		var okll: String = g.onekey_btn_tip(0, _filter_active, tier_i75)
+		if okll != _ok_learn_tip:
+			_ok_learn_tip = okll
+			_learn_all_btn.tooltip_text = _ok_learn_tip_static + okll
+		var okal: String = g.onekey_btn_tip(1, _filter_active, tier_i75)
+		if okal != _ok_actlearn_tip:
+			_ok_actlearn_tip = okal
+			_active_learn_btn.tooltip_text = _ok_actlearn_tip_static + okal
+		var okcs: String = g.onekey_btn_tip(2)
+		if okcs != _ok_cast_tip:
+			_ok_cast_tip = okcs
+			_active_all_btn.tooltip_text = _ok_cast_tip_static + okcs
+		var okit: String = g.onekey_btn_tip(3)
+		if okit != _ok_item_tip:
+			_ok_item_tip = okit
+			_items_buy_btn.tooltip_text = _ok_item_tip_static + okit
+		var okby: String = g.onekey_btn_tip(4)
+		if okby != _ok_buy_tip:
+			_ok_buy_tip = okby
+			_buy_all_btn.tooltip_text = _ok_buy_tip_static + okby
+		var okbs: String = g.onekey_btn_tip(5)
+		if okbs != _ok_best_tip:
+			_ok_best_tip = okbs
+			_equip_best_btn.tooltip_text = _ok_best_tip_static + okbs
 	# 打磨-32: 突破按钮"可突破"金边高亮 (资源攒够时引导点击, 状态变化才刷样式; 闪烁动画期间不干预)
 	var ready_now: bool = g.breakthrough_ready()
 	if ready_now != _break_ready:

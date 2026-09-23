@@ -9000,6 +9000,55 @@ func _init() -> void:
 	g.essence = es142
 	g.realm_idx = r142
 	g.save_game()
+	# ---------- 打磨-143: 各页 一键 按钮 tooltip 动态段 (onekey_btn_tip 只读接口, 单源 复用 打磨-76 明细) ----------
+	# 受控 基准: 前序 段 残留 存档 态 (灵石/拥有/已学) 须 显式 清零 防 基线 漂移
+	g.save_game()
+	g.load_game()
+	g.stones = 0.0
+	g.essence = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	# 1) 基准 全新档: 6 段 = onekey_segment_tips 同索引 恒等 (单源 口径)
+	var tips143: Array = g.onekey_segment_tips()
+	var base143: bool = true
+	for i in 6:
+		if str(g.onekey_btn_tip(i)) != str(tips143[i]):
+			base143 = false
+	check(base143, "打磨-143 基准 6 段 = onekey_segment_tips 同索引 恒等 (单源)")
+	# 2) 全新档 受控 基准: 无 学/无 拥有 → 施展段 无就绪 口径, 法器/装备 段 灵石不足 口径
+	check(str(g.onekey_btn_tip(2)).find("无 就绪") >= 0,
+		"打磨-143 全新档 施展段 无就绪 口径 (实际 %s)" % str(g.onekey_btn_tip(2)).left(20))
+	check(str(g.onekey_btn_tip(3)) == "灵石 不足 购买 下一件, 或 法器 已 全 拥有"
+			and str(g.onekey_btn_tip(4)) == "灵石 不足 购买 下一件, 或 装备 已 全 拥有",
+		"打磨-143 全新档 法器/装备段 灵石不足 口径 (实际 %s / %s)" % [str(g.onekey_btn_tip(3)), str(g.onekey_btn_tip(4))])
+	check(str(g.onekey_btn_tip(5)) == "各 部位 已 最佳 (或 无 拥有 装备)",
+		"打磨-143 全新档 最佳段 已最佳 口径 (实际 %s)" % str(g.onekey_btn_tip(5)))
+	# 3) 境界/筛选 同步: 境界2 领悟/神通 段 数 与 接口 恒等 (境界 提升 可学数 变)
+	g.realm_idx = 2
+	var ll143: int = g.learn_available_count()
+	var al143: int = g.active_learn_available_count()
+	check(str(g.onekey_btn_tip(0)).begins_with("%d 个可学:" % ll143)
+			and str(g.onekey_btn_tip(1)).begins_with("%d 个可学:" % al143),
+		"打磨-143 境界2 领悟/神通段 计数 = 接口 恒等 (实际 %s / %s)" % [str(g.onekey_btn_tip(0)).left(12), str(g.onekey_btn_tip(1)).left(12)])
+	# 4) 筛选 叠加: 品质 tier0 → 领悟/神通 段 计数 收窄 恒等 (与 顶栏 徽标 段 同口径)
+	check(str(g.onekey_btn_tip(0, "", 0)).begins_with("%d 个可学:" % g.learn_available_count("", 0))
+			and str(g.onekey_btn_tip(1, "", 0)).begins_with("%d 个可学:" % g.active_learn_available_count("", 0)),
+		"打磨-143 tier0 筛选 领悟/神通段 收窄 恒等 (实际 %s)" % str(g.onekey_btn_tip(0, "", 0)).left(12))
+	# 5) 越界 索引 空串 防御 (负数/超上)
+	check(g.onekey_btn_tip(-1) == "" and g.onekey_btn_tip(6) == "" and g.onekey_btn_tip(99) == "",
+		"打磨-143 越界 索引 空串 防御")
+	# 6) 只读 连读 恒定 无 资源/统计 副作用 (境界2 态 下 连读, 快照 防 本段 自身 改态 干扰)
+	var snap143: Dictionary = g.stats.duplicate(true)
+	var es143r: float = g.essence
+	var st143r: float = g.stones
+	var rr143: String = g.onekey_btn_tip(2)
+	check(rr143 == g.onekey_btn_tip(2) and g.essence == es143r and g.stones == st143r and g.stats == snap143,
+		"打磨-143 只读 连读 恒定 无副作用")
+	# 7) 收尾 复原
+	g.realm_idx = r142
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

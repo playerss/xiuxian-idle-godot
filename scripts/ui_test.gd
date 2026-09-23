@@ -232,6 +232,7 @@ func _ready() -> void:
 	await _assert_m139c_sfx()  # M7-4 打磨-139c: 音效 播放器 挂 现有 触发点 (player 节点/6 触发点 名称/未知 名称 防御/无 副作用/收尾 复位; 内部含 tower 挑战 await 须 显式 await 防 _finish 抢先 quit)
 	await _assert_m140_sfx_toggle()  # M7-4 打磨-140: 音效 开关 (修行页 开关 按钮 与 水墨背景 同区 同 定位: toggle 默认 开/点击 切 关 _sfx_play 静默 跳过/恢复 开 播放/读档 同步 按钮态/tooltip 口径/同态 节流/无 资源 统计 副作用/收尾 复位 开)
 	await _assert_break_btn_tip()  # 打磨-142: 突破 按钮 tooltip 动态 段 (核心 CTA 悬停 消耗/成功率/缺口/ETA/预期成本 一览: 静态段 标记+动态段=break_btn_tip 接口 恒等/境界 提升 消耗 段 动态 同步/攒满 已攒够 文案/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
+	await _assert_onekey_btn_tips()  # 打磨-143: 6 个 一键 按钮 (领悟/神通/施展/法器/装备/最佳) tooltip 动态段 (单源 onekey_btn_tip 复用 打磨-76 明细: 静态前缀+接口 恒等/筛选 叠加 同步/施展 就绪 同步/同态 节流 无 副作用/收尾 干净 基准)
 
 	_finish()
 
@@ -783,12 +784,15 @@ func _assert_onekey_tooltips() -> void:
 		"best": ui._equip_best_btn,
 	}
 	for key in btns:
+		# 打磨-46 三行结构 静态 前缀 断言 (打磨-143 后 tooltip = 静态 前缀 3 行 + 空行 + 动态段,
+		# 前 3 行 口径 不变: 第1行 动作/第2行 筛选/第3行 按钮计数)
 		var b: Button = btns[key]
 		var tip: String = str(b.tooltip_text)
 		var lines: PackedStringArray = tip.split("\n")
 		check(tip.length() > 20, "一键系列 tooltip 非空 (%s)" % key)
-		check(lines.size() == 3, "一键系列 tooltip 三行结构 (%s, 实际 %d)" % [key, lines.size()])
+		check(lines.size() >= 4 and lines[3] == "", "一键系列 tooltip 静态 3 行+空行 分隔 动态段 (%s, 实际 %d)" % [key, lines.size()])
 		check(lines.size() >= 3 and lines[2].begins_with("按钮计数 ="), "一键系列 tooltip 第3行=计数口径 (%s)" % key)
+		check(tip.find("【本次 一键") >= 0, "一键系列 tooltip 含 动态段 标记 (%s)" % key)
 	# 一键领悟: 境界条件 + 筛选 AND 叠加 + 不耗资源
 	var t_learn: String = str(ui._learn_all_btn.tooltip_text)
 	check(t_learn.contains("境界/层数足够"), "一键领悟 tooltip 含 境界/层数足够 条件")
@@ -1339,10 +1343,10 @@ func _assert_active_learn() -> void:
 	ui._on_active_learn()
 	check(ui._onekey_float_count == c1, "打磨-56 0变更再点 不弹浮动 (计数 %d 不变)" % c1)
 	check(str(ui._msg_label.text).find("没有可领悟的新主动神通") >= 0, "打磨-56 0变更 走底部消息 (实际 %s)" % str(ui._msg_label.text))
-	# tooltip 3 行结构 + 口径词 (构建时静态文本)
+	# tooltip 静态 3 行 前缀 + 空行 + 动态段 (打磨-143 后 结构; 前 3 行 口径 不变)
 	var tip: String = str(btn.tooltip_text)
 	var lines: PackedStringArray = tip.split("\n")
-	check(lines.size() == 3, "打磨-56 tooltip 三行结构 (实际 %d)" % lines.size())
+	check(lines.size() >= 4 and lines[3] == "", "打磨-56 tooltip 静态 3 行+空行 分隔 动态段 (实际 %d)" % lines.size())
 	check(lines.size() >= 3 and lines[2].begins_with("按钮计数 ="), "打磨-56 tooltip 第3行=计数口径 (实际 %s)" % (lines[2] if lines.size() >= 3 else ""))
 	check(tip.contains("主动神通"), "打磨-56 tooltip 含 主动神通 范围说明")
 	check(tip.contains("AND 叠加"), "打磨-56 tooltip 含 筛选 AND 叠加口径")
@@ -9008,3 +9012,93 @@ func _assert_break_btn_tip() -> void:
 	ui.set_process(uiproc142)
 	ui._refresh()
 	check(g.stats == snap142, "打磨-142 收尾 复原 无 统计 副作用")
+
+
+# 打磨-143: 6 个 一键 按钮 (领悟/神通/施展/法器/装备/最佳) tooltip 动态段 — 单源 g.onekey_btn_tip
+# 复用 打磨-76 onekey_segment_tips 明细, 与 顶栏 一键 徽标 段 同 状态键 节流 (挂机 恒定 无 每帧 重建).
+# 断言: 静态前缀 标记 + 动态段 = 接口 恒等 x6 / 筛选 叠加 领悟/神通 段 同步 / 学 神通 施展 段 就绪 同步 /
+# 同态 节流 无 资源/统计 副作用 (UI 挂机 _process 冻结 窗口 内 手动 驱动, 同 打磨-59/142 口径) / 收尾 干净 基准.
+func _assert_onekey_btn_tips() -> void:
+	var g := GameData
+	# 受控基准: 境界2 层1 / 灵石 5000 / 空 状态 (防 前序 段 残留, 与 打磨-76 基准 同口径)
+	g.realm_idx = 2
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 5000.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd.clear()
+	ui._on_filter("")
+	ui._on_tier_filter("")
+	ui._on_equip_filter("")
+	ui._on_equip_tier_filter("")
+	ui._refresh()
+	# 1) 静态前缀 标记 + 动态段 = 接口 恒等 x6 (单源 口径)
+	var btns: Array = [ui._learn_all_btn, ui._active_learn_btn, ui._active_all_btn,
+		ui._items_buy_btn, ui._buy_all_btn, ui._equip_best_btn]
+	var marks: Array = ["【本次 一键领悟 预估", "【本次 一键神通 预估", "【本次 一键施展 预估",
+		"【本次 一键购买 预估", "【本次 一键购买 预估", "【本次 一键最佳 预估"]
+	var statics: Array = [ui._ok_learn_tip_static, ui._ok_actlearn_tip_static, ui._ok_cast_tip_static,
+		ui._ok_item_tip_static, ui._ok_buy_tip_static, ui._ok_best_tip_static]
+	var cat143: String = ui._filter_active
+	var tier143: int = int(ui._tier_active) if ui._tier_active != "" else -1
+	for i in 6:
+		var tt: String = str(btns[i].tooltip_text)
+		check(tt.begins_with(str(statics[i])) and tt.find(str(marks[i])) >= 0,
+			"打磨-143 按钮%d tooltip = 静态前缀+动态段标记 (实际 %s)" % [i, tt.left(20)])
+		var seg: String = g.onekey_btn_tip(i, cat143, tier143) if i < 2 else g.onekey_btn_tip(i)
+		check(tt == str(statics[i]) + seg,
+			"打磨-143 按钮%d tooltip = 静态前缀 + onekey_btn_tip 恒等 (实际 %s)" % [i, tt.substr(0, 30)])
+	# 2) 筛选 叠加: tier0 → 领悟/神通 段 收窄 动态 同步 (状态键 变化 触发 刷)
+	ui._on_tier_filter("0")
+	ui._refresh()
+	var t0l: String = g.onekey_btn_tip(0, "", 0)
+	var t0a: String = g.onekey_btn_tip(1, "", 0)
+	check(str(ui._learn_all_btn.tooltip_text).ends_with(t0l) and t0l.find("20 个可学:") >= 0,
+		"打磨-143 tier0 领悟段 收窄 同步 20 个可学 (实际 %s)" % t0l.left(16))
+	check(str(ui._active_learn_btn.tooltip_text).ends_with(t0a) and t0a.find("6 个可学:") >= 0,
+		"打磨-143 tier0 神通段 收窄 同步 6 个可学 (实际 %s)" % t0a.left(16))
+	# 3) 学 全部 可学 神通 → 施展 段 就绪 数 上升 动态 同步 (爆发 预览 段 非空)
+	ui._on_tier_filter("")
+	g.learn_all_active()
+	ui._refresh()
+	var tcs: String = g.onekey_btn_tip(2)
+	var rn: int = g.active_ready_count()
+	check(str(ui._active_all_btn.tooltip_text).ends_with(tcs)
+			and tcs.begins_with("%d 个就绪:" % rn) and rn > 0,
+		"打磨-143 学神通 后 施展段 就绪 同步 %d 个就绪 (实际 %s)" % [rn, tcs.left(16)])
+	# 同态 节流: 再刷 键 不变 → tooltip 不重写 稳定 无 资源/统计 副作用 (UI 挂机 _process 冻结 窗口, 同 打磨-142 口径)
+	var snap143: Dictionary = g.stats.duplicate(true)
+	var st143s: float = g.stones
+	var tips143: Array = []
+	for i in 6:
+		tips143.append(str(btns[i].tooltip_text))
+	var gproc143: bool = g.is_processing()
+	var uiproc143: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	var same: bool = true
+	for i in 6:
+		if str(btns[i].tooltip_text) != tips143[i]:
+			same = false
+	check(same and g.stats == snap143 and g.stones == st143s,
+		"打磨-143 同态 节流 6 按钮 tooltip 稳定 无 资源/统计 副作用 (窗口内 冻结 UI)")
+	# 收尾 复原 干净 基准 (恢复 挂机 进程, 资源 漂移 不 断言 — 主动 收益 口径)
+	g.learned.clear()
+	g._active_cd.clear()
+	g.stones = 0.0
+	g.essence = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.set_process(gproc143)
+	ui.set_process(uiproc143)
+	ui._refresh()
+	check(g.stats == snap143 and g.learned.is_empty(), "打磨-143 收尾 干净 基准 无 统计 副作用")
