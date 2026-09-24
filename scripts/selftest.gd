@@ -9112,6 +9112,97 @@ func _init() -> void:
 	g.layer = 1
 	g.auto_break = ab144
 	g.save_game()
+	# ---------- 打磨-145: 速率构成 tooltip 动态段 (rate_compose_tip 只读接口, 灵气/灵石 构成 拆解 一览) ----------
+	var a145: bool = g.ascended
+	var d145: float = g.dao
+	var dl145: int = g.dao_level
+	var es145: float = g.essence
+	var r145: int = g.realm_idx
+	var l145: int = g.layer
+	var st145: float = g.stones
+	var ln145: Array[String] = []
+	for x145 in g.learned:
+		ln145.append(str(x145))
+	var ow145: Array[String] = []
+	for x145 in g.owned:
+		ow145.append(str(x145))
+	var oe145: Array[String] = []
+	for x145 in g.owned_eq:
+			oe145.append(str(x145))
+	var eq145: Dictionary = g.equipped.duplicate(true)
+	# 受控 基准: 清空 功法/装备/法器, 境界0层1 (与 打磨-144 收尾 态 对齐, 防 前序 段 残留)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 600.0
+	# 1) 基准 未飞升: 灵气 行 无 飞升 段 + 两段 数值 恒等 分解 函数
+	var t1145: String = g.rate_compose_tip()
+	check(t1145.begins_with("灵气: 境界基础 x1.0 x 法器连乘 x1.0 x 功法装备 x1.00 = 当前 灵气 %s/秒" % g.fmt(g.QI_MULT[0])),
+		"打磨-145 基准 未飞升 灵气 行 构成=分解 恒等 (实际 %s)" % t1145)
+	check(t1145.find("\n灵石: 境界基础 x1.0 x 功法装备 x1.00 = 当前灵石 %s/秒" % g.fmt(g.QI_MULT[0])) >= 0
+			and t1145.find("飞升") < 0,
+		"打磨-145 基准 灵石 行 构成 恒等 + 未飞升 无 飞升 段 (实际 %s)" % t1145)
+	# 2) 学 qi_mult 功法 + 穿 装备 + 购 法器 — 三段 动态 同步 (各段 单点 分解 恒等)
+	var qm145: String = ""
+	for sid in g.skill_ids:
+		var s145: Dictionary = g.skill_by_id[sid]
+		if str(s145.get("type", "")) == "passive" and str(s145.get("effect", "")) == "qi_mult" 				and int(s145.get("unlock_realm", 99)) == 0 and int(s145.get("unlock_layer", 99)) <= 1:
+			qm145 = str(sid)
+			break
+	check(qm145 != "" and g.learn_skill(qm145).find("领悟") >= 0, "打磨-145 受控 学 qi_mult 功法")
+	check(g.buy_equipment("weapon_0_0").find("购得") >= 0, "打磨-145 受控 购 武器 木剑")
+	check(g.equipped.get("weapon", "") == "weapon_0_0", "打磨-145 受控 自动 穿戴 武器")
+	check(g.try_buy_item("wooden_sword").find("购得") >= 0, "打磨-145 受控 购 木剑 法器")
+	var t2145: String = g.rate_compose_tip()
+	check(t2145 != t1145 and t2145.begins_with("灵气: 境界基础 x1.0 x 法器连乘 x1.5 x 功法装备 x%.2f = 当前 灵气 %s/秒" % [g.qi_mult_skill_equip(), g.fmt(g.qi_per_sec())]),
+		"打磨-145 功法+装备+法器 灵气 行 动态 同步 构成 恒等 (实际 %s)" % t2145)
+	check(t2145.find("\n灵石: 境界基础 x1.0 x 功法装备 x%.2f = 当前灵石 %s/秒" % [g.stone_mult_skill_equip(), g.fmt(g.stone_per_sec())]) >= 0,
+		"打磨-145 功法+装备 灵石 行 动态 同步 构成 恒等 (实际 %s)" % t2145)
+	# 3) 境界 提升 (境界2 基础 x15) — 境界基础 段 动态 同步
+	g.realm_idx = 2
+	var t3145: String = g.rate_compose_tip()
+	check(t3145.begins_with("灵气: 境界基础 x15.0") and t3145.find("\n灵石: 境界基础 x15.0 x 功法装备 x%.2f = 当前灵石 %s/秒" % [g.stone_mult_skill_equip(), g.fmt(g.stone_per_sec())]) >= 0,
+		"打磨-145 境界2 境界基础 段 动态 同步 (实际 %s)" % t3145)
+	# 4) 飞升 道行 口径 — 段 前缀 道行 + 飞升x2 段 出现 (道行阶段1 倍率 x2)
+	g.ascended = true
+	g.dao_level = 1
+	g.dao = 0.0
+	var t4145: String = g.rate_compose_tip()
+	check(t4145.begins_with("道行: 境界基础 x15.0 x 飞升x2 x 法器连乘") and t4145.find("\n灵石: 境界基础 x15.0") >= 0,
+		"打磨-145 飞升 道行 口径 + 飞升x2 段 (实际 %s)" % t4145)
+	# 5) 只读 连读 恒定 无 资源/统计 副作用
+	var snap145: Dictionary = g.stats.duplicate(true)
+	var st145r: float = g.stones
+	var es145r: float = g.essence
+	var d145r: float = g.dao
+	check(g.rate_compose_tip() == t4145 and g.stones == st145r and g.essence == es145r
+			and g.dao == d145r and g.stats == snap145,
+		"打磨-145 只读 连读 恒定 无 资源/统计 副作用")
+	# 6) 收尾 复原 (恢复 前序 段 态)
+	g.learned.clear()
+	for x145 in ln145:
+		g.learned.append(x145)
+	g.owned.clear()
+	for x145 in ow145:
+		g.owned.append(x145)
+	g.owned_eq.clear()
+	for x145 in oe145:
+			g.owned_eq.append(x145)
+	g.equipped = eq145
+	g.ascended = a145
+	g.dao_level = dl145
+	g.dao = d145
+	g.essence = es145
+	g.realm_idx = r145
+	g.layer = l145
+	g.stones = st145
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

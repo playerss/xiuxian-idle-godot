@@ -234,6 +234,7 @@ func _ready() -> void:
 	await _assert_break_btn_tip()  # 打磨-142: 突破 按钮 tooltip 动态 段 (核心 CTA 悬停 消耗/成功率/缺口/ETA/预期成本 一览: 静态段 标记+动态段=break_btn_tip 接口 恒等/境界 提升 消耗 段 动态 同步/攒满 已攒够 文案/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_onekey_btn_tips()  # 打磨-143: 6 个 一键 按钮 (领悟/神通/施展/法器/装备/最佳) tooltip 动态段 (单源 onekey_btn_tip 复用 打磨-76 明细: 静态前缀+接口 恒等/筛选 叠加 同步/施展 就绪 同步/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_goal_line_tip()  # 打磨-144: 修行页 下一目标 行 tooltip 动态段 (goal_line_tip 只读接口: 静态前缀+接口 恒等/开 自动突破 段 同步/境界 成功率 同步/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
+	await _assert_rate_compose_tip()  # 打磨-145: 灵气/灵石 速率 tooltip 动态段 (rate_compose_tip 只读接口: 4 展示位 单源 构成 一览/功法装备法器 动态 同步/境界 基础 段 同步/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 
 	_finish()
 
@@ -4640,6 +4641,138 @@ func _assert_m135d_bar_skins() -> void:
 	ui._refresh()
 
 
+# 打磨-145: 灵气/灵石 速率 tooltip 动态段 (修行页 2 行 + 顶栏 2 行 4 展示位 单源 复用
+# GameData.rate_compose_tip 速率构成 一览; 断言: 4 位 静态前缀+动态段标记+接口 恒等/
+# 受控 基准 功法+装备+法器 动态 同步/境界 基础 段 同步/飞升 道行 口径/同态 节流 无 副作用/收尾)
+func _assert_rate_compose_tip() -> void:
+	var g := GameData
+	var qi_l: Label = ui._qi_label
+	var sr_l: Label = ui._stone_rate_label
+	var top_qi: Label = ui._rate_label
+	var top_sr: Label = ui._sr_label
+	check(qi_l != null and sr_l != null and top_qi != null and top_sr != null,
+			"打磨-145 4 个 速率 行 节点 齐全 (修行页 2 + 顶栏 2)")
+	# 4 位 初始 tooltip = 静态前缀 + 动态段标记 + 接口 恒等
+	var t0q: String = str(qi_l.tooltip_text)
+	var t0s: String = str(sr_l.tooltip_text)
+	check(t0q.find("【速率 构成 (动态)】") >= 0 and t0q == str(ui._qi_rate_tip_static) + g.rate_compose_tip(),
+			"打磨-145 修行页 灵气 行 tooltip = 静态前缀+接口 恒等 (实际 %s)" % t0q.left(40))
+	check(t0s == str(ui._stone_rate_tip_static) + g.rate_compose_tip(),
+			"打磨-145 修行页 灵石 行 tooltip = 静态前缀+接口 恒等 (实际 %s)" % t0s.left(40))
+	check(str(top_qi.tooltip_text) == str(ui._rate_tip_static) + g.rate_compose_tip(),
+			"打磨-145 顶栏 主资源 速率 行 tooltip = 静态前缀+接口 恒等")
+	check(str(top_sr.tooltip_text) == str(ui._sr_tip_static) + g.rate_compose_tip(),
+			"打磨-145 顶栏 灵石 速率 行 tooltip = 静态前缀+接口 恒等")
+	# 受控 基准: 清空 功法/装备/法器, 境界0层1 (防 前序 段 残留 干扰 构成 段)
+	var a145: bool = g.ascended
+	var d145: float = g.dao
+	var dl145: int = g.dao_level
+	var es145: float = g.essence
+	var r145: int = g.realm_idx
+	var l145: int = g.layer
+	var st145: float = g.stones
+	var ln145: Array[String] = []
+	for x145 in g.learned:
+		ln145.append(str(x145))
+	var ow145: Array[String] = []
+	for x145 in g.owned:
+		ow145.append(str(x145))
+	var oe145: Array[String] = []
+	for x145 in g.owned_eq:
+			oe145.append(str(x145))
+	var eq145: Dictionary = g.equipped.duplicate(true)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 600.0
+	ui._refresh()
+	var t1q: String = str(qi_l.tooltip_text)
+	check(t1q == str(ui._qi_rate_tip_static) + g.rate_compose_tip()
+			and t1q.find("境界基础 x1.0 x 法器连乘 x1.0 x 功法装备 x1.00") >= 0
+			and t1q.find("\n灵石: 境界基础 x1.0 x 功法装备 x1.00") >= 0,
+			"打磨-145 受控 基准 4 位 同步 构成 段 数值 恒等 (实际 %s)" % t1q)
+	check(str(top_qi.tooltip_text) == str(ui._rate_tip_static) + g.rate_compose_tip()
+			and str(sr_l.tooltip_text) == str(ui._stone_rate_tip_static) + g.rate_compose_tip(),
+			"打磨-145 受控 基准 顶栏 2 位 + 修行页 灵石 行 单源 恒等")
+	# 功法+装备+法器 — 4 位 动态 同步 (段 文本 变化 才 刷 4 处)
+	var qm145: String = ""
+	for sid in g.skill_ids:
+		var s145: Dictionary = g.skill_by_id[sid]
+		if str(s145.get("type", "")) == "passive" and str(s145.get("effect", "")) == "qi_mult" \
+				and int(s145.get("unlock_realm", 99)) == 0 and int(s145.get("unlock_layer", 99)) <= 1:
+			qm145 = str(sid)
+			break
+	check(qm145 != "" and g.learn_skill(qm145).find("领悟") >= 0, "打磨-145 ui 受控 学 qi_mult 功法")
+	check(g.buy_equipment("weapon_0_0").find("购得") >= 0, "打磨-145 ui 受控 购 武器 木剑")
+	check(g.try_buy_item("wooden_sword").find("购得") >= 0, "打磨-145 ui 受控 购 木剑 法器")
+	ui._refresh()
+	var t2q: String = str(qi_l.tooltip_text)
+	check(t2q != t1q and t2q == str(ui._qi_rate_tip_static) + g.rate_compose_tip()
+			and t2q.find("法器连乘 x1.5") >= 0 and t2q.find("功法装备 x%.2f" % g.qi_mult_skill_equip()) >= 0,
+			"打磨-145 功法+装备+法器 灵气 构成 动态 同步 = 接口 恒等 (实际 %s)" % t2q)
+	check(str(top_qi.tooltip_text) == str(ui._rate_tip_static) + g.rate_compose_tip()
+			and str(top_sr.tooltip_text) == str(ui._sr_tip_static) + g.rate_compose_tip()
+			and str(sr_l.tooltip_text) == str(ui._stone_rate_tip_static) + g.rate_compose_tip(),
+			"打磨-145 功法+装备+法器 顶栏 2 位 + 灵石 行 同步 = 接口 恒等")
+	# 境界 提升 (境界2 基础 x15) — 境界基础 段 动态 同步
+	g.realm_idx = 2
+	ui._refresh()
+	var t3q: String = str(qi_l.tooltip_text)
+	check(t3q != t2q and t3q.begins_with(str(ui._qi_rate_tip_static) + "灵气: 境界基础 x15.0")
+			and t3q == str(ui._qi_rate_tip_static) + g.rate_compose_tip(),
+			"打磨-145 境界2 境界基础 段 动态 同步 = 接口 恒等 (实际 %s)" % t3q)
+	# 飞升 道行 口径 — 段 前缀 道行 + 飞升x2 段 (道行阶段1 倍率 x2)
+	g.ascended = true
+	g.dao_level = 1
+	g.dao = 0.0
+	ui._refresh()
+	var t4q: String = str(qi_l.tooltip_text)
+	check(t4q.begins_with(str(ui._qi_rate_tip_static) + "道行: 境界基础 x15.0 x 飞升x2 x 法器连乘 x1.5")
+			and str(top_qi.tooltip_text) == str(ui._rate_tip_static) + g.rate_compose_tip(),
+			"打磨-145 飞升 道行 口径 + 飞升x2 段 4 位 同步 (实际 %s)" % t4q)
+	# 同态 节流: 冻结 窗口 内 再刷 4 位 稳定 无 资源/统计 副作用 (UI 挂机 _process 冻结 同 打磨-142 口径)
+	var snap145: Dictionary = g.stats.duplicate(true)
+	var st145s: float = g.stones
+	var gproc145: bool = g.is_processing()
+	var uiproc145: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(str(qi_l.tooltip_text) == t4q and str(top_sr.tooltip_text) == str(ui._sr_tip_static) + g.rate_compose_tip()
+			and g.stats == snap145 and g.stones == st145s,
+			"打磨-145 同态 节流 4 位 稳定 无 资源/统计 副作用 (窗口内 冻结 UI)")
+	# 收尾 复原 干净 基准 (恢复 挂机 进程 + 前序 段 态)
+	g.learned.clear()
+	for x145 in ln145:
+		g.learned.append(x145)
+	g.owned.clear()
+	for x145 in ow145:
+		g.owned.append(x145)
+	g.owned_eq.clear()
+	for x145 in oe145:
+			g.owned_eq.append(x145)
+	g.equipped = eq145
+	g.ascended = a145
+	g.dao_level = dl145
+	g.dao = d145
+	g.essence = es145
+	g.realm_idx = r145
+	g.layer = l145
+	g.stones = st145
+	g.set_process(gproc145)
+	ui.set_process(uiproc145)
+	ui._refresh()
+	check(str(qi_l.tooltip_text) == str(ui._qi_rate_tip_static) + g.rate_compose_tip(),
+			"打磨-145 收尾 复原 后 tooltip = 接口 恒等 干净 基准")
+
 func _finish() -> void:
 	print("")
 	if _fail.is_empty():
@@ -5109,8 +5242,9 @@ func _assert_primary_rate_badge() -> void:
 		"打磨-78 标签 挂在 顶栏 (与 挂机时长 标签 同父; 实际 %s)" % str(rl.get_parent()))
 	check(rl.get_theme_color("font_color") == Color(0.6, 0.62, 0.68),
 		"打磨-78 标签 字色 灰色 (实际 %s)" % str(rl.get_theme_color("font_color")))
-	check(rl.tooltip_text.find("主资源 收入 速率") >= 0 and rl.tooltip_text.find("修行页 灵气速率 同 口径") >= 0,
-		"打磨-78 标签 tooltip 含 口径 说明 (实际 %s)" % rl.tooltip_text.left(20))
+	check(rl.tooltip_text.find("主资源 收入 速率") >= 0 and rl.tooltip_text.find("【速率 构成 (动态)】") >= 0
+			and rl.tooltip_text.find("构成 拆解") >= 0,
+		"打磨-78 标签 tooltip 含 口径 说明+速率构成 动态段 标记 [打磨-145 适配] (实际 %s)" % rl.tooltip_text.left(20))
 	# 初始: 速率 恒 >0 (QI_MULT>=1) → 可见 + 文本=接口 (动态 恒等, 防 前序 残留 干扰)
 	var t0: String = g.primary_rate_text()
 	check(t0 != "", "打磨-78 基准 速率>0 接口 非空 (实际 %s)" % t0)
@@ -5166,8 +5300,9 @@ func _assert_stone_rate_badge() -> void:
 		"打磨-79 标签 挂在 顶栏 (与 挂机时长 标签 同父; 实际 %s)" % str(sl.get_parent()))
 	check(sl.get_theme_color("font_color") == Color(0.6, 0.62, 0.68),
 		"打磨-79 标签 字色 灰色 (实际 %s)" % str(sl.get_theme_color("font_color")))
-	check(sl.tooltip_text.find("灵石 收入 速率") >= 0 and sl.tooltip_text.find("修行页 灵石速率 行 同 口径") >= 0,
-		"打磨-79 标签 tooltip 含 口径 说明 (实际 %s)" % sl.tooltip_text.left(20))
+	check(sl.tooltip_text.find("灵石 收入 速率") >= 0 and sl.tooltip_text.find("【速率 构成 (动态)】") >= 0
+			and sl.tooltip_text.find("法器 连乘 仅 影响 主资源 速率") >= 0,
+		"打磨-79 标签 tooltip 含 口径 说明+速率构成 动态段 标记 [打磨-145 适配] (实际 %s)" % sl.tooltip_text.left(20))
 	# 初始: 灵石速率 恒 >0 (境界倍率>=1) → 可见 + 文本=接口 (动态 恒等, 防 前序 残留 干扰)
 	var t0: String = g.stone_rate_text()
 	check(t0 != "", "打磨-79 基准 灵石速率>0 接口 非空 (实际 %s)" % t0)

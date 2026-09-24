@@ -1485,8 +1485,12 @@ func immortal_mult() -> float:
 func qi_per_sec() -> float:
 	return QI_MULT[realm_idx] * immortal_mult() * item_boost() * (1.0 + passive_bonus("qi_mult") + passive_bonus("all_mult") + equip_bonus("qi_mult"))
 
+# 灵石 功法装备段 (1 + 灵石/全面 被动 + 装备加成, 含 已装配 词缀; 打磨-145 单点 供 构成 展示 复用)
+func stone_mult_skill_equip() -> float:
+	return 1.0 + passive_bonus("stone_mult") + passive_bonus("all_mult") + equip_bonus("stone_mult")
+
 func stone_per_sec() -> float:
-	return 1.0 * QI_MULT[realm_idx] * (1.0 + passive_bonus("stone_mult") + passive_bonus("all_mult") + equip_bonus("stone_mult"))
+	return QI_MULT[realm_idx] * stone_mult_skill_equip()
 
 # 灵气倍率构成 (顶栏展示用: 境界基础 / 功法与装备加成)
 func qi_mult_realm() -> float:
@@ -4412,6 +4416,24 @@ func goal_line_tip() -> String:
 	var ch := "道行精进成功率 %d%%" % pct if ascended else "突破成功率 %d%%" % pct
 	var ab := "自动突破: 开" if auto_break else "自动突破: 关"
 	return "%s\n%s · %s" % [rate_head, ch, ab]
+
+# ---------- 打磨-145: 速率构成 tooltip 动态段 (灵气/灵石 速率 各 构成 拆解 一览) ----------
+
+# 当前 灵气/灵石 速率 构成 文案 (只读 不改 状态/存档/统计): 两行 结构 —
+# 灵气(道行): 境界基础 x 飞升x (飞升 才 有) x 法器连乘 x 功法装备 (1+Σ 被动/装备/词缀) = 当前 X/秒
+# 灵石: 境界基础 x 功法装备 (灵石池 1+Σ) = 当前 X/秒; 法器 连乘 仅 影响 主资源 速率 不 影响 灵石.
+# 各段 单点 复用 qi_per_sec/stone_per_sec 分解 函数 (QI_MULT/immortal_mult/item_boost/
+# qi_mult_skill_equip/stone_mult_skill_equip), 与 item_qi_compose 构成 口径 同源 不 二重 表达式.
+func rate_compose_tip() -> String:
+	var res_name := "道行" if ascended else "灵气"
+	var base_txt := "境界基础 x%.1f" % QI_MULT[realm_idx]
+	if ascended:
+		base_txt += " x 飞升x%.0f" % immortal_mult()
+	var qi_c := "%s: %s x 法器连乘 x%.1f x 功法装备 x%.2f = 当前 %s %s/秒" % [
+		res_name, base_txt, item_boost(), qi_mult_skill_equip(), res_name, fmt(qi_per_sec())]
+	var stone_c := "灵石: %s x 功法装备 x%.2f = 当前灵石 %s/秒" % [
+		base_txt, stone_mult_skill_equip(), fmt(stone_per_sec())]
+	return qi_c + "\n" + stone_c
 
 
 # ---------- 打磨-32: 突破按钮"可突破"状态 (资源攒够时 UI 金边高亮引导点击) ----------

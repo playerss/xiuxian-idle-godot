@@ -31,6 +31,11 @@ var _chance_tip := ""          # 打磨-37: 成功率构成 tooltip 缓存 (变�
 var _goal_label: Label         # 打磨-31: 下一目标提示 (修行页)
 var _goal_text := ""           # 下一目标文本缓存 (变化时才刷)
 var _goal_tip_static := ""     # 打磨-144: 下一目标行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑, 同 打磨-84/85 口径)
+var _qi_rate_tip_static := ""   # 打磨-145: 修行页 灵气速率行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼)
+var _stone_rate_tip_static := "" # 打磨-145: 修行页 灵石速率行 tooltip 静态 前缀
+var _rate_tip_static := ""      # 打磨-145: 顶栏 主资源速率行 tooltip 静态 前缀
+var _sr_tip_static := ""        # 打磨-145: 顶栏 灵石速率行 tooltip 静态 前缀
+var _rc_tip := ""               # 打磨-145: 速率构成 动态段 缓存 (4 展示位 单源 复用 rate_compose_tip, 文本 变化 才 刷)
 var _goal_tip := ""            # 打磨-144: 下一目标行 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85/142 口径)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
 var _stats_text := ""          # 统计文本缓存 (变化时才刷)
@@ -458,14 +463,16 @@ func _build_ui() -> void:
 	# 与 修行页 灵气速率 同 口径; 速率<=0 隐藏 避免 空文本 占位; 文本 变化 才刷 节流, 纯展示 无 副作用)
 	_rate_label = _label("", 13, DIM)
 	_rate_label.visible = false
-	_rate_label.tooltip_text = "当前 主资源 收入 速率 (与 主资源行 同 口径: 未飞升=灵气/秒, 飞升后=道行/秒)。\n构成 = 境界基础 倍率 x 道行阶段 倍率 x 法器 连乘 x 功法装备 (1+Σ 被动/装备加成), 与 修行页 灵气速率 同 口径; 纯展示, 无 存档/统计 副作用。"
+	_rate_tip_static = "当前 主资源 收入 速率 (与 主资源行 同 口径: 未飞升=灵气/秒, 飞升后=道行/秒). 悬停 查看 速率 构成 拆解 (随 境界/飞升/法器/功法装备 重算, 纯展示 无 存档/统计 副作用).\n\n【速率 构成 (动态)】\n"
+	_rate_label.tooltip_text = _rate_tip_static + GameData.rate_compose_tip()
 	top.add_child(_rate_label)
 	# 打磨-79: 顶栏 灵石速率 常显 (灰色小字 "+X/秒", 灵石行 后: 与 修行页 灵石速率 行 同 口径
 	# = 基础 x 境界倍率 x (1 + 灵石/全面 被动 + 装备加成); 速率<=0 隐藏 避免 空文本 占位;
 	# 文本 变化 才刷 节流, 纯展示 无 副作用)
 	_sr_label = _label("", 13, DIM)
 	_sr_label.visible = false
-	_sr_label.tooltip_text = "当前 灵石 收入 速率 (与 灵石行 同 口径, 未飞升/飞升 恒 灵石)。\n构成 = 基础 x 境界倍率 x (1 + 灵石/全面 被动 + 装备加成), 与 修行页 灵石速率 行 同 口径; 法器 连乘 仅 影响 主资源 速率, 不影响 灵石; 纯展示, 无 存档/统计 副作用。"
+	_sr_tip_static = "当前 灵石 收入 速率 (未飞升/飞升 恒 灵石, 与 修行页 灵石速率 行 同 口径; 法器 连乘 仅 影响 主资源 速率 不 影响 灵石). 悬停 查看 速率 构成 拆解 (随 境界/功法装备 重算, 纯展示 无 存档/统计 副作用).\n\n【速率 构成 (动态)】\n"
+	_sr_label.tooltip_text = _sr_tip_static + GameData.rate_compose_tip()
 	top.add_child(_sr_label)
 	# 打磨-73: 顶栏 自动系列 状态徽标 (金色圆角徽标 "自动 N/3": 任一开关开 显示, 全关 隐藏;
 	# tooltip 复用 auto_summary_text 三开关 口径 + 离线不触发 说明; 纯展示 无 存档/统计 副作用)
@@ -872,8 +879,14 @@ func _build_training_page(page: Panel) -> void:
 	left.add_child(_label("修 行 状 态", 15, DIM))
 	left.add_child(_sep())
 	_qi_label = _label("灵气速率  0 /秒", 15, CYAN)
+	# 打磨-145: 灵气/灵石 速率行 tooltip = 静态口径 + 动态段 (rate_compose_tip 速率构成 一览,
+	# 随 境界/飞升/法器/功法装备 变化 由 _refresh 刷新; 纯展示 无 存档/统计 副作用)
+	_qi_rate_tip_static = "当前 灵气 收入 速率 (未飞升 口径; 飞升后 本行 改 显 道行/秒 同 接口 道行 口径). 悬停 查看 速率 构成 拆解 (随 境界/飞升/法器/功法装备 重算, 纯展示 无 存档/统计 副作用).\n\n【速率 构成 (动态)】\n"
+	_qi_label.tooltip_text = _qi_rate_tip_static + GameData.rate_compose_tip()
 	left.add_child(_qi_label)
 	_stone_rate_label = _label("灵石速率  0 /秒", 15, CYAN)
+	_stone_rate_tip_static = "当前 灵石 收入 速率 (未飞升/飞升 恒 灵石, 法器 连乘 仅 影响 主资源 速率 不 影响 灵石). 悬停 查看 速率 构成 拆解 (随 境界/功法装备 重算, 纯展示 无 存档/统计 副作用).\n\n【速率 构成 (动态)】\n"
+	_stone_rate_label.tooltip_text = _stone_rate_tip_static + GameData.rate_compose_tip()
 	left.add_child(_stone_rate_label)
 	# 打磨-50: 灵石速率行内联 下一件可购 ETA (金色小字, 文本变化才刷; 买得起/全集齐 切换提示)
 	_stone_next_label = _label("", 12, GOLD)
@@ -2383,6 +2396,15 @@ func _refresh() -> void:
 	if stone_tip != _stone_tip:
 		_stone_tip = stone_tip
 		_stones_label.tooltip_text = stone_tip
+	# 打磨-145: 速率构成 动态段 (修行页 灵气/灵石 速率行 + 顶栏 两速率行 4 展示位 单源 复用
+	# rate_compose_tip, 段 文本 变化 才 刷 4 处, 挂机 恒定 无 每帧 重建; 纯展示 无 副作用)
+	var rc_tip: String = g.rate_compose_tip()
+	if rc_tip != _rc_tip:
+		_rc_tip = rc_tip
+		_qi_label.tooltip_text = _qi_rate_tip_static + rc_tip
+		_stone_rate_label.tooltip_text = _stone_rate_tip_static + rc_tip
+		_rate_label.tooltip_text = _rate_tip_static + rc_tip
+		_sr_label.tooltip_text = _sr_tip_static + rc_tip
 	var rate_txt := g.fmt(g.qi_per_sec())
 	_qi_label.text = ("道行速率  %s /秒" if g.ascended else "灵气速率  %s /秒") % rate_txt
 	_stone_rate_label.text = "灵石速率  %s /秒" % g.fmt(g.stone_per_sec())
