@@ -235,6 +235,7 @@ func _ready() -> void:
 	await _assert_onekey_btn_tips()  # 打磨-143: 6 个 一键 按钮 (领悟/神通/施展/法器/装备/最佳) tooltip 动态段 (单源 onekey_btn_tip 复用 打磨-76 明细: 静态前缀+接口 恒等/筛选 叠加 同步/施展 就绪 同步/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_goal_line_tip()  # 打磨-144: 修行页 下一目标 行 tooltip 动态段 (goal_line_tip 只读接口: 静态前缀+接口 恒等/开 自动突破 段 同步/境界 成功率 同步/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_rate_compose_tip()  # 打磨-145: 灵气/灵石 速率 tooltip 动态段 (rate_compose_tip 只读接口: 4 展示位 单源 构成 一览/功法装备法器 动态 同步/境界 基础 段 同步/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
+	await _assert_offline_tip()  # 打磨-146: 修行页 离线收益行 tooltip 动态段 (offline_preview_tip 单源 复用 打磨-83 口径: 静态前缀+动态段标记+接口 恒等/三档 1h/4h/8h/未飞升 灵气 口径/同态 节流 无 副作用/境界2 同步/学 offline_rate 效率%% 段 同步/飞升 道行 口径/收尾 干净 基准)
 
 	_finish()
 
@@ -4773,6 +4774,95 @@ func _assert_rate_compose_tip() -> void:
 	check(str(qi_l.tooltip_text) == str(ui._qi_rate_tip_static) + g.rate_compose_tip(),
 			"打磨-145 收尾 复原 后 tooltip = 接口 恒等 干净 基准")
 
+# 打磨-146: 修行页 离线收益行 tooltip 动态段 (打磨-83 顶栏 挂机时长 已给 离线收益 预估 动态段, 但 修行页
+# 离线收益行 悬停 只有 静态 口径, 挂机 在 修行页 扫视 不知 离线 能 攒 多少; 单源 复用 GameData.offline_preview_tip
+# 三档 1h/4h/8h 主资源/灵石 + 效率%% + 上限 8h, 与 顶栏 同 口径 同源; _refresh 动态段 文本 变化 才 刷;
+# 纯展示 无 存档/统计 副作用);
+# 断言 (手动驱动 确定性): 节点 存在/初始 tooltip = 静态前缀+动态段标记+接口 恒等/静态前缀 口径 说明/
+# 动态段 三档 齐全/未飞升 灵气 口径/同态 节流 冻结窗口 无 副作用/境界2 动态段 同步/学 offline_rate
+# 效率%% 段 同步/飞升 道行 口径/收尾 复原 干净 基准
+func _assert_offline_tip() -> void:
+	var g := GameData
+	var ol: Label = ui._offline_label
+	check(ol != null, "打磨-146 离线收益行 节点 存在")
+	var dyn0: String = g.offline_preview_tip()
+	var t0: String = str(ol.tooltip_text)
+	check(t0 == str(ui._offline_tip_static) + dyn0,
+			"打磨-146 初始 tooltip = 静态前缀+接口 恒等 (实际 %s)" % t0.left(40))
+	check(str(ui._offline_tip_static).find("上限 8 小时") >= 0
+			and str(ui._offline_tip_static).find("【离线收益 预估 (动态)】") >= 0,
+			"打磨-146 静态前缀 含 口径 说明 + 动态段 标记")
+	check(dyn0.find("离线 1 小时") >= 0 and dyn0.find("离线 4 小时") >= 0 and dyn0.find("离线 8 小时") >= 0,
+			"打磨-146 动态段 含 三档 1h/4h/8h")
+	check(dyn0.find("灵气") >= 0 and dyn0.find("道行") < 0,
+			"打磨-146 未飞升 动态段 主资源 口径=灵气 (实际 %s)" % dyn0.left(30))
+	# 同态 节流: 冻结 UI 窗口 内 刷新 tooltip 稳定 无重写, 无 资源/统计/境界 副作用
+	var snap: Dictionary = g.stats.duplicate(true)
+	var ess0: float = g.essence
+	var st0: float = g.stones
+	var rl0: int = g.realm_idx
+	var gproc: bool = g.is_processing()
+	var uiproc: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(str(ol.tooltip_text) == t0 and g.stats == snap
+			and g.essence == ess0 and g.stones == st0 and g.realm_idx == rl0,
+			"打磨-146 同态 节流 tooltip 稳定 无 资源/统计 副作用 (窗口内 冻结 UI)")
+	# 境界2 → 主资源 数值 变化 → 动态段 同步
+	g.realm_idx = 2
+	ui._refresh()
+	var t2: String = str(ol.tooltip_text)
+	check(t2 != t0 and t2 == str(ui._offline_tip_static) + g.offline_preview_tip(),
+			"打磨-146 境界2 动态段 同步 = 接口 恒等")
+	g.realm_idx = rl0
+	ui._refresh()
+	check(str(ol.tooltip_text) == t0, "打磨-146 恢复 境界 后 tooltip 复原")
+	# 学 offline_rate 功法 → 效率%% 段 变化 → 动态段 同步
+	var off_skill := ""
+	for sid in g.skill_ids:
+		var sk: Dictionary = g.skill_by_id[sid]
+		if str(sk.get("type", "")) == "passive" and str(sk.get("effect", "")) == "offline_rate":
+			off_skill = sid
+			break
+	check(off_skill != "", "打磨-146 存在 offline_rate 被动 (实际 %s)" % off_skill)
+	g.learned.erase(off_skill)
+	var rate0: float = g.offline_rate()
+	var rb: int = g.realm_idx
+	g.realm_idx = 3
+	g.learn_skill(off_skill)
+	check(g.learned.has(off_skill) and g.offline_rate() > rate0,
+			"打磨-146 offline_rate 功法 学习 成功 效率 上升")
+	ui._refresh()
+	var t3: String = str(ol.tooltip_text)
+	check(t3.find("基础 %d%%" % int(g.offline_rate() * 100.0)) >= 0 and t3 != t0,
+			"打磨-146 学 offline_rate 后 效率%% 段 动态 同步 (实际 %s)" % t3.left(40))
+	g.learned.erase(off_skill)
+	g.realm_idx = rb
+	ui._refresh()
+	check(str(ol.tooltip_text) == t0, "打磨-146 清除 功法+恢复 境界 后 tooltip 复原")
+	# 飞升 后 动态段 主资源 口径=道行
+	var asc_save: bool = g.ascended
+	var daoLv_save: int = g.dao_level
+	g.ascended = true
+	g.dao_level = 1
+	ui._refresh()
+	var dyn4: String = g.offline_preview_tip()
+	check(str(ol.tooltip_text) == str(ui._offline_tip_static) + dyn4
+			and dyn4.find("道行") >= 0 and dyn4.find("灵气") < 0,
+			"打磨-146 飞升 后 动态段 主资源=道行 恒等 (实际 %s)" % dyn4.left(30))
+	g.ascended = asc_save
+	g.dao_level = daoLv_save
+	# 收尾: 恢复 挂机 进程 + 干净 基准
+	g.set_process(gproc)
+	ui.set_process(uiproc)
+	ui._refresh()
+	check(str(ol.tooltip_text) == str(ui._offline_tip_static) + g.offline_preview_tip()
+			and g.ascended == false and g.realm_idx == rl0,
+			"打磨-146 收尾 复原 tooltip = 接口 恒等 干净 基准")
+	await get_tree().process_frame
 func _finish() -> void:
 	print("")
 	if _fail.is_empty():

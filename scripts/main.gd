@@ -35,6 +35,8 @@ var _qi_rate_tip_static := ""   # 打磨-145: 修行页 灵气速率行 tooltip 
 var _stone_rate_tip_static := "" # 打磨-145: 修行页 灵石速率行 tooltip 静态 前缀
 var _rate_tip_static := ""      # 打磨-145: 顶栏 主资源速率行 tooltip 静态 前缀
 var _sr_tip_static := ""        # 打磨-145: 顶栏 灵石速率行 tooltip 静态 前缀
+var _offline_tip_static := ""    # 打磨-146: 修行页 离线收益行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑)
+var _offline_tip := ""           # 打磨-146: 离线收益预估 动态段 缓存 (变化 才 刷, 单源 复用 offline_preview_tip, 同 打磨-83/145 口径)
 var _rc_tip := ""               # 打磨-145: 速率构成 动态段 缓存 (4 展示位 单源 复用 rate_compose_tip, 文本 变化 才 刷)
 var _goal_tip := ""            # 打磨-144: 下一目标行 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85/142 口径)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
@@ -895,7 +897,11 @@ func _build_training_page(page: Panel) -> void:
 	# 打磨-13: 离线/挂机收益可视化 (每小时离线可得资源)
 	_offline_label = _label("", 14, DIM)
 	left.add_child(_offline_label)
-	_offline_label.tooltip_text = "离线收益 = 当前速率 x 离线效率 (基础50% + 功法/装备加成), 上限 8 小时。关闭游戏后继续积累, 重新进入时发放。\n飞升后离线主资源计入道行。"
+	# 打磨-146: 离线收益行 tooltip = 静态口径 + 动态段 (单源 复用 offline_preview_tip, 与 打磨-83 顶栏 挂机时长 同 口径;
+	# _refresh 动态段 文本 变化 才 刷; 纯展示 无 存档/统计 副作用)
+	_offline_tip_static = "离线收益 = 当前速率 x 离线效率 (基础50% + 功法/装备加成), 上限 8 小时。关闭游戏后继续积累, 重新进入时发放。\n飞升后离线主资源计入道行。\n\n【离线收益 预估 (动态)】\n"
+	_offline_tip = GameData.offline_preview_tip()
+	_offline_label.tooltip_text = _offline_tip_static + _offline_tip
 	# 打磨-14: 修行统计 (累计时长/突破/道行精进/神通/法器/装备, 持久化)
 	_stats_label = _label("", 13, DIM)
 	left.add_child(_stats_label)
@@ -2418,6 +2424,12 @@ func _refresh() -> void:
 	if off_t != _offline_text:
 		_offline_text = off_t
 		_offline_label.text = off_t
+	# 打磨-146: 离线收益行 tooltip 动态段 (单源 复用 offline_preview_tip, 与 打磨-83 顶栏 挂机时长 同 口径;
+	# 动态段 文本 变化 才 刷, 挂机 恒定 无 每帧 重建; 纯展示 无 副作用)
+	var offp_tip: String = g.offline_preview_tip()
+	if offp_tip != _offline_tip:
+		_offline_tip = offp_tip
+		_offline_label.tooltip_text = _offline_tip_static + offp_tip
 	# 打磨-14: 修行统计 (文本变化时才刷)
 	var st_t: String = g.stats_text()
 	if st_t != _stats_text:

@@ -4853,6 +4853,49 @@ func _init() -> void:
 	check(g.offline_preview_tip() == g.offline_preview_tip(), "打磨-83 只读 连读 恒定")
 	check(g.stats == snap83 and g.stones == st83_s and g.essence == es83_e and g.realm_idx == rl83,
 		"打磨-83 只读 接口 无 资源/统计/境界 副作用")
+	# ---------- 打磨-146: 修行页 离线收益行 tooltip 动态段 (单源 复用 offline_preview_tip, 与 打磨-83 顶栏
+	# 挂机时长 同 口径; 本 段 钉 数值 恒等/上限 钳制/只读 无 副作用 — 只读 接口 口径 不 依赖 UI) ----------
+	var tip146: String = g.offline_preview_tip()
+	check(tip146 != "" and tip146.find("离线 1 小时") >= 0 and tip146.find("离线 8 小时") >= 0,
+			"打磨-146 离线收益 预估 段 非空 三档 齐全 (实际 %s)" % tip146.left(30))
+	# 数值 恒等: 三档 主资源/灵石 = offline_gain(3600/4h/8h) (未飞升 基准 态)
+	var h146_1: Dictionary = g.offline_gain(3600.0)
+	var h146_4: Dictionary = g.offline_gain(4.0 * 3600.0)
+	var h146_8: Dictionary = g.offline_gain(8.0 * 3600.0)
+	var l146: Array[String] = []
+	for ln146 in tip146.split("\n"):
+		l146.append(ln146)
+	check(l146.size() == 4 and l146[1].find(g.fmt(float(h146_1["qi"]))) >= 0 and l146[1].find(g.fmt(float(h146_1["stone"]))) >= 0,
+			"打磨-146 1h 档 数值 = offline_gain(3600) 恒等 (实际 %s)" % l146[1])
+	check(l146[2].find(g.fmt(float(h146_4["qi"]))) >= 0 and l146[2].find(g.fmt(float(h146_4["stone"]))) >= 0,
+			"打磨-146 4h 档 数值 = offline_gain(14400) 恒等 (实际 %s)" % l146[2])
+	check(l146[3].find(g.fmt(float(h146_8["qi"]))) >= 0 and l146[3].find(g.fmt(float(h146_8["stone"]))) >= 0,
+			"打磨-146 8h 上限档 数值 = offline_gain(28800) 恒等 (实际 %s)" % l146[3])
+	# 上限 钳制: >8h 收益 = 8h 恒等 (OFFLINE_CAP_SEC 封顶)
+	var h146_9: Dictionary = g.offline_gain(9.0 * 3600.0)
+	check(h146_9["qi"] == h146_8["qi"] and h146_9["stone"] == h146_8["stone"]
+			and h146_9["sec"] == h146_8["sec"] and h146_9.get("capped", false) == true,
+			"打磨-146 离线 上限 8h 钳制 (9h 收益 = 8h, capped 标注)")
+	# 效率%% 段 与 offline_rate 恒等 (基础 50% 基准, 含 功法/装备 加成 口径)
+	check(tip146.find("基础 %d%%" % int(g.offline_rate() * 100.0)) >= 0,
+			"打磨-146 动态段 含 当前 效率%% = offline_rate 恒等")
+	# 飞升 后 主资源 口径=道行 (恢复 原 态)
+	var asc146: bool = g.ascended
+	var daoLv146: int = g.dao_level
+	g.ascended = true
+	g.dao_level = 0
+	var tip146_asc: String = g.offline_preview_tip()
+	check(tip146_asc.find("道行") >= 0 and tip146_asc.find("灵气") < 0,
+			"打磨-146 飞升 后 动态段 主资源=道行 (实际 %s)" % tip146_asc.left(30))
+	g.ascended = asc146
+	g.dao_level = daoLv146
+	check(g.offline_preview_tip() == tip146, "打磨-146 恢复 飞升 态 后 动态段 复原")
+	# 只读 连读 恒定 无 资源/统计 副作用 (前序 _process 已 冻结)
+	var snap146: Dictionary = g.stats.duplicate(true)
+	var st146: float = g.stones
+	var es146: float = g.essence
+	check(g.offline_preview_tip() == tip146 and g.stats == snap146 and g.stones == st146 and g.essence == es146,
+			"打磨-146 只读 连读 恒定 无 资源/统计 副作用")
 	# ---------- 打磨-84: 自动购置 按钮 tooltip 动态段 (auto_buy_next_tip 只读接口, 复用 打磨-49/12 口径) ----------
 	# 受控态: 清空 拥有/穿戴/已学, 境界0层1 (灵石速率 = 1.0/s, 基准 无 加成), _process 冻结 已生效
 	g.learned.clear()
