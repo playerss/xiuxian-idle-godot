@@ -9410,6 +9410,88 @@ func _init() -> void:
 	g.realm_idx = r148
 	g.layer = l148
 	g.save_game()
+	# ---------- 打磨-149: 修行页 突破 ETA 行 tooltip 动态段 (break_eta_tip 只读接口: 当前 速率 + 成功率 + ETA + 期望成本,
+	# 单点 复用 打磨-24/36/63 口径, 与 行 文本/成功率 行/突破 CTA tooltip 同 表达式 防 漂移) ----------
+	# 1) 受控 基准 (清空 境界0层1 灵气0) — 速率 段 = qi_per_sec 恒等 + 85% + ETA 不足1分 档 + 期望成本 两行
+	var a149: bool = g.ascended
+	var d149: float = g.dao
+	var dl149: int = g.dao_level
+	var es149: float = g.essence
+	var r149: int = g.realm_idx
+	var l149: int = g.layer
+	var ln149: Array[String] = []
+	for x149 in g.learned:
+		ln149.append(x149)
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.ascended = false
+	var tip149_0: String = g.break_eta_tip()
+	check(tip149_0.begins_with("当前 %s 灵气/秒" % g.fmt(g.qi_per_sec()))
+			and tip149_0.find("突破成功率 85%") >= 0 and tip149_0.find("突破还需 不足1分") >= 0,
+			"打磨-149 基准 速率段+成功率段+ETA段 齐全 (实际 %s)" % tip149_0.left(60))
+	# 期望成本 两行 = 打磨-63 单源 恒等 (1/0.85=1.2 次, 10/0.85 fmt 截断 11 灵气)
+	check(tip149_0.find("· 期望次数 ~1.2 次 (成功率 85%)") >= 0
+			and tip149_0.find("· 期望总消耗 ~%s 灵气" % g.fmt(g.breakthrough_cost() / 0.85)) >= 0
+			and tip149_0.find(g.breakthrough_expect_text()) >= 0,
+			"打磨-149 基准 期望成本 两行 = 打磨-63 单源 恒等 (实际 %s)" % tip149_0.right(50))
+	# 2) 层 11 — 消耗 x11, 缺口 110, 速率 1.0 → ETA 110 秒 = 1分 档 (不足1分→1分 跨档 真 变化)
+	g.layer = 11
+	var tip149_1: String = g.break_eta_tip()
+	check(tip149_1.find("突破还需 1分") >= 0 and tip149_1.find("突破成功率 85%") >= 0
+			and tip149_1 != tip149_0,
+			"打磨-149 层11 消耗 段 动态 同步 ETA 1分 档 跨档 变化 (实际 %s)" % tip149_1.left(60))
+	# 3) 境界2 层20 — 消耗 90x20=1800, 速率 15, ETA 120 秒 = 2分 档 + 成功率 77% (85→77 档 变化)
+	g.realm_idx = 2
+	g.layer = 20
+	g.essence = 0.0
+	var tip149_2: String = g.break_eta_tip()
+	check(absf(g.breakthrough_cost() - 1800.0) < 1e-6
+			and tip149_2.begins_with("当前 15 灵气/秒") and tip149_2.find("突破成功率 77%") >= 0
+			and tip149_2.find("突破还需 2分") >= 0,
+			"打磨-149 境界2 速率/成功率/ETA 段 动态 同步 (实际 %s)" % tip149_2.left(60))
+	g.realm_idx = 0
+	g.layer = 1
+	# 4) 攒够 — 已攒够 文案 无 ETA/成功率/期望 段 (ETA 行 自动 消失 口径)
+	g.essence = g.breakthrough_cost() + 1.0
+	var tip149_3: String = g.break_eta_tip()
+	check(tip149_3.find("已攒够, 点击突破/修炼") >= 0 and tip149_3.find("突破还需") < 0
+			and tip149_3.find("成功率") < 0 and tip149_3.find("期望次数") < 0,
+			"打磨-149 攒够 动态段=已攒够 无 ETA/成功率/期望 段 (实际 %s)" % tip149_3.left(50))
+	# 5) 飞升 道行 口径 (初仙 消耗 1e9, 道行 5e8, 速率 1.0 → ETA 5e8 秒 大 时长 档)
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 5.0e8
+	var tip149_4: String = g.break_eta_tip()
+	check(tip149_4.begins_with("当前 1 道行/秒") and tip149_4.find("道行精进成功率 90%") >= 0
+			and tip149_4.find("道行精进还需") >= 0 and tip149_4.find("· 期望总消耗 ~11.1亿 道行") >= 0,
+			"打磨-149 飞升 道行 口径 速率/成功率/ETA/期望成本 (实际 %s)" % tip149_4.left(60))
+	# 6) 道祖 封顶 — 圆满 文案 (道行 超限 恒满足 圆满 分支, cost = 1e9x8^8 不硬编码)
+	g.dao_level = 8
+	g.dao = 2.0e16
+	var tip149_5: String = g.break_eta_tip()
+	check(tip149_5.find("已至道祖 · 道法自然") >= 0 and tip149_5.find("不再 精进") >= 0
+			and tip149_5.find("成功率") < 0,
+			"打磨-149 道祖 封顶 圆满 文案 (实际 %s)" % tip149_5.left(50))
+	# 7) 只读 连读 恒定 无 资源/统计 副作用
+	var snap149: Dictionary = g.stats.duplicate(true)
+	var es149r: float = g.essence
+	var st149r: float = g.stones
+	check(g.break_eta_tip() == g.break_eta_tip() and g.essence == es149r
+			and g.stones == st149r and g.stats == snap149,
+			"打磨-149 只读 连读 恒定 无 资源/统计 副作用")
+	# 8) 收尾 复原 (恢复 前序 段 态)
+	g.learned.clear()
+	for x149 in ln149:
+		g.learned.append(x149)
+	g.ascended = a149
+	g.dao_level = dl149
+	g.dao = d149
+	g.essence = es149
+	g.realm_idx = r149
+	g.layer = l149
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

@@ -238,6 +238,7 @@ func _ready() -> void:
 	await _assert_offline_tip()  # 打磨-146: 修行页 离线收益行 tooltip 动态段 (offline_preview_tip 单源 复用 打磨-83 口径: 静态前缀+动态段标记+接口 恒等/三档 1h/4h/8h/未飞升 灵气 口径/同态 节流 无 副作用/境界2 同步/学 offline_rate 效率%% 段 同步/飞升 道行 口径/收尾 干净 基准)
 	await _assert_stone_next_tip()  # 打磨-147: 修行页 灵石行内联 下一件可购 标签 tooltip 动态段 (stone_next_target_tip 单源 复用 打磨-49 口径: 静态前缀+动态段标记+接口 恒等/速率 行 缺口 行/同态 节流 无 副作用/境界2 速率 行 同步/灵石 足够 切换/全 拥有 已集齐/收尾 干净 基准)
 	await _assert_progress_tip()  # 打磨-148: 修行页 突破进度行 tooltip 动态段 (progress_tip 单源: 静态前缀+动态段标记+接口 恒等/明细+成功率+ETA 齐全/同态 节流 无 副作用/灵气 半程 40% 同步/境界2 消耗 段 同步/攒够 切换/飞升 道行 口径/收尾 干净 基准)
+	await _assert_break_eta_tip()  # 打磨-149: 修行页 突破 ETA 行 tooltip 动态段 (break_eta_tip 单源: 静态前缀+动态段标记+接口 恒等/速率+成功率+ETA+期望成本 齐全/同态 节流 无 副作用/层 跨档 ETA 同步/境界2 速率/成功率/ETA 同步/攒够 切换/飞升 道行 口径/收尾 干净 基准)
 
 	_finish()
 
@@ -5090,6 +5091,115 @@ func _assert_progress_tip() -> void:
 	ui._refresh()
 	check(str(pl.tooltip_text) == str(ui._progress_tip_static) + g.progress_tip(),
 			"打磨-148 收尾 复原 tooltip = 接口 恒等 干净 基准")
+	await get_tree().process_frame
+# 打磨-149: 修行页 突破 ETA 行 tooltip 动态段 (打磨-142/144/145/146/147/148 已给 突破 CTA/下一目标行/
+# 速率行/离线收益行/灵石内联行/进度行 补 动态段, 但 「突破还需 X」 ETA 行 悬停 只有 静态 口径 说明
+# [怎么 估算], 挂机 扫视 悬停 不知 ETA 背后 当前 速率/成功率/期望 失败 重烧 成本 — 单源 复用
+# GameData.break_eta_tip [速率+成功率+ETA+期望成本, 与 行 文本/成功率 行/按钮 tooltip 同 表达式],
+# 静态 前缀 存 成员 防 split 坑, _refresh 动态段 文本 变化 才 刷 [同 打磨-142/144/148 缓存 口径];
+# 纯展示 无 存档/统计 副作用)
+# 断言 (手动驱动 确定性): 节点 存在/初始 tooltip = 静态前缀+接口 恒等/静态前缀 含 口径 说明+动态段 标记/
+# 同态 节流 冻结窗口 无 副作用/层 跨档 ETA 1分 档 同步/境界2 速率+成功率+ETA 2分 档 同步/攒够 切 已攒够 无段/
+# 飞升 道行 口径/收尾 复原 干净 基准
+func _assert_break_eta_tip() -> void:
+	var g := GameData
+	var bl: Label = ui._break_eta_label
+	check(bl != null, "打磨-149 突破 ETA 行 节点 存在")
+	# 受控 基准 (清空 境界0层1 灵气0, ETA 行 文本 非空 [突破还需 不足1分])
+	var rl: int = g.realm_idx
+	var ly: int = g.layer
+	var es: float = g.essence
+	var ao: bool = g.ascended
+	var dl: int = g.dao_level
+	var dv: float = g.dao
+	var ln: Array[String] = []
+	for x in g.learned:
+		ln.append(x)
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.ascended = false
+	ui._refresh()
+	var dyn0: String = g.break_eta_tip()
+	var t0: String = str(bl.tooltip_text)
+	check(t0 == str(ui._break_eta_tip_static) + dyn0,
+			"打磨-149 初始 tooltip = 静态前缀+接口 恒等 (实际 %s)" % t0.left(40))
+	check(str(ui._break_eta_tip_static).find("当前 速率") >= 0
+			and str(ui._break_eta_tip_static).find("【ETA 明细 (动态)】") >= 0,
+			"打磨-149 静态前缀 含 口径 说明 + 动态段 标记")
+	check(dyn0.begins_with("当前 %s 灵气/秒" % g.fmt(g.qi_per_sec()))
+			and dyn0.find("突破成功率") >= 0 and dyn0.find("突破还需") >= 0
+			and dyn0.find("· 期望次数") >= 0 and dyn0.find("· 期望总消耗") >= 0,
+			"打磨-149 动态段 速率+成功率+ETA+期望成本 齐全 (实际 %s)" % dyn0.left(60))
+	# 同态 节流: 冻结 UI 窗口 内 tooltip 稳定 无重写, 无 资源/统计/境界 副作用
+	var snap: Dictionary = g.stats.duplicate(true)
+	var ess0: float = g.essence
+	var st0: float = g.stones
+	var gproc: bool = g.is_processing()
+	var uiproc: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(str(bl.tooltip_text) == t0 and str(ui._break_eta_tip) == dyn0
+			and g.stats == snap and g.essence == ess0 and g.stones == st0,
+			"打磨-149 同态 节流 tooltip 稳定 无 资源/统计 副作用 (窗口内 冻结 UI)")
+	# 层 11 → 消耗 x11 缺口 110, 速率 1.0 → ETA 1分 档 (不足1分→1分 跨档 真 变化)
+	g.layer = 11
+	ui._refresh()
+	var t1: String = str(bl.tooltip_text)
+	check(t1 == str(ui._break_eta_tip_static) + g.break_eta_tip()
+			and t1.find("突破还需 1分") >= 0 and t1 != t0,
+			"打磨-149 层11 ETA 1分 档 跨档 动态 同步 = 接口 恒等 (实际 %s)" % g.break_eta_tip().left(40))
+	# 境界2 层20 → 速率 15 段 + 成功率 77% 段 + ETA 2分 档 动态 同步
+	g.realm_idx = 2
+	g.layer = 20
+	ui._refresh()
+	var t2: String = str(bl.tooltip_text)
+	check(t2 == str(ui._break_eta_tip_static) + g.break_eta_tip()
+			and t2.begins_with(str(ui._break_eta_tip_static) + "当前 15 灵气/秒")
+			and t2.find("突破成功率 77%") >= 0 and t2.find("突破还需 2分") >= 0 and t2 != t1,
+			"打磨-149 境界2 速率/成功率/ETA 段 动态 同步 = 接口 恒等 (实际 %s)" % g.break_eta_tip().left(40))
+	g.realm_idx = 0
+	g.layer = 1
+	# 攒够 → 动态段 切 已攒够 无 ETA/成功率/期望 段 (行 文本 自动 消失 同 窗口)
+	g.essence = g.breakthrough_cost() + 1.0
+	ui._refresh()
+	var t3: String = str(bl.tooltip_text)
+	var d3: String = t3.substr(str(ui._break_eta_tip_static).length())
+	check(d3.find("已攒够, 点击突破/修炼") >= 0 and d3.find("突破还需") < 0
+			and d3.find("成功率") < 0 and d3.find("期望次数") < 0
+			and t3 == str(ui._break_eta_tip_static) + g.break_eta_tip()
+			and bl.text == "",
+			"打磨-149 攒够 动态段 切 已攒够 + 行 文本 消失 (实际 %s)" % d3.left(50))
+	# 飞升 道行 口径 (初仙 消耗 1e9, 道行 5e8, 速率 1.0)
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 5.0e8
+	ui._refresh()
+	var t4: String = str(bl.tooltip_text)
+	check(t4.begins_with(str(ui._break_eta_tip_static) + "当前 1 道行/秒")
+			and t4.find("道行精进成功率") >= 0 and t4.find("道行精进还需") >= 0
+			and t4.find("· 期望总消耗") >= 0
+			and t4 == str(ui._break_eta_tip_static) + g.break_eta_tip(),
+			"打磨-149 飞升 道行 口径 动态段 = 接口 恒等 (实际 %s)" % t4.left(50))
+	# 收尾: 恢复 前序 段 态 + 挂机 进程 + 干净 基准
+	g.essence = es
+	g.learned.clear()
+	for x in ln:
+		g.learned.append(x)
+	g.ascended = ao
+	g.dao_level = dl
+	g.dao = dv
+	g.realm_idx = rl
+	g.layer = ly
+	g.set_process(gproc)
+	ui.set_process(uiproc)
+	ui._refresh()
+	check(str(bl.tooltip_text) == str(ui._break_eta_tip_static) + g.break_eta_tip(),
+			"打磨-149 收尾 复原 tooltip = 接口 恒等 干净 基准")
 	await get_tree().process_frame
 func _finish() -> void:
 	print("")

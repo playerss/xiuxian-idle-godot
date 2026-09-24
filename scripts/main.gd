@@ -41,6 +41,8 @@ var _offline_tip := ""           # 打磨-146: 离线收益预估 动态段 缓�
 var _stone_next_tip := ""        # 打磨-147: 灵石行内联 下一件可购 动态段 缓存 (变化 才 刷, 单源 复用 stone_next_target_tip, 同 打磨-49/145 口径)
 var _progress_tip_static := ""   # 打磨-148: 修行页 突破进度行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑, 同 打磨-84/85/142 口径)
 var _progress_tip := ""          # 打磨-148: 突破进度行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 progress_tip, 同 打磨-142/144 口径)
+var _break_eta_tip_static := ""  # 打磨-149: 修行页 突破 ETA 行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑, 同 打磨-84/85/142/148 口径)
+var _break_eta_tip := ""         # 打磨-149: 突破 ETA 行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 break_eta_tip, 同 打磨-142/144/148 口径)
 var _rc_tip := ""               # 打磨-145: 速率构成 动态段 缓存 (4 展示位 单源 复用 rate_compose_tip, 文本 变化 才 刷)
 var _goal_tip := ""            # 打磨-144: 下一目标行 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85/142 口径)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
@@ -923,7 +925,10 @@ func _build_training_page(page: Panel) -> void:
 	# 打磨-24: 突破/道行精进 ETA (按当前速率预计何时攒够突破资源)
 	_break_eta_label = _label("", 13, DIM)
 	left.add_child(_break_eta_label)
-	_break_eta_label.tooltip_text = "按当前灵气(道行)速率估算攒够突破资源所需时间。挂机/神通/境界提升都会改变该时间, 攒够后自动消失。"
+	# 打磨-149: tooltip = 静态口径 + 动态段 (单源 复用 break_eta_tip: 当前 速率 + 成功率 + ETA + 期望成本,
+	# 与 行 文本 ETA 互补; _refresh 动态段 文本 变化 才 刷; 纯展示 无 存档/统计 副作用)
+	_break_eta_tip_static = "按 当前 主资源/秒 估算 攒满 本阶 突破/道行精进 消耗 所需 时间 (失败 重耗 不 计入, 境界/功法/装备 提升 会 改变 该 时间; 攒满 后 自动 消失). 悬停 查看 明细 (当前 速率 + 成功率 + ETA + 期望 失败 重烧 成本, 随 挂机 动态 刷新).\n\n【ETA 明细 (动态)】\n"
+	_break_eta_label.tooltip_text = _break_eta_tip_static + GameData.break_eta_tip()
 	# 打磨-36: 主突破/道行精进成功率 (与浮动提示/按钮口径对齐; 道祖封顶圆满)
 	_chance_label = _label("", 13, DIM)
 	# 打磨-37: 成功率行 tooltip 动态展示构成 (境界基础/功法/装备/钳制, 数值变化才刷)
@@ -2490,6 +2495,12 @@ func _refresh() -> void:
 	if bet_t != _break_eta_text:
 		_break_eta_text = bet_t
 		_break_eta_label.text = bet_t
+	# 打磨-149: 突破 ETA 行 tooltip 动态段 (速率/成功率/ETA/期望成本, 随 速率/境界/功法装备/飞升 变化才刷;
+	# 与 进度 行/突破 CTA tooltip 同 刷新 窗口, 挂机 恒定 无 每帧 重建, 同 打磨-142/148 缓存 口径)
+	var bet_tip: String = g.break_eta_tip()
+	if bet_tip != _break_eta_tip:
+		_break_eta_tip = bet_tip
+		_break_eta_label.tooltip_text = _break_eta_tip_static + bet_tip
 	# 打磨-36: 主突破/道行精进成功率 (境界/道行阶段/功法装备变化才变, 文本变化才写)
 	var ch_t: String = g.primary_break_chance_text()
 	if ch_t != _chance_text:
