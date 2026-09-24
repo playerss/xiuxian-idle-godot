@@ -9049,6 +9049,69 @@ func _init() -> void:
 	# 7) 收尾 复原
 	g.realm_idx = r142
 	g.save_game()
+	# ---------- 打磨-144: 修行页 下一目标 行 tooltip 动态段 (goal_line_tip 只读接口, 速率/成功率/自动突破 状态 一览) ----------
+	# 受控 基准: 未飞升 境界0层1 / 关 自动突破 / 空 状态 (前序 段 残留 须 显式 清零 防 基线 漂移)
+	var a144: bool = g.ascended
+	var d144: float = g.dao
+	var dl144: int = g.dao_level
+	var es144: float = g.essence
+	var ab144: bool = g.auto_break
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = g.breakthrough_cost() * 0.5
+	g.auto_break = false
+	# 1) 基准 未飞升: 当前 速率 段 + 成功率 段 + 自动突破: 关 段 (与 行 文本 互补)
+	var t1144: String = g.goal_line_tip()
+	var rl144: String = "当前 %s 灵气/秒" % g.fmt(g.qi_per_sec())
+	check(t1144.begins_with(rl144), "打磨-144 基准 未飞升 速率 段=接口 恒等 (实际 %s)" % t1144)
+	check(("突破成功率 %d%%" % int(round(g.primary_break_chance() * 100.0))) in t1144 and "自动突破: 关" in t1144,
+		"打磨-144 基准 含 成功率 段+自动突破 关 段 (实际 %s)" % t1144)
+	# 2) 开 自动突破 — 自动突破 段 动态 同步 (开关 状态 变化 才 变)
+	g.auto_break = true
+	var t2144: String = g.goal_line_tip()
+	check(t2144 != t1144 and "自动突破: 开" in t2144 and t2144.begins_with(rl144),
+		"打磨-144 开 自动突破 段 动态 同步 (实际 %s)" % t2144)
+	# 3) 境界 提升 — 成功率 变 动态 同步 (境界2 成功率 与 基准 不同)
+	g.auto_break = false
+	g.realm_idx = 2
+	g.essence = g.breakthrough_cost() * 0.5
+	var t3144: String = g.goal_line_tip()
+	check(t3144 != t2144 and ("突破成功率 %d%%" % int(round(g.primary_break_chance() * 100.0))) in t3144,
+		"打磨-144 境界2 成功率 段 动态 同步 (实际 %s)" % t3144)
+	# 4) 飞升 道行 口径 — 速率 段 道行 + 道行精进成功率 段
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = g.dao_break_cost() * 0.25
+	var t4144: String = g.goal_line_tip()
+	check(t4144.begins_with("当前 %s 道行/秒" % g.fmt(g.qi_per_sec()))
+			and ("道行精进成功率 %d%%" % int(round(g.primary_break_chance() * 100.0))) in t4144,
+		"打磨-144 飞升 道行 口径 速率+成功率 段 (实际 %s)" % t4144)
+	# 5) 道祖 封顶 — 圆满 文案 (无 下一目标, 不再 精进)
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	var t5144: String = g.goal_line_tip()
+	check(t5144.find("已至道祖") >= 0 and t5144.find("不再 精进") >= 0,
+		"打磨-144 道祖 封顶 圆满 文案 (实际 %s)" % t5144)
+	# 6) 只读 连读 恒定 无 资源/统计 副作用 (道祖 态 下 连读, 快照 防 本段 自身 改态 干扰)
+	var snap144: Dictionary = g.stats.duplicate(true)
+	var es144r: float = g.essence
+	var d144r: float = g.dao
+	var st144: float = g.stones
+	var rr144: String = g.goal_line_tip()
+	check(rr144 == g.goal_line_tip() and g.essence == es144r and g.dao == d144r
+			and g.stones == st144 and g.stats == snap144,
+		"打磨-144 只读 连读 恒定 无副作用")
+	# 7) 收尾 复原
+	g.ascended = a144
+	g.dao_level = dl144
+	g.dao = d144
+	g.essence = es144
+	g.realm_idx = 0
+	g.layer = 1
+	g.auto_break = ab144
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

@@ -4395,6 +4395,25 @@ func break_btn_tip() -> String:
 	return head2 + (" · 还差 %s 灵气 (%s) %s" % [fmt(gap2), eta2.trim_prefix("突破还需 "), breakthrough_expect_text()])
 
 
+# ---------- 打磨-144: 修行页 下一目标 行 tooltip 动态段 (悬停 速率/成功率/自动突破 状态 一览) ----------
+
+# 修行页 金色 下一目标 行 (打磨-31) 悬停 原只有 静态 口径 (攒够突破资源即点击突破), 玩家 不知
+# 当前 速率 / 成功率 / 自动突破 是否 生效 — 悬停 补 动态段 (与 行 文本 next_goal_text 互补:
+# 行 文本 = 目标+缺口+ETA, 本 动态段 = 当前 速率 + 成功率 + 自动突破 状态).
+# 未飞升 = 灵气 口径 / 飞升后 = 道行 口径 / 道祖 封顶 = 圆满 文案 (无 下一目标 不再 精进).
+# 复用 打磨-36 primary_break_chance + qi_per_sec + 打磨-67 auto_break 只读 口径.
+# 纯 只读 不 改 状态/存档/统计 (供 UI tooltip 动态 刷新, 文本 变化 才 写).
+func goal_line_tip() -> String:
+	var res_name := "道行" if ascended else "灵气"
+	var rate_head := "当前 %s %s/秒" % [fmt(qi_per_sec()), res_name]
+	if ascended and dao_level >= IMMORTAL_REALMS.size() - 1:
+		return rate_head + "\n已至道祖 · 道法自然 ♪ (无 下一目标, 不再 精进)"
+	var pct := int(round(primary_break_chance() * 100.0))
+	var ch := "道行精进成功率 %d%%" % pct if ascended else "突破成功率 %d%%" % pct
+	var ab := "自动突破: 开" if auto_break else "自动突破: 关"
+	return "%s\n%s · %s" % [rate_head, ch, ab]
+
+
 # ---------- 打磨-32: 突破按钮"可突破"状态 (资源攒够时 UI 金边高亮引导点击) ----------
 
 # 当前是否已可点击突破/精进 (资源 >= 突破消耗且未封顶; 封顶恒 false, 按钮保持禁用)

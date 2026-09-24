@@ -30,6 +30,8 @@ var _chance_text := ""         # 成功率文本缓存 (变化时才刷)
 var _chance_tip := ""          # 打磨-37: 成功率构成 tooltip 缓存 (变化才刷)
 var _goal_label: Label         # 打磨-31: 下一目标提示 (修行页)
 var _goal_text := ""           # 下一目标文本缓存 (变化时才刷)
+var _goal_tip_static := ""     # 打磨-144: 下一目标行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑, 同 打磨-84/85 口径)
+var _goal_tip := ""            # 打磨-144: 下一目标行 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85/142 口径)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
 var _stats_text := ""          # 统计文本缓存 (变化时才刷)
 var _play_label: Label         # 打磨-77: 顶栏 挂机时长 常显 ("⏳ X小时Y分", 随 play_sec 分钟档 变化 才刷)
@@ -922,7 +924,10 @@ func _build_training_page(page: Panel) -> void:
 	# 打磨-31: 下一目标提示 (玩家下一步该做什么: 目标名+缺口+预计时间)
 	_goal_label = _label("", 14, GOLD)
 	break_col.add_child(_goal_label)
-	_goal_label.tooltip_text = "当前最优先的下一步: 攒够突破资源即点击突破; 飞升后改为道行精进。"
+	# 打磨-144: tooltip = 静态口径 + 动态段 (当前 速率/成功率/自动突破 状态, 随 速率/境界/功法装备/飞升/自动突破开关 变化 由 _refresh 刷新);
+	# 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85/142 动态段 口径)
+	_goal_tip_static = "当前 最优先 的 下一步 (与 行 文本 同 口径: 攒够 突破 资源 即 点击 突破/修炼, 飞升后 改 为 道行 精进). 悬停 查看 当前 速率/成功率/自动突破 状态 (随 挂机 动态 刷新).\n\n【下一目标 状态 (动态)】\n"
+	_goal_label.tooltip_text = _goal_tip_static + GameData.goal_line_tip()
 	# 打磨-135d: 突破条 底+填充 换 9-slice 纹理 (bar_track 底 / bar_fill 填充 青档, 色档 逻辑 不变)
 	_bar_bg = Panel.new()
 	_bar_bg.add_theme_stylebox_override("panel", _bar_track_sb())
@@ -2443,6 +2448,11 @@ func _refresh() -> void:
 	if goal_t != _goal_text:
 		_goal_text = goal_t
 		_goal_label.text = goal_t
+	# 打磨-144: 下一目标行 tooltip 动态段 (速率/成功率/自动突破 状态, 随 速率/境界/功法装备/飞升/开关 变化 才刷; 同 打磨-84/85/142 缓存口径)
+	var gl_tip: String = g.goal_line_tip()
+	if gl_tip != _goal_tip:
+		_goal_tip = gl_tip
+		_goal_label.tooltip_text = _goal_tip_static + gl_tip
 	_bar_fill.size = Vector2(_bar_bg.size.x * g.breakthrough_progress() / 100.0, _bar_bg.size.y)
 	if g.ascended:
 		if g.dao_level >= g.IMMORTAL_REALMS.size() - 1:

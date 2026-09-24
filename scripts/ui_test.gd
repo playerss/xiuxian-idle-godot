@@ -233,6 +233,7 @@ func _ready() -> void:
 	await _assert_m140_sfx_toggle()  # M7-4 打磨-140: 音效 开关 (修行页 开关 按钮 与 水墨背景 同区 同 定位: toggle 默认 开/点击 切 关 _sfx_play 静默 跳过/恢复 开 播放/读档 同步 按钮态/tooltip 口径/同态 节流/无 资源 统计 副作用/收尾 复位 开)
 	await _assert_break_btn_tip()  # 打磨-142: 突破 按钮 tooltip 动态 段 (核心 CTA 悬停 消耗/成功率/缺口/ETA/预期成本 一览: 静态段 标记+动态段=break_btn_tip 接口 恒等/境界 提升 消耗 段 动态 同步/攒满 已攒够 文案/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_onekey_btn_tips()  # 打磨-143: 6 个 一键 按钮 (领悟/神通/施展/法器/装备/最佳) tooltip 动态段 (单源 onekey_btn_tip 复用 打磨-76 明细: 静态前缀+接口 恒等/筛选 叠加 同步/施展 就绪 同步/同态 节流 无 副作用/收尾 干净 基准)
+	await _assert_goal_line_tip()  # 打磨-144: 修行页 下一目标 行 tooltip 动态段 (goal_line_tip 只读接口: 静态前缀+接口 恒等/开 自动突破 段 同步/境界 成功率 同步/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 
 	_finish()
 
@@ -9102,3 +9103,87 @@ func _assert_onekey_btn_tips() -> void:
 	ui.set_process(uiproc143)
 	ui._refresh()
 	check(g.stats == snap143 and g.learned.is_empty(), "打磨-143 收尾 干净 基准 无 统计 副作用")
+
+# 打磨-144: 修行页 下一目标 行 tooltip 动态段 — _goal_label tooltip 追加
+# "【下一目标 状态 (动态)】" 段 (GameData.goal_line_tip 只读接口: 当前 速率/成功率/自动突破 状态,
+# 与 行 文本 next_goal_text 互补). 断言 (手动驱动 确定性): 静态前缀+接口 恒等/开 自动突破 段 同步/
+# 境界 成功率 同步/飞升 道行 口径/同态 节流 无副作用/收尾 干净 基准 (tooltip 节点 隐藏 态 仍可 读).
+func _assert_goal_line_tip() -> void:
+	var g := GameData
+	var gl: Label = ui._goal_label
+	var tip0: String = str(gl.tooltip_text)
+	check(tip0.find("【下一目标 状态 (动态)】") >= 0,
+		"打磨-144 下一目标 行 tooltip 含 动态段 标记 (实际 %s)" % tip0.left(30))
+	check(tip0 == str(ui._goal_tip_static) + g.goal_line_tip(),
+		"打磨-144 初始 tooltip = 静态前缀 + goal_line_tip 接口 恒等 (实际 %s)" % tip0)
+	# 受控 基准: 未飞升 境界0层1 / 关 自动突破 / 半程 资源 (前序 段 残留 须 显式 清零)
+	var a144: bool = g.ascended
+	var d144: float = g.dao
+	var dl144: int = g.dao_level
+	var es144: float = g.essence
+	var ab144: bool = g.auto_break
+	var r144: int = g.realm_idx
+	var l144: int = g.layer
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = g.breakthrough_cost() * 0.5
+	g.auto_break = false
+	ui._refresh()
+	var tip1: String = str(gl.tooltip_text)
+	var rl144: String = "当前 %s 灵气/秒" % g.fmt(g.qi_per_sec())
+	check(tip1.begins_with(str(ui._goal_tip_static)) and tip1.begins_with(str(ui._goal_tip_static) + rl144)
+			and tip1 == str(ui._goal_tip_static) + g.goal_line_tip(),
+		"打磨-144 基准 未飞升 静态前缀+速率段=接口 恒等 (实际 %s)" % tip1.left(40))
+	check(("突破成功率 %d%%" % int(round(g.primary_break_chance() * 100.0))) in tip1 and "自动突破: 关" in tip1,
+		"打磨-144 基准 含 成功率 段+自动突破 关 段 (实际 %s)" % tip1)
+	# 开 自动突破 — 自动突破 段 动态 同步 (开关 状态 变化 _refresh 感知)
+	g.auto_break = true
+	ui._refresh()
+	var tip2: String = str(gl.tooltip_text)
+	check(tip2 != tip1 and "自动突破: 开" in tip2 and tip2 == str(ui._goal_tip_static) + g.goal_line_tip(),
+		"打磨-144 开 自动突破 段 动态 同步 = 接口 恒等 (实际 %s)" % tip2)
+	# 境界 提升 — 成功率 变 动态 同步 (境界2 成功率 与 基准 不同)
+	g.auto_break = false
+	g.realm_idx = 2
+	g.essence = g.breakthrough_cost() * 0.5
+	ui._refresh()
+	var tip3: String = str(gl.tooltip_text)
+	check(tip3 != tip2 and ("突破成功率 %d%%" % int(round(g.primary_break_chance() * 100.0))) in tip3,
+		"打磨-144 境界2 成功率 段 动态 同步 (实际 %s)" % tip3)
+	# 飞升 道行 口径 — 速率 段 道行 + 道行精进成功率 段
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = g.dao_break_cost() * 0.25
+	ui._refresh()
+	var tip4: String = str(gl.tooltip_text)
+	check(tip4.begins_with(str(ui._goal_tip_static) + "当前 %s 道行/秒" % g.fmt(g.qi_per_sec()))
+			and ("道行精进成功率 %d%%" % int(round(g.primary_break_chance() * 100.0))) in tip4,
+		"打磨-144 飞升 道行 口径 速率+成功率 段 (实际 %s)" % tip4)
+	# 同态 节流: 再刷 键 不变 → tooltip 不重写 稳定 无 资源/统计 副作用 (UI 挂机 _process 冻结 窗口, 同 打磨-142 口径)
+	var snap144: Dictionary = g.stats.duplicate(true)
+	var st144s: float = g.stones
+	var gproc144: bool = g.is_processing()
+	var uiproc144: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(str(gl.tooltip_text) == tip4 and g.stats == snap144 and g.stones == st144s,
+		"打磨-144 同态 节流 tooltip 稳定 无 资源/统计 副作用 (窗口内 冻结 UI)")
+	# 收尾 复原 干净 基准 (恢复 挂机 进程)
+	g.ascended = a144
+	g.dao_level = dl144
+	g.dao = d144
+	g.essence = es144
+	g.realm_idx = r144
+	g.layer = l144
+	g.auto_break = ab144
+	g.set_process(gproc144)
+	ui.set_process(uiproc144)
+	ui._refresh()
+	check(g.stats == snap144 and g.auto_break == ab144, "打磨-144 收尾 干净 基准 无 统计 副作用")
+
