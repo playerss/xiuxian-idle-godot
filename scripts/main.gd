@@ -36,7 +36,9 @@ var _stone_rate_tip_static := "" # 打磨-145: 修行页 灵石速率行 tooltip
 var _rate_tip_static := ""      # 打磨-145: 顶栏 主资源速率行 tooltip 静态 前缀
 var _sr_tip_static := ""        # 打磨-145: 顶栏 灵石速率行 tooltip 静态 前缀
 var _offline_tip_static := ""    # 打磨-146: 修行页 离线收益行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑)
+var _stone_next_tip_static := "" # 打磨-147: 修行页 灵石行内联 下一件可购 标签 tooltip 静态 前缀 (构建时 存)
 var _offline_tip := ""           # 打磨-146: 离线收益预估 动态段 缓存 (变化 才 刷, 单源 复用 offline_preview_tip, 同 打磨-83/145 口径)
+var _stone_next_tip := ""        # 打磨-147: 灵石行内联 下一件可购 动态段 缓存 (变化 才 刷, 单源 复用 stone_next_target_tip, 同 打磨-49/145 口径)
 var _rc_tip := ""               # 打磨-145: 速率构成 动态段 缓存 (4 展示位 单源 复用 rate_compose_tip, 文本 变化 才 刷)
 var _goal_tip := ""            # 打磨-144: 下一目标行 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85/142 口径)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
@@ -893,7 +895,10 @@ func _build_training_page(page: Panel) -> void:
 	# 打磨-50: 灵石速率行内联 下一件可购 ETA (金色小字, 文本变化才刷; 买得起/全集齐 切换提示)
 	_stone_next_label = _label("", 12, GOLD)
 	left.add_child(_stone_next_label)
-	_stone_next_label.tooltip_text = "距下一件可购(最便宜未拥有 装备/法器)所需灵石与预计时间, 复用顶栏灵石口径。灵石足够或已集齐时显示对应提示。"
+	# 打磨-147: tooltip = 静态口径 + 动态段 (单源 复用 stone_next_target_tip, 与 打磨-49 顶栏 灵石行 同 口径 同 节流;
+	# _refresh 动态段 文本 变化 才 刷; 纯展示 无 存档/统计 副作用)
+	_stone_next_tip_static = "距下一件可购(最便宜未拥有 装备/法器)所需灵石与预计时间, 复用顶栏灵石口径。灵石足够或已集齐时显示对应提示。\n\n【下一件可购 (动态)】\n"
+	_stone_next_label.tooltip_text = _stone_next_tip_static + GameData.stone_next_target_tip()
 	# 打磨-13: 离线/挂机收益可视化 (每小时离线可得资源)
 	_offline_label = _label("", 14, DIM)
 	left.add_child(_offline_label)
@@ -2430,6 +2435,12 @@ func _refresh() -> void:
 	if offp_tip != _offline_tip:
 		_offline_tip = offp_tip
 		_offline_label.tooltip_text = _offline_tip_static + offp_tip
+	# 打磨-147: 灵石行内联 下一件可购 标签 tooltip 动态段 (单源 复用 stone_next_target_tip,
+	# 与 打磨-49 顶栏 灵石行 同 口径 同 节流; 动态段 文本 变化 才 刷, 挂机 恒定 无 每帧 重建; 纯展示 无 副作用)
+	var sn_tip: String = g.stone_next_target_tip()
+	if sn_tip != _stone_next_tip:
+		_stone_next_tip = sn_tip
+		_stone_next_label.tooltip_text = _stone_next_tip_static + sn_tip
 	# 打磨-14: 修行统计 (文本变化时才刷)
 	var st_t: String = g.stats_text()
 	if st_t != _stats_text:

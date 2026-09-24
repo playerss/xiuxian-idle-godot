@@ -236,6 +236,7 @@ func _ready() -> void:
 	await _assert_goal_line_tip()  # 打磨-144: 修行页 下一目标 行 tooltip 动态段 (goal_line_tip 只读接口: 静态前缀+接口 恒等/开 自动突破 段 同步/境界 成功率 同步/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_rate_compose_tip()  # 打磨-145: 灵气/灵石 速率 tooltip 动态段 (rate_compose_tip 只读接口: 4 展示位 单源 构成 一览/功法装备法器 动态 同步/境界 基础 段 同步/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_offline_tip()  # 打磨-146: 修行页 离线收益行 tooltip 动态段 (offline_preview_tip 单源 复用 打磨-83 口径: 静态前缀+动态段标记+接口 恒等/三档 1h/4h/8h/未飞升 灵气 口径/同态 节流 无 副作用/境界2 同步/学 offline_rate 效率%% 段 同步/飞升 道行 口径/收尾 干净 基准)
+	await _assert_stone_next_tip()  # 打磨-147: 修行页 灵石行内联 下一件可购 标签 tooltip 动态段 (stone_next_target_tip 单源 复用 打磨-49 口径: 静态前缀+动态段标记+接口 恒等/速率 行 缺口 行/同态 节流 无 副作用/境界2 速率 行 同步/灵石 足够 切换/全 拥有 已集齐/收尾 干净 基准)
 
 	_finish()
 
@@ -4862,6 +4863,124 @@ func _assert_offline_tip() -> void:
 	check(str(ol.tooltip_text) == str(ui._offline_tip_static) + g.offline_preview_tip()
 			and g.ascended == false and g.realm_idx == rl0,
 			"打磨-146 收尾 复原 tooltip = 接口 恒等 干净 基准")
+	await get_tree().process_frame
+
+# 打磨-147: 修行页 灵石行内联 下一件可购 标签 tooltip 动态段 (打磨-49 顶栏 灵石行 已给 下一件 缺口/ETA 动态 tooltip,
+# 但 修行页 灵石速率行内联 金色小字 悬停 只有 静态 口径 说明, 挂机 在 修行页 扫视 悬停 不知 下一件 具体 缺口/可购 时间;
+# 单源 复用 GameData.stone_next_target_tip (与 顶栏 同 接口 同 表达式 不 二重 拼接), _refresh 动态段 文本 变化 才 刷;
+# 纯展示 无 存档/统计 副作用; GameData 无 新 接口)
+# 断言 (手动驱动 确定性): 节点 存在/初始 tooltip = 静态前缀+接口 恒等/静态前缀 含 口径 说明+动态段 标记/
+# 动态段 速率 行+缺口 行 恒等/同态 节流 冻结窗口 无 副作用/境界2 速率 行 动态 同步/灵石 足够 切 可立即购买/
+# 全 拥有 已集齐/收尾 复原 干净 基准
+func _assert_stone_next_tip() -> void:
+	var g := GameData
+	var snl: Label = ui._stone_next_label
+	check(snl != null, "打磨-147 灵石行内联 下一件可购 标签 节点 存在")
+	# 受控 基准 (清空 境界0层1 灵石0, 灵石速率 1.0/s; 保存 前序 段 态 收尾 复原)
+	var rl: int = g.realm_idx
+	var ly: int = g.layer
+	var es: float = g.essence
+	var st: float = g.stones
+	var ao: bool = g.ascended
+	var dl: int = g.dao_level
+	var dv: float = g.dao
+	var ln: Array[String] = []
+	for x in g.learned:
+		ln.append(x)
+	var ow: Array[String] = []
+	for x in g.owned:
+		ow.append(x)
+	var oe: Array[String] = []
+	for x in g.owned_eq:
+		oe.append(x)
+	var eqs: Dictionary = g.equipped.duplicate(true)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 0.0
+	g.ascended = false
+	ui._refresh()
+	var dyn0: String = g.stone_next_target_tip()
+	var t0: String = str(snl.tooltip_text)
+	check(t0 == str(ui._stone_next_tip_static) + dyn0,
+			"打磨-147 初始 tooltip = 静态前缀+接口 恒等 (实际 %s)" % t0.left(40))
+	check(str(ui._stone_next_tip_static).find("复用顶栏灵石口径") >= 0
+			and str(ui._stone_next_tip_static).find("【下一件可购 (动态)】") >= 0,
+			"打磨-147 静态前缀 含 口径 说明 + 动态段 标记")
+	check(dyn0.begins_with("当前 1 灵石/秒") and dyn0.find("距下一件") >= 0
+			and dyn0.find("可购") >= 0,
+			"打磨-147 动态段 含 速率 行 + 缺口 行 (实际 %s)" % dyn0.left(30))
+	# 同态 节流: 冻结 UI 窗口 内 tooltip 稳定 无重写, 无 资源/统计/境界 副作用
+	var snap: Dictionary = g.stats.duplicate(true)
+	var ess0: float = g.essence
+	var st0: float = g.stones
+	var rl0: int = g.realm_idx
+	var gproc: bool = g.is_processing()
+	var uiproc: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(str(snl.tooltip_text) == t0 and str(ui._stone_next_tip) == dyn0
+			and g.stats == snap and g.essence == ess0 and g.stones == st0 and g.realm_idx == rl0,
+			"打磨-147 同态 节流 tooltip 稳定 无 资源/统计 副作用 (窗口内 冻结 UI)")
+	# 境界2 → 灵石速率 基础 x15 → 动态段 速率 行 同步 (fmt 档 1→15 真 变化)
+	g.realm_idx = 2
+	ui._refresh()
+	var t2: String = str(snl.tooltip_text)
+	var dyn2: String = g.stone_next_target_tip()
+	check(t2 == str(ui._stone_next_tip_static) + dyn2 and dyn2.begins_with("当前 15 灵石/秒") and t2 != t0,
+			"打磨-147 境界2 速率 行 动态 同步 = 接口 恒等 (实际 %s)" % dyn2.left(30))
+	g.realm_idx = 0
+	ui._refresh()
+	check(str(snl.tooltip_text) == t0, "打磨-147 恢复 境界 后 tooltip 复原")
+	# 灵石 足够 → 动态段 切 可立即购买 (无 还差/可购ETA)
+	var tgt: Dictionary = g.stone_next_target()
+	g.stones = float(tgt["cost"]) + 1.0
+	ui._refresh()
+	var t3: String = str(snl.tooltip_text)
+	check(t3 != t0 and t3.find("可立即购买") >= 0 and t3.find("还差") < 0
+			and t3 == str(ui._stone_next_tip_static) + g.stone_next_target_tip(),
+			"打磨-147 灵石 足够 动态段 切 可立即购买 = 接口 恒等 (实际 %s)" % t3.left(40))
+	g.stones = 0.0
+	ui._refresh()
+	check(str(snl.tooltip_text) == t0, "打磨-147 灵石 归0 tooltip 复原")
+	# 全 拥有 → 动态段 = 已集齐
+	for id in g.equip_ids:
+		g.owned_eq.append(str(id))
+	for it in g.ITEMS:
+		g.owned.append(str((it as Dictionary)["id"]))
+	ui._refresh()
+	var t4: String = str(snl.tooltip_text)
+	check(t4.find("已集齐") >= 0 and t4 == str(ui._stone_next_tip_static) + g.stone_next_target_tip(),
+			"打磨-147 全 拥有 动态段=已集齐 = 接口 恒等 (实际 %s)" % t4.left(40))
+	# 收尾: 恢复 前序 段 态 + 挂机 进程 + 干净 基准
+	g.stones = st
+	g.learned.clear()
+	for x in ln:
+		g.learned.append(x)
+	g.owned.clear()
+	for x in ow:
+		g.owned.append(x)
+	g.owned_eq.clear()
+	for x in oe:
+		g.owned_eq.append(x)
+	g.equipped = eqs
+	g.ascended = ao
+	g.dao_level = dl
+	g.dao = dv
+	g.essence = es
+	g.realm_idx = rl
+	g.layer = ly
+	g.set_process(gproc)
+	ui.set_process(uiproc)
+	ui._refresh()
+	check(str(snl.tooltip_text) == str(ui._stone_next_tip_static) + g.stone_next_target_tip(),
+			"打磨-147 收尾 复原 tooltip = 接口 恒等 干净 基准")
 	await get_tree().process_frame
 func _finish() -> void:
 	print("")

@@ -9246,6 +9246,93 @@ func _init() -> void:
 	g.layer = l145
 	g.stones = st145
 	g.save_game()
+	# ---------- 打磨-147: 修行页 灵石行内联 下一件可购 标签 tooltip 动态段 (stone_next_target_tip 单源 复用 打磨-49 口径, UI 侧 静态 前缀+动态段 拼接, _refresh 变化 才 刷) ----------
+	# 1) 受控 基准 (清空 境界0 灵石0, 灵石速率 1.0/s) — 动态段 缺口 行 = 接口 恒等
+	var a147: bool = g.ascended
+	var d147: float = g.dao
+	var dl147: int = g.dao_level
+	var es147: float = g.essence
+	var r147: int = g.realm_idx
+	var l147: int = g.layer
+	var st147: float = g.stones
+	var ln147: Array[String] = []
+	for x147 in g.learned:
+		ln147.append(x147)
+	var ow147: Array[String] = []
+	for x147 in g.owned:
+		ow147.append(x147)
+	var oe147: Array[String] = []
+	for x147 in g.owned_eq:
+		oe147.append(x147)
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.stones = 0.0
+	var snt0: String = g.stone_next_target_tip()
+	var snt0t: Dictionary = g.stone_next_target()
+	check(absf(g.stone_per_sec() - 1.0) < 1e-6 and snt0.begins_with("当前 1 灵石/秒"),
+		"打磨-147 受控 基准 速率 行 = stone_per_sec 恒等 (实际 %s)" % snt0)
+	check(snt0.find("距下一件 %s「%s」" % [str(snt0t["kind"]), str(snt0t["name"])]) >= 0
+			and snt0.find("还差 %s 灵石" % g.fmt(float(snt0t["shortfall"]))) >= 0 and snt0.find("可购") >= 0,
+		"打磨-147 动态段 缺口 行 指向 最便宜 未拥有 件 缺口额 恒等 (实际 %s)" % snt0)
+	# 2) 灵石 足够 — 动态段 切 可立即购买 无 还差
+	g.stones = float(snt0t["cost"]) + 1.0
+	var snt1: String = g.stone_next_target_tip()
+	check(snt1.find("可立即购买") >= 0 and snt1.find("还差") < 0,
+		"打磨-147 灵石 足够 动态段=可立即购买 无 还差 (实际 %s)" % snt1)
+	# 3) 境界2 — 速率 行 基础 x15 段 动态 同步 (fmt 档 真 变化 1->15)
+	g.stones = 0.0
+	g.realm_idx = 2
+	var snt2: String = g.stone_next_target_tip()
+	check(snt2.begins_with("当前 15 灵石/秒") and snt2.find("还差 %s 灵石" % g.fmt(float(snt0t["shortfall"]))) >= 0,
+		"打磨-147 境界2 速率 行 基础 x15 段 动态 同步 (实际 %s)" % snt2)
+	g.realm_idx = 0
+	# 4) 拥有 最便宜 — 动态段 指向 次便宜 (目标 移动 恒等)
+	if str(snt0t["kind"]) == "装备":
+		g.owned_eq.append(str(snt0t["id"]))
+	else:
+		g.owned.append(str(snt0t["id"]))
+	var snt3t: Dictionary = g.stone_next_target()
+	var snt3: String = g.stone_next_target_tip()
+	check(str(snt3t["id"]) != str(snt0t["id"]) and snt3.find("「%s」" % str(snt3t["name"])) >= 0,
+		"打磨-147 拥有 最便宜 后 动态段 指向 次便宜 (实际 %s)" % snt3)
+	# 5) 全 拥有 — 动态段 = 已集齐
+	g.owned.clear()
+	g.owned_eq.clear()
+	for id147 in g.equip_ids:
+		g.owned_eq.append(str(id147))
+	for it147 in g.ITEMS:
+		g.owned.append(str((it147 as Dictionary)["id"]))
+	check(g.stone_next_target_tip().find("已集齐") >= 0,
+		"打磨-147 全 拥有 动态段=已集齐 (实际 %s)" % g.stone_next_target_tip())
+	# 6) 只读 连读 恒定 无 资源/统计 副作用
+	var snap147: Dictionary = g.stats.duplicate(true)
+	var st147r: float = g.stones
+	var es147r: float = g.essence
+	check(g.stone_next_target_tip() == g.stone_next_target_tip() and g.stones == st147r
+			and g.essence == es147r and g.stats == snap147,
+		"打磨-147 只读 连读 恒定 无 资源/统计 副作用")
+	# 7) 收尾 复原 (恢复 前序 段 态)
+	g.learned.clear()
+	for x147 in ln147:
+		g.learned.append(x147)
+	g.owned.clear()
+	for x147 in ow147:
+		g.owned.append(x147)
+	g.owned_eq.clear()
+	for x147 in oe147:
+		g.owned_eq.append(x147)
+	g.ascended = a147
+	g.dao_level = dl147
+	g.dao = d147
+	g.essence = es147
+	g.realm_idx = r147
+	g.layer = l147
+	g.stones = st147
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
