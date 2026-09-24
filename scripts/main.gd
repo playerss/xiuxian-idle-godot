@@ -39,6 +39,8 @@ var _offline_tip_static := ""    # 打磨-146: 修行页 离线收益行 tooltip
 var _stone_next_tip_static := "" # 打磨-147: 修行页 灵石行内联 下一件可购 标签 tooltip 静态 前缀 (构建时 存)
 var _offline_tip := ""           # 打磨-146: 离线收益预估 动态段 缓存 (变化 才 刷, 单源 复用 offline_preview_tip, 同 打磨-83/145 口径)
 var _stone_next_tip := ""        # 打磨-147: 灵石行内联 下一件可购 动态段 缓存 (变化 才 刷, 单源 复用 stone_next_target_tip, 同 打磨-49/145 口径)
+var _progress_tip_static := ""   # 打磨-148: 修行页 突破进度行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑, 同 打磨-84/85/142 口径)
+var _progress_tip := ""          # 打磨-148: 突破进度行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 progress_tip, 同 打磨-142/144 口径)
 var _rc_tip := ""               # 打磨-145: 速率构成 动态段 缓存 (4 展示位 单源 复用 rate_compose_tip, 文本 变化 才 刷)
 var _goal_tip := ""            # 打磨-144: 下一目标行 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85/142 口径)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
@@ -913,6 +915,10 @@ func _build_training_page(page: Panel) -> void:
 	_stats_label.tooltip_text = "修行统计自开荒起累计, 存档保存。\n突破: 境界层数成功次数 (含飞升)。\n道行精进: 飞升后道行阶段成功次数。\n词缀: 塔掉落/装配/分解/兑换 累计 (打磨-110, 只读展示, 与 修行统计 同存档 口径)"
 	left.add_child(_sep())
 	_progress_label = _label("突破进度  0%", 14, DIM)
+	# 打磨-148: tooltip = 静态口径 + 动态段 (单源 复用 progress_tip: 当前/需求 明细 + 成功率 + ETA,
+	# 与 行 文本 百分比 互补; _refresh 动态段 文本 变化 才 刷; 纯展示 无 存档/统计 副作用)
+	_progress_tip_static = "当前 境界 (飞升后 为 道行阶段) 的 突破/道行精进 进度 (百分比 = 当前 主资源 / 本阶 消耗). 悬停 查看 明细 (当前/需求 + 成功率 + 攒满 ETA, 随 挂机 动态 刷新; 失败 重耗 不 计入 ETA).\n\n【进度 明细 (动态)】\n"
+	_progress_label.tooltip_text = _progress_tip_static + GameData.progress_tip()
 	left.add_child(_progress_label)
 	# 打磨-24: 突破/道行精进 ETA (按当前速率预计何时攒够突破资源)
 	_break_eta_label = _label("", 13, DIM)
@@ -2473,6 +2479,12 @@ func _refresh() -> void:
 	# tooltip 动态 含 比例 文本变化 才刷; 挂机 恒定 无 每帧 重绘)
 	_refresh_goalbar()
 	_progress_label.text = ("道行进度  %d%%" if g.ascended else "突破进度  %d%%") % int(g.breakthrough_progress())
+	# 打磨-148: 突破进度行 tooltip 动态段 (明细+成功率+ETA 随 主资源/速率/境界/功法装备/飞升 变化才刷;
+	# 与 ETA 行/成功率行 同 刷新 窗口, 挂机 恒定 无 每帧 重建, 同 打磨-142/144 缓存 口径)
+	var prg_tip: String = g.progress_tip()
+	if prg_tip != _progress_tip:
+		_progress_tip = prg_tip
+		_progress_label.tooltip_text = _progress_tip_static + prg_tip
 	# 打磨-24: 突破/道行精进 ETA (每帧算一次, 文本变化才写)
 	var bet_t: String = g.breakthrough_eta_text()
 	if bet_t != _break_eta_text:

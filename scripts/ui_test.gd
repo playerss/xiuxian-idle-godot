@@ -237,6 +237,7 @@ func _ready() -> void:
 	await _assert_rate_compose_tip()  # 打磨-145: 灵气/灵石 速率 tooltip 动态段 (rate_compose_tip 只读接口: 4 展示位 单源 构成 一览/功法装备法器 动态 同步/境界 基础 段 同步/飞升 道行 口径/同态 节流 无 副作用/收尾 干净 基准)
 	await _assert_offline_tip()  # 打磨-146: 修行页 离线收益行 tooltip 动态段 (offline_preview_tip 单源 复用 打磨-83 口径: 静态前缀+动态段标记+接口 恒等/三档 1h/4h/8h/未飞升 灵气 口径/同态 节流 无 副作用/境界2 同步/学 offline_rate 效率%% 段 同步/飞升 道行 口径/收尾 干净 基准)
 	await _assert_stone_next_tip()  # 打磨-147: 修行页 灵石行内联 下一件可购 标签 tooltip 动态段 (stone_next_target_tip 单源 复用 打磨-49 口径: 静态前缀+动态段标记+接口 恒等/速率 行 缺口 行/同态 节流 无 副作用/境界2 速率 行 同步/灵石 足够 切换/全 拥有 已集齐/收尾 干净 基准)
+	await _assert_progress_tip()  # 打磨-148: 修行页 突破进度行 tooltip 动态段 (progress_tip 单源: 静态前缀+动态段标记+接口 恒等/明细+成功率+ETA 齐全/同态 节流 无 副作用/灵气 半程 40% 同步/境界2 消耗 段 同步/攒够 切换/飞升 道行 口径/收尾 干净 基准)
 
 	_finish()
 
@@ -4981,6 +4982,114 @@ func _assert_stone_next_tip() -> void:
 	ui._refresh()
 	check(str(snl.tooltip_text) == str(ui._stone_next_tip_static) + g.stone_next_target_tip(),
 			"打磨-147 收尾 复原 tooltip = 接口 恒等 干净 基准")
+	await get_tree().process_frame
+# 打磨-148: 修行页 突破进度行 tooltip 动态段 (打磨-142/144/145/146/147 已给 突破 CTA/下一目标行/速率行/
+# 离线收益行/灵石内联行 补 动态段, 但 「突破进度 N%」 行 悬停 无 tooltip 只有 裸 百分比, 挂机 扫视 悬停
+# 不知 进度 背后 当前/需求 明细 — 单源 复用 GameData.progress_tip [明细+成功率+ETA, 与 行 文本/ETA 行 同 表达式],
+# 静态 前缀 存 成员 防 split 坑, _refresh 动态段 文本 变化 才 刷 [同 打磨-142/144 缓存 口径];
+# 纯展示 无 存档/统计 副作用; GameData 无 新 接口 消费 (progress_tip 为本 任务 数据层))
+# 断言 (手动驱动 确定性): 节点 存在/初始 tooltip = 静态前缀+接口 恒等/静态前缀 含 口径 说明+动态段 标记/
+# 同态 节流 冻结窗口 无 副作用/境界2 消耗 段 动态 同步/灵气 半程 百分比 同步/攒够 切 已攒够/飞升 道行 口径/收尾 复原 干净 基准
+func _assert_progress_tip() -> void:
+	var g := GameData
+	var pl: Label = ui._progress_label
+	check(pl != null, "打磨-148 突破进度行 节点 存在")
+	# 受控 基准 (清空 境界0层1 灵气0, 进度 0%; 保存 前序 段 态 收尾 复原)
+	var rl: int = g.realm_idx
+	var ly: int = g.layer
+	var es: float = g.essence
+	var ao: bool = g.ascended
+	var dl: int = g.dao_level
+	var dv: float = g.dao
+	var ln: Array[String] = []
+	for x in g.learned:
+		ln.append(x)
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.ascended = false
+	ui._refresh()
+	var dyn0: String = g.progress_tip()
+	var t0: String = str(pl.tooltip_text)
+	check(t0 == str(ui._progress_tip_static) + dyn0,
+			"打磨-148 初始 tooltip = 静态前缀+接口 恒等 (实际 %s)" % t0.left(40))
+	check(str(ui._progress_tip_static).find("当前/需求") >= 0
+			and str(ui._progress_tip_static).find("【进度 明细 (动态)】") >= 0,
+			"打磨-148 静态前缀 含 口径 说明 + 动态段 标记")
+	check(dyn0.begins_with("0% 灵气 0/10") and dyn0.find("突破成功率") >= 0
+			and dyn0.find("突破还需") >= 0,
+			"打磨-148 动态段 明细+成功率+ETA 齐全 (实际 %s)" % dyn0.left(50))
+	# 同态 节流: 冻结 UI 窗口 内 tooltip 稳定 无重写, 无 资源/统计/境界 副作用
+	var snap: Dictionary = g.stats.duplicate(true)
+	var ess0: float = g.essence
+	var st0: float = g.stones
+	var gproc: bool = g.is_processing()
+	var uiproc: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	await get_tree().process_frame
+	ui._refresh()
+	check(str(pl.tooltip_text) == t0 and str(ui._progress_tip) == dyn0
+			and g.stats == snap and g.essence == ess0 and g.stones == st0,
+			"打磨-148 同态 节流 tooltip 稳定 无 资源/统计 副作用 (窗口内 冻结 UI)")
+	# 灵气 半程 → 百分比 40% 明细 动态 同步 (fmt 档 0→4 真 变化)
+	g.essence = 4.0
+	ui._refresh()
+	var t1: String = str(pl.tooltip_text)
+	check(t1 == str(ui._progress_tip_static) + g.progress_tip()
+			and t1.begins_with(str(ui._progress_tip_static) + "40%") and t1 != t0,
+			"打磨-148 灵气 半程 40%% 明细 动态 同步 = 接口 恒等 (实际 %s)" % g.progress_tip().left(40))
+	# 境界2 → 消耗 x3^2 段 动态 同步 (4/90 = 4%)
+	g.realm_idx = 2
+	ui._refresh()
+	var t2: String = str(pl.tooltip_text)
+	check(t2 == str(ui._progress_tip_static) + g.progress_tip()
+			and t2.find("4/90") >= 0 and t2 != t1,
+			"打磨-148 境界2 消耗 段 动态 同步 = 接口 恒等 (实际 %s)" % g.progress_tip().left(40))
+	g.realm_idx = 0
+	# 攒够 → 动态段 切 已攒够 (无 ETA/成功率 段; 静态前缀 含 口径 词 故 只 断言 动态段 子串)
+	g.essence = 11.0
+	ui._refresh()
+	var t3: String = str(pl.tooltip_text)
+	var d3: String = t3.substr(str(ui._progress_tip_static).length())
+	check(d3.find("已攒够, 点击 突破/修炼") >= 0 and d3.find("突破还需") < 0
+			and d3.find("成功率") < 0 and t3 == str(ui._progress_tip_static) + g.progress_tip(),
+			"打磨-148 攒够 动态段 切 已攒够 = 接口 恒等 (实际 %s)" % d3.left(50))
+	# 飞升 道行 口径 (初仙 消耗 1e9, 道行 5e8 = 50%)
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 5.0e8
+	ui._refresh()
+	var t4: String = str(pl.tooltip_text)
+	check(t4.begins_with(str(ui._progress_tip_static) + "50%")
+			and t4.find("道行精进成功率") >= 0 and t4.find("道行精进还需") >= 0
+			and t4 == str(ui._progress_tip_static) + g.progress_tip(),
+			"打磨-148 飞升 道行 口径 动态段 = 接口 恒等 (实际 %s)" % t4.left(50))
+	# 道祖 封顶 → 圆满 文案 (道行 超限 恒满足, cost = 1e9x8^8 ≈ 1.7京 不硬编码)
+	g.dao_level = 8
+	g.dao = 2.0e16
+	ui._refresh()
+	var t5: String = str(pl.tooltip_text)
+	check(t5.find("已至道祖, 道法自然") >= 0 and t5.find("不再 精进") >= 0
+			and t5 == str(ui._progress_tip_static) + g.progress_tip(),
+			"打磨-148 道祖 封顶 圆满 文案 = 接口 恒等 (实际 %s)" % t5.left(50))
+	# 收尾: 恢复 前序 段 态 + 挂机 进程 + 干净 基准
+	g.essence = es
+	g.learned.clear()
+	for x in ln:
+		g.learned.append(x)
+	g.ascended = ao
+	g.dao_level = dl
+	g.dao = dv
+	g.realm_idx = rl
+	g.layer = ly
+	g.set_process(gproc)
+	ui.set_process(uiproc)
+	ui._refresh()
+	check(str(pl.tooltip_text) == str(ui._progress_tip_static) + g.progress_tip(),
+			"打磨-148 收尾 复原 tooltip = 接口 恒等 干净 基准")
 	await get_tree().process_frame
 func _finish() -> void:
 	print("")

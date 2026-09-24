@@ -4399,6 +4399,37 @@ func break_btn_tip() -> String:
 	return head2 + (" · 还差 %s 灵气 (%s) %s" % [fmt(gap2), eta2.trim_prefix("突破还需 "), breakthrough_expect_text()])
 
 
+# ---------- 打磨-148: 修行页 突破进度行 tooltip 动态段 (悬停 进度 明细 一览) ----------
+
+# 修行页「突破进度 N%」行 (打磨-24 同区) 此前 无 tooltip (只有 裸 百分比 数字), 玩家 悬停 不知
+# 进度 背后 的 当前/需求 明细 — 与 突破 CTA (打磨-142)/下一目标 行 (打磨-144)/顶栏 进度条 (打磨-141)
+# 同 定位 补 动态段 (进度 行 = 百分比 汇总, 动态段 = 当前/需求 明细 + 成功率 + ETA):
+# 未飞升 = "N% 灵气 当前/消耗 · 突破成功率 P% · 突破还需 T"; 飞升后 = 道行 口径 (道行精进 成功率);
+# 资源 已攒够 = "N% 主资源 当前/消耗 · 已攒够, 点击 突破/修炼" (无 ETA/成功率);
+# 无 主资源 收入 标注 无法 估算; 道祖 封顶 = 圆满 文案 (进度 恒 100%);
+# 失败 重耗 不 计入 ETA (同 打磨-24 口径).
+# 复用 breakthrough_cost/dao_break_cost/primary_res_name/primary_break_chance_text/
+# breakthrough_eta_text 单点 口径 (与 行 文本/ETA 行 同 表达式 防 漂移).
+# 纯 只读 不 改 状态/存档/统计 (供 UI tooltip 动态 刷新, 文本 变化 才 写).
+func progress_tip() -> String:
+	var res_name := primary_res_name()
+	var need: float = dao_break_cost() if ascended else breakthrough_cost()
+	var cur: float = dao if ascended else essence
+	var pct: int = int(round(clampf(cur / need * 100.0, 0.0, 100.0) if need > 0.0 else 100.0))
+	var head := "%d%% %s %s/%s" % [pct, res_name, fmt(cur), fmt(need)]
+	if ascended and dao_level >= IMMORTAL_REALMS.size() - 1:
+		return head + " · 已至道祖, 道法自然 ♪ (进度 恒满, 不再 精进)"
+	if cur >= need:
+		return head + " · 已攒够, 点击 突破/修炼"
+	var head2 := head + " · " + primary_break_chance_text()
+	var eta: String = breakthrough_eta_text()
+	if eta == "":
+		return head2 + " · 已攒够, 点击 突破/修炼"
+	if eta.begins_with("无"):
+		return head2 + " · 当前无%s收入, 无法 估算 ETA" % res_name
+	return head2 + " · " + eta
+
+
 # ---------- 打磨-144: 修行页 下一目标 行 tooltip 动态段 (悬停 速率/成功率/自动突破 状态 一览) ----------
 
 # 修行页 金色 下一目标 行 (打磨-31) 悬停 原只有 静态 口径 (攒够突破资源即点击突破), 玩家 不知

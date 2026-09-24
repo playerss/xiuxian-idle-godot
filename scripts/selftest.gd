@@ -9333,6 +9333,83 @@ func _init() -> void:
 	g.layer = l147
 	g.stones = st147
 	g.save_game()
+	# ---------- 打磨-148: 修行页 突破进度行 tooltip 动态段 (progress_tip 只读接口: 当前/需求 明细 + 成功率 + ETA, 单点 复用 行 文本/ETA 口径) ----------
+	# 1) 受控 基准 (清空 境界0层1 灵气0, 进度 0% 未攒够) — 明细 行 + 成功率 + ETA 动态 恒等
+	var a148: bool = g.ascended
+	var d148: float = g.dao
+	var dl148: int = g.dao_level
+	var es148: float = g.essence
+	var r148: int = g.realm_idx
+	var l148: int = g.layer
+	var ln148: Array[String] = []
+	for x148 in g.learned:
+		ln148.append(x148)
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	var cost148: float = g.breakthrough_cost()
+	var tip148_0: String = g.progress_tip()
+	check(tip148_0.begins_with("0%% 灵气 0/%s" % g.fmt(cost148)),
+		"打磨-148 受控 基准 明细 行 = 当前/需求 恒等 (实际 %s)" % tip148_0.left(40))
+	check(tip148_0.find("突破成功率") >= 0 and tip148_0.find("突破还需") >= 0,
+		"打磨-148 基准 含 成功率 段 + ETA 段 (实际 %s)" % tip148_0.left(60))
+	# 2) 半程 灵气 — 百分比 动态 同步 (40/10 = 40%, fmt 档 真 变化 0->40)
+	g.essence = cost148 * 0.4
+	var tip148_1: String = g.progress_tip()
+	check(tip148_1.begins_with("40% 灵气 4/10") and tip148_1.find("突破还需") >= 0,
+		"打磨-148 半程 40%% 明细 动态 同步 (实际 %s)" % tip148_1.left(40))
+	# 3) 攒够 — 已攒够 文案 无 ETA/成功率 段
+	g.essence = cost148 + 1.0
+	var tip148_2: String = g.progress_tip()
+	check(tip148_2.begins_with("100% 灵气 11/10") and tip148_2.find("已攒够, 点击 突破/修炼") >= 0
+			and tip148_2.find("突破还需") < 0 and tip148_2.find("成功率") < 0,
+		"打磨-148 攒够 动态段=已攒够 无 ETA/成功率 (实际 %s)" % tip148_2.left(50))
+	# 4) 境界2 — 消耗 x3^2 倍率 同步 (10x9x1=90, 明细 4/90 动态 恒等)
+	g.essence = 4.0
+	g.realm_idx = 2
+	var cost148b: float = g.breakthrough_cost()
+	var tip148_3: String = g.progress_tip()
+	check(absf(cost148b - 90.0) < 1e-6 and tip148_3.begins_with("4% 灵气 4/90")
+			and tip148_3.find("突破成功率") >= 0,
+		"打磨-148 境界2 消耗 段 动态 同步 (实际 %s)" % tip148_3.left(40))
+	g.realm_idx = 0
+	# 5) 飞升 道行 口径 (初仙 消耗 1e9, 道行 5e8 = 50%)
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 5.0e8
+	var tip148_4: String = g.progress_tip()
+	check(tip148_4.begins_with("50% 道行 5.0亿/10.0亿") and tip148_4.find("道行精进成功率") >= 0
+			and tip148_4.find("道行精进还需") >= 0,
+		"打磨-148 飞升 道行 口径 明细+成功率+ETA (实际 %s)" % tip148_4.left(60))
+	# 6) 道祖 封顶 — 圆满 文案 (道行 超限 恒满足 圆满 分支, cost = 1e9x8^8 ≈ 1.7京 不硬编码)
+	g.dao_level = 8
+	g.dao = 2.0e16
+	var tip148_5: String = g.progress_tip()
+	check(tip148_5.begins_with("100%") and tip148_5.find("已至道祖, 道法自然") >= 0
+			and tip148_5.find("不再 精进") >= 0,
+		"打磨-148 道祖 封顶 圆满 文案 (实际 %s)" % tip148_5.left(50))
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	# 7) 只读 连读 恒定 无 资源/统计 副作用
+	var snap148: Dictionary = g.stats.duplicate(true)
+	var es148r: float = g.essence
+	var st148r: float = g.stones
+	check(g.progress_tip() == g.progress_tip() and g.essence == es148r
+			and g.stones == st148r and g.stats == snap148,
+		"打磨-148 只读 连读 恒定 无 资源/统计 副作用")
+	# 8) 收尾 复原 (恢复 前序 段 态)
+	g.learned.clear()
+	for x148 in ln148:
+		g.learned.append(x148)
+	g.ascended = a148
+	g.dao_level = dl148
+	g.dao = d148
+	g.essence = es148
+	g.realm_idx = r148
+	g.layer = l148
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():
