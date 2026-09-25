@@ -9492,6 +9492,90 @@ func _init() -> void:
 	g.realm_idx = r149
 	g.layer = l149
 	g.save_game()
+	# ---------- 打磨-150: 境界阶梯 层内 进度行 / 道行阶段 进度行 tooltip 动态段 (单源 复用 break_eta_tip:
+	# 速率+成功率+ETA+期望成本, 与 行 文本 ladder_current_progress_text/dao_progress_text 同 刷新 窗口,
+	# 两行 共用 同一 动态段 文案, 口径 随 飞升 翻转; 与 突破 ETA 行/CTA tooltip 同 表达式 防 漂移) ----------
+	# 1) 受控 基准 (清空 境界0层1 灵气0) — 动态段 = break_eta_tip 恒等: 速率 段 + 85% + ETA 不足1分 档 + 期望 成本
+	var a150: bool = g.ascended
+	var d150: float = g.dao
+	var dl150: int = g.dao_level
+	var es150: float = g.essence
+	var r150: int = g.realm_idx
+	var l150: int = g.layer
+	var ln150: Array[String] = []
+	for x150 in g.learned:
+		ln150.append(x150)
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.ascended = false
+	var tip150_0: String = g.break_eta_tip()
+	check(tip150_0.begins_with("当前 %s 灵气/秒" % g.fmt(g.qi_per_sec()))
+			and tip150_0.find("突破成功率 85%") >= 0 and tip150_0.find("突破还需 不足1分") >= 0
+			and tip150_0.find("· 期望次数") >= 0 and tip150_0.find("· 期望总消耗") >= 0,
+			"打磨-150 受控 基准 动态段 = break_eta_tip 恒等 速率+成功率+ETA+期望 齐全 (实际 %s)" % tip150_0.left(60))
+	# 2) 层 11 — 消耗 x11 缺口 110 速率 1.0 → ETA 1分 档 (不足1分→1分 跨档 真 变化, fmt 档位 真 变)
+	g.layer = 11
+	var tip150_1: String = g.break_eta_tip()
+	check(tip150_1 != tip150_0 and tip150_1.find("突破还需 1分") >= 0,
+			"打磨-150 层11 跨档 ETA 1分 动态 同步 (实际 %s)" % tip150_1.left(50))
+	check(g.ladder_current_progress_text().begins_with("第 11/9 层")
+			and g.break_eta_tip().find("期望总消耗") >= 0,
+			"打磨-150 层内 行 文本 与 动态段 并存 口径 (行 文本 层数/消耗 动态段 速率/成功率/ETA)")
+	# 3) 境界2 层20 — 速率 15 段 + 成功率 77% 段 + ETA 2分 档 动态 同步 (境界 提升 行 文本 随 境界 移动 同 窗口)
+	g.realm_idx = 2
+	g.layer = 20
+	var tip150_2: String = g.break_eta_tip()
+	check(tip150_2.begins_with("当前 15 灵气/秒") and tip150_2.find("突破成功率 77%") >= 0
+			and tip150_2.find("突破还需 2分") >= 0,
+			"打磨-150 境界2 速率 15+成功率 77%%+ETA 2分 档 动态 同步 (实际 %s)" % tip150_2.left(50))
+	check(g.ladder_current_progress_text().begins_with("第 20/3 层"),
+			"打磨-150 境界2 层内 行 文本 第 20/3 层 同源 口径 (实际 %s)" % g.ladder_current_progress_text().left(30))
+	g.realm_idx = 0
+	g.layer = 1
+	# 4) 攒够 — 动态段 切 已攒够 无 ETA/成功率/期望 段 (行 文本 保持 当前 已攒 口径)
+	g.essence = g.breakthrough_cost() + 1.0
+	var tip150_3: String = g.break_eta_tip()
+	check(tip150_3.find("已攒够, 点击突破/修炼") >= 0 and tip150_3.find("突破还需") < 0
+			and tip150_3.find("成功率") < 0 and tip150_3.find("期望次数") < 0,
+			"打磨-150 攒够 动态段 切 已攒够 无 ETA/成功率/期望 段 (实际 %s)" % tip150_3.left(50))
+	# 5) 飞升 道行 口径 (初仙 消耗 1e9, 道行 5e8, 速率 1.0) — 层内 行 空串 道行 行 动态 同 窗口
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 5.0e8
+	check(g.ladder_current_progress_text() == "", "打磨-150 飞升 层内 行 文本 空串 隐藏 口径")
+	var tip150_4: String = g.break_eta_tip()
+	check(tip150_4.begins_with("当前 1 道行/秒") and tip150_4.find("道行精进成功率") >= 0
+			and tip150_4.find("道行精进还需") >= 0 and tip150_4.find("· 期望总消耗") >= 0
+			and g.dao_progress_text().find("道行精进需") >= 0,
+			"打磨-150 飞升 道行 口径 动态段 + 道行 行 文本 同 窗口 (实际 %s)" % tip150_4.left(50))
+	# 6) 道祖 封顶 — 圆满 文案 (行 文本 圆满 口径 同源)
+	g.dao_level = 8
+	g.dao = 2.0e16
+	var tip150_5: String = g.break_eta_tip()
+	check(tip150_5.find("已至道祖 · 道法自然") >= 0 and tip150_5.find("不再 精进") >= 0
+			and g.dao_progress_text().find("已至道祖") >= 0,
+			"打磨-150 道祖 封顶 动态段 圆满 + 道行 行 文本 圆满 同源 (实际 %s)" % tip150_5.left(50))
+	# 7) 只读 连读 恒定 无 资源/统计 副作用 (两行 动态段 同源 连读 恒定)
+	var snap150: Dictionary = g.stats.duplicate(true)
+	var es150r: float = g.essence
+	var st150r: float = g.stones
+	var tip150_6a: String = g.break_eta_tip()
+	var tip150_6b: String = g.break_eta_tip()
+	check(tip150_6a == tip150_6b and g.essence == es150r and g.stones == st150r and g.stats == snap150,
+			"打磨-150 只读 连读 恒定 无 资源/统计 副作用")
+	# 8) 收尾 复原 (恢复 前序 段 态)
+	g.learned.clear()
+	for x150 in ln150:
+		g.learned.append(x150)
+	g.ascended = a150
+	g.dao_level = dl150
+	g.dao = d150
+	g.essence = es150
+	g.realm_idx = r150
+	g.layer = l150
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

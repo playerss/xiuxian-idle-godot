@@ -43,6 +43,10 @@ var _progress_tip_static := ""   # 打磨-148: 修行页 突破进度行 tooltip
 var _progress_tip := ""          # 打磨-148: 突破进度行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 progress_tip, 同 打磨-142/144 口径)
 var _break_eta_tip_static := ""  # 打磨-149: 修行页 突破 ETA 行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑, 同 打磨-84/85/142/148 口径)
 var _break_eta_tip := ""         # 打磨-149: 突破 ETA 行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 break_eta_tip, 同 打磨-142/144/148 口径)
+var _ladder_prog_tip_static := ""  # 打磨-150: 境界阶梯 层内 进度行 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑, 同 打磨-84/85/142/149 口径)
+var _ladder_prog_tip := ""         # 打磨-150: 层内 进度行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 break_eta_tip, 同 打磨-142/148/149 口径)
+var _dao_prog_tip_static := ""     # 打磨-150: 道行阶段 进度行 tooltip 静态 前缀 (构建时 存, 防 split 坑)
+var _dao_prog_tip := ""            # 打磨-150: 道行阶段 进度行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 break_eta_tip)
 var _rc_tip := ""               # 打磨-145: 速率构成 动态段 缓存 (4 展示位 单源 复用 rate_compose_tip, 文本 变化 才 刷)
 var _goal_tip := ""            # 打磨-144: 下一目标行 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85/142 口径)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
@@ -1192,7 +1196,10 @@ func _build_training_page(page: Panel) -> void:
 		if i == 0:
 			# 打磨-34: 当前境界行内 层内进度 (初始挂在第 0 行下, 随当前境界移动)
 			_ladder_prog = _label("", 12, GOLD)
-			_ladder_prog.tooltip_text = "当前境界的层内进度: 第 X/Y 层 与 下次突破所需灵气 (当前已攒)。\n飞升后隐藏。"
+			# 打磨-150: tooltip = 静态口径 + 动态段 (单源 复用 break_eta_tip: 速率+成功率+ETA+期望成本,
+			# 与 突破 ETA 行/CTA tooltip 同 表达式 防 漂移; _refresh 动态段 文本 变化 才 刷)
+			_ladder_prog_tip_static = "当前 境界 的 层内 进度: 第 X/Y 层 与 下次 突破 所需 灵气 (当前 已攒). 悬停 查看 明细 (当前 速率 + 成功率 + 攒满 ETA + 期望 失败 重烧 成本, 随 挂机 动态 刷新; 单源 复用 突破 ETA 行 口径). 飞升后 隐藏.\n\n【突破 明细 (动态)】\n"
+			_ladder_prog.tooltip_text = _ladder_prog_tip_static + GameData.break_eta_tip()
 			rbox.add_child(_ladder_prog)
 		# 打磨-33: 阶梯 ETA 路线 (按当前速率估算 累计耗时, 已达成/当前 行不显示)
 		var r_eta := _label("", 12, CYAN)
@@ -1211,7 +1218,10 @@ func _build_training_page(page: Panel) -> void:
 		_ladder_eta["dao_%d" % i] = d_eta
 	# 打磨-35: 当前道行阶段行内 道行精进进度 (初始挂在第 1 个道行 d_eta 下 index=23, 随道行阶段移动; 未飞升隐藏)
 	_dao_prog = _label("", 12, GOLD)
-	_dao_prog.tooltip_text = "当前道行阶段的精进进度: 下次精进所需道行 (当前已攒)。道祖封顶显示圆满。\n未飞升隐藏。"
+	# 打磨-150: tooltip = 静态口径 + 动态段 (单源 复用 break_eta_tip: 速率+成功率+ETA+期望成本,
+	# 与 突破 ETA 行/CTA tooltip 同 表达式 防 漂移; _refresh 动态段 文本 变化 才 刷)
+	_dao_prog_tip_static = "当前 道行阶段 的 精进 进度: 下次 精进 所需 道行 (当前 已攒). 道祖 封顶 显示 圆满. 悬停 查看 明细 (当前 速率 + 成功率 + 精进 ETA + 期望 失败 重烧 成本, 随 挂机 动态 刷新; 单源 复用 突破 ETA 行 口径). 未飞升 隐藏.\n\n【道行 精进 明细 (动态)】\n"
+	_dao_prog.tooltip_text = _dao_prog_tip_static + GameData.break_eta_tip()
 	rbox.add_child(_dao_prog)
 	_dao_prog_hide_idx = rbox.get_child_count() - 1   # 道行区末行 (未飞升时藏于此, 视觉最靠下)
 	rbox.move_child(_dao_prog, 23)
@@ -2501,6 +2511,15 @@ func _refresh() -> void:
 	if bet_tip != _break_eta_tip:
 		_break_eta_tip = bet_tip
 		_break_eta_label.tooltip_text = _break_eta_tip_static + bet_tip
+	# 打磨-150: 境界阶梯 层内 进度行 / 道行阶段 进度行 tooltip 动态段 (单源 复用 break_eta_tip:
+	# 速率+成功率+ETA+期望成本, 与 进度 行/ETA 行 同 刷新 窗口, 两行 共用 同一 动态段 文案,
+	# 口径 随 飞升 翻转, 挂机 恒定 无 每帧 重建, 同 打磨-142/148/149 缓存 口径)
+	if bet_tip != _ladder_prog_tip:
+		_ladder_prog_tip = bet_tip
+		_ladder_prog.tooltip_text = _ladder_prog_tip_static + bet_tip
+	if bet_tip != _dao_prog_tip:
+		_dao_prog_tip = bet_tip
+		_dao_prog.tooltip_text = _dao_prog_tip_static + bet_tip
 	# 打磨-36: 主突破/道行精进成功率 (境界/道行阶段/功法装备变化才变, 文本变化才写)
 	var ch_t: String = g.primary_break_chance_text()
 	if ch_t != _chance_text:
