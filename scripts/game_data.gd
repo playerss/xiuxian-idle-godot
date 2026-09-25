@@ -4585,6 +4585,51 @@ func ladder_row_eta(kind: String, target: int) -> String:
 		return "8天+"   # 无收入防御 (正常恒不触发): 按上限显示, 不误导
 	return ladder_eta_text(sec / r)
 
+
+# 打磨-151: 境界阶梯 境界行/道行阶段行 tooltip 动态段 (悬停 显示 该 境界/阶段 灵气 倍率 + 到达 累计消耗 + ETA)
+# 境界行 (未飞升 灵气 口径) / 道行阶段行 (飞升后 道行 口径) / 已达成 已达成✓ / 当前 当前 标注 /
+# 道祖 封顶 圆满 / 未飞升 道行 行 显 飞升后 解锁. 复用 realm_ladder_eta/dao_ladder_eta (累计消耗)
+# + ladder_row_eta (ETA 文本 含 当前 已攒 抵扣) + QI_MULT/IMMORTAL_STAGE_MULT (倍率).
+# 纯 只读 不 改 状态/存档/统计 (供 UI tooltip 动态 刷新, 文本 变化 才 写).
+func ladder_row_tip(kind: String, target: int) -> String:
+	if kind == "realm":
+		if target < 0 or target >= REALMS.size():
+			return ""
+		var nm: String = (REALMS[target]["name"] as String)
+		var mult: float = QI_MULT[target]
+		var base := "%s (灵气 x%s)" % [nm, fmt(mult)]
+		if ascended:
+			return base + " · 已达成 ✓ (飞升 后 凡境 全部 达成)"
+		if target < realm_idx:
+			return base + " · 已达成 ✓"
+		if target == realm_idx:
+			return base + " · 当前境界 (第 %d/%d 层)" % [layer, REALMS[target]["layers"]]
+		var total := realm_ladder_eta(target)
+		if total <= 0.0:
+			return base + " · 即将达成"
+		return base + " · 到达 累计需 %s 灵气 (已攒 %s) · %s" % [
+			fmt(total), fmt(essence), ladder_row_eta("realm", target)]
+	# kind == "dao"
+	if target < 0 or target >= IMMORTAL_REALMS.size():
+		return ""
+	var nm2: String = IMMORTAL_REALMS[target]
+	var mult2: float = pow(IMMORTAL_STAGE_MULT, float(target))
+	var base2 := "%s (灵气 x%s)" % [nm2, fmt(mult2)]
+	if not ascended:
+		return base2 + " · 飞升后 解锁"
+	if target < dao_level:
+		return base2 + " · 已达成 ✓"
+	if target == dao_level:
+		if target >= IMMORTAL_REALMS.size() - 1:
+			return base2 + " · 已至道祖 · 道法自然 ♪"
+		return base2 + " · 当前 阶段 (道行精进 中)"
+	var total2 := dao_ladder_eta(target)
+	if total2 <= 0.0:
+		return base2 + " · 即将达成"
+	return base2 + " · 到达 累计需 %s 道行 (已攒 %s) · %s" % [
+		fmt(total2), fmt(dao), ladder_row_eta("dao", target)]
+
+
 # ---------- 打磨-34: 境界阶梯当前层进度 (当前境界行内 层数位置 + 突破资源) ----------
 
 # 当前境界的层内进度 (未飞升): "第 X/Y 层 · 突破需 X 灵气 (当前 X)"

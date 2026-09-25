@@ -9575,6 +9575,100 @@ func _init() -> void:
 	g.essence = es150
 	g.realm_idx = r150
 	g.layer = l150
+	# ---------- 打磨-151: 境界阶梯 境界行/道行阶段行 tooltip 动态段 (ladder_row_tip 只读接口:
+	# 悬停 显示 该 境界/阶段 灵气 倍率 + 到达 累计消耗 + ETA; 复用 realm/dao_ladder_eta + ladder_row_eta +
+	# QI_MULT/IMMORTAL_STAGE_MULT 单点 口径; 已达成/当前/道祖圆满/未飞升道行 解锁 分态; 只读 无 副作用) ----------
+	# 保存 前序 段 态
+	var a151: bool = g.ascended
+	var d151: float = g.dao
+	var dl151: int = g.dao_level
+	var es151: float = g.essence
+	var st151: float = g.stones
+	var r151: int = g.realm_idx
+	var l151: int = g.layer
+	var ln151: Array[String] = []
+	for x151 in g.learned:
+		ln151.append(x151)
+	# 受控 基准: 境界0层1 灵气0 未飞升 无功法
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	# 1) 当前 境界行 — 标注 当前 (无 累计/ETA, 第 1/9 层)
+	var tip151_0: String = g.ladder_row_tip("realm", 0)
+	check(tip151_0 == "练气 (灵气 x1) · 当前境界 (第 1/9 层)",
+			"打磨-151 当前 境界行 标注 当前 无 累计 (实际 %s)" % tip151_0)
+	# 2) 下一 境界 筑基 — 倍率 x4 + 累计 450 灵气 + ETA 约 7分 (速率 1.0)
+	var tip151_1: String = g.ladder_row_tip("realm", 1)
+	check(tip151_1 == "筑基 (灵气 x4) · 到达 累计需 450 灵气 (已攒 0) · 约 7分",
+			"打磨-151 筑基行 倍率+累计 450+ETA 7分 (实际 %s)" % tip151_1)
+	# 3) 金丹 行 — 累计 630 (450+筑基 3 层 180) ETA 约 10分
+	var tip151_2: String = g.ladder_row_tip("realm", 2)
+	check(tip151_2 == "金丹 (灵气 x15) · 到达 累计需 630 灵气 (已攒 0) · 约 10分",
+			"打磨-151 金丹行 累计 630+ETA 10分 (实际 %s)" % tip151_2)
+	# 4) 越界 境界 — 空串 防御
+	check(g.ladder_row_tip("realm", 100) == "" and g.ladder_row_tip("realm", -1) == "",
+			"打磨-151 越界 境界行 空串 防御")
+	# 5) 升 境界2 层1 — 前 两 境界 已达成✓, 当前=金丹 标注, 元婴 累计 含 金丹 层
+	g.realm_idx = 2
+	g.layer = 1
+	var tip151_3: String = g.ladder_row_tip("realm", 0)
+	var tip151_4: String = g.ladder_row_tip("realm", 1)
+	var tip151_5: String = g.ladder_row_tip("realm", 2)
+	check(tip151_3.find("已达成 ✓") >= 0 and tip151_4.find("已达成 ✓") >= 0
+			and tip151_5.find("当前境界") >= 0,
+			"打磨-151 升 境界2 已达成✓+当前 标注 分态 (实际 %s)" % tip151_5)
+	g.realm_idx = 0
+	g.layer = 1
+	# 6) 飞升 道行 口径 — 未飞升 时 道行 行 显 飞升后 解锁
+	g.essence = 0.0
+	var tip151_6: String = g.ladder_row_tip("dao", 0)
+	check(tip151_6 == "初仙 (灵气 x1) · 飞升后 解锁",
+			"打磨-151 未飞升 道行 行 显 飞升后 解锁 (实际 %s)" % tip151_6)
+	# 7) 飞升 初仙 — 凡境 全部 已达成✓ + 当前 阶段 标注
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 5.0e8
+	var tip151_7: String = g.ladder_row_tip("realm", 3)
+	var tip151_8: String = g.ladder_row_tip("dao", 0)
+	check(tip151_7.find("已达成 ✓") >= 0 and tip151_7.find("飞升 后 凡境 全部 达成") >= 0,
+			"打磨-151 飞升 后 凡境 行 全部 已达成 (实际 %s)" % tip151_7)
+	check(tip151_8 == "初仙 (灵气 x1) · 当前 阶段 (道行精进 中)",
+			"打磨-151 飞升 当前 道行 阶段 标注 (实际 %s)" % tip151_8)
+	# 8) 飞升 少仙 行 — 累计 1e9 道行 + ETA (速率 初仙 x1 1.0, dao 5e8 已攒)
+	var tip151_9: String = g.ladder_row_tip("dao", 1)
+	check(tip151_9.begins_with("少仙 (灵气 x2) · 到达 累计需 ")
+			and tip151_9.find("道行") >= 0 and tip151_9.find("· 8天+") >= 0,
+			"打磨-151 飞升 少仙 行 累计+ETA 7天 封顶 8天+ 道行 口径 (实际 %s)" % tip151_9)
+	# 9) 道祖 封顶 — 圆满 文案
+	g.dao_level = 8
+	g.dao = 2.0e16
+	var tip151_10: String = g.ladder_row_tip("dao", 8)
+	check(tip151_10.find("已至道祖 · 道法自然") >= 0,
+			"打磨-151 道祖 封顶 圆满 文案 (实际 %s)" % tip151_10)
+	# 10) 只读 连读 恒定 无 资源/统计 副作用
+	var snap151: Dictionary = g.stats.duplicate(true)
+	var es151c: float = g.essence
+	var st151c: float = g.stones
+	var tip151_11a: String = g.ladder_row_tip("realm", 1)
+	var tip151_11b: String = g.ladder_row_tip("realm", 1)
+	check(tip151_11a == tip151_11b and g.essence == es151c and g.stones == st151c and g.stats == snap151,
+			"打磨-151 只读 连读 恒定 无 资源/统计 副作用")
+	# 11) 收尾 复原
+	g.learned.clear()
+	for x151 in ln151:
+		g.learned.append(x151)
+	g.ascended = a151
+	g.dao_level = dl151
+	g.dao = d151
+	g.essence = es151
+	g.stones = st151
+	g.realm_idx = r151
+	g.layer = l151
+	g.save_game()
 	g.save_game()
 	# ---------- 汇报 ----------
 	print("")

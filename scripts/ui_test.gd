@@ -240,6 +240,7 @@ func _ready() -> void:
 	await _assert_progress_tip()  # 打磨-148: 修行页 突破进度行 tooltip 动态段 (progress_tip 单源: 静态前缀+动态段标记+接口 恒等/明细+成功率+ETA 齐全/同态 节流 无 副作用/灵气 半程 40% 同步/境界2 消耗 段 同步/攒够 切换/飞升 道行 口径/收尾 干净 基准)
 	await _assert_break_eta_tip()  # 打磨-149: 修行页 突破 ETA 行 tooltip 动态段 (break_eta_tip 单源: 静态前缀+动态段标记+接口 恒等/速率+成功率+ETA+期望成本 齐全/同态 节流 无 副作用/层 跨档 ETA 同步/境界2 速率/成功率/ETA 同步/攒够 切换/飞升 道行 口径/收尾 干净 基准)
 	await _assert_ladder_prog_tip()  # 打磨-150: 境界阶梯 层内 进度行/道行阶段 进度行 tooltip 动态段 (break_eta_tip 单源: 两行 静态前缀+接口 恒等/基准 速率+成功率+ETA+期望 齐全/同态 节流 无 副作用/层11 跨档 1分 同步/境界2 15+77%+2分 同步/攒够 切 已攒够/飞升 道行 口径 行 文本 窗口 联动/收尾 干净 基准)
+	await _assert_ladder_row_tip()  # 打磨-151: 境界阶梯 境界行/道行阶段行 tooltip 动态段 (ladder_row_tip 单源: 静态前缀+接口 恒等 19 行/倍率+累计+ETA 齐全/同态 节流 无 副作用/升 境界 动态 同步/飞升 道行 口径 凡境 全 已达成/收尾 干净 基准)
 
 	_finish()
 
@@ -5326,6 +5327,121 @@ func _assert_ladder_prog_tip() -> void:
 			and str(dp.tooltip_text) == str(ui._dao_prog_tip_static) + g.break_eta_tip(),
 			"打磨-150 收尾 复原 两行 tooltip = 接口 恒等 干净 基准")
 	await get_tree().process_frame
+# 打磨-151: 境界阶梯 境界行/道行阶段行 tooltip 动态段 断言 (19 行: 10 凡境 + 9 道行)
+func _assert_ladder_row_tip() -> void:
+	var g := GameData
+	# 静态 前缀 含 口径 说明 + 动态段 标记
+	check(str(ui._ladder_tip_static).find("【明细 (动态)】") >= 0
+			and str(ui._ladder_tip_static).find("到达 累计需") >= 0,
+			"打磨-151 静态 前缀 含 口径 说明 + 动态段 标记")
+	# 受控 基准 (清空 境界0层1 灵气0, 未飞升; 保存 前序 段 态 收尾 复原)
+	var rl: int = g.realm_idx
+	var ly: int = g.layer
+	var es: float = g.essence
+	var ao: bool = g.ascended
+	var dl: int = g.dao_level
+	var dv: float = g.dao
+	var ln: Array[String] = []
+	for x in g.learned:
+		ln.append(x)
+	g.learned.clear()
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	ui._refresh()
+	ui._refresh_ladder_eta(true)
+	# 19 行 节点 tooltip = 静态 前缀 + 接口 恒等 (10 凡境 + 9 道行)
+	var ok := true
+	for i in g.REALMS.size():
+		var t: String = str((ui._realm_ladder[i] as Label).tooltip_text)
+		if t != str(ui._ladder_tip_static) + g.ladder_row_tip("realm", i):
+			ok = false
+	check(ok, "打磨-151 凡境 10 行 tooltip = 静态前缀+接口 恒等 (实际 realm_0=%s)" %
+			str((ui._realm_ladder[0] as Label).tooltip_text).left(40))
+	ok = true
+	for i in g.IMMORTAL_REALMS.size():
+		var t2: String = str((ui._immortal_ladder[i] as Label).tooltip_text)
+		if t2 != str(ui._ladder_tip_static) + g.ladder_row_tip("dao", i):
+			ok = false
+	check(ok, "打磨-151 道行 9 行 tooltip = 静态前缀+接口 恒等 (实际 dao_0=%s)" %
+			str((ui._immortal_ladder[0] as Label).tooltip_text).left(40))
+	# 基准 关键 行 内容: 当前 境界 标注 / 筑基 倍率+累计 / 未飞升 道行 行 飞升后 解锁
+	var rl0: String = str((ui._realm_ladder[0] as Label).tooltip_text)
+	var rl1: String = str((ui._realm_ladder[1] as Label).tooltip_text)
+	var dl0: String = str((ui._immortal_ladder[0] as Label).tooltip_text)
+	check(rl0.find("当前境界 (第 1/9 层)") >= 0 and rl1.find("灵气 x4") >= 0
+			and rl1.find("到达 累计需") >= 0 and rl1.find("· 约") >= 0
+			and dl0.find("飞升后 解锁") >= 0,
+			"打磨-151 基准 当前 标注+倍率+累计+ETA 齐全 (筑基行 %s)" % rl1.left(50))
+	# 同态 节流: 冻结 UI 窗口 内 19 行 tooltip 稳定 无重写, 无 资源/统计 副作用
+	var snap: Dictionary = g.stats.duplicate(true)
+	var ess0: float = g.essence
+	var st0: float = g.stones
+	var gproc: bool = g.is_processing()
+	var uiproc: bool = ui.is_processing()
+	g.set_process(false)
+	ui.set_process(false)
+	ui._refresh()
+	ui._refresh_ladder_eta(true)
+	await get_tree().process_frame
+	ui._refresh()
+	ui._refresh_ladder_eta(true)
+	var stable := true
+	for i in g.REALMS.size():
+		if str((ui._realm_ladder[i] as Label).tooltip_text) != str(ui._ladder_tip_static) + g.ladder_row_tip("realm", i):
+			stable = false
+	check(stable and g.stats == snap and g.essence == ess0 and g.stones == st0,
+			"打磨-151 同态 节流 19 行 tooltip 稳定 无 资源/统计 副作用 (窗口内 冻结 UI)")
+	# 升 境界2 层1 — 动态 同步: 前 两 行 切 已达成✓, 当前=金丹 标注, 后续 行 累计 含 金丹 消耗
+	# (行 tooltip 走 _refresh_ladder_eta 1 秒 节流 路径, 手动驱动 后 强制 刷 防 节流 窗口 未 跨 1 秒 漏 刷, 同 打磨-150 口径)
+	g.realm_idx = 2
+	g.layer = 1
+	ui._refresh()
+	ui._refresh_ladder_eta(true)
+	var r0b: String = str((ui._realm_ladder[0] as Label).tooltip_text)
+	var r2b: String = str((ui._realm_ladder[2] as Label).tooltip_text)
+	var r3b: String = str((ui._realm_ladder[3] as Label).tooltip_text)
+	check(r0b.find("已达成 ✓") >= 0 and r2b.find("当前境界 (第 1/3 层)") >= 0
+			and r3b.find("到达 累计需") >= 0 and r3b.find("· 约") >= 0,
+			"打磨-151 升 境界2 动态 同步 已达成✓/当前 金丹/元婴 累计 齐全 (实际 %s)" % r2b.left(40))
+	# 飞升 道行 口径 — 凡境 全 已达成 + 道行 行 道行 口径
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 5.0e8
+	ui._refresh()
+	ui._refresh_ladder_eta(true)
+	var r3c: String = str((ui._realm_ladder[3] as Label).tooltip_text)
+	var d0c: String = str((ui._immortal_ladder[0] as Label).tooltip_text)
+	var d1c: String = str((ui._immortal_ladder[1] as Label).tooltip_text)
+	ok = true
+	for i in g.REALMS.size():
+		if str((ui._realm_ladder[i] as Label).tooltip_text).find("已达成 ✓") < 0:
+			ok = false
+	check(ok and d0c.find("当前 阶段 (道行精进 中)") >= 0 and d1c.find("到达 累计需") >= 0
+			and d1c.find("道行") >= 0,
+			"打磨-151 飞升 凡境 全 已达成 + 当前 阶段 标注 + 少仙 行 道行 口径 (实际 %s)" % d1c.left(50))
+	# 收尾: 恢复 前序 段 态 + 挂机 进程 + 干净 基准
+	g.essence = es
+	g.learned.clear()
+	for x in ln:
+		g.learned.append(x)
+	g.ascended = ao
+	g.dao_level = dl
+	g.dao = dv
+	g.realm_idx = rl
+	g.layer = ly
+	g.set_process(gproc)
+	ui.set_process(uiproc)
+	ui._refresh()
+	ui._refresh_ladder_eta(true)
+	check(str((ui._realm_ladder[0] as Label).tooltip_text) == str(ui._ladder_tip_static) + g.ladder_row_tip("realm", 0)
+			and str((ui._immortal_ladder[0] as Label).tooltip_text) == str(ui._ladder_tip_static) + g.ladder_row_tip("dao", 0),
+			"打磨-151 收尾 复原 tooltip = 接口 恒等 干净 基准")
+	await get_tree().process_frame
+
 func _finish() -> void:
 	print("")
 	if _fail.is_empty():

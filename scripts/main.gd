@@ -47,6 +47,7 @@ var _ladder_prog_tip_static := ""  # 打磨-150: 境界阶梯 层内 进度行 t
 var _ladder_prog_tip := ""         # 打磨-150: 层内 进度行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 break_eta_tip, 同 打磨-142/148/149 口径)
 var _dao_prog_tip_static := ""     # 打磨-150: 道行阶段 进度行 tooltip 静态 前缀 (构建时 存, 防 split 坑)
 var _dao_prog_tip := ""            # 打磨-150: 道行阶段 进度行 tooltip 动态段 缓存 (变化 才 刷, 单源 复用 break_eta_tip)
+var _ladder_tip_static := ""    # 打磨-151: 境界阶梯 行 tooltip 静态 前缀 (构建 存, 供 动态段 重拼 防 split 坑, 同 打磨-84/85 口径)
 var _rc_tip := ""               # 打磨-145: 速率构成 动态段 缓存 (4 展示位 单源 复用 rate_compose_tip, 文本 变化 才 刷)
 var _goal_tip := ""            # 打磨-144: 下一目标行 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85/142 口径)
 var _stats_label: Label        # 打磨-14: 修行统计 (修行页)
@@ -1188,11 +1189,14 @@ func _build_training_page(page: Panel) -> void:
 	rbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rbox.add_theme_constant_override("separation", 4)
 	rscroll.add_child(rbox)
+	_ladder_tip_static = "境界阶梯 行 悬停 说明: 灵气 xN = 该 境界/阶段 的 挂机 倍率; 到达 累计需 X = 从 当前 状态 攒够 该行 全部 突破/精进 资源 的 总量 (含 当前 已攒 抵扣, 未计入 突破 失败 重耗; 境界 提升 后 速率 加快 实际 只会 更快; 超 7 天 显 8天+). 随 挂机 动态 刷新.\n\n【明细 (动态)】\n"
 	for i in GameData.REALMS.size():
 		var r: Dictionary = GameData.REALMS[i]
 		var rl := _label("%s × %d 层  (灵气x%s)" % [r["name"], r["layers"], GameData.fmt(GameData.QI_MULT[i])], 14, WHITEISH)
 		rbox.add_child(rl)
 		_realm_ladder.append(rl)
+		# 打磨-151: 境界行 tooltip = 静态 口径 前缀 + 动态段 (ladder_row_tip 单源: 倍率+到达 累计消耗+ETA)
+		rl.tooltip_text = _ladder_tip_static + GameData.ladder_row_tip("realm", i)
 		if i == 0:
 			# 打磨-34: 当前境界行内 层内进度 (初始挂在第 0 行下, 随当前境界移动)
 			_ladder_prog = _label("", 12, GOLD)
@@ -1213,6 +1217,8 @@ func _build_training_page(page: Panel) -> void:
 		var il := _label("%s  (x%.0f)" % [nm, pow(2.0, float(i))], 14, WHITEISH)
 		rbox.add_child(il)
 		_immortal_ladder.append(il)
+		# 打磨-151: 道行阶段行 tooltip = 静态 口径 前缀 + 动态段 (ladder_row_tip 单源)
+		il.tooltip_text = _ladder_tip_static + GameData.ladder_row_tip("dao", i)
 		var d_eta := _label("", 12, CYAN)
 		rbox.add_child(d_eta)
 		_ladder_eta["dao_%d" % i] = d_eta
@@ -3556,6 +3562,16 @@ func _refresh_ladder_eta(force: bool = false) -> void:
 				t2 = g.ladder_row_eta("dao", i)
 		if l2.text != t2:
 			l2.text = t2
+	# 打磨-151: 境界行/道行阶段行 tooltip 动态段 (ladder_row_tip 单源: 倍率+到达 累计消耗+ETA,
+	# 与 ETA 文本 同 1 秒 节流 窗口; 动态段 文本 变化 才 刷, 挂机 恒定 无 每帧 重建)
+	for i in _realm_ladder.size():
+		var lt: String = _ladder_tip_static + g.ladder_row_tip("realm", i)
+		if (_realm_ladder[i] as Label).tooltip_text != lt:
+			(_realm_ladder[i] as Label).tooltip_text = lt
+	for i in _immortal_ladder.size():
+		var lt2: String = _ladder_tip_static + g.ladder_row_tip("dao", i)
+		if (_immortal_ladder[i] as Label).tooltip_text != lt2:
+			(_immortal_ladder[i] as Label).tooltip_text = lt2
 	# 打磨-34: 当前境界行内 层内进度 (未飞升才显示; 文本变化才刷)
 	var tp: String = g.ladder_current_progress_text()
 	if _ladder_prog.text != tp:
