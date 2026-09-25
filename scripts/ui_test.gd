@@ -168,6 +168,7 @@ func _ready() -> void:
 	await _assert_idle_badge()
 	await _assert_auto_summary()
 	await _assert_auto_sum_jump()
+	await _assert_auto_sum_seg_tip()  # 打磨-152: 自动系列 状态汇总行 5 段热区 tooltip 动态段
 	_assert_auto_restore()
 	await _assert_auto_badge()
 	await _assert_auto_badge_jump()
@@ -3246,6 +3247,93 @@ func _assert_auto_sum_jump() -> void:
 	ui._refresh()
 	check(g.auto_break == false and g.auto_buy == false and g.auto_cast == false and g.auto_learn == false
 			and ui._auto_sum_key == "0|0|0|0|0", "打磨-71 收尾 五关 恢复 0|0|0|0|0 (M5-3, 实际 %s)" % ui._auto_sum_key)
+	await get_tree().process_frame
+
+
+# 打磨-152: 自动系列 状态汇总行 5 段热区 tooltip 动态段 — 段热区 (flat Button) 悬停 = 静态口径 前缀 +
+# 动态段 (单源 复用 各 单开关 接口 auto_*_next_tip, 与 上方 5 单开关 按钮/一键挂机 tooltip 打磨-89
+# 同 表达式 防 漂移); 动态段 恒 可算 不 受 开关 门控 (段 关 时 悬停 也 显示 该 开关 动态 状态,
+# 与 一键挂机 门控 口径 区分); _refresh 动态段 文本 变化 才 刷 (挂机 恒定 无 每帧 重建).
+# 断言: 5 热区 tooltip=静态前缀+接口 恒等 x5 / 5 动态段 标记 齐全 / 同态 节流 无 资源/统计 副作用 /
+# 半程 突破段 缺口 动态 同步 / 攒够 分支 / 飞升 道行 口径 / 收尾 复原 恒等
+func _assert_auto_sum_seg_tip() -> void:
+	var g := GameData
+	var btns: Array = ui._auto_sum_btns
+	check(btns.size() == 5 and ui._auto_sum_tip_statics.size() == 5
+			and ui._auto_sum_tips.size() == 5,
+			"打磨-152 5 段热区 按钮+静态前缀/动态段缓存 数组 齐全 (实际 %d/%d/%d)"
+			% [btns.size(), ui._auto_sum_tip_statics.size(), ui._auto_sum_tips.size()])
+	if btns.size() < 5:
+		return
+	var marks: Array = ["【下次 自动突破 耗时 (动态)】", "【下一件 可购 时间 (动态)】",
+		"【神通 就绪/爆发/冷却 (动态)】", "【当前 可学/下一 门槛 (动态)】", "【双塔 当前 挑战 层 (动态)】"]
+	# 受控 基准: 五关 全 关 + realm0 层1 (前序 段 收尾 口径, 显式 重置 防 漂移)
+	g.set_auto_all(false)
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	ui._refresh()
+	# 1) 5 热区 tooltip = 静态前缀 + 接口 恒等 (单源, 与 上方 5 单开关 按钮 同 动态段 文案)
+	for i in 5:
+		var b: Button = btns[i]
+		check(str(b.tooltip_text) == str(ui._auto_sum_tip_statics[i]) + g.auto_summary_seg_tip(i),
+				"打磨-152 段%d tooltip=静态前缀+接口 恒等 (实际 %s)" % [i, str(b.tooltip_text).left(50)])
+	# 2) 5 动态段 标记 齐全
+	var all_marks := true
+	for i in 5:
+		if str((btns[i] as Button).tooltip_text).find(str(marks[i])) < 0:
+			all_marks = false
+	check(all_marks, "打磨-152 5 段 动态段 标记 齐全 (突破/购置/施展/领悟/爬塔)")
+	# 3) 同态 节流: 再刷 不 重写, 无 资源/统计 副作用
+	var snap: Dictionary = g.stats.duplicate(true)
+	var st0: float = g.stones
+	var tips0: Array = []
+	for i in 5:
+		tips0.append(str((btns[i] as Button).tooltip_text))
+	ui._refresh()
+	var same := true
+	for i in 5:
+		if str((btns[i] as Button).tooltip_text) != str(tips0[i]):
+			same = false
+	check(same and g.stats == snap and g.stones == st0, "打磨-152 同态 节流 5 段 tooltip 稳定 无 资源/统计 副作用")
+	# 4) 半程 → 突破段 缺口 动态 同步 (动态段 = 单开关 接口 恒等, 与 上方 按钮 同 刷新 窗口)
+	g.essence = g.breakthrough_cost() / 2.0
+	ui._refresh()
+	check(str((btns[0] as Button).tooltip_text) == str(ui._auto_sum_tip_statics[0]) + g.auto_break_next_tip()
+			and str((btns[0] as Button).tooltip_text).find("还差") >= 0,
+			"打磨-152 半程 突破段 缺口 动态 同步 = 接口 恒等 (实际 %s)" % str((btns[0] as Button).tooltip_text).left(60))
+	# 5) 攒够 分支: 无 ETA/期望 成本 段
+	g.essence = g.breakthrough_cost()
+	ui._refresh()
+	check(str((btns[0] as Button).tooltip_text).find("灵气 已足够, 可立即突破") >= 0,
+			"打磨-152 突破段 攒够=可立即突破 (实际 %s)" % str((btns[0] as Button).tooltip_text).right(30))
+	# 6) 飞升 → 突破段 道行 口径 (道行/秒 + 道行精进至 下一阶段, = 接口 恒等)
+	g.ascended = true
+	g.dao = 0.0
+	g.dao_level = 0
+	ui._refresh()
+	check(str((btns[0] as Button).tooltip_text).find("道行/秒") >= 0
+			and str((btns[0] as Button).tooltip_text) == str(ui._auto_sum_tip_statics[0]) + g.auto_break_next_tip(),
+			"打磨-152 飞升 突破段 道行 口径 = 接口 恒等 (实际 %s)" % str((btns[0] as Button).tooltip_text).left(50))
+	# 7) 收尾: 恢复 干净 基准, 5 段 = 接口 恒等 (防 污染 后续 段)
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.essence = 0.0
+	g.stones = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.set_auto_all(false)
+	ui._refresh()
+	var ok := true
+	for i in 5:
+		if str((btns[i] as Button).tooltip_text) != str(ui._auto_sum_tip_statics[i]) + g.auto_summary_seg_tip(i):
+			ok = false
+	check(ok and g.stats == snap and g.stones == 0.0, "打磨-152 收尾 复原 5 段=接口 恒等 干净 基准 无 副作用")
 	await get_tree().process_frame
 
 

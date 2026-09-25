@@ -9670,6 +9670,97 @@ func _init() -> void:
 	g.layer = l151
 	g.save_game()
 	g.save_game()
+	# ---------- 打磨-152: 自动系列 状态汇总行 5 段热区 tooltip 动态段 (auto_summary_seg_tip 只读 接口,
+	# 单源 复用 各 单开关 动态段 接口, 与 一键挂机 tooltip 打磨-89 同 表达式 防 漂移) ----------
+	g.set_process(false)
+	# 受控 基准: 全关 + realm0 层1 + 0 资源 + 清空 拥有/已学/塔 态 (与 打磨-88/89 基准 同态)
+	var r152: int = g.realm_idx
+	var l152: int = g.layer
+	var es152: float = g.essence
+	var st152: float = g.stones
+	var d152: float = g.dao
+	var dl152: int = g.dao_level
+	var a152: bool = g.ascended
+	var twf152: int = g.tower_fixed_floor
+	var twc152: bool = g.tower_fixed_clear
+	var twe152: int = g.tower_endless_floor
+	var tweb152: int = g.tower_endless_best
+	g.auto_break = false
+	g.auto_buy = false
+	g.auto_cast = false
+	g.auto_learn = false
+	g.auto_tower = false
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.dao = 0.0
+	g.dao_level = 0
+	g.ascended = false
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	# 1) 5 段 单源 恒等: 各段 = 对应 单开关 接口 (同 表达式 防 漂移)
+	var s152b: String = g.auto_summary_seg_tip(0)
+	var s152p: String = g.auto_summary_seg_tip(1)
+	var s152c: String = g.auto_summary_seg_tip(2)
+	var s152l: String = g.auto_summary_seg_tip(3)
+	var s152t: String = g.auto_summary_seg_tip(4)
+	check(s152b == g.auto_break_next_tip() and s152p == g.auto_buy_next_tip()
+			and s152c == g.auto_cast_next_tip() and s152l == g.auto_learn_next_tip()
+			and s152t == g.auto_tower_next_tip(),
+			"打磨-152 5 段 单源 恒等 = 各 单开关 接口 (实际 %s)" % s152b.left(40))
+	# 2) 各段 恒 可算 不 受 开关 门控 (全关 态 5 段 均 非空, 与 一键挂机 门控 口径 区分)
+	check(s152b != "" and s152p != "" and s152c != "" and s152l != "" and s152t != "",
+			"打磨-152 全关 态 5 段 恒 可算 非空 (实际 %s)" % s152c.left(40))
+	# 3) 段 口径 抽查: 突破段 含 速率/下一目标, 爬塔段 含 双塔 当前 层 (基准 塔 态 = 镇妖 1/1000 + 登天 1 层)
+	check(s152b.find("灵气/秒") >= 0 and s152b.find("突破至") >= 0,
+			"打磨-152 突破段 含 速率+下一目标 (实际 %s)" % s152b.left(60))
+	check(s152t.find("镇妖塔 第 1/1000 层") >= 0 and s152t.find("登天梯 第 1 层") >= 0,
+			"打磨-152 爬塔段 双塔 当前 层 口径 (实际 %s)" % s152t.left(60))
+	# 4) 境界 提升 → 突破段 动态 同步 (消耗/缺口 变化) + 同态 连读 恒定
+	g.essence += 5.0
+	var s152b2: String = g.auto_summary_seg_tip(0)
+	check(s152b2 != s152b and g.auto_summary_seg_tip(0) == s152b2,
+			"打磨-152 资源 变化 突破段 动态 同步 + 同态 恒定 (实际 %s)" % s152b2.left(60))
+	g.realm_idx = 1
+	var s152b3: String = g.auto_summary_seg_tip(0)
+	check(s152b3 != s152b2, "打磨-152 境界 提升 突破段 消耗/缺口 动态 同步")
+	g.realm_idx = 0
+	# 5) 越界 防御: 索引 越界 返回 空串 (不 崩溃)
+	check(g.auto_summary_seg_tip(5) == "" and g.auto_summary_seg_tip(-1) == "",
+			"打磨-152 越界 索引 空串 防御")
+	# 6) 只读 连读 恒定 无 资源/统计 副作用 (重置后 essence=0, 再 +5 恒 5.0)
+	var snap152: Dictionary = g.stats.duplicate(true)
+	var tip152a: String = g.auto_summary_seg_tip(1)
+	var tip152b: String = g.auto_summary_seg_tip(1)
+	check(tip152a == tip152b and g.essence == 5.0 and g.stones == st152 and g.stats == snap152,
+			"打磨-152 只读 连读 恒定 无 资源/统计 副作用")
+	# 7) 收尾 复原 干净 基准 (防 污染 后续 段)
+	g.realm_idx = r152
+	g.layer = l152
+	g.essence = es152
+	g.stones = st152
+	g.dao = d152
+	g.dao_level = dl152
+	g.ascended = a152
+	g.tower_fixed_floor = twf152
+	g.tower_fixed_clear = twc152
+	g.tower_endless_floor = twe152
+	g.tower_endless_best = tweb152
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g._active_cd = {}
+	g.save_game()
+	g.save_game()
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

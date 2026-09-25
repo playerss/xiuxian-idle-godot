@@ -129,6 +129,8 @@ var _auto_sum_segs: Array = []    # 打磨-70: 3 个状态标签 (突破/购置/
 var _auto_sum_btns: Array = []    # 打磨-71: 3 个段热区 flat Button (点击切对应自动开关, 与上方按钮同口径)
 var _auto_sum_sb_hover: StyleBoxFlat  # 打磨-71: 汇总段热区 hover (淡底+金边 可点提示)
 var _auto_sum_key := ""           # 打磨-70: 已刷过的状态键 (auto_summary_key, 变化才刷)
+var _auto_sum_tip_statics: Array = []  # 打磨-152: 5 段热区 tooltip 静态 前缀 (构建时 存, 供 动态段 重拼 防 split 坑)
+var _auto_sum_tips: Array = []     # 打磨-152: 5 段热区 tooltip 动态段 缓存 (变化才刷, 同 打磨-84/85 口径)
 var _shop_box: VBoxContainer
 var _shop_rows: Dictionary = {}
 var _items_buy_btn: Button          # 打磨-29: 法器 一键购买 (修行页法器区)
@@ -1117,6 +1119,15 @@ func _build_training_page(page: Panel) -> void:
 		"点击切换 自动领悟 (与上方按钮同口径, 底部消息确认): 境界/层 提升 解锁 新技能 自动 批量 领悟; 开关 存档 持久化, 离线期间不触发",
 		"点击切换 自动爬塔 (与爬塔页按钮同口径, 底部消息确认): 挂机时 镇妖塔/登天梯 自动 挑战 (胜推进 败停留 无热循环); 开关 存档 持久化, 离线期间不触发",
 	]
+	# 打磨-152: 5 段热区 tooltip 动态段 标记 (段热区 = 各 单开关 的 快捷 切换 入口, 悬停 同 定位 给
+	# 对应 单开关 按钮 的 动态段; 静态 前缀/动态段 缓存 存 成员 供 重拼 防 split 坑, 同 打磨-84/85 口径)
+	var sum_tip_marks: Array = [
+		"【下次 自动突破 耗时 (动态)】",
+		"【下一件 可购 时间 (动态)】",
+		"【神通 就绪/爆发/冷却 (动态)】",
+		"【当前 可学/下一 门槛 (动态)】",
+		"【双塔 当前 挑战 层 (动态)】",
+	]
 	for si in sum_names.size():
 		var seg_l := _label("", 12, DIM)
 		var seg_btn := Button.new()
@@ -1127,7 +1138,9 @@ func _build_training_page(page: Panel) -> void:
 		seg_btn.add_theme_stylebox_override("pressed", _auto_sum_sb_hover)
 		seg_btn.add_theme_stylebox_override("focus", _auto_sum_sb_hover)
 		seg_btn.toggle_mode = false
-		seg_btn.tooltip_text = str(sum_tips[si])
+		_auto_sum_tip_statics.append(str(sum_tips[si]) + "\n\n" + str(sum_tip_marks[si]) + "\n")
+		_auto_sum_tips.append(GameData.auto_summary_seg_tip(si))
+		seg_btn.tooltip_text = str(_auto_sum_tip_statics[si]) + str(_auto_sum_tips[si])
 		seg_btn.add_child(seg_l)
 		seg_btn.pressed.connect(sum_handlers[si])
 		_auto_sum_box.add_child(seg_btn)
@@ -2638,6 +2651,13 @@ func _refresh() -> void:
 	if at_tip != _tw_auto_tip:
 		_tw_auto_tip = at_tip
 		_tw_auto_btn.tooltip_text = _tw_auto_tip_static + at_tip
+	# 打磨-152: 自动系列 状态汇总行 5 段热区 tooltip 动态段 (单源 复用 各 单开关 接口,
+	# 与 上方 5 按钮 动态段 同 刷新 窗口; 段 文本 变化 才 刷 对应 热区, 挂机 恒定 无 每帧 重建)
+	for _si in _auto_sum_btns.size():
+		var _s_tip: String = g.auto_summary_seg_tip(_si)
+		if _s_tip != str(_auto_sum_tips[_si]):
+			_auto_sum_tips[_si] = _s_tip
+			(_auto_sum_btns[_si] as Button).tooltip_text = str(_auto_sum_tip_statics[_si]) + _s_tip
 	# 打磨-95: 自动爬塔 胜局 变更事件 → 节流 底部消息 (序号 变化 且 有 文案 才 提示一次,
 	# 无 屏幕浮动 防 挂机刷屏; 同 打磨-68 自动购置 变更事件 口径)
 	if g._auto_tower_seq != _tw_auto_msg_seq:

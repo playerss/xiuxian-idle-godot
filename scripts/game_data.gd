@@ -3310,6 +3310,29 @@ func auto_idle_next_tip() -> String:
 		return "各开关 均 未开启 (点击 一键 全开; 开启后 此处 展示 各开关 动态 状态)"
 	return "\n".join(parts)
 
+# ---------- 打磨-152: 自动系列 状态汇总行 5 段热区 tooltip 动态段 (单源复用 各 单开关 动态段 接口) ----------
+# 只读: 汇总行 5 段热区 [突破/购置/施展/领悟/爬塔, 打磨-70/71] 悬停 只有 静态 口径 (点击 切换 说明),
+# 各 单开关 按钮 的 动态段 (打磨-84/85/86/M5-3) 要 逐个 按钮 悬停 才 见; 段 热区 是 各 开关 的
+# 快捷 切换 入口 (与 单开关 按钮 同 口径), 悬停 应 同 定位 给 对应 动态段。返回 固定序 5 段 明细
+# (段索引 0..4 = 突破/购置/施展/领悟/爬塔, 与 _auto_sum_btns 索引 同序), 单源 复用 各 单开关
+# 接口 (auto_break_next_tip/auto_buy_next_tip/auto_cast_next_tip/auto_learn_next_tip/
+# auto_tower_next_tip, 与 一键挂机 tooltip 打磨-89 同 表达式 防 漂移); 各段 恒 可算 不 受 开关
+# 状态 门控 (悬停 段 热区 即 查看 该 开关 动态 状态, 与 开启 与否 无关)。
+# 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
+func auto_summary_seg_tip(i: int) -> String:
+	match i:
+		0:
+			return auto_break_next_tip()
+		1:
+			return auto_buy_next_tip()
+		2:
+			return auto_cast_next_tip()
+		3:
+			return auto_learn_next_tip()
+		4:
+			return auto_tower_next_tip()
+	return ""
+
 # roll: 传入 [0,1) 可确定性注入 (自测用), 默认 randf()
 func try_breakthrough(roll: float = -1.0) -> String:
 	last_break_result = 0
