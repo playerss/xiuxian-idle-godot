@@ -9759,8 +9759,63 @@ func _init() -> void:
 	g.owned_eq.clear()
 	g.equipped.clear()
 	g._active_cd = {}
+	# ---------- M8-1 打磨-153: 怪物 6 类别 程序化 剪影 图标 (数据层+绘制层) ----------
+	# 妖兽=狼耳兽头 / 鬼修=圆头飘带 / 虫群=六足多节 / 精怪=狐耳面具 / 凶灵=火焰爪 / 天兽=双角犄;
+	# 类别 主色 单源 GameData.MONSTER_CAT_COLORS (monster_icon.gd 剪影 纯函数 消费, 同 类 恒 同 图);
+	# 像素 采样 走 Xvfb (headless 不 采样 像素, 本 段 断言 色 表 口径 + 数据 覆盖 + 节点 状态)
+	var cats148: Array = ["妖兽", "鬼修", "虫群", "精怪", "凶灵", "天兽"]
+	var cols148: Array = []
+	for cn148 in cats148:
+		cols148.append(g.monster_category_color(cn148))
+	check(g.MONSTER_CAT_COLORS.size() == 6, "M8-1 打磨-153 6 类别 主色 表 齐全")
+	var uniq148: Array = []
+	for c148 in cols148:
+		if c148 not in uniq148:
+			uniq148.append(c148)
+	check(uniq148.size() == 6, "M8-1 打磨-153 6 类别 主色 互异 (实际 %d)" % uniq148.size())
+	check(g.monster_category_color("妖兽") == g.MONSTER_CAT_COLORS["妖兽"], "M8-1 打磨-153 接口 = 常量 单源 恒等")
+	check(g.monster_category_color("") == g.MONSTER_CAT_FALLBACK and g.monster_category_color("未知类") == g.MONSTER_CAT_FALLBACK,
+			"M8-1 打磨-153 越界/未知 类别 兜底 色 恒等")
+	var sp148: Dictionary = g.monster_by_id.get("m01", {})
+	check(not sp148.is_empty() and str(sp148.get("category_name", "")) in g.MONSTER_CAT_COLORS,
+			"M8-1 打磨-153 怪物种 m01 类别 名 在 6 类 表 内 (实际 %s)" % str(sp148.get("category_name", "")))
+	var cov148 := 0
+	var boss148 := 0
+	var covfail148 := ""
+	for mid148 in g.monster_ids:
+		var m148: Dictionary = g.monster_by_id[mid148]
+		if str(m148.get("kind", "")) == "species":
+			var cn148b: String = str(m148.get("category_name", ""))
+			if cn148b in g.MONSTER_CAT_COLORS and g.monster_category_color(cn148b) == g.MONSTER_CAT_COLORS[cn148b]:
+				cov148 += 1
+			else:
+				covfail148 = str(mid148) + "/" + cn148b
+		elif str(m148.get("kind", "")) == "boss":
+			boss148 += 1
+			if str(m148.get("category_name", "")) != "":
+				covfail148 = "boss 含 类别 " + str(mid148)
+	check(cov148 == 120 and covfail148 == "", "M8-1 打磨-153 120 种 类别 全覆盖 + 颜色 恒等 (实际 %d, 首个 失 %s)" % [cov148, covfail148])
+	check(boss148 == 25, "M8-1 打磨-153 25 Boss 无 类别 字段 (实际 %d)" % boss148)
+	var icon148: CanvasItem = (load("res://scripts/monster_icon.gd").new())
+	root.add_child(icon148)
+	icon148.set_category("妖兽", g.monster_category_color("妖兽"))
+	icon148.set_category("妖兽", g.monster_category_color("妖兽"))
+	check(icon148.redraw_count == 1 and icon148.get_category() == "妖兽",
+			"M8-1 打磨-153 图标 节点 set_category 幂等 不 重绘 (实际 %d)" % icon148.redraw_count)
+	icon148.set_category("凶灵", g.monster_category_color("凶灵"))
+	check(icon148.redraw_count == 2 and icon148.get_category() == "凶灵",
+			"M8-1 打磨-153 切 类 别 触发 重绘 + 状态 更新 (实际 %d)" % icon148.redraw_count)
+	var icon2148: CanvasItem = (load("res://scripts/monster_icon.gd").new())
+	root.add_child(icon2148)
+	check(icon2148.redraw_count == 0 and icon2148.get_category() == "",
+			"M8-1 打磨-153 未设 类别 不 设 态 (Boss 层 不 显 口径, 实际 %d)" % icon2148.redraw_count)
+	icon148.queue_free()
+	icon2148.queue_free()
+	await process_frame
+	check(g.monster_category_color("天兽") == g.MONSTER_CAT_COLORS["天兽"], "M8-1 打磨-153 节点 释放 后 接口 只读 恒定")
 	g.save_game()
 	g.save_game()
+	
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

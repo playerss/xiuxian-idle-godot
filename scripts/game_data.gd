@@ -117,6 +117,18 @@ const TIER_COLOR := {
 	5: Color(0.8, 0.55, 0.98),    # 仙品 紫
 	6: Color(0.98, 0.86, 0.5),    # 神品 金
 }
+# M8-1 打磨-153: 怪物 6 类别 主色 (妖兽=青 / 鬼修=紫 / 虫群=黄绿 / 精怪=橙 / 凶灵=红 / 天兽=金;
+# 低饱和 深色仙侠 基调, 与 TIER_COLOR/顶栏 语义色 同风格; scripts/monster_icon.gd 剪影 单源 消费)
+const MONSTER_CAT_COLORS := {
+	"妖兽": Color(0.45, 0.78, 0.8),
+	"鬼修": Color(0.72, 0.55, 0.92),
+	"虫群": Color(0.68, 0.82, 0.42),
+	"精怪": Color(0.92, 0.65, 0.35),
+	"凶灵": Color(0.9, 0.42, 0.4),
+	"天兽": Color(0.95, 0.85, 0.45),
+}
+# 兜底 色 (Boss 层 无 category_name 时 不 显 类别 图标, 该 色 仅 防 越界 查询 兜底)
+const MONSTER_CAT_FALLBACK := Color(0.6, 0.62, 0.68)
 
 # ---- 数据表 (加载自 JSON) ----
 var skill_by_id := {}
@@ -1232,6 +1244,12 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 		# 打磨-117: 属性 偏向/类型 随 stats 传递 (幂等 再算 沿用; Boss/无种 = 空串 不 展示)
 		"bias_cn": bias_cn, "category_name": category_name,
 	}
+
+# M8-1 打磨-153: 怪物 类别 主色 只读 接口 (单源 MONSTER_CAT_COLORS 常量, 6 类 妖兽/鬼修/
+# 虫群/精怪/凶灵/天兽; 未知 类别/Boss 层 无 category_name 回 兜底 灰 — 由 UI 按
+# category_name 非空 门控 显隐, 本 接口 只 保证 颜色 可算 不 崩溃; 纯 只读 无 副作用)
+func monster_category_color(cat_name: String) -> Color:
+	return MONSTER_CAT_COLORS.get(cat_name, MONSTER_CAT_FALLBACK)
 
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
 # tower = "fixed" (镇妖塔) / "endless" (登天梯); roll 仅 影响 展示 伤害浮动 (不改变 胜负), 可注入 确定性
