@@ -1323,6 +1323,20 @@ func skill_is_active(id: String) -> bool:
 	var s: Dictionary = skill_by_id.get(id, {})
 	return not s.is_empty() and str(s.get("type", "")) == "active"
 
+
+# M8-3 打磨-155b: 技能 行 tooltip 追加 类别 字形 口径 说明行 (只读 单源; 与 行内 skill_icon
+# 图标 同 类别/主动 档 口径: 主动 24 金 爆发 描边 / 被动 96 无 描边; 未知 id/类别 = 空串 防御;
+# skill_detail 恒 追加, 纯 展示 无 存档/统计 副作用)
+func skill_cat_glyph_tip(id: String) -> String:
+	var s: Dictionary = skill_by_id.get(id, {})
+	if s.is_empty():
+		return ""
+	var cat: String = str(s.get("category", ""))
+	if cat == "":
+		return ""
+	var active: bool = str(s.get("type", "")) == "active"
+	return "类别字形: %s·%s (%s)" % [cat, SKILL_CAT_CN.get(cat, ""), "主动·金爆发描边" if active else "被动·无描边"]
+
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
 # tower = "fixed" (镇妖塔) / "endless" (登天梯); roll 仅 影响 展示 伤害浮动 (不改变 胜负), 可注入 确定性
 func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
@@ -1962,6 +1976,9 @@ func skill_detail(id: String) -> String:
 	var r: Dictionary = REALMS[int(s["unlock_realm"])]
 	tip += "\n领悟条件: %s 第%d层" % [r["name"], int(s["unlock_layer"])]
 	tip += "\n状态: %s" % ("已领悟" if learned.has(id) else "未领悟")
+	var cat_tip155: String = skill_cat_glyph_tip(id)
+	if cat_tip155 != "":
+		tip += "\n" + cat_tip155
 	return tip
 
 # 打磨-9: 装备详情 (tooltip: 名称/品质/部位/属性/价格/状态/换装对比)

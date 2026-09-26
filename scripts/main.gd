@@ -332,6 +332,7 @@ var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用
 # 绘制, 构建 一次 无 每帧 重建; 图标 恒 同 部位/同 件 不 随 状态 变, 同 138 徽章 构建 一次 口径)
 var _equip_icon_nodes: Dictionary = {} # 装备 id -> 部位 剪影 图标 (badge 右侧, 纯 装饰)
 var _shop_icon_nodes: Dictionary = {}  # 法器 id -> 金边 几何 字形 图标 (badge 右侧, 纯 装饰)
+var _skill_icon_nodes: Dictionary = {} # 技能 id -> 类别 字形 图标 (badge 右侧, 纯 装饰, M8-3 打磨-155b)
 var _shop_eta: Dictionary = {}     # 法器 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_eta: Dictionary = {}    # 装备 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_swap: Dictionary = {}   # 打磨-25: 装备 id -> 换装对比提示标签
@@ -1397,6 +1398,17 @@ func _add_skill_row(id: String) -> void:
 	row.add_child(hb)
 	# 打磨-41→138: 行首品质徽章 (颜色/字 随数据 tier 固定, 构建一次)
 	_add_tier_badge(hb, int(s["tier"]))
+	# M8-3 打磨-155b: 功法/神通 5 类别 字形 图标 (138 徽章 右侧, 按 类别 取 字形 单点 复用 120 行;
+	# 类别 主色 单源 GameData.skill_category_color, 品质 色 由 徽章 区分 不 随 品质 变色;
+	# 24 主动 金 爆发 描边 档 区分, 96 被动 无 描边 旧 口径; 构建 一次 无 每帧 刷新,
+	# set_category 同 键 幂等 不 重绘)
+	var sk_icon: Control = (load("res://scripts/skill_icon.gd").new())
+	sk_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sk_icon.custom_minimum_size = Vector2(16, 16)
+	sk_icon.set_category(str(s["category"]), GameData.skill_category_color(str(s["category"])), str(s["type"]) == "active")
+	hb.add_child(sk_icon)
+	hb.move_child(sk_icon, 1)
+	_skill_icon_nodes[id] = sk_icon
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)

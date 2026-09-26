@@ -246,11 +246,11 @@
 - [x] ui_test 断言（5 部位 5 枚 + 140 行 接入 覆盖 + 10 法器 10 枚 不重 不空 + 挂机 恒定）（实现: ui_test 新增 _assert_m154b_equip_icons 298 项 [140 行 图标 挂 徽章 右侧 child1 全覆盖 无 缺漏 + 20px/纯 装饰/垂直 居中 口径 x140 + 部位 = 数据 slot 接口 恒等 x140 + 5 部位 全覆盖 + 法器 10 行 挂 徽章 右侧 + 字形 = item_glyph_name 接口 单源 x10 + 10 枚 字形 不重 不空 + 同态 再刷 幂等 不 重绘 节点 不 重建 无 统计 副作用 + 收尾 节点 恒在 干净 基准]; 像素 采样 走 Xvfb icon_probe [154a 已 交付 5 部位 互异 + 10 法器 金 命中 不重 不空 + 未设态 全透明, 本轮 复跑 全过]; 顺带 5 张 Steam 商店截图 Xvfb 重跑 [01 修行页 法器 行/03 装备页 行 图标 入帧 像素 校验 01 +1627/03 +2139 采样 像素 变化, 02/04/05 无 视觉 变化 0 diff, 顶栏 0 diff 排除 顶栏 干扰])
 
 ### M8-3 功法/神通类别与专属字形（打磨-155）
-> 进度: 155a 数据层+绘制层 完成 (SKILL_CAT_COLORS 5 类别 主色 单源 [sword=剑法 冷青/spell=法术 紫/mind=心法 青/body=身法 琥珀/divine=神通 品红, 低饱和 深色仙侠 基调 与 TIER_COLOR/怪物 6 类/部位 5 色 同风格 互异, 品质 色 由 138 徽章 区分 不 随 品质 变色] + SKILL_CAT_FALLBACK 兜底 + SKILL_ACTIVE_GOLD 主动 爆发 描边 金 [与 EQUIP_ITEM_COLOR 同值 语义 同源]; skill_category_color/skill_is_active 只读 接口 [24 主动 判定 未知 id 防御]; skill_icon.gd 5 类 几何 字形 [剑法=竖刃/法术=符纸雷纹/心法=瞳/身法=心脉/神通=四芒星] 24x24 低饱和 幂等 不 重绘, 24 主动 金 爆发 描边 环+四芒 火花 区分 主动, 96 被动 无 描边 旧 品质徽章 口径 保持; selftest +14 项 = 11141, Xvfb icon_probe 扩 5 技能 字形 互异 + 主动 金 爆发 描边 两 档 区分 + 技能 未设态 全透明 全过 [MIN_BODY 0.08→0.07 抗锯齿 余量 防 weapon 边界 flake]); 剩余 = UI 接入 (技能页 行 字形 + tooltip 口径 行) + ui_test (155b)。
-- [ ] 5 类别字形（sword=剑/spell=符/mind=瞳/body=脉/divine=星，24 主动 按类别 取字形 + 金色 爆发 描边 区分 主动，
+> 进度: M8-3 全部 子任务 完成 (155a 数据层+绘制层: SKILL_CAT_COLORS 5 类别 主色 单源 [sword=剑法 冷青/spell=法术 紫/mind=心法 青/body=身法 琥珀/divine=神通 品红] + SKILL_CAT_FALLBACK 兜底 + SKILL_ACTIVE_GOLD 主动 爆发 描边 金; skill_category_color/skill_is_active 只读 接口; skill_icon.gd 5 类 几何 字形 24x24 幂等 不 重绘, 24 主动 金 爆发 描边 环 区分, 96 被动 无 描边 旧 口径; selftest +14 = 11141, Xvfb icon_probe 5 字形 互异 + 主动 两 档 区分 + 未设态 全透明 全过); 155b UI 接入 完成 (main.gd _add_skill_row 138 徽章 右侧 插 skill_icon 节点 [hb child1, 16px 口径, SHRINK_CENTER 垂直 居中, 纯 装饰 无 热区], 类别 主色 单源 GameData.skill_category_color + 主动 档 GameData.skill_is_active, set_category 同 键 幂等 不 重绘, _skill_icon_nodes 120 行 登记; tooltip 追加 类别 字形 口径 行 skill_cat_glyph_tip 只读 单源 [主动 金 爆发 描边/被动 无 描边, skill_detail 恒 追加, 未知 id 空串 防御]; ui_test 新增 _assert_m155b_skill_icons 247 项 [120 行 图标 挂 徽章 右侧 全覆盖 + 16px/纯 装饰/垂直 居中 x120 + 类别 = 数据 接口 恒等 + 5 类 全覆盖 + 24 主动 描边 档 计数 + tooltip = skill_detail 恒等 含 口径 行 + 同态 幂等 不 重绘 无 统计 副作用 + 收尾 节点 恒在]; 像素 走 Xvfb icon_probe [5 字形 互异 复跑 全过]; 顺带 5 张 Steam 商店截图 Xvfb 重跑 [02_skills 行 图标 入帧 视觉 复核 5 类 字形 按 类别 着色 + 布局 无 错位, 01/03/04/05 无 视觉 变化 llvmpipe 抗锯齿 抖动 0 实改 已 回滚]); 2026-09-26 M8-3 全部 子任务 完成。
+- [x] 5 类别字形（sword=剑/spell=符/mind=瞳/body=脉/divine=星，24 主动 按类别 取字形 + 金色 爆发 描边 区分 主动，
       96 被动 无描边 旧 品质徽章 口径 保持）
-- [ ] 技能页 行接入（品质徽章 后 12-16px 字形，仅 主动 24 显 专属 描边 档；tooltip 追加 类别 字形 口径 说明行）
-- [ ] ui_test 断言（5 类别 字形 各 1 枚 采样 + 主动 24 描边 档 + 被动 无描边 + 挂机 恒定）
+- [x] 技能页 行接入（品质徽章 后 12-16px 字形，仅 主动 24 显 专属 描边 档；tooltip 追加 类别 字形 口径 说明行）
+- [x] ui_test 断言（5 类别 字形 各 1 枚 采样 + 主动 24 描边 档 + 被动 无描边 + 挂机 恒定）
 
 ### M8-4 词缀池字形（打磨-156，与 138 徽章 体系 对齐）
 - [ ] 6 词缀池 字形（atk/def/qi/stone/break/offline 池 各 1 枚 单字或几何 符号 + 池主色，词缀行/背包格 词缀名 前 接入）

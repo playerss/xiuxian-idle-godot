@@ -9956,6 +9956,28 @@ func _init() -> void:
 	await process_frame
 	check(g.skill_category_color("mind") == g.SKILL_CAT_COLORS["mind"] and g.skill_is_active("sword_0_3") == true and g.skill_is_active("sword_0_0") == false,
 			"M8-3 打磨-155a 节点 释放 后 接口 只读 恒定")
+	# ---------- M8-3 打磨-155b: 技能 行 tooltip 追加 类别 字形 口径 行 (只读 单源 skill_cat_glyph_tip) ----------
+	# 主动 24 金 爆发 描边 档 / 被动 96 无 描边 / 未知 id/类别 = 空串 防御 / skill_detail 恒 追加 该 行
+	check(g.skill_cat_glyph_tip("sword_0_0") == "类别字形: sword·剑法 (被动·无描边)",
+			"M8-3 打磨-155b 被动 skill_cat_glyph_tip 口径 (实际 %s)" % g.skill_cat_glyph_tip("sword_0_0"))
+	check(g.skill_cat_glyph_tip("sword_0_3") == "类别字形: sword·剑法 (主动·金爆发描边)",
+			"M8-3 打磨-155b 主动 skill_cat_glyph_tip 口径 (实际 %s)" % g.skill_cat_glyph_tip("sword_0_3"))
+	check(g.skill_cat_glyph_tip("divine_0_2") == "类别字形: divine·神通 (主动·金爆发描边)"
+			and g.skill_cat_glyph_tip("mind_0_0") == "类别字形: mind·心法 (被动·无描边)",
+			"M8-3 打磨-155b 类别 接口 单源 多 例 恒等")
+	check(g.skill_cat_glyph_tip("") == "" and g.skill_cat_glyph_tip("unknown_id") == "",
+			"M8-3 打磨-155b 未知/空 id 防御 空串")
+	var st155b := 0
+	var st155bfail := ""
+	for sid155b in g.skill_ids:
+		if g.skill_detail(sid155b).find(g.skill_cat_glyph_tip(sid155b)) >= 0:
+			st155b += 1
+		else:
+			st155bfail = str(sid155b)
+	check(st155b == 120 and st155bfail == "",
+			"M8-3 打磨-155b skill_detail 120 技能 全 含 类别字形 口径 行 (实际 %d, 首个 失 %s)" % [st155b, st155bfail])
+	check(g.skill_cat_glyph_tip("sword_0_0") == g.skill_cat_glyph_tip("sword_0_0") and g.skill_detail("sword_0_0").find("类别字形:") >= 0,
+			"M8-3 打磨-155b 只读 连读 恒定 无 副作用")
 	g.save_game()
 	g.save_game()
 	
