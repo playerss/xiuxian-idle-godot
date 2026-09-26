@@ -214,6 +214,8 @@ var _flash_left := 0              # 剩余闪烁帧数
 var _tower_box: VBoxContainer     # 爬塔页 外框
 var _tw_cards: Dictionary = {}    # 双塔入口卡片 id -> {panel, prog_label, mon_label, win_label, bar_bg, bar_fill, btn, floor_label}
 var _tw_mon_labels: Dictionary = {}  # 塔 id -> 怪物名 Label (刷新键 变化才刷)
+var _tw_mon_row: Dictionary = {}     # 打磨-153b: 塔 id -> 怪物名 HBox 行 (图标 + 名 同父)
+var _tw_mon_icons: Dictionary = {}   # 打磨-153b: 塔 id -> 怪物 类别 剪影 图标 (MonsterIcon 纯装饰, 类别 变化 才 重绘)
 var _tw_mon_tips: Dictionary = {}    # 塔 id -> 怪物卡 tooltip 缓存
 var _tw_pwr_labels: Dictionary = {}  # 塔 id -> 战力对比 Label (变化才刷, 着色 胜绿/败红)
 var _tw_pwr_tips: Dictionary = {}    # 打磨-113: 塔 id -> 战力对比 判定口径 段 缓存 (剧毒 态 变化才刷)
@@ -1988,9 +1990,19 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 	bar_fill.position = Vector2.ZERO
 	bar_bg.add_child(bar_fill)
 	# 怪物卡 (名 + 精英/Boss 标记 + 特性 tooltip; 键变化才刷)
+	# 打磨-153b: 怪物名 行 前 插 类别 剪影 图标 (monster_icon.gd 24x24 纯函数 绘制,
+	# 类别 主色 单源 GameData.monster_category_color, 20px 渲染; Boss 层 无 category_name
+	# 隐藏 — 旧 ⚑ 口径; 纯 装饰 无 热区, 类别 变化 才 重绘 挂机 恒定)
+	var mon_row := HBoxContainer.new()
+	mon_row.add_theme_constant_override("separation", 6)
+	mon_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(mon_row)
+	var mon_icon: Control = (load("res://scripts/monster_icon.gd").new())
+	mon_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mon_row.add_child(mon_icon)
 	var mon_l := _label("", 15, CYAN)
 	mon_l.tooltip_text = ""
-	box.add_child(mon_l)
+	mon_row.add_child(mon_l)
 	# 战力对比 (玩家 有效 ATK vs 怪物 ATK; 胜=绿 败=红, 文本变化才刷)
 	var pwr_l := _label("", 13, WHITEISH)
 	pwr_l.tooltip_text = ""
@@ -2025,6 +2037,8 @@ func _build_tower_card(parent: Control, tid: String, tname: String, tsub: String
 		"btn": btn, "milestone": ms_l,
 	}
 	_tw_mon_labels[tid] = mon_l
+	_tw_mon_row[tid] = mon_row
+	_tw_mon_icons[tid] = mon_icon
 	_tw_pwr_labels[tid] = pwr_l
 	_tw_thr_labels[tid] = thr_l
 	_tw_def_labels[tid] = def_l
@@ -2163,6 +2177,14 @@ func _apply_tower_card(tid: String, floor_n: int, floor_txt: String, is_clear: b
 	var mon_l: Label = _tw_mon_labels[tid]
 	if str(mon_l.text) != mon_txt:
 		mon_l.text = mon_txt
+	# 打磨-153b: 类别 剪影 图标 (名字行 前 20px, 类别 主色 单源 接口; set_category 同 键
+	# 幂等 不 重绘, Boss 层 无 category_name 隐藏 — 旧 ⚑ 口径; 层数 变化 天然 经 刷新键 进入)
+	var mon_icon: Control = _tw_mon_icons[tid]
+	var catn: String = str(mon.get("category_name", ""))
+	mon_icon.visible = catn != ""
+	if catn != "":
+		mon_icon.set_category(catn, g.monster_category_color(catn))
+		mon_icon.custom_minimum_size = Vector2(20, 20)
 	# 打磨-103: 传入 塔 id (登天梯 里程碑 Boss 层 tooltip 追加 里程碑宝箱 保底 稀有+ 词缀 提示)
 	var tip: String = g.tower_monster_tip(mon, tid)
 	if _tw_mon_tips.get(tid, "") != tip:

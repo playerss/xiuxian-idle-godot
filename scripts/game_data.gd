@@ -2653,7 +2653,10 @@ func tower_monster_tip(rec: Dictionary, tower: String = "") -> String:
 	# 只 有 分层 行 防 重复; 登天梯 里程碑 Boss boss_type="boss" 无 分层 不 追加)
 	var btsfx: String = " (主题 Boss)" if str(mon.get("boss_type", "")) == "theme" else (
 		" (最终 Boss)" if str(mon.get("boss_type", "")) == "final" else "")
-	lines.append(str(mon["name"]) + (" (精英)" if bool(mon["is_elite"]) else "") + (" (Boss)" if str(mon["boss_type"]) != "" else "") + btsfx)
+	# M8-1 打磨-153b: 类别 段 并入 首行 (怪物 卡 剪影 图标 的 文本 口径: 图标 按 类别 主色
+	# 绘制, 悬停 首行 可 见 类别 名; Boss 层 无 category_name 不 展示 — 旧 口径 恒等)
+	var cat153b: String = str(mon.get("category_name", ""))
+	lines.append((("类别: %s · " % cat153b) if cat153b != "" else "") + str(mon["name"]) + (" (精英)" if bool(mon["is_elite"]) else "") + (" (Boss)" if str(mon["boss_type"]) != "" else "") + btsfx)
 	var tn: String = _trait_names(mon["traits"])
 	if tn != "":
 		lines.append("特性: " + tn)

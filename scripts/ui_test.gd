@@ -241,7 +241,8 @@ func _ready() -> void:
 	await _assert_progress_tip()  # 打磨-148: 修行页 突破进度行 tooltip 动态段 (progress_tip 单源: 静态前缀+动态段标记+接口 恒等/明细+成功率+ETA 齐全/同态 节流 无 副作用/灵气 半程 40% 同步/境界2 消耗 段 同步/攒够 切换/飞升 道行 口径/收尾 干净 基准)
 	await _assert_break_eta_tip()  # 打磨-149: 修行页 突破 ETA 行 tooltip 动态段 (break_eta_tip 单源: 静态前缀+动态段标记+接口 恒等/速率+成功率+ETA+期望成本 齐全/同态 节流 无 副作用/层 跨档 ETA 同步/境界2 速率/成功率/ETA 同步/攒够 切换/飞升 道行 口径/收尾 干净 基准)
 	await _assert_ladder_prog_tip()  # 打磨-150: 境界阶梯 层内 进度行/道行阶段 进度行 tooltip 动态段 (break_eta_tip 单源: 两行 静态前缀+接口 恒等/基准 速率+成功率+ETA+期望 齐全/同态 节流 无 副作用/层11 跨档 1分 同步/境界2 15+77%+2分 同步/攒够 切 已攒够/飞升 道行 口径 行 文本 窗口 联动/收尾 干净 基准)
-	await _assert_ladder_row_tip()  # 打磨-151: 境界阶梯 境界行/道行阶段行 tooltip 动态段 (ladder_row_tip 单源: 静态前缀+接口 恒等 19 行/倍率+累计+ETA 齐全/同态 节流 无 副作用/升 境界 动态 同步/飞升 道行 口径 凡境 全 已达成/收尾 干净 基准)
+	await _assert_ladder_row_tip()  # 打磨-151: 境界阶梯 境界行/道行阶段行 tooltip 动态段 (ladder_row_tip 单源: 静态前缀+接口 恒等 19 行/倍率+累计+ETA 齐全/同态 节流 冻结 窗口 19 行 稳定 无 资源 统计 副作用/升 境界 动态 同步/飞升 道行 口径 凡境 全 已达成/收尾 复原 接口 恒等 干净 基准)
+	await _assert_m153b_mon_icons()  # M8-1 打磨-153b: 爬塔页 怪物 类别 剪影 图标 接入 (怪物卡 图标 节点/6 类别 轮转 显隐+类别/主色 接口 恒等/tooltip 首行 类别 段 恒等/Boss 层 无 类别 图标 隐藏+tooltip 无 段/挂机 恒定 幂等 不 重绘/收尾 干净 基准)
 
 	_finish()
 
@@ -5529,6 +5530,119 @@ func _assert_ladder_row_tip() -> void:
 			and str((ui._immortal_ladder[0] as Label).tooltip_text) == str(ui._ladder_tip_static) + g.ladder_row_tip("dao", 0),
 			"打磨-151 收尾 复原 tooltip = 接口 恒等 干净 基准")
 	await get_tree().process_frame
+
+# M8-1 打磨-153b: 爬塔页 怪物 类别 剪影 图标 接入 (M8-1 打磨-153 规格 2: 24x24 挂 怪物卡
+# 名字行 前 20px + 怪物 tooltip 首行 接入 + ui_test 断言; 像素 采样 走 Xvfb icon_probe
+# [153a 已交付], 本 段 断言 节点 接入/6 类别 轮转 显隐+主色/tooltip 首行 类别 段/Boss 层
+# 无 类别 口径/挂机 恒定 幂等 不 重绘/收尾 干净 基准)
+func _assert_m153b_mon_icons() -> void:
+	var g := GameData
+	ui._tab.current_tab = 4
+	g.set_process(false)
+	# 受控 基准: 干净 塔 态 (镇妖塔 第 1 层 种 m41 = 虫群 数据 锚定, 与 打磨-117 同 锚点)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	ui._refresh_tower()
+	await get_tree().process_frame
+	# 1) 节点: 双塔 图标 + 名 行 同父 + 图标 在 名 行 内 (构建 一次 无 每帧 重建)
+	check(ui._tw_mon_icons.size() == 2 and ui._tw_mon_row.size() == 2,
+			"M8-1 打磨-153b 双塔 图标/名 行 节点 齐全 (实际 %d/%d)" % [ui._tw_mon_icons.size(), ui._tw_mon_row.size()])
+	for tid in ["fixed", "endless"]:
+		var ic: Control = ui._tw_mon_icons[tid]
+		var rl: Control = ui._tw_mon_row[tid]
+		var ml: Label = ui._tw_mon_labels[tid]
+		check(ic != null and ic is CanvasItem and ic.get_parent() == rl and rl.get_child(0) == ic
+				and ml.get_parent() == rl,
+				"M8-1 打磨-153b %s 图标 挂 名 行 前 同父 (实际 父 %s)" % [tid, str(ic.get_parent() if ic != null else null)])
+		check(ic.mouse_filter == Control.MOUSE_FILTER_IGNORE and ic.size_flags_vertical == Control.SIZE_SHRINK_CENTER,
+				"M8-1 打磨-153b %s 图标 纯 装饰 无 热区 + 垂直 居中 防 拉伸" % tid)
+	# 2) 镇妖塔 第 1 层 (虫群): 图标 可见 + 类别 = 接口 + 名 行 文本 口径 不变
+	var fs153: Dictionary = g.tower_monster_stats(g.get_fixed_floor(1))
+	var fcat153: String = str(fs153.get("category_name", ""))
+	check(fcat153 != "", "M8-1 打磨-153b 镇妖塔 第 1 层 有 类别 (数据 锚定, 实际 %s)" % fcat153)
+	var fic153: Control = ui._tw_mon_icons["fixed"]
+	check(fic153.visible == true and fic153.get_category() == fcat153,
+			"M8-1 打磨-153b 镇妖塔 图标 可见 + 类别 = 数据 (实际 %s)" % str(fic153.get_category()))
+	check(str(fic153.custom_minimum_size) == str(Vector2(20, 20)),
+			"M8-1 打磨-153b 图标 20px 口径 (实际 %s)" % str(fic153.custom_minimum_size))
+	check(str(ui._tw_mon_labels["fixed"].text).find("第 1 层") >= 0,
+			"M8-1 打磨-153b 怪物名 行 文本 口径 不变 (实际 %s)" % str(ui._tw_mon_labels["fixed"].text))
+	# tooltip 首行 含 类别 段 + = 接口 恒等 (stats 字典 路径 同源)
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text) == g.tower_monster_tip(fs153, "fixed")
+			and str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 0).find("类别: %s · " % fcat153) >= 0,
+			"M8-1 打磨-153b 镇妖塔 tooltip 首行 含 类别 段 且 = 接口 恒等 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 0))
+	# 3) 6 类别 轮转 (镇妖塔 层 1/2/3/5/6/9 = 6 类别 首见 数据 锚定): 图标 类别/显隐 逐层 同步
+	var floors153: Array = [0, 1, 2, 4, 5, 8]
+	var seen153: Dictionary = {}
+	for i153 in floors153.size():
+		g.tower_fixed_floor = int(floors153[i153])
+		ui._refresh_tower()
+		await get_tree().process_frame
+		var s153: Dictionary = g.tower_monster_stats(g.get_fixed_floor(int(floors153[i153]) + 1))
+		var cn153: String = str(s153.get("category_name", ""))
+		check(cn153 != "" and ui._tw_mon_icons["fixed"].visible == true
+				and ui._tw_mon_icons["fixed"].get_category() == cn153,
+				"M8-1 打磨-153b 第 %d 层 图标 类别 同步 (实际 %s, 期望 %s)" % [int(floors153[i153]) + 1, str(ui._tw_mon_icons["fixed"].get_category()), cn153])
+		check(str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 0).find("类别: %s · " % cn153) >= 0,
+				"M8-1 打磨-153b 第 %d 层 tooltip 首行 类别 段 同步 (实际 %s)" % [int(floors153[i153]) + 1, str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 0)])
+		seen153[cn153] = true
+	check(seen153.size() == 6, "M8-1 打磨-153b 6 类别 全覆盖 (实际 %d: %s)" % [seen153.size(), str(seen153.keys())])
+	# 4) Boss 层 (镇妖塔 第 50 层 小 Boss 无 种): 图标 隐藏 + tooltip 首行 无 类别 段
+	g.tower_fixed_floor = 49
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var bs153: Dictionary = g.tower_monster_stats(g.get_fixed_floor(50))
+	check(str(bs153.get("category_name", "")) == "", "M8-1 打磨-153b Boss 层 无 类别 (数据 锚定)")
+	check(ui._tw_mon_icons["fixed"].visible == false,
+			"M8-1 打磨-153b Boss 层 图标 隐藏 (旧 ⚑ 口径, 实际 visible=%s)" % str(ui._tw_mon_icons["fixed"].visible))
+	check(str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 0).find("类别: ") < 0,
+			"M8-1 打磨-153b Boss 层 tooltip 首行 无 类别 段 (实际 %s)" % str(ui._tw_mon_labels["fixed"].tooltip_text).get_slice("\n", 0))
+	check(str(ui._tw_mon_labels["fixed"].text).find("⚑Boss") >= 0,
+			"M8-1 打磨-153b Boss 层 ⚑ 标记 旧 口径 保留 (实际 %s)" % str(ui._tw_mon_labels["fixed"].text))
+	# 5) 登天梯 普通层 (第 1 层): 同 口径 恒等
+	g.tower_fixed_floor = 0
+	g.tower_endless_floor = 1
+	ui._refresh_tower()
+	await get_tree().process_frame
+	var es153: Dictionary = g.tower_monster_stats(g.get_endless_floor(1))
+	var ecat153: String = str(es153.get("category_name", ""))
+	check(ecat153 != "" and ui._tw_mon_icons["endless"].visible == true
+			and ui._tw_mon_icons["endless"].get_category() == ecat153,
+			"M8-1 打磨-153b 登天梯 第 1 层 图标 类别 同步 (实际 %s)" % str(ui._tw_mon_icons["endless"].get_category()))
+	check(str(ui._tw_mon_labels["endless"].tooltip_text) == g.tower_monster_tip(es153, "endless")
+			and str(ui._tw_mon_labels["endless"].tooltip_text).get_slice("\n", 0).find("类别: %s · " % ecat153) >= 0,
+			"M8-1 打磨-153b 登天梯 tooltip 首行 含 类别 段 且 = 接口 恒等 (实际 %s)" % str(ui._tw_mon_labels["endless"].tooltip_text).get_slice("\n", 0))
+	# 6) 挂机 恒定: 同态 再刷 幂等 不 重绘 + 无 统计 副作用 (set_category 同 键 早退)
+	var rc_before: int = fic153.redraw_count
+	var erec153: int = ui._tw_mon_icons["endless"].redraw_count
+	var snap153: Dictionary = g.stats.duplicate(true)
+	ui._refresh_tower()
+	await get_tree().process_frame
+	check(fic153.redraw_count == rc_before and ui._tw_mon_icons["endless"].redraw_count == erec153
+			and g.stats == snap153,
+			"M8-1 打磨-153b 同态 再刷 幂等 不 重绘 无 统计 副作用 (实际 %d/%d)" % [fic153.redraw_count, ui._tw_mon_icons["endless"].redraw_count])
+	# 收尾: 恢复 干净 基准 (塔 态 归零, 防 污染 后续 段)
+	g.tower_fixed_floor = 0
+	g.tower_fixed_clear = false
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.tower_daily_bonus_stones = 0.0
+	g.poison_battles = 0
+	g.poison_events.clear()
+	g.set_process(true)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	check(int(g.tower_fixed_floor) == 0 and int(g.tower_endless_floor) == 1,
+			"M8-1 打磨-153b 收尾 干净 基准 (塔 态 归零)")
+
 
 func _finish() -> void:
 	print("")
