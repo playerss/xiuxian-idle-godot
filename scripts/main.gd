@@ -328,6 +328,10 @@ var _items_hi_tween: Tween           # 打磨-44: 法器区高亮 tween (1.2s �
 var _bonus_labels: Array[Label] = []  # 技能/装备页顶栏 总加成汇总标签 (打磨-9)
 var _bonus_text := ""              # 汇总文本缓存 (变化时才刷)
 var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用)
+# M8-2 打磨-154b: 装备 5 部位 剪影 + 法器 10 件 金边 几何 字形 图标 (equip_icon.gd 纯函数
+# 绘制, 构建 一次 无 每帧 重建; 图标 恒 同 部位/同 件 不 随 状态 变, 同 138 徽章 构建 一次 口径)
+var _equip_icon_nodes: Dictionary = {} # 装备 id -> 部位 剪影 图标 (badge 右侧, 纯 装饰)
+var _shop_icon_nodes: Dictionary = {}  # 法器 id -> 金边 几何 字形 图标 (badge 右侧, 纯 装饰)
 var _shop_eta: Dictionary = {}     # 法器 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_eta: Dictionary = {}    # 装备 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_swap: Dictionary = {}   # 打磨-25: 装备 id -> 换装对比提示标签
@@ -1261,6 +1265,15 @@ func _add_shop_row(it: Dictionary) -> void:
 	_shop_box.add_child(row)
 	# 打磨-41→138: 行首品质徽章 (法器无 tier 字段, 按价格档着色: <1k 凡 / <100k 玄 / <1M 仙 / 以上 神)
 	_add_tier_badge(row, _item_tier_idx(float(it["cost"])))
+	# M8-2 打磨-154b: 法器 金边 几何 字形 图标 (138 徽章 右侧, 10 件 逐件 字形 单源
+	# GameData.item_glyph_index, 金色 与 灵石 语义 同源; 构建 一次 无 每帧 刷新)
+	var it_icon: Control = (load("res://scripts/equip_icon.gd").new())
+	it_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	it_icon.custom_minimum_size = Vector2(20, 20)
+	it_icon.set_item_index(GameData.item_glyph_index(it["id"] as String))
+	row.add_child(it_icon)
+	row.move_child(it_icon, 1)
+	_shop_icon_nodes[it["id"] as String] = it_icon
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)
@@ -1866,6 +1879,16 @@ func _add_equip_row(id: String) -> void:
 	row.add_child(hb)
 	# 打磨-41→138: 行首品质徽章 (颜色/字 随数据 tier 固定, 构建一次)
 	_add_tier_badge(hb, int(e["tier"]))
+	# M8-2 打磨-154b: 部位 剪影 图标 (138 徽章 右侧, 5 部位 共享 5 枚 绘制 单点复用 140 行;
+	# 部位 主色 单源 GameData.equip_slot_color, 品质 色 由 徽章 区分 不 随 品质 变色;
+	# 构建 一次 无 每帧 刷新, set_slot 同 键 幂等 不 重绘)
+	var eq_icon: Control = (load("res://scripts/equip_icon.gd").new())
+	eq_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	eq_icon.custom_minimum_size = Vector2(20, 20)
+	eq_icon.set_slot(str(e["slot"]), GameData.equip_slot_color(str(e["slot"])))
+	hb.add_child(eq_icon)
+	hb.move_child(eq_icon, 1)
+	_equip_icon_nodes[id] = eq_icon
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 2)

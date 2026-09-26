@@ -243,6 +243,7 @@ func _ready() -> void:
 	await _assert_ladder_prog_tip()  # 打磨-150: 境界阶梯 层内 进度行/道行阶段 进度行 tooltip 动态段 (break_eta_tip 单源: 两行 静态前缀+接口 恒等/基准 速率+成功率+ETA+期望 齐全/同态 节流 无 副作用/层11 跨档 1分 同步/境界2 15+77%+2分 同步/攒够 切 已攒够/飞升 道行 口径 行 文本 窗口 联动/收尾 干净 基准)
 	await _assert_ladder_row_tip()  # 打磨-151: 境界阶梯 境界行/道行阶段行 tooltip 动态段 (ladder_row_tip 单源: 静态前缀+接口 恒等 19 行/倍率+累计+ETA 齐全/同态 节流 冻结 窗口 19 行 稳定 无 资源 统计 副作用/升 境界 动态 同步/飞升 道行 口径 凡境 全 已达成/收尾 复原 接口 恒等 干净 基准)
 	await _assert_m153b_mon_icons()  # M8-1 打磨-153b: 爬塔页 怪物 类别 剪影 图标 接入 (怪物卡 图标 节点/6 类别 轮转 显隐+类别/主色 接口 恒等/tooltip 首行 类别 段 恒等/Boss 层 无 类别 图标 隐藏+tooltip 无 段/挂机 恒定 幂等 不 重绘/收尾 干净 基准)
+	await _assert_m154b_equip_icons()  # M8-2 打磨-154b: 装备 5 部位 剪影 + 法器 10 件 金边 几何 字形 图标 接入 (140 行 部位 覆盖 接口 恒等/10 法器 字形 不重 不空/20px 纯 装饰 口径/同态 幂等 不 重绘 无 副作用/收尾 干净 基准)
 
 	_finish()
 
@@ -5642,6 +5643,86 @@ func _assert_m153b_mon_icons() -> void:
 	await get_tree().process_frame
 	check(int(g.tower_fixed_floor) == 0 and int(g.tower_endless_floor) == 1,
 			"M8-1 打磨-153b 收尾 干净 基准 (塔 态 归零)")
+
+
+# M8-2 打磨-154b: 装备 5 部位 剪影 + 法器 10 件 金边 几何 字形 图标 接入 (M8-2 打磨-154
+# 规格 3: 24x24 挂 装备行 138 徽章 右侧 20px 渲染 + 修行页 法器材行 品质色标 后 接入 +
+# ui_test 断言; 像素 采样 走 Xvfb icon_probe [154a 已交付], 本 段 断言 节点 接入/
+# 140 行 部位 覆盖+接口 恒等/10 法器 字形 不重 不空/挂机 恒定 构建 一次 不 重绘/
+# 收尾 干净 基准; 图标 纯 装饰 构建 一次 无 每帧 刷新, set_slot/set_item_index 同 键
+# 幂等 不 重绘, 品质 色 由 138 徽章 区分 图标 不 随 品质 变色)
+func _assert_m154b_equip_icons() -> void:
+	var g := GameData
+	g.set_process(false)
+	# 1) 装备页 (tab 2): 140 行 部位 剪影 接入 (徽章 右侧 child1, 主色 单源 接口 恒等)
+	ui._tab.current_tab = 2
+	ui._refresh()
+	await get_tree().process_frame
+	check(ui._equip_icon_nodes.size() == g.equip_ids.size(),
+				"M8-2 打磨-154b 装备 图标 节点 全量 (实际 %d/%d)" % [ui._equip_icon_nodes.size(), g.equip_ids.size()])
+	var slot_seen154: Dictionary = {}
+	var icfail154 := ""
+	for id in g.equip_ids:
+		var e: Dictionary = g.equip_by_id[id]
+		var rown: Node = ui._equip_row_nodes[id]
+		var hb: HBoxContainer = rown.get_child(0)
+		var badge: Node = hb.get_child(0)
+		var ic: Node = hb.get_child(1) if hb.get_child_count() > 1 else null
+		if ic == null or ic.get_parent() != hb or badge.get_parent() != hb:
+			icfail154 = id + " 缺 图标"
+			break
+		check(ic.mouse_filter == Control.MOUSE_FILTER_IGNORE
+					and ic.size_flags_vertical == Control.SIZE_SHRINK_CENTER
+					and str(ic.custom_minimum_size) == str(Vector2(20, 20)),
+					"M8-2 打磨-154b 装备 %s 图标 纯 装饰 无 热区 + 垂直 居中 + 20px 口径 (实际 %s)" % [id, str(ic.custom_minimum_size)])
+		var slot: String = str(e["slot"])
+		check(ic.get_kind() == "slot" and ic.get_key() == slot,
+					"M8-2 打磨-154b 装备 %s 图标 部位 = 数据 slot=%s (实际 %s)" % [id, slot, str(ic.get_key())])
+		slot_seen154[slot] = true
+	check(icfail154 == "", "M8-2 打磨-154b 140 行 图标 挂 徽章 右侧 全覆盖 (首个 失 %s)" % icfail154)
+	check(slot_seen154.size() == 5,
+				"M8-2 打磨-154b 5 部位 全覆盖 (实际 %d: %s)" % [slot_seen154.size(), str(slot_seen154.keys())])
+	# 2) 修行页 (tab 0): 法器 10 件 金边 几何 字形 接入 (徽章 右侧 child1, 字形 单源 接口)
+	ui._tab.current_tab = 0
+	ui._refresh()
+	await get_tree().process_frame
+	check(ui._shop_icon_nodes.size() == g.ITEMS.size(),
+				"M8-2 打磨-154b 法器 图标 节点 全量 (实际 %d/%d)" % [ui._shop_icon_nodes.size(), g.ITEMS.size()])
+	var glyph_seen154: Dictionary = {}
+	var ifail154 := ""
+	for it in g.ITEMS:
+		var iid: String = str(it["id"])
+		var row: Node = ui._shop_row_nodes[iid]
+		var badge2: Node = row.get_child(0)
+		var ic2: Node = row.get_child(1) if row.get_child_count() > 1 else null
+		if ic2 == null or ic2.get_parent() != row or badge2.get_parent() != row:
+			ifail154 = iid + " 缺 图标"
+			break
+		var gi: int = g.item_glyph_index(iid)
+		check(gi >= 0 and ic2.get_kind() == "item" and ic2.get_key() == g.item_glyph_name(gi),
+					"M8-2 打磨-154b 法器 %s 图标 字形 = 接口 单源 (idx %d, 实际 %s)" % [iid, gi, str(ic2.get_key())])
+		glyph_seen154[ic2.get_key()] = true
+	check(ifail154 == "", "M8-2 打磨-154b 法器 10 行 图标 挂 徽章 右侧 全覆盖 (首个 失 %s)" % ifail154)
+	check(glyph_seen154.size() == 10,
+				"M8-2 打磨-154b 法器 10 件 字形 不重 不空 (实际 %d: %s)" % [glyph_seen154.size(), str(glyph_seen154.keys())])
+	# 3) 挂机 恒定: 图标 构建 一次 无 每帧 重建, 同态 再刷 幂等 不 重绘 + 无 统计 副作用
+	var eq154: Control = ui._equip_icon_nodes[g.equip_ids[0]]
+	var it154: Control = ui._shop_icon_nodes[str(g.ITEMS[0]["id"])]
+	var rc_eq154: int = eq154.redraw_count
+	var rc_it154: int = it154.redraw_count
+	var snap154: Dictionary = g.stats.duplicate(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(ui._equip_icon_nodes.size() == g.equip_ids.size() and ui._shop_icon_nodes.size() == g.ITEMS.size()
+				and eq154.redraw_count == rc_eq154 and it154.redraw_count == rc_it154 and g.stats == snap154,
+				"M8-2 打磨-154b 同态 再刷 幂等 不 重绘 节点 不 重建 无 统计 副作用 (实际 %d/%d)" % [eq154.redraw_count, it154.redraw_count])
+	# 收尾: 恢复 干净 基准 (纯 UI 节点 构建 一次 无 状态 变更, 仅 复位 页面/进程)
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	g.set_process(true)
+	check(ui._equip_icon_nodes.size() == g.equip_ids.size() and ui._shop_icon_nodes.size() == g.ITEMS.size(),
+				"M8-2 打磨-154b 收尾 节点 恒在 干净 基准")
 
 
 func _finish() -> void:
