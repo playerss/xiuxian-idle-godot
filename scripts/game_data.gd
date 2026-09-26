@@ -129,6 +129,20 @@ const MONSTER_CAT_COLORS := {
 }
 # 兜底 色 (Boss 层 无 category_name 时 不 显 类别 图标, 该 色 仅 防 越界 查询 兜底)
 const MONSTER_CAT_FALLBACK := Color(0.6, 0.62, 0.68)
+# M8-2 打磨-154: 装备 5 部位 剪影 主色 (统一 白灰 系 低饱和 微 冷 暖 区分, 暗底 深色仙侠
+# 基调, 与 TIER_COLOR/顶栏 语义色 同风格; scripts/equip_icon.gd 剪影 单源 消费;
+# 部位 品质 色 由 138 徽章 区分, 部位 图标 不 带 品质 色 避免 撞色)
+const EQUIP_SLOT_COLORS := {
+	"weapon": Color(0.78, 0.8, 0.86),
+	"robe": Color(0.68, 0.74, 0.82),
+	"amulet": Color(0.74, 0.86, 0.8),
+	"bead": Color(0.84, 0.8, 0.66),
+	"boot": Color(0.64, 0.66, 0.72),
+}
+# 部位 图标 兜底 色 (未知 slot 时 不 绘制 部位 剪影, 该 色 仅 防 越界 查询 兜底)
+const EQUIP_SLOT_FALLBACK := Color(0.6, 0.62, 0.68)
+# 法器 图标 主色 (10 件 金边 单字 徽章, 金色 与 灵石/品质 金 语义 同源 低饱和 暗调)
+const EQUIP_ITEM_COLOR := Color(0.85, 0.7, 0.38)
 
 # ---- 数据表 (加载自 JSON) ----
 var skill_by_id := {}
@@ -1250,6 +1264,34 @@ func tower_monster_stats(rec: Dictionary) -> Dictionary:
 # category_name 非空 门控 显隐, 本 接口 只 保证 颜色 可算 不 崩溃; 纯 只读 无 副作用)
 func monster_category_color(cat_name: String) -> Color:
 	return MONSTER_CAT_COLORS.get(cat_name, MONSTER_CAT_FALLBACK)
+
+
+# M8-2 打磨-154: 装备 部位 剪影 主色 只读 接口 (单源 EQUIP_SLOT_COLORS 常量,
+# equip_icon.gd 剪影 消费, 同 slot 恒 同 色; 未知 slot = 兜底 色 防御, 不 抛 错)
+func equip_slot_color(slot: String) -> Color:
+	return EQUIP_SLOT_COLORS.get(slot, EQUIP_SLOT_FALLBACK)
+
+
+# M8-2 打磨-154: 法器 图标 字形 只读 接口 (10 件 逐件 简化 几何 字形 索引, 与
+# equip_icon.gd ITEMS_ORDER 同 数据序 同 顺序 [const ITEMS 数据序 即 字形 序, 零 映射表];
+# 越界/未知 id = -1, UI 侧 不 绘制 徽章 防御; 字形 两两 可分 见 equip_icon.gd 10 枚 几何;
+# 不用 文字 绘制 — llvmpipe 软件 渲染 下 字体 字形 像素 不可靠 [探针 实测 混同], 几何 同
+# 153/154 部位 剪影 同 确定性 口径; 不 改 状态/存档/统计)
+func item_glyph_index(item_id: String) -> int:
+	for i in ITEMS.size():
+		if str((ITEMS[i] as Dictionary).get("id", "")) == item_id:
+			return i
+	return -1
+
+
+# M8-2 打磨-154: 法器 字形 名 只读 接口 (equip_icon.gd ITEMS_ORDER 索引 名, 越界 = 空串)
+func item_glyph_name(idx: int) -> String:
+	var order: Array = [
+		"sword", "talisman", "bag", "lamp", "flute", "boat", "mirror", "hex", "bell", "seal"]
+	var k := clampi(idx, 0, order.size() - 1)
+	if idx < 0 or idx >= order.size():
+		return ""
+	return str(order[k])
 
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
 # tower = "fixed" (镇妖塔) / "endless" (登天梯); roll 仅 影响 展示 伤害浮动 (不改变 胜负), 可注入 确定性

@@ -9813,6 +9813,81 @@ func _init() -> void:
 	icon2148.queue_free()
 	await process_frame
 	check(g.monster_category_color("天兽") == g.MONSTER_CAT_COLORS["天兽"], "M8-1 打磨-153 节点 释放 后 接口 只读 恒定")
+	# ---------- M8-2 打磨-154a: 装备 5 部位 剪影 + 法器 金边 单字 徽章 (数据层+绘制层) ----------
+	# weapon=剑形 / robe=袍形 / amulet=玉佩环 / bead=圆珠 / boot=靴形; 部位 主色 单源
+	# GameData.EQUIP_SLOT_COLORS (equip_icon.gd 剪影 纯函数 消费, 同 slot 恒 同 图);
+	# 法器 10 件 金边 逐件 几何 字形 (剑/符/囊/灯/笛/船/镜/六角/钟/印, 不用 文字 绘制
+	# — llvmpipe 软件 渲染 字体 字形 像素 不可靠 [探针 实测 混同], 几何 同 153 确定性 口径);
+	# 像素 采样 走 Xvfb (headless 不 采样 像素, 本 段 断言 色 表 口径 + 数据 覆盖 + 节点 状态)
+	var slots149: Array = ["weapon", "robe", "amulet", "bead", "boot"]
+	var scol149: Array = []
+	for sl149 in slots149:
+		scol149.append(g.equip_slot_color(sl149))
+	check(g.EQUIP_SLOT_COLORS.size() == 5, "M8-2 打磨-154a 5 部位 主色 表 齐全 (实际 %d)" % g.EQUIP_SLOT_COLORS.size())
+	var su149: Array = []
+	for sc149 in scol149:
+		if sc149 not in su149:
+			su149.append(sc149)
+	check(su149.size() == 5, "M8-2 打磨-154a 5 部位 主色 互异 (实际 %d)" % su149.size())
+	check(g.equip_slot_color("weapon") == g.EQUIP_SLOT_COLORS["weapon"], "M8-2 打磨-154a 部位 接口 = 常量 单源 恒等")
+	check(g.equip_slot_color("") == g.EQUIP_SLOT_FALLBACK and g.equip_slot_color("unknown") == g.EQUIP_SLOT_FALLBACK,
+			"M8-2 打磨-154a 越界/未知 部位 兜底 色 恒等")
+	var ecov149 := 0
+	var ecovfail149 := ""
+	for eid149 in g.equip_ids:
+		var e149: Dictionary = g.equip_by_id[eid149]
+		var sl149b: String = str(e149.get("slot", ""))
+		if sl149b in g.EQUIP_SLOT_COLORS and g.equip_slot_color(sl149b) == g.EQUIP_SLOT_COLORS[sl149b]:
+			ecov149 += 1
+		else:
+			ecovfail149 = str(eid149) + "/" + sl149b
+	check(ecov149 == 140 and ecovfail149 == "", "M8-2 打磨-154a 140 件 部位 全覆盖 + 颜色 恒等 (实际 %d, 首个 失 %s)" % [ecov149, ecovfail149])
+	var inames149: Array = []
+	var inamefail149 := ""
+	var iuniq149: Array = []
+	for it149 in g.ITEMS:
+		var iid149: String = str(it149["id"])
+		var idx149: int = g.item_glyph_index(iid149)
+		var gn149: String = g.item_glyph_name(idx149)
+		if idx149 < 0 or gn149 == "" or gn149 in iuniq149:
+			inamefail149 = iid149 + "=" + gn149
+		else:
+			iuniq149.append(gn149)
+			inames149.append(gn149)
+	check(inames149.size() == 10 and inamefail149 == "",
+			"M8-2 打磨-154a 法器 10 件 字形 索引 不空 不重 (实际 %d, 失 %s)" % [inames149.size(), inamefail149])
+	check(g.item_glyph_index("wooden_sword") == 0 and g.item_glyph_name(0) == "sword",
+			"M8-2 打磨-154a 字形 索引 0 = 木剑 sword (数据序 单源)")
+	check(g.item_glyph_index("ascension_seal") == 9 and g.item_glyph_name(9) == "seal",
+			"M8-2 打磨-154a 字形 索引 9 = 渡劫引仙印 seal (数据序 单源)")
+	check(g.item_glyph_index("unknown_item") == -1 and g.item_glyph_name(-1) == "" and g.item_glyph_name(10) == "",
+			"M8-2 打磨-154a 未知 id/越界 字形 防御 (索引 -1 名 空串)")
+	var eic149: CanvasItem = (load("res://scripts/equip_icon.gd").new())
+	root.add_child(eic149)
+	eic149.set_slot("weapon", g.equip_slot_color("weapon"))
+	eic149.set_slot("weapon", g.equip_slot_color("weapon"))
+	check(eic149.redraw_count == 1 and eic149.get_kind() == "slot" and eic149.get_key() == "weapon",
+			"M8-2 打磨-154a 部位 节点 set_slot 幂等 不 重绘 (实际 %d)" % eic149.redraw_count)
+	eic149.set_slot("boot", g.equip_slot_color("boot"))
+	check(eic149.redraw_count == 2 and eic149.get_key() == "boot",
+			"M8-2 打磨-154a 切 部位 触发 重绘 + 状态 更新 (实际 %d)" % eic149.redraw_count)
+	eic149.set_item_index(0)
+	check(eic149.redraw_count == 3 and eic149.get_kind() == "item" and eic149.get_key() == "sword",
+			"M8-2 打磨-154a 法器 节点 set_item_index 切 类型 重绘 (实际 %d)" % eic149.redraw_count)
+	eic149.set_item_index(0)
+	check(eic149.redraw_count == 3, "M8-2 打磨-154a 法器 徽章 同 字形 幂等 不 重绘 (实际 %d)" % eic149.redraw_count)
+	eic149.set_item_index(9)
+	check(eic149.redraw_count == 4 and eic149.get_key() == "seal",
+			"M8-2 打磨-154a 法器 徽章 切 字形 触发 重绘 (实际 %d)" % eic149.redraw_count)
+	var eic2_149: CanvasItem = (load("res://scripts/equip_icon.gd").new())
+	root.add_child(eic2_149)
+	check(eic2_149.redraw_count == 0 and eic2_149.get_kind() == "" and eic2_149.get_key() == "",
+			"M8-2 打磨-154a 未设 部位/名称 不 设 态 (隐藏 口径, 实际 %d)" % eic2_149.redraw_count)
+	eic149.queue_free()
+	eic2_149.queue_free()
+	await process_frame
+	check(g.equip_slot_color("robe") == g.EQUIP_SLOT_COLORS["robe"] and g.item_glyph_index("wooden_sword") == 0,
+			"M8-2 打磨-154a 节点 释放 后 接口 只读 恒定")
 	g.save_game()
 	g.save_game()
 	
