@@ -143,6 +143,21 @@ const EQUIP_SLOT_COLORS := {
 const EQUIP_SLOT_FALLBACK := Color(0.6, 0.62, 0.68)
 # 法器 图标 主色 (10 件 金边 单字 徽章, 金色 与 灵石/品质 金 语义 同源 低饱和 暗调)
 const EQUIP_ITEM_COLOR := Color(0.85, 0.7, 0.38)
+# M8-3 打磨-155: 功法/神通 5 类别 字形 主色 (sword=剑法 冷青 / spell=法术 紫 / mind=心法 青 /
+# body=身法 琥珀 / divine=神通 品红; 低饱和 深色仙侠 基调, 与 TIER_COLOR/怪物 6 类/部位 5 色
+# 同风格 互异; scripts/skill_icon.gd 字形 单源 消费; 品质 色 由 138 徽章 区分 不 随 品质 变色)
+const SKILL_CAT_COLORS := {
+	"sword": Color(0.6, 0.75, 0.9),
+	"spell": Color(0.7, 0.55, 0.95),
+	"mind": Color(0.45, 0.8, 0.7),
+	"body": Color(0.88, 0.7, 0.45),
+	"divine": Color(0.85, 0.5, 0.85),
+}
+# 技能 字形 兜底 色 (未知 category 时 不 绘制 字形, 该 色 仅 防 越界 查询 兜底)
+const SKILL_CAT_FALLBACK := Color(0.6, 0.62, 0.68)
+# 主动 神通 爆发 描边 金 (与 EQUIP_ITEM_COLOR 同值 — 金色 与 爆发/灵石 语义 同源;
+# 24 主动 按 类别 取 字形 + 金爆发 描边 区分 主动, 96 被动 无 描边)
+const SKILL_ACTIVE_GOLD := Color(0.85, 0.7, 0.38)
 
 # ---- 数据表 (加载自 JSON) ----
 var skill_by_id := {}
@@ -1292,6 +1307,21 @@ func item_glyph_name(idx: int) -> String:
 	if idx < 0 or idx >= order.size():
 		return ""
 	return str(order[k])
+
+
+# M8-3 打磨-155: 功法/神通 类别 主色 只读 接口 (单源 SKILL_CAT_COLORS 常量, 5 类 sword/spell/
+# mind/body/divine; 未知 category = 兜底 色 防御 — 由 UI 按 技能 数据 存在 门控 显隐,
+# 本 接口 只 保证 颜色 可算 不 崩溃; 与 153 monster_category_color/154 equip_slot_color
+# 同 口径; 纯 只读 无 副作用)
+func skill_category_color(cat: String) -> Color:
+	return SKILL_CAT_COLORS.get(cat, SKILL_CAT_FALLBACK)
+
+
+# M8-3 打磨-155: 技能 主动/被动 只读 接口 (type == "active" = 24 主动 神通, 金色 爆发 描边 档;
+# 96 被动 功法 无 描边 旧 品质徽章 口径; 未知 id = false 防御; 不 改 状态/存档/统计)
+func skill_is_active(id: String) -> bool:
+	var s: Dictionary = skill_by_id.get(id, {})
+	return not s.is_empty() and str(s.get("type", "")) == "active"
 
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
 # tower = "fixed" (镇妖塔) / "endless" (登天梯); roll 仅 影响 展示 伤害浮动 (不改变 胜负), 可注入 确定性

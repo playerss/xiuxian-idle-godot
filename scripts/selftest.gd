@@ -9888,6 +9888,74 @@ func _init() -> void:
 	await process_frame
 	check(g.equip_slot_color("robe") == g.EQUIP_SLOT_COLORS["robe"] and g.item_glyph_index("wooden_sword") == 0,
 			"M8-2 打磨-154a 节点 释放 后 接口 只读 恒定")
+	# ---------- M8-3 打磨-155a: 功法/神通 5 类别字形 + 主动 金色 爆发 描边 档 (数据层+绘制层) ----------
+	# sword=剑法 竖刃 / spell=法术 符纸雷纹 / mind=心法 瞳 / body=身法 脉动 / divine=神通 四芒星;
+	# 类别 主色 单源 GameData.SKILL_CAT_COLORS (skill_icon.gd 字形 纯函数 消费, 同 类 恒 同 图);
+	# 24 主动 按 类别 取 字形 + 金色 爆发 描边 环 区分, 96 被动 无 描边 旧 品质徽章 口径 保持;
+	# 像素 采样 走 Xvfb icon_probe (headless 不 采样 像素, 本 段 断言 色 表 口径 + 数据 覆盖 + 节点 状态)
+	var scats150: Array = ["sword", "spell", "mind", "body", "divine"]
+	var scols150: Array = []
+	for sc150 in scats150:
+		scols150.append(g.skill_category_color(sc150))
+	check(g.SKILL_CAT_COLORS.size() == 5, "M8-3 打磨-155a 5 类别 主色 表 齐全 (实际 %d)" % g.SKILL_CAT_COLORS.size())
+	var su150: Array = []
+	for sc150b in scols150:
+		if sc150b not in su150:
+			su150.append(sc150b)
+	check(su150.size() == 5, "M8-3 打磨-155a 5 类别 主色 互异 (实际 %d)" % su150.size())
+	check(g.skill_category_color("sword") == g.SKILL_CAT_COLORS["sword"], "M8-3 打磨-155a 类别 接口 = 常量 单源 恒等")
+	check(g.skill_category_color("") == g.SKILL_CAT_FALLBACK and g.skill_category_color("unknown") == g.SKILL_CAT_FALLBACK,
+			"M8-3 打磨-155a 越界/未知 类别 兜底 色 恒等")
+	var scov150 := 0
+	var scovfail150 := ""
+	for sid150 in g.skill_ids:
+		var sk150: Dictionary = g.skill_by_id[sid150]
+		var c150: String = str(sk150.get("category", ""))
+		if c150 in g.SKILL_CAT_COLORS and g.skill_category_color(c150) == g.SKILL_CAT_COLORS[c150]:
+			scov150 += 1
+		else:
+			scovfail150 = str(sid150) + "/" + c150
+	check(scov150 == 120 and scovfail150 == "", "M8-3 打磨-155a 120 技能 类别 全覆盖 + 颜色 恒等 (实际 %d, 首个 失 %s)" % [scov150, scovfail150])
+	var sact150 := 0
+	var sactfail150 := ""
+	for sid150b in g.skill_ids:
+		var sk150b: Dictionary = g.skill_by_id[sid150b]
+		var isact: bool = g.skill_is_active(sid150b)
+		var dact: bool = str(sk150b.get("type", "")) == "active"
+		if isact != dact:
+			sactfail150 = str(sid150b)
+			break
+		if isact:
+			sact150 += 1
+	check(sact150 == 24 and sactfail150 == "", "M8-3 打磨-155a skill_is_active 24 主动 恒等 + 类型 匹配 (实际 %d, 首个 失 %s)" % [sact150, sactfail150])
+	check(g.skill_is_active("unknown_id") == false, "M8-3 打磨-155a 未知 id 主动 防御 false")
+	var sic150: CanvasItem = (load("res://scripts/skill_icon.gd").new())
+	root.add_child(sic150)
+	sic150.set_category("sword", g.skill_category_color("sword"), false)
+	sic150.set_category("sword", g.skill_category_color("sword"), false)
+	check(sic150.redraw_count == 1 and sic150.get_category() == "sword" and not sic150.is_active_marked(),
+			"M8-3 打磨-155a 被动 字形 set_category 幂等 不 重绘 (实际 %d)" % sic150.redraw_count)
+	sic150.set_category("divine", g.skill_category_color("divine"), true)
+	check(sic150.redraw_count == 2 and sic150.get_category() == "divine" and sic150.is_active_marked(),
+			"M8-3 打磨-155a 切 类别 + 主动 档 触发 重绘 (实际 %d)" % sic150.redraw_count)
+	sic150.set_category("divine", g.skill_category_color("divine"), true)
+	check(sic150.redraw_count == 2, "M8-3 打磨-155a 主动 档 同 键 幂等 不 重绘 (实际 %d)" % sic150.redraw_count)
+	sic150.set_category("divine", g.skill_category_color("divine"), false)
+	check(sic150.redraw_count == 3 and not sic150.is_active_marked(),
+			"M8-3 打磨-155a 主动→被动 档 切换 触发 重绘 (实际 %d)" % sic150.redraw_count)
+	var sic2_150: CanvasItem = (load("res://scripts/skill_icon.gd").new())
+	root.add_child(sic2_150)
+	check(sic2_150.redraw_count == 0 and sic2_150.get_category() == "" and not sic2_150.is_active_marked(),
+			"M8-3 打磨-155a 未设 类别 不 设 态 (隐藏 口径, 实际 %d)" % sic2_150.redraw_count)
+	sic2_150.set_category("spell", g.skill_category_color("spell"), true)
+	sic2_150.set_category("", Color(), false)
+	check(sic2_150.redraw_count == 2 and sic2_150.get_category() == "",
+			"M8-3 打磨-155a 空 类别 清除 回 未 设 态 (实际 %d)" % sic2_150.redraw_count)
+	sic150.queue_free()
+	sic2_150.queue_free()
+	await process_frame
+	check(g.skill_category_color("mind") == g.SKILL_CAT_COLORS["mind"] and g.skill_is_active("sword_0_3") == true and g.skill_is_active("sword_0_0") == false,
+			"M8-3 打磨-155a 节点 释放 后 接口 只读 恒定")
 	g.save_game()
 	g.save_game()
 	

@@ -1,8 +1,11 @@
 extends Node
-## M8-1 打磨-153 + M8-2 打磨-154 像素探针: SubViewport 真实渲染
+## M8-1 打磨-153 + M8-2 打磨-154 + M8-3 打磨-155a 像素探针: SubViewport 真实渲染
 ## ① monster_icon 6 类剪影 + Boss 层隐藏口径 (153a)
 ## ② equip_icon 5 部位剪影 (5 枚 互异 非空 + 主色 命中) + 法器 金边 前 2 字 徽章
 ##    (10 枚 金 色 命中 + 区域 像素 不重 不空 + 未设态 全透明) (154a)
+## ③ skill_icon 5 类字形 (sword/spell/mind/body/divine 互异 非空 + 类别 主色 命中)
+##    + 24 主动 金色 爆发 描边 档 (被动/主动 两 行 同 键 对照: 主色 恒等 + 主动 金 命中
+##    + 两 档 hash 区分 防 描边 未 生效 + 未设态 全透明) (155a)
 ## 用法 (需 X 环境/Xvfb, 勿加 --headless, 与 store_shots 同口径):
 ##   xvfb-run -a ~/bin/godot --path . res://scenes/icon_probe.tscn
 ## 口径: 真实 渲染 像素 采样 — 采样区 非空 (不透明 像素 > 阈值) + 主色 命中 比例
@@ -10,21 +13,29 @@ extends Node
 ## (UI 隐藏 口径 0 不透明 像素); 退出码 0/1 可 接 CI。
 
 const W := 512
-const H := 700
+const H := 880
 const CATS: Array = ["妖兽", "鬼修", "虫群", "精怪", "凶灵", "天兽"]
 const TOL := 0.25        # 主色 像素 匹配 距离 容差 (抗锯齿 边缘 混色)
-const MIN_BODY := 0.08   # 区域 内 主色 像素 占比 下限 (剪影 躯体 非空)
+const MIN_BODY := 0.07   # 区域 内 主色 像素 占比 下限 (剪影 躯体 非空; 0.07 = 抗锯齿 抖动 余量 —
+                          # weapon 剪影 体量 恰 0.08 档, 边缘 混色 像素 跨 渲染 会话 抖动 致
+                          # 0.0799/0.0800 边界 flake, 155a 复跑 实测 定稿)
 const MIN_OPA := 40      # 区域 不透明 像素 下限 (非空)
 const ICON := 72        # 探针 实际 渲染 尺寸 (24 基准 x3, 放大 采样 精度)
 # 法器 徽章 金色 占比 下限 (金边 环 + 金字 笔画, 低于 部位 剪影 体量)
 const MIN_GOLD := 0.10
+# 主动 神通 爆发 描边 金 占比 下限 (金环 + 4 芒 火花, 体量 低于 法器 金边 环)
+const MIN_SKILL_GOLD := 0.04
 # 区域 坐标 (怪物 6 格 2 行 3 列 y=40/200, Boss 格 y=340; 装备 部位 5 格 y=450,
-# 法器 10 格 2 行 5 列 y=540/620)
+# 法器 10 格 2 行 5 列 y=540/620; 技能 5 类 字形 2 行 5 列 被动 y=710 / 主动 y=790)
 const SLOT_X := 40
 const SLOT_Y := 450
 const ITEM_X := 40
 const ITEM_Y := 530
 const CELL := 80
+const SKILL_X := 40
+const SKILL_Y := 710
+const SKILL_A_Y := 790
+const SKILL_CATS: Array = ["sword", "spell", "mind", "body", "divine"]
 
 
 var _sub: SubViewport
@@ -79,10 +90,30 @@ func _ready() -> void:
 	_empty.position = Vector2(430.0, 40.0)
 	_empty.size = Vector2(ICON, ICON)
 	_sub.add_child(_empty)
+	# ⑤ 功法/神通 5 类 字形 (155a: 类别 主色 单源 GameData.SKILL_CAT_COLORS;
+	# 被动 无 描边 行 y=710 + 主动 金爆发 描边 行 y=790, 5 类 同 键 两 档 对照)
+	for i in SKILL_CATS.size():
+		var ck: String = str(SKILL_CATS[i])
+		var icp: Control = (load("res://scripts/skill_icon.gd").new())
+		icp.set_category(ck, GameData.skill_category_color(ck), false)
+		icp.position = Vector2(float(SKILL_X + i * CELL), float(SKILL_Y))
+		icp.size = Vector2(ICON, ICON)
+		_sub.add_child(icp)
+		var icv: Control = (load("res://scripts/skill_icon.gd").new())
+		icv.set_category(ck, GameData.skill_category_color(ck), true)
+		icv.position = Vector2(float(SKILL_X + i * CELL), float(SKILL_A_Y))
+		icv.size = Vector2(ICON, ICON)
+		_sub.add_child(icv)
+	# ⑥ 技能 未设态 全透明 口径 (位置 避开 采样区)
+	_skill_empty = (load("res://scripts/skill_icon.gd").new())
+	_skill_empty.position = Vector2(430.0, 340.0)
+	_skill_empty.size = Vector2(ICON, ICON)
+	_sub.add_child(_skill_empty)
 
 
 var _boss: Control
 var _empty: Control
+var _skill_empty: Control
 
 
 func _process(_d: float) -> void:
@@ -183,6 +214,53 @@ func _render_check() -> void:
 				eop += 1
 	if eop > 0:
 		_fail.append("部位 未设态 应 全 透明 (实际 %d 不透明 像素)" % eop)
+	# ⑤ 技能 5 类 字形: 被动 行 非空 + 类别 主色 命中 + 区域 互异; 主动 行 同 键 主色
+	# 恒等 + 金色 爆发 描边 命中 + 两 行 hash 区分 (描边 档 不 混 同 键)
+	var shc: Color = GameData.SKILL_ACTIVE_GOLD
+	var ph: Array = []
+	var ah: Array = []
+	for i in SKILL_CATS.size():
+		var ck: String = str(SKILL_CATS[i])
+		var col: Color = GameData.SKILL_CAT_COLORS[ck]
+		var pr := Rect2i(SKILL_X + i * CELL, SKILL_Y, ICON, ICON)
+		_probe_body(img, pr, col, "技能 被动-" + ck)
+		ph.append(_hash(_region_img(img, pr)))
+		var ar := Rect2i(SKILL_X + i * CELL, SKILL_A_Y, ICON, ICON)
+		_probe_body(img, ar, col, "技能 主动-" + ck)
+		# 主动 行 金色 爆发 描边 占比
+		var gpx := 0
+		for y in ar.size.y:
+			for x in ar.size.x:
+				var px: Color = img.get_pixel(ar.position.x + x, ar.position.y + y)
+				var d: float = absf(px.r - shc.r) + absf(px.g - shc.g) + absf(px.b - shc.b)
+				if d / 3.0 < TOL:
+					gpx += 1
+		var tot: int = ar.size.x * ar.size.y
+		if float(gpx) / float(tot) < MIN_SKILL_GOLD:
+			_fail.append("技能 主动-%s: 金色 爆发 描边 占比 不足 (%.3f < %.3f, 描边 渲染 缺失)" % [ck, float(gpx) / float(tot), MIN_SKILL_GOLD])
+		ah.append(_hash(_region_img(img, ar)))
+	for i in ph.size():
+		for j in range(i + 1, ph.size()):
+			if ph[i] == ph[j]:
+				_fail.append("技能 字形 区域 像素 混同 (hash 相等, 5 类 不同 枚 不 混 口径)")
+				break
+	for i in ah.size():
+		for j in range(i + 1, ah.size()):
+			if ah[i] == ah[j]:
+				_fail.append("技能 主动 字形 区域 像素 混同 (hash 相等, 5 类 不同 枚 不 混 口径)")
+				break
+	for i in ph.size():
+		if ph[i] == ah[i]:
+			_fail.append("技能 %s: 被动/主动 两 档 像素 混同 (金色 爆发 描边 未 生效)" % str(SKILL_CATS[i]))
+	# ⑥ 技能 未设态 全 透明 (UI 隐藏 口径 同源)
+	var sr := Rect2i(430, 340, ICON, ICON)
+	var sop := 0
+	for y in sr.size.y:
+		for x in sr.size.x:
+			if img.get_pixel(sr.position.x + x, sr.position.y + y).a > 0.1:
+				sop += 1
+	if sop > 0:
+		_fail.append("技能 未设态 应 全 透明 (实际 %d 不透明 像素)" % sop)
 	_finish()
 
 
@@ -206,7 +284,7 @@ func _probe_body(img: Image, rect: Rect2i, col: Color, tag: String) -> void:
 
 func _finish() -> void:
 	if _fail.is_empty():
-		print("ICON_PROBE PASS (6 类 非空 + 主色 命中 + Boss 层 隐藏 + 5 部位 互异 + 10 法器 金 命中 不重 + 未设态 全透明)")
+		print("ICON_PROBE PASS (6 类 非空 + 主色 命中 + Boss 层 隐藏 + 5 部位 互异 + 10 法器 金 命中 不重 + 未设态 全透明 + 5 技能 字形 互异 + 主动 金 爆发 描边 两 档 区分 + 技能 未设态 全透明)")
 		get_tree().quit(0)
 	else:
 		printerr("ICON_PROBE FAIL (%d 项):" % _fail.size())
