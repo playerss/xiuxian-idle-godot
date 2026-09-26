@@ -253,6 +253,7 @@
 - [x] ui_test 断言（5 类别 字形 各 1 枚 采样 + 主动 24 描边 档 + 被动 无描边 + 挂机 恒定）
 
 ### M8-4 词缀池字形（打磨-156，与 138 徽章 体系 对齐）
+> 进度: 156a 数据层+绘制层 完成 (AFFIX_POOL_COLORS 6 池 主色 单源 [qi_rate=灵气 青/stone_rate=灵石 金/bt_chance=突破 橙/offline_rate=离线 蓝紫/atk=攻击 红/def=防御 灰蓝] + AFFIX_POOL_CN 池 中文名 单源 与 affixes.json pool_name 同源; affix_pool_color/affix_pool_name/affix_pool_of/affix_pool_glyph_tip 只读 接口; affix_icon.gd 6 池 几何 字形 24x24 幂等 不 重绘 [灵气 涡旋/灵石 宝石/突破 箭矢/离线 月相/攻击 交叉 锋/防御 盾形, 几何 同 153/154/155 确定性 口径, 品质 色 由 背包格 品质色 区分 不 随 品质 变色]; selftest +18 = 11165, Xvfb icon_probe 扩展 6 池 互异/非空/主色 命中/未设态 全透明 全过); 156b UI 接入 待做 (词缀行/背包格 词缀名 前 接入 + ui_test 断言 + 商店截图 复核)
 - [ ] 6 词缀池 字形（atk/def/qi/stone/break/offline 池 各 1 枚 单字或几何 符号 + 池主色，词缀行/背包格 词缀名 前 接入）
 - [ ] ui_test 断言（6 池 各 1 枚 + 背包格 接入 + 挂机 恒定）
 

@@ -1,11 +1,13 @@
 extends Node
-## M8-1 打磨-153 + M8-2 打磨-154 + M8-3 打磨-155a 像素探针: SubViewport 真实渲染
+## M8-1 打磨-153 + M8-2 打磨-154 + M8-3 打磨-155a + M8-4 打磨-156a 像素探针: SubViewport 真实渲染
 ## ① monster_icon 6 类剪影 + Boss 层隐藏口径 (153a)
 ## ② equip_icon 5 部位剪影 (5 枚 互异 非空 + 主色 命中) + 法器 金边 前 2 字 徽章
 ##    (10 枚 金 色 命中 + 区域 像素 不重 不空 + 未设态 全透明) (154a)
 ## ③ skill_icon 5 类字形 (sword/spell/mind/body/divine 互异 非空 + 类别 主色 命中)
 ##    + 24 主动 金色 爆发 描边 档 (被动/主动 两 行 同 键 对照: 主色 恒等 + 主动 金 命中
 ##    + 两 档 hash 区分 防 描边 未 生效 + 未设态 全透明) (155a)
+## ④ affix_icon 6 池字形 (qi_rate/stone_rate/bt_chance/offline_rate/atk/def 互异 非空
+##    + 池 主色 命中 + 未设态 全透明) (156a)
 ## 用法 (需 X 环境/Xvfb, 勿加 --headless, 与 store_shots 同口径):
 ##   xvfb-run -a ~/bin/godot --path . res://scenes/icon_probe.tscn
 ## 口径: 真实 渲染 像素 采样 — 采样区 非空 (不透明 像素 > 阈值) + 主色 命中 比例
@@ -13,7 +15,7 @@ extends Node
 ## (UI 隐藏 口径 0 不透明 像素); 退出码 0/1 可 接 CI。
 
 const W := 512
-const H := 880
+const H := 960
 const CATS: Array = ["妖兽", "鬼修", "虫群", "精怪", "凶灵", "天兽"]
 const TOL := 0.25        # 主色 像素 匹配 距离 容差 (抗锯齿 边缘 混色)
 const MIN_BODY := 0.07   # 区域 内 主色 像素 占比 下限 (剪影 躯体 非空; 0.07 = 抗锯齿 抖动 余量 —
@@ -36,6 +38,10 @@ const SKILL_X := 40
 const SKILL_Y := 710
 const SKILL_A_Y := 790
 const SKILL_CATS: Array = ["sword", "spell", "mind", "body", "divine"]
+# 词缀 6 池 字形 行 y=870 (156a 口径, 6 格 单行 x 起点 40 步长 80)
+const AFFIX_X := 40
+const AFFIX_Y := 870
+const AFFIX_POOLS: Array = ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]
 
 
 var _sub: SubViewport
@@ -109,11 +115,25 @@ func _ready() -> void:
 	_skill_empty.position = Vector2(430.0, 340.0)
 	_skill_empty.size = Vector2(ICON, ICON)
 	_sub.add_child(_skill_empty)
+	# ⑦ 词缀 6 池 字形 (156a: 池 主色 单源 GameData.AFFIX_POOL_COLORS; 6 格 单行 y=870)
+	for i in AFFIX_POOLS.size():
+		var pk: String = str(AFFIX_POOLS[i])
+		var icf: Control = (load("res://scripts/affix_icon.gd").new())
+		icf.set_pool(pk, GameData.affix_pool_color(pk))
+		icf.position = Vector2(float(AFFIX_X + i * CELL), float(AFFIX_Y))
+		icf.size = Vector2(ICON, ICON)
+		_sub.add_child(icf)
+	# ⑧ 词缀 未设态 全透明 口径 (位置 避开 采样区: (120,340) 与 Boss 格 (40,340) 同 空行 不 重叠)
+	_affix_empty = (load("res://scripts/affix_icon.gd").new())
+	_affix_empty.position = Vector2(120.0, 340.0)
+	_affix_empty.size = Vector2(ICON, ICON)
+	_sub.add_child(_affix_empty)
 
 
 var _boss: Control
 var _empty: Control
 var _skill_empty: Control
+var _affix_empty: Control
 
 
 func _process(_d: float) -> void:
@@ -261,6 +281,28 @@ func _render_check() -> void:
 				sop += 1
 	if sop > 0:
 		_fail.append("技能 未设态 应 全 透明 (实际 %d 不透明 像素)" % sop)
+	# ⑦ 词缀 6 池 字形: 非空 + 池 主色 命中 + 区域 互异 (156a)
+	var fh: Array = []
+	for i in AFFIX_POOLS.size():
+		var pk: String = str(AFFIX_POOLS[i])
+		var col: Color = GameData.AFFIX_POOL_COLORS[pk]
+		var fr := Rect2i(AFFIX_X + i * CELL, AFFIX_Y, ICON, ICON)
+		_probe_body(img, fr, col, "词缀 池-" + pk)
+		fh.append(_hash(_region_img(img, fr)))
+	for i in fh.size():
+		for j in range(i + 1, fh.size()):
+			if fh[i] == fh[j]:
+				_fail.append("词缀 池 字形 区域 像素 混同 (hash 相等, 6 池 不同 枚 不 混 口径)")
+				break
+	# ⑧ 词缀 未设态 全 透明 (UI 隐藏 口径 同源)
+	var fr := Rect2i(120, 340, ICON, ICON)
+	var fop := 0
+	for y in fr.size.y:
+		for x in fr.size.x:
+			if img.get_pixel(fr.position.x + x, fr.position.y + y).a > 0.1:
+				fop += 1
+	if fop > 0:
+		_fail.append("词缀 未设态 应 全 透明 (实际 %d 不透明 像素)" % fop)
 	_finish()
 
 
@@ -284,7 +326,7 @@ func _probe_body(img: Image, rect: Rect2i, col: Color, tag: String) -> void:
 
 func _finish() -> void:
 	if _fail.is_empty():
-		print("ICON_PROBE PASS (6 类 非空 + 主色 命中 + Boss 层 隐藏 + 5 部位 互异 + 10 法器 金 命中 不重 + 未设态 全透明 + 5 技能 字形 互异 + 主动 金 爆发 描边 两 档 区分 + 技能 未设态 全透明)")
+		print("ICON_PROBE PASS (6 类 非空 + 主色 命中 + Boss 层 隐藏 + 5 部位 互异 + 10 法器 金 命中 不重 + 未设态 全透明 + 5 技能 字形 互异 + 主动 金 爆发 描边 两 档 区分 + 技能 未设态 全透明 + 6 词缀 池 字形 互异 + 词缀 未设态 全透明)")
 		get_tree().quit(0)
 	else:
 		printerr("ICON_PROBE FAIL (%d 项):" % _fail.size())

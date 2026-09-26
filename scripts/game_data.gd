@@ -158,6 +158,29 @@ const SKILL_CAT_FALLBACK := Color(0.6, 0.62, 0.68)
 # 主动 神通 爆发 描边 金 (与 EQUIP_ITEM_COLOR 同值 — 金色 与 爆发/灵石 语义 同源;
 # 24 主动 按 类别 取 字形 + 金爆发 描边 区分 主动, 96 被动 无 描边)
 const SKILL_ACTIVE_GOLD := Color(0.85, 0.7, 0.38)
+# M8-4 打磨-156: 词缀 6 池 字形 主色 (qi_rate=灵气 青 / stone_rate=灵石 金 / bt_chance=突破 橙 /
+# offline_rate=离线 蓝紫 / atk=攻击 红 / def=防御 灰蓝; 低饱和 深色仙侠 基调, 与 TIER_COLOR/怪物 6 类/
+# 部位 5 色/技能 5 类 同风格 互异; scripts/affix_icon.gd 字形 单源 消费; 品质 色 由 背包格 品质色
+# 区分, 池 字形 不 随 品质 变色)
+const AFFIX_POOL_COLORS := {
+	"qi_rate": Color(0.45, 0.82, 0.75),
+	"stone_rate": Color(0.9, 0.78, 0.4),
+	"bt_chance": Color(0.95, 0.55, 0.35),
+	"offline_rate": Color(0.55, 0.6, 0.95),
+	"atk": Color(0.92, 0.45, 0.42),
+	"def": Color(0.6, 0.72, 0.85),
+}
+# 词缀 池 中文 名 (单源; 与 affixes.json pool_name 字段 同源, 防 数据 漂移)
+const AFFIX_POOL_CN := {
+	"qi_rate": "灵气速率",
+	"stone_rate": "灵石速率",
+	"bt_chance": "突破成功率",
+	"offline_rate": "离线效率",
+	"atk": "攻击",
+	"def": "防御",
+}
+# 池 字形 兜底 色 (未知 pool 时 不 绘制 字形, 该 色 仅 防 越界 查询 兜底)
+const AFFIX_POOL_FALLBACK := Color(0.6, 0.62, 0.68)
 
 # ---- 数据表 (加载自 JSON) ----
 var skill_by_id := {}
@@ -1336,6 +1359,39 @@ func skill_cat_glyph_tip(id: String) -> String:
 		return ""
 	var active: bool = str(s.get("type", "")) == "active"
 	return "类别字形: %s·%s (%s)" % [cat, SKILL_CAT_CN.get(cat, ""), "主动·金爆发描边" if active else "被动·无描边"]
+
+
+# M8-4 打磨-156: 词缀 池 主色 只读 接口 (单源 AFFIX_POOL_COLORS 常量, 6 池 qi_rate/stone_rate/
+# bt_chance/offline_rate/atk/def; 未知 pool = 兜底 色 防御 — 由 UI 按 词缀 数据 存在 门控 显隐,
+# 本 接口 只 保证 颜色 可算 不 崩溃; 与 153 monster_category_color/154 equip_slot_color/
+# 155 skill_category_color 同 口径; 纯 只读 无 副作用)
+func affix_pool_color(pool: String) -> Color:
+	return AFFIX_POOL_COLORS.get(pool, AFFIX_POOL_FALLBACK)
+
+
+# M8-4 打磨-156: 词缀 池 中文 名 只读 接口 (单源 AFFIX_POOL_CN 常量, 与 affixes.json pool_name
+# 同源 防 数据 漂移; 未知 pool = 空串 防御; 纯 只读 无 副作用)
+func affix_pool_name(pool: String) -> String:
+	return str(AFFIX_POOL_CN.get(pool, ""))
+
+
+# M8-4 打磨-156: 词缀 池 关键字 只读 接口 (单源 affix_by_id 数据 pool 字段; 未知 id = 空串 防御;
+# 纯 只读 无 副作用)
+func affix_pool_of(id: String) -> String:
+	var a: Dictionary = affix_by_id.get(id, {})
+	return str(a.get("pool", ""))
+
+
+# M8-4 打磨-156: 词缀 池 字形 口径 行 (只读 单源; 与 行内 affix_icon 图标 同 池 口径:
+# 池名 + 池主色 语义; 未知 id/池 = 空串 防御; 纯 展示 无 存档/统计 副作用)
+func affix_pool_glyph_tip(id: String) -> String:
+	var a: Dictionary = affix_by_id.get(id, {})
+	if a.is_empty():
+		return ""
+	var pool: String = str(a.get("pool", ""))
+	if pool == "":
+		return ""
+	return "池字形: %s·%s (池主色, 不随品质变色)" % [pool, str(a.get("pool_name", ""))]
 
 # 战斗判定: 即时, 无死亡, 可无限重试。win = 玩家 有效 atk >= 怪 atk x 0.85
 # tower = "fixed" (镇妖塔) / "endless" (登天梯); roll 仅 影响 展示 伤害浮动 (不改变 胜负), 可注入 确定性

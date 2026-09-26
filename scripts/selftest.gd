@@ -9978,6 +9978,86 @@ func _init() -> void:
 			"M8-3 打磨-155b skill_detail 120 技能 全 含 类别字形 口径 行 (实际 %d, 首个 失 %s)" % [st155b, st155bfail])
 	check(g.skill_cat_glyph_tip("sword_0_0") == g.skill_cat_glyph_tip("sword_0_0") and g.skill_detail("sword_0_0").find("类别字形:") >= 0,
 			"M8-3 打磨-155b 只读 连读 恒定 无 副作用")
+	# ---------- M8-4 打磨-156a: 词缀 6 池字形 (数据层+绘制层) ----------
+	# qi_rate=灵气 涡旋 / stone_rate=灵石 宝石 / bt_chance=突破 箭矢 / offline_rate=离线 月相 /
+	# atk=攻击 交叉 锋 / def=防御 盾形; 池 主色 单源 GameData.AFFIX_POOL_COLORS (affix_icon.gd
+	# 字形 纯函数 消费, 同 池 恒 同 图); 像素 采样 走 Xvfb icon_probe (headless 不 采样 像素,
+	# 本 段 断言 色 表 口径 + 数据 覆盖 + 接口 单源 + 节点 状态)
+	var apools156: Array = ["qi_rate", "stone_rate", "bt_chance", "offline_rate", "atk", "def"]
+	var acols156: Array = []
+	for ap156 in apools156:
+		acols156.append(g.affix_pool_color(ap156))
+	check(g.AFFIX_POOL_COLORS.size() == 6, "M8-4 打磨-156a 6 池 主色 表 齐全 (实际 %d)" % g.AFFIX_POOL_COLORS.size())
+	var au156: Array = []
+	for ac156b in acols156:
+		if ac156b not in au156:
+			au156.append(ac156b)
+	check(au156.size() == 6, "M8-4 打磨-156a 6 池 主色 互异 (实际 %d)" % au156.size())
+	check(g.affix_pool_color("atk") == g.AFFIX_POOL_COLORS["atk"], "M8-4 打磨-156a 池 接口 = 常量 单源 恒等")
+	check(g.affix_pool_color("") == g.AFFIX_POOL_FALLBACK and g.affix_pool_color("unknown") == g.AFFIX_POOL_FALLBACK,
+			"M8-4 打磨-156a 越界/未知 池 兜底 色 恒等")
+	var acov156 := 0
+	var acovfail156 := ""
+	for aid156 in g.affix_ids:
+		var ak156: Dictionary = g.affix_by_id[aid156]
+		var cp156: String = str(ak156.get("pool", ""))
+		if cp156 in g.AFFIX_POOL_COLORS and g.affix_pool_color(cp156) == g.AFFIX_POOL_COLORS[cp156]:
+			acov156 += 1
+		else:
+			acovfail156 = str(aid156) + "/" + cp156
+	check(acov156 == 120 and acovfail156 == "", "M8-4 打磨-156a 120 词缀 池 全覆盖 + 颜色 恒等 (实际 %d, 首个 失 %s)" % [acov156, acovfail156])
+	var acnt156: Dictionary = {}
+	for aid156b in g.affix_ids:
+		var cp156b: String = str(g.affix_by_id[aid156b].get("pool", ""))
+		acnt156[cp156b] = int(acnt156.get(cp156b, 0)) + 1
+	check(acnt156.size() == 6 and int(acnt156["qi_rate"]) == 20 and int(acnt156["atk"]) == 20,
+			"M8-4 打磨-156a 6 池 各 20 词缀 分布 恒等 (池数 %d)" % acnt156.size())
+	check(g.affix_pool_name("qi_rate") == "灵气速率" and g.affix_pool_name("def") == "防御"
+			and g.affix_pool_name("bt_chance") == "突破成功率",
+			"M8-4 打磨-156a 池 中文名 单源 多 例 恒等")
+	check(g.affix_pool_name("") == "" and g.affix_pool_name("unknown") == "",
+			"M8-4 打磨-156a 未知 池 名 防御 空串")
+	var apof156 := 0
+	var apoffail156 := ""
+	for aid156c in g.affix_ids:
+		var dp156: String = str(g.affix_by_id[aid156c].get("pool", ""))
+		if g.affix_pool_of(aid156c) == dp156 and dp156 != "":
+			apof156 += 1
+		else:
+			apoffail156 = str(aid156c)
+	check(apof156 == 120 and apoffail156 == "", "M8-4 打磨-156a affix_pool_of 120 词缀 = 数据 pool 恒等 (实际 %d, 首个 失 %s)" % [apof156, apoffail156])
+	check(g.affix_pool_of("unknown_id") == "", "M8-4 打磨-156a 未知 id 池 关键字 防御 空串")
+	var atip156: String = g.affix_pool_glyph_tip("af_qi_rate_0_0")
+	check(atip156 == "池字形: qi_rate·灵气速率 (池主色, 不随品质变色)",
+			"M8-4 打磨-156a 池 字形 口径 行 恒等 (实际 %s)" % atip156)
+	check(g.affix_pool_glyph_tip("af_atk_4_3") == "池字形: atk·攻击 (池主色, 不随品质变色)"
+			and g.affix_pool_glyph_tip("") == "" and g.affix_pool_glyph_tip("unknown_id") == "",
+			"M8-4 打磨-156a 池 字形 口径 行 多 例 + 未知/空 id 防御")
+	var aic156: CanvasItem = (load("res://scripts/affix_icon.gd").new())
+	root.add_child(aic156)
+	aic156.set_pool("atk", g.affix_pool_color("atk"))
+	aic156.set_pool("atk", g.affix_pool_color("atk"))
+	check(aic156.redraw_count == 1 and aic156.get_pool() == "atk",
+			"M8-4 打磨-156a 池 字形 set_pool 幂等 不 重绘 (实际 %d)" % aic156.redraw_count)
+	aic156.set_pool("def", g.affix_pool_color("def"))
+	check(aic156.redraw_count == 2 and aic156.get_pool() == "def",
+			"M8-4 打磨-156a 切 池 触发 重绘 (实际 %d)" % aic156.redraw_count)
+	aic156.set_pool("def", g.affix_pool_color("def"))
+	check(aic156.redraw_count == 2, "M8-4 打磨-156a 同 池 键 幂等 不 重绘 (实际 %d)" % aic156.redraw_count)
+	var aic2_156: CanvasItem = (load("res://scripts/affix_icon.gd").new())
+	root.add_child(aic2_156)
+	check(aic2_156.redraw_count == 0 and aic2_156.get_pool() == "",
+			"M8-4 打磨-156a 未设 池 不 设 态 (隐藏 口径, 实际 %d)" % aic2_156.redraw_count)
+	aic2_156.set_pool("qi_rate", g.affix_pool_color("qi_rate"))
+	aic2_156.set_pool("", Color())
+	check(aic2_156.redraw_count == 2 and aic2_156.get_pool() == "",
+			"M8-4 打磨-156a 空 池 清除 回 未 设 态 (实际 %d)" % aic2_156.redraw_count)
+	aic156.queue_free()
+	aic2_156.queue_free()
+	await process_frame
+	check(g.affix_pool_color("stone_rate") == g.AFFIX_POOL_COLORS["stone_rate"]
+			and g.affix_pool_name("offline_rate") == "离线效率",
+			"M8-4 打磨-156a 节点 释放 后 接口 只读 恒定")
 	g.save_game()
 	g.save_game()
 	
