@@ -356,6 +356,72 @@ func _ready() -> void:
 	g._offline_qi = 0.0
 	g._offline_stone = 0.0
 	ui._refresh()
+	# 打磨-161: 修行统计 爬塔败 计数 段 (tower_loss 埋点 真实 路径 [try_tower_challenge 败局 分支],
+	# 对称 打磨-14 tower_win 胜局 埋点: 双塔 败局 停留 本层 无 惩罚, 胜/败 均 手动+自动 路径 同 口径 计数)
+	check(ui._stats_label.tooltip_text.find("爬塔") >= 0 and ui._stats_label.tooltip_text.find("打磨-161") >= 0
+			and ui._stats_label.tooltip_text.find("手动+自动 路径 同 口径 计数") >= 0,
+			"打磨-161 统计 行 tooltip 含 爬塔胜/败 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 爬塔胜/败 段 + 标签 = 接口 恒等
+	var tw161: int = int(g.stats.get("tower_win", 0.0))
+	var tl161: int = int(g.stats.get("tower_loss", 0.0))
+	check(g.stats_text().find("爬塔胜 %d 次 (败 %d)" % [tw161, tl161]) >= 0,
+			"打磨-161 stats_text 含 爬塔胜/败 段 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-161 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 弱玩家 镇妖塔 12 层 败 (数据 锚定 阈值 3.23 > 2.0) 埋点 +1 停留 本层 -> _refresh 标签 同步
+	var r161: int = g.realm_idx
+	var l161: int = g.layer
+	var a161: bool = g.ascended
+	var es161: float = g.essence
+	var st161: float = g.stones
+	var twf161: int = g.tower_fixed_floor
+	var tl_before161: int = int(g.stats.get("tower_loss", 0.0))
+	var tw_before161: int = int(g.stats.get("tower_win", 0.0))
+	var lr161: Array[String] = g.learned.duplicate()
+	var ow161: Array[String] = g.owned.duplicate()
+	var owe161: Array[String] = g.owned_eq.duplicate()
+	var eq161: Dictionary = g.equipped.duplicate(true)
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 11  # 待挑战 12 层 (弱玩家 恒败, 数据 锚定, 同 打磨-123/128)
+	g.tower_fixed_clear = false
+	g.poison_battles = 0
+	g.try_tower_challenge("fixed", 0.5)
+	check(int(g.stats.get("tower_loss", 0.0)) == tl_before161 + 1
+			and int(g.stats.get("tower_win", 0.0)) == tw_before161,
+			"打磨-161 败局 埋点 tower_loss +1 且 不 计 tower_win (实际 loss %d / win %d)" % [int(g.stats.get("tower_loss", 0.0)), int(g.stats.get("tower_win", 0.0))])
+	check(g.tower_fixed_floor == 11, "打磨-161 败局 停留 本层 不 推进 (实际 %d)" % g.tower_fixed_floor)
+	ui._refresh()
+	check(g.stats_text().find("爬塔胜 %d 次 (败 %d)" % [tw_before161, tl_before161 + 1]) >= 0,
+			"打磨-161 埋点 后 文案 含 新 爬塔败 计数 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-161 _refresh 后 标签 文本 同步 恒等")
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached161: String = ui._stats_text
+	var es_chk161: float = g.essence
+	ui._refresh()
+	check(ui._stats_text == cached161 and str(ui._stats_label.text) == g.stats_text() and g.essence == es_chk161,
+			"打磨-161 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (境界 状态 恢复 防 污染 后续 段)
+	g.ascended = a161
+	g.realm_idx = r161
+	g.layer = l161
+	g.essence = es161
+	g.stones = st161
+	g.tower_fixed_floor = twf161
+	g.learned = lr161
+	g.owned = ow161
+	g.owned_eq = owe161
+	g.equipped = eq161
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-161 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-160 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 

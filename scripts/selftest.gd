@@ -1714,6 +1714,75 @@ func _init() -> void:
 	g._offline_qi = offq160
 	g._offline_stone = offst160
 
+	# ---------- 打磨-161: 爬塔败 计数 段 (tower_loss 埋点 本轮 新增 [try_tower_challenge 败局 分支],
+	# 对称 打磨-14 tower_win 胜局 埋点: 双塔 败局 停留 本层 无 惩罚, 胜/败 均 手动+自动 路径 同 口径 计数) ----------
+	# 空档 _load_stats 兜底 tower_loss = 0
+	var sv161: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("爬塔胜 0 次 (败 0)") >= 0,
+			"打磨-161 空档 _load_stats 兜底 爬塔败 段 = 0 (实际 %s)" % g.stats_text().left(80))
+	g.stats = sv161
+	# stats_text 含 爬塔败 段 (与 爬塔胜 段 相邻, 便于 对照 胜败 比)
+	var tw161: int = int(g.stats.get("tower_win", 0.0))
+	var tl161: int = int(g.stats.get("tower_loss", 0.0))
+	check(g.stats_text().find("爬塔胜 %d 次 (败 %d) · 离线" % [tw161, tl161]) >= 0,
+			"打磨-161 stats_text 含 爬塔胜/败 段 (实际 %s)" % g.stats_text().left(90))
+	# 真实 路径 埋点: 弱玩家 镇妖塔 12 层 败 (数据 锚定 atk 2.0 < 阈值 3.23) 埋点 +1 停留 本层
+	var ri161: int = g.realm_idx
+	var ly161: int = g.layer
+	var es161: float = g.essence
+	var st161: float = g.stones
+	var asc161: bool = g.ascended
+	var tl_before: int = int(g.stats.get("tower_loss", 0.0))
+	var tw_before: int = int(g.stats.get("tower_win", 0.0))
+	var twf161: int = g.tower_fixed_floor
+	var lr160b: Array[String] = g.owned.duplicate()
+	var lr160c: Array[String] = g.owned_eq.duplicate()
+	var eq161: Dictionary = g.equipped.duplicate(true)
+	var twc161: bool = g.tower_fixed_clear
+	var pb161: int = g.poison_battles
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_fixed_floor = 11  # 待挑战 12 层 (弱玩家 恒败, 数据 锚定 阈值 3.23 > 2.0, 同 打磨-123/128)
+	g.tower_fixed_clear = false
+	g.poison_battles = 0
+	g.try_tower_challenge("fixed", 0.5)
+	check(int(g.stats.get("tower_loss", 0.0)) == tl_before + 1,
+			"打磨-161 败局 埋点 tower_loss +1 (实际 %d)" % int(g.stats.get("tower_loss", 0.0)))
+	check(int(g.stats.get("tower_win", 0.0)) == tw_before,
+			"打磨-161 败局 不 计 tower_win (实际 %d)" % int(g.stats.get("tower_win", 0.0)))
+	check(g.tower_fixed_floor == 11,
+			"打磨-161 败局 停留 本层 不 推进 (实际 %d)" % g.tower_fixed_floor)
+	check(g.stats_text().find("爬塔胜 %d 次 (败 %d)" % [tw_before, tl_before + 1]) >= 0,
+			"打磨-161 埋点 后 文案 含 新 爬塔败 计数 (实际 %s)" % g.stats_text().left(90))
+	# 只读: stats_text 连读 恒定 无 副作用
+	var stt_r161: String = g.stats_text()
+	g.stats_text()
+	check(g.stats_text() == stt_r161, "打磨-161 stats_text 只读 连读 恒定 无 副作用")
+	# 收尾 复原 干净 基准 (塔 态/境界/收集 复原 防 污染 后续 段)
+	g.ascended = asc161
+	g.realm_idx = ri161
+	g.layer = ly161
+	g.essence = es161
+	g.stones = st161
+	g.tower_fixed_floor = twf161
+	g.dao_level = 0
+	g.dao = 0.0
+	g.owned = lr160b
+	g.owned_eq = lr160c
+	g.equipped = eq161
+	g.tower_fixed_clear = twc161
+	g.poison_battles = pb161
+
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
 	g.essence = 54321.0
