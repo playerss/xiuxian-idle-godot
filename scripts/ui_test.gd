@@ -296,6 +296,68 @@ func _ready() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-159 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+	# 打磨-160: 修行统计 离线收益 累计 段 (offline_total_qi/stone 埋点 真实 路径 [load_game 离线 结算 分支,
+	# 对称 打磨-158/159 补 展示位]: 历史 离线 收益 总量 展示位; 主资源 飞升后 计 道行 口径 与 offline_msg 同源)
+	check(ui._stats_label.tooltip_text.find("历史 离线 收益 累计") >= 0 and ui._stats_label.tooltip_text.find("打磨-160") >= 0,
+			"打磨-160 统计 行 tooltip 含 离线 累计 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# 真实 路径: 构造 2h 离线档 读档 -> 结算 入账 stats -> _refresh 标签 同步 含 新 累计 段 (elapsed 墙钟 漂移 动态 恒等)
+	var asc160: bool = g.ascended
+	var ri160: int = g.realm_idx
+	var ly160: int = g.layer
+	var es160: float = g.essence
+	var st160: float = g.stones
+	var dao160: float = g.dao
+	var dl160: int = g.dao_level
+	var lr160: Array[String] = g.learned.duplicate()
+	var ow160: Array[String] = g.owned.duplicate()
+	var owe160: Array[String] = g.owned_eq.duplicate()
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	var otq_b160: float = float(g.stats.get("offline_total_qi", 0.0))
+	var ots_b160: float = float(g.stats.get("offline_total_stone", 0.0))
+	var f160 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f160.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 0.0, "stones": 0.0, "stats": g.stats, "ts": int(Time.get_unix_time_from_system()) - 7200}))
+	f160.close()
+	g.load_game()
+	check(absf(g._offline_qi - 3600.0) < 2.0, "打磨-160 真实 路径 离线 结算 明细 ≈3600 (实际 %s)" % g.fmt(g._offline_qi))
+	var otq160: float = float(g.stats.get("offline_total_qi", 0.0))
+	var ots160: float = float(g.stats.get("offline_total_stone", 0.0))
+	var otdq160: float = otq160 - otq_b160
+	var otds160: float = ots160 - ots_b160
+	check(absf(otdq160 - g._offline_qi) < 1e-6 and absf(otds160 - g._offline_stone) < 1e-6,
+			"打磨-160 离线 结算 埋点 增量 = 本次 明细 (实际 %s / %s)" % [g.fmt(otdq160), g.fmt(otds160)])
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-160 _refresh 后 标签 文本 = 接口 恒等 (含 离线 累计 段)")
+	check(g.stats_text().find("离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt(otq160), g.fmt(ots160)]) >= 0,
+			"打磨-160 埋点 后 文案 含 新 离线 累计 (实际 %s)" % g.stats_text().left(90))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached160: String = ui._stats_text
+	var es_chk160: float = g.essence
+	ui._refresh()
+	check(ui._stats_text == cached160 and str(ui._stats_label.text) == g.stats_text() and g.essence == es_chk160,
+			"打磨-160 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (境界 状态 恢复 + 离线 明细 归零 防 污染 后续 段; 离线 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc160
+	g.realm_idx = ri160
+	g.layer = ly160
+	g.dao_level = dl160
+	g.dao = dao160
+	g.essence = es160
+	g.stones = st160
+	g.learned = lr160
+	g.owned = ow160
+	g.owned_eq = owe160
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-160 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)

@@ -1716,7 +1716,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1726,13 +1726,17 @@ func _load_stats(v: Variant) -> void:
 # 与 突破 成功 段 相邻 便于 对照 成败 比)
 # 打磨-159: 道行精进 失败 段 (dao_fail 埋点 本轮 新增 [try_dao_break 失败 分支, 对称 打磨-158 突破 失败],
 # 展示位 补齐: 道行精进 成功 段 括号 内 失败 次数, 与 成功 计数 相邻 便于 对照 成败 比; 旧档 缺 键 兜底 0)
+# 打磨-160: 离线收益 累计 段 (offline_total_qi/stone 累计 埋点 本轮 新增 [load_game 离线 结算 分支,
+# 对称 打磨-158/159 只 补 展示位 与 埋点]: 玩家 挂机 回看 不知 历史 离线 收益 总量, 只 见 本次 启动 浮动
+# [打磨-66]; 主资源 飞升后 计 道行 口径, 与 offline_msg 同源 单点 累加; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
 		int(stats.get("skill_use", 0.0)), int(stats.get("item_buy", 0.0)),
 		int(stats.get("equip_buy", 0.0)), int(stats.get("tower_win", 0.0)),
+		fmt(float(stats.get("offline_total_qi", 0.0))), fmt(float(stats.get("offline_total_stone", 0.0))),
 		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
 		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0))]
 
@@ -4227,6 +4231,10 @@ func load_game() -> void:
 			_offline_sec = elapsed
 			_offline_qi = gq
 			_offline_stone = gs
+			# 打磨-160: 离线收益 累计 埋点 (stats 只 增不减 存档 持久化, 与 本次 明细 同源 单点;
+			# 只 改 内存 统计 不 改 结算 逻辑, 旧档 缺 键 兜底 0)
+			_stat_inc("offline_total_qi", gq)
+			_stat_inc("offline_total_stone", gs)
 			if ascended:
 				dao += gq
 				offline_msg = "离线 %s, 效率%0.0f%%, 收获道行 %s, 灵石 %s" % [

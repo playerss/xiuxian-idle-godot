@@ -1634,6 +1634,86 @@ func _init() -> void:
 	g.dao_level = dl159
 	g.dao = dao159
 
+	# ---------- 打磨-160: 离线收益 累计 段 (offline_total_qi/stone 埋点 本轮 新增 [load_game 离线 结算 分支],
+	# 对称 打磨-158/159 补 展示位: 历史 离线 收益 总量 展示位; 主资源 飞升后 计 道行 口径 与 offline_msg 同源) ----------
+	# 空档 _load_stats 兜底 双 键 = 0
+	var sv160: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("离线 主资源 0 · 灵石 0") >= 0, "打磨-160 空档 _load_stats 兜底 离线 段 = 0 (实际 %s)" % g.stats_text().left(80))
+	g.stats = sv160
+	# stats_text 含 离线 累计 段 (与 本次 明细 同源 口径, fmt 万/亿 档 显示)
+	var otq160: float = float(g.stats.get("offline_total_qi", 0.0))
+	var ots160: float = float(g.stats.get("offline_total_stone", 0.0))
+	var stt160: String = g.stats_text()
+	check(stt160.find("离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt(otq160), g.fmt(ots160)]) >= 0,
+			"打磨-160 stats_text 含 离线 累计 段 (实际 %s)" % stt160.left(90))
+	# 真实 路径: 构造 未飞升 2h 离线档 读档 -> 累计 埋点 入账 = 本次 明细 恒等 (elapsed 含 墙钟 漂移, 相对 容差)
+	var asc160: bool = g.ascended
+	var ri160: int = g.realm_idx
+	var ly160: int = g.layer
+	var es160: float = g.essence
+	var st160: float = g.stones
+	var dao160: float = g.dao
+	var dl160: int = g.dao_level
+	var offq160: float = g._offline_qi
+	var offst160: float = g._offline_stone
+	var lr160: Array[String] = g.learned.duplicate()
+	var ow160: Array[String] = g.owned.duplicate()
+	var owe160: Array[String] = g.owned_eq.duplicate()
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	var otq_b160: float = float(g.stats.get("offline_total_qi", 0.0))
+	var ots_b160: float = float(g.stats.get("offline_total_stone", 0.0))
+	var f160 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f160.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 0.0, "stones": 0.0, "stats": g.stats, "ts": int(Time.get_unix_time_from_system()) - 7200}))
+	f160.close()
+	g.load_game()
+	# load_game 重读 stats (基准 保留), 结算 后 累计 = 基准 + 本次 明细 (纯挂机 速率 1.0, 效率 50%, 2h -> ≈3600)
+	check(absf(g._offline_qi - 3600.0) < 2.0, "打磨-160 真实 路径 离线 明细 ≈3600 (实际 %s)" % g.fmt(g._offline_qi))
+	check(absf((float(g.stats["offline_total_qi"]) - otq_b160) - g._offline_qi) < 1e-6
+			and absf((float(g.stats["offline_total_stone"]) - ots_b160) - g._offline_stone) < 1e-6,
+			"打磨-160 离线 结算 埋点 增量 = 本次 明细 (实际 %s / %s)" % [g.fmt(float(g.stats["offline_total_qi"])), g.fmt(float(g.stats["offline_total_stone"]))])
+	check(absf(float(g.stats["offline_total_qi"]) - (otq_b160 + g._offline_qi)) / 3601.0 < 1e-6
+			and absf(float(g.stats["offline_total_stone"]) - (ots_b160 + g._offline_stone)) / 3601.0 < 1e-6,
+			"打磨-160 累计 = 基准 + 本次 增量 恒等 (相对容差 防 float 往返 漂移)")
+	check(g.stats_text().find("离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt(float(g.stats["offline_total_qi"])), g.fmt(float(g.stats["offline_total_stone"]))]) >= 0,
+			"打磨-160 埋点 后 文案 含 新 离线 累计 (实际 %s)" % g.stats_text().left(90))
+	# 二次 读档 累加: 再 构造 1h 离线档 -> 累计 再 增 (≈900), 历史 累计 跨 读档 持久
+	var otq_m160: float = float(g.stats["offline_total_qi"])
+	g.save_game()
+	var f160b := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f160b.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 0.0, "stones": 0.0, "stats": g.stats, "ts": int(Time.get_unix_time_from_system()) - 3600}))
+	f160b.close()
+	g.load_game()
+	check(absf(float(g.stats["offline_total_qi"]) - (otq_m160 + g._offline_qi)) / (otq_m160 + 1801.0) < 1e-6
+			and absf(g._offline_qi - 1800.0) < 2.0,
+			"打磨-160 二次 读档 累计 再 增 = 上 基准 + 1800 (实际 %s / 本次 %s)" % [g.fmt(float(g.stats["offline_total_qi"])), g.fmt(g._offline_qi)])
+	# 只读: stats_text 连读 恒定 无 副作用 (离线 累计 不改 资源/明细)
+	var stt_r160: String = g.stats_text()
+	var offq_r160: float = g._offline_qi
+	g.stats_text()
+	check(g.stats_text() == stt_r160 and g._offline_qi == offq_r160,
+			"打磨-160 stats_text 只读 连读 恒定 无 副作用")
+	# 收尾 复原 干净 基准 (离线 明细 归零 防 污染 后续 段 浮动 断言; 离线 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc160
+	g.realm_idx = ri160
+	g.layer = ly160
+	g.dao_level = dl160
+	g.dao = dao160
+	g.essence = es160
+	g.stones = st160
+	g.learned = lr160
+	g.owned = ow160
+	g.owned_eq = owe160
+	g._offline_sec = 0.0
+	g._offline_qi = offq160
+	g._offline_stone = offst160
+
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
 	g.essence = 54321.0
