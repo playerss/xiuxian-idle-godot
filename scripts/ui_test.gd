@@ -333,8 +333,8 @@ func _ready() -> void:
 			"打磨-160 离线 结算 埋点 增量 = 本次 明细 (实际 %s / %s)" % [g.fmt(otdq160), g.fmt(otds160)])
 	ui._refresh()
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-160 _refresh 后 标签 文本 = 接口 恒等 (含 离线 累计 段)")
-	check(g.stats_text().find("离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt(otq160), g.fmt(ots160)]) >= 0,
-			"打磨-160 埋点 后 文案 含 新 离线 累计 (实际 %s)" % g.stats_text().left(90))
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(otq160), g.fmt(ots160)]) >= 0,
+			"打磨-160 埋点 后 文案 含 新 离线 累计 (打磨-162 新 格式 串 适配, 实际 %s)" % g.stats_text().left(90))
 	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
 	var cached160: String = ui._stats_text
 	var es_chk160: float = g.essence
@@ -424,6 +424,66 @@ func _ready() -> void:
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-161 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-160 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+	# 打磨-162: 修行统计 离线时长 累计 段 (offline_total_sec 埋点 真实 路径 [load_game 离线 结算 分支],
+	# 对称 打磨-160 离线 收益 累计: 历史 离线 总 时长 展示位; 结算 口径 读档 离线 >1分钟, 单 次 上限 8 小时 钳制)
+	check(ui._stats_label.tooltip_text.find("离线时长") >= 0 and ui._stats_label.tooltip_text.find("打磨-162") >= 0
+			and ui._stats_label.tooltip_text.find("单 次 上限 8 小时 钳制") >= 0,
+			"打磨-162 统计 行 tooltip 含 离线时长 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 累计离线 段 + 标签 = 接口 恒等
+	var ots162: float = float(g.stats.get("offline_total_sec", 0.0))
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(ots162), g.fmt(float(g.stats.get("offline_total_qi", 0.0))), g.fmt(float(g.stats.get("offline_total_stone", 0.0)))]) >= 0,
+			"打磨-162 stats_text 含 累计离线 段 (实际 %s)" % g.stats_text().left(90))
+	# 真实 路径: 构造 2h 离线档 读档 -> 结算 埋点 入账 -> _refresh 标签 同步 (elapsed 墙钟 漂移 动态 锚定)
+	var asc162: bool = g.ascended
+	var ri162: int = g.realm_idx
+	var ly162: int = g.layer
+	var es162: float = g.essence
+	var st162: float = g.stones
+	var dao162: float = g.dao
+	var dl162: int = g.dao_level
+	var lr162: Array[String] = g.learned.duplicate()
+	var ow162: Array[String] = g.owned.duplicate()
+	var owe162: Array[String] = g.owned_eq.duplicate()
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	var otsec_b162: float = float(g.stats.get("offline_total_sec", 0.0))
+	var f162 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f162.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 0.0, "stones": 0.0, "stats": g.stats, "ts": int(Time.get_unix_time_from_system()) - 7200}))
+	f162.close()
+	g.load_game()
+	check(absf(float(g.stats["offline_total_sec"]) - (otsec_b162 + g._offline_sec)) < 1e-6
+			and absf(g._offline_sec - 7200.0) < 2.0,
+			"打磨-162 离线 结算 埋点 增量 = 本次 elapsed (实际 %s)" % g.fmt_stats_time(float(g.stats["offline_total_sec"])))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-162 _refresh 后 标签 文本 = 接口 恒等 (含 累计离线 段)")
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached162: String = ui._stats_text
+	var es_chk162: float = g.essence
+	ui._refresh()
+	check(ui._stats_text == cached162 and str(ui._stats_label.text) == g.stats_text() and g.essence == es_chk162,
+			"打磨-162 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (境界 状态 恢复 + 离线 明细 归零 防 污染 后续 段; 离线 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc162
+	g.realm_idx = ri162
+	g.layer = ly162
+	g.dao_level = dl162
+	g.dao = dao162
+	g.essence = es162
+	g.stones = st162
+	g.learned = lr162
+	g.owned = ow162
+	g.owned_eq = owe162
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-162 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)

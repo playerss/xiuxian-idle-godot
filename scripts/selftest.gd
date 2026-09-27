@@ -1645,8 +1645,8 @@ func _init() -> void:
 	var otq160: float = float(g.stats.get("offline_total_qi", 0.0))
 	var ots160: float = float(g.stats.get("offline_total_stone", 0.0))
 	var stt160: String = g.stats_text()
-	check(stt160.find("离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt(otq160), g.fmt(ots160)]) >= 0,
-			"打磨-160 stats_text 含 离线 累计 段 (实际 %s)" % stt160.left(90))
+	check(stt160.find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(otq160), g.fmt(ots160)]) >= 0,
+			"打磨-160 stats_text 含 离线 累计 段 (打磨-162 新 格式 串 适配, 实际 %s)" % stt160.left(90))
 	# 真实 路径: 构造 未飞升 2h 离线档 读档 -> 累计 埋点 入账 = 本次 明细 恒等 (elapsed 含 墙钟 漂移, 相对 容差)
 	var asc160: bool = g.ascended
 	var ri160: int = g.realm_idx
@@ -1681,8 +1681,8 @@ func _init() -> void:
 	check(absf(float(g.stats["offline_total_qi"]) - (otq_b160 + g._offline_qi)) / 3601.0 < 1e-6
 			and absf(float(g.stats["offline_total_stone"]) - (ots_b160 + g._offline_stone)) / 3601.0 < 1e-6,
 			"打磨-160 累计 = 基准 + 本次 增量 恒等 (相对容差 防 float 往返 漂移)")
-	check(g.stats_text().find("离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt(float(g.stats["offline_total_qi"])), g.fmt(float(g.stats["offline_total_stone"]))]) >= 0,
-			"打磨-160 埋点 后 文案 含 新 离线 累计 (实际 %s)" % g.stats_text().left(90))
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(float(g.stats["offline_total_qi"])), g.fmt(float(g.stats["offline_total_stone"]))]) >= 0,
+			"打磨-160 埋点 后 文案 含 新 离线 累计 (打磨-162 新 格式 串 适配, 实际 %s)" % g.stats_text().left(90))
 	# 二次 读档 累加: 再 构造 1h 离线档 -> 累计 再 增 (≈900), 历史 累计 跨 读档 持久
 	var otq_m160: float = float(g.stats["offline_total_qi"])
 	g.save_game()
@@ -1725,8 +1725,8 @@ func _init() -> void:
 	# stats_text 含 爬塔败 段 (与 爬塔胜 段 相邻, 便于 对照 胜败 比)
 	var tw161: int = int(g.stats.get("tower_win", 0.0))
 	var tl161: int = int(g.stats.get("tower_loss", 0.0))
-	check(g.stats_text().find("爬塔胜 %d 次 (败 %d) · 离线" % [tw161, tl161]) >= 0,
-			"打磨-161 stats_text 含 爬塔胜/败 段 (实际 %s)" % g.stats_text().left(90))
+	check(g.stats_text().find("爬塔胜 %d 次 (败 %d) · 累计离线" % [tw161, tl161]) >= 0,
+			"打磨-161 stats_text 含 爬塔胜/败 段 (打磨-162 新 格式 串 适配, 实际 %s)" % g.stats_text().left(90))
 	# 真实 路径 埋点: 弱玩家 镇妖塔 12 层 败 (数据 锚定 atk 2.0 < 阈值 3.23) 埋点 +1 停留 本层
 	var ri161: int = g.realm_idx
 	var ly161: int = g.layer
@@ -1782,6 +1782,78 @@ func _init() -> void:
 	g.equipped = eq161
 	g.tower_fixed_clear = twc161
 	g.poison_battles = pb161
+
+	# ---------- 打磨-162: 离线时长 累计 段 (offline_total_sec 埋点 本轮 新增 [load_game 离线 结算 分支],
+	# 对称 打磨-160 离线 收益 累计: 玩家 挂机 回看 不知 历史 离线 总 时长, 只 见 本次 启动 浮动 [打磨-66];
+	# 结算 口径 读档 离线 >1分钟, 单 次 上限 8 小时 钳制, 与 _offline_sec 同源 单点 累加) ----------
+	# 空档 _load_stats 兜底 offline_total_sec = 0 (fmt_stats_time 0 = 不足1分, 与 修行 时长 段 同 口径)
+	var sv162: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("累计离线 不足1分 · 离线 主资源 0 · 灵石 0") >= 0,
+			"打磨-162 空档 _load_stats 兜底 累计离线 段 = 0 (实际 %s)" % g.stats_text().left(80))
+	g.stats = sv162
+	# stats_text 含 累计离线 段 (动态 锚定, fmt_stats_time 日/小时/分 档)
+	var ots162: float = float(g.stats.get("offline_total_sec", 0.0))
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(ots162), g.fmt(float(g.stats.get("offline_total_qi", 0.0))), g.fmt(float(g.stats.get("offline_total_stone", 0.0)))]) >= 0,
+			"打磨-162 stats_text 含 累计离线 段 (实际 %s)" % g.stats_text().left(90))
+	# 真实 路径: 构造 2h 离线档 读档 -> 埋点 增量 = 本次 elapsed (elapsed 含 墙钟 漂移, 动态 锚定)
+	var asc162: bool = g.ascended
+	var ri162: int = g.realm_idx
+	var ly162: int = g.layer
+	var es162: float = g.essence
+	var st162: float = g.stones
+	var dao162: float = g.dao
+	var dl162: int = g.dao_level
+	var lr162: Array[String] = g.learned.duplicate()
+	var ow162: Array[String] = g.owned.duplicate()
+	var owe162: Array[String] = g.owned_eq.duplicate()
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	var otsec_b162: float = float(g.stats.get("offline_total_sec", 0.0))
+	var f162 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f162.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 0.0, "stones": 0.0, "stats": g.stats, "ts": int(Time.get_unix_time_from_system()) - 7200}))
+	f162.close()
+	g.load_game()
+	check(absf(g._offline_sec - 7200.0) < 2.0, "打磨-162 真实 路径 离线 elapsed ≈7200 (实际 %s)" % g.fmt_stats_time(g._offline_sec))
+	check(absf(float(g.stats["offline_total_sec"]) - (otsec_b162 + g._offline_sec)) < 1e-6,
+			"打磨-162 离线 结算 埋点 增量 = 本次 elapsed (实际 %s / %s)" % [g.fmt_stats_time(float(g.stats["offline_total_sec"])), g.fmt_stats_time(g._offline_sec)])
+	check(g.stats_text().find("累计离线 %s ·" % g.fmt_stats_time(float(g.stats["offline_total_sec"]))) >= 0,
+			"打磨-162 埋点 后 文案 含 新 累计离线 (实际 %s)" % g.stats_text().left(90))
+	# 二次 读档 累加: 再 构造 1h 离线档 -> 累计 再 增 (≈3600), 历史 累计 跨 读档 持久
+	var otsec_m162: float = float(g.stats["offline_total_sec"])
+	g.save_game()
+	var f162b := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f162b.store_string(JSON.stringify({"realm_idx": 0, "layer": 1, "essence": 0.0, "stones": 0.0, "stats": g.stats, "ts": int(Time.get_unix_time_from_system()) - 3600}))
+	f162b.close()
+	g.load_game()
+	check(absf(float(g.stats["offline_total_sec"]) - (otsec_m162 + g._offline_sec)) < 1e-6
+			and absf(g._offline_sec - 3600.0) < 2.0,
+			"打磨-162 二次 读档 累计 再 增 = 上 基准 + 本次 elapsed (≈3600, 实际 %s)" % g.fmt_stats_time(float(g.stats["offline_total_sec"])))
+	# 只读: stats_text 连读 恒定 无 副作用 (离线 时长 累计 不改 资源/明细)
+	var stt_r162: String = g.stats_text()
+	var offsec_r162: float = g._offline_sec
+	g.stats_text()
+	check(g.stats_text() == stt_r162 and g._offline_sec == offsec_r162,
+			"打磨-162 stats_text 只读 连读 恒定 无 副作用")
+	# 收尾 复原 干净 基准 (境界 状态+收集 复原 离线 明细 归零 防 污染 后续 段; 离线 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc162
+	g.realm_idx = ri162
+	g.layer = ly162
+	g.dao_level = dl162
+	g.dao = dao162
+	g.essence = es162
+	g.stones = st162
+	g.learned = lr162
+	g.owned = ow162
+	g.owned_eq = owe162
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
 
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false

@@ -1720,7 +1720,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1736,14 +1736,19 @@ func _load_stats(v: Variant) -> void:
 # 打磨-161: 爬塔败 计数 段 (tower_loss 埋点 本轮 新增 [try_tower_challenge 败局 分支, 对称 打磨-14
 # tower_win 胜局 埋点]: 双塔 败局 停留 本层 无 惩罚, 胜/败 均 手动+自动 路径 同 口径 计数,
 # 玩家 挂机 回看 不知 爬塔 胜败 比; 与 爬塔胜 段 相邻 便于 对照; 旧档 缺 键 兜底 0)
+# 打磨-162: 离线时长 累计 段 (offline_total_sec 埋点 本轮 新增 [load_game 离线 结算 分支, 对称
+# 打磨-160 离线 收益 累计 埋点]: 玩家 挂机 回看 不知 历史 离线 总 时长, 只 见 本次 启动 浮动
+# [打磨-66]; 结算 口径 读档 离线 >1分钟, 单 次 上限 8 小时 钳制, 与 _offline_sec 同源 单点 累加;
+# fmt_stats_time 日/小时/分 档 与 修行 时长 段 同 口径; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
 		int(stats.get("skill_use", 0.0)), int(stats.get("item_buy", 0.0)),
 		int(stats.get("equip_buy", 0.0)), int(stats.get("tower_win", 0.0)),
 		int(stats.get("tower_loss", 0.0)),
+		fmt_stats_time(float(stats.get("offline_total_sec", 0.0))),
 		fmt(float(stats.get("offline_total_qi", 0.0))), fmt(float(stats.get("offline_total_stone", 0.0))),
 		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
 		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0))]
@@ -4243,6 +4248,9 @@ func load_game() -> void:
 			# 只 改 内存 统计 不 改 结算 逻辑, 旧档 缺 键 兜底 0)
 			_stat_inc("offline_total_qi", gq)
 			_stat_inc("offline_total_stone", gs)
+			# 打磨-162: 离线时长 累计 埋点 (与 _offline_sec 同源 单点, 对称 打磨-160 收益 埋点;
+			# stats 只 增不减 存档 持久化, 旧档 缺 键 兜底 0)
+			_stat_inc("offline_total_sec", elapsed)
 			if ascended:
 				dao += gq
 				offline_msg = "离线 %s, 效率%0.0f%%, 收获道行 %s, 灵石 %s" % [
