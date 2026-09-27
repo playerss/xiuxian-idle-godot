@@ -253,9 +253,9 @@
 - [x] ui_test 断言（5 类别 字形 各 1 枚 采样 + 主动 24 描边 档 + 被动 无描边 + 挂机 恒定）
 
 ### M8-4 词缀池字形（打磨-156，与 138 徽章 体系 对齐）
-> 进度: 156a 数据层+绘制层 完成 (AFFIX_POOL_COLORS 6 池 主色 单源 [qi_rate=灵气 青/stone_rate=灵石 金/bt_chance=突破 橙/offline_rate=离线 蓝紫/atk=攻击 红/def=防御 灰蓝] + AFFIX_POOL_CN 池 中文名 单源 与 affixes.json pool_name 同源; affix_pool_color/affix_pool_name/affix_pool_of/affix_pool_glyph_tip 只读 接口; affix_icon.gd 6 池 几何 字形 24x24 幂等 不 重绘 [灵气 涡旋/灵石 宝石/突破 箭矢/离线 月相/攻击 交叉 锋/防御 盾形, 几何 同 153/154/155 确定性 口径, 品质 色 由 背包格 品质色 区分 不 随 品质 变色]; selftest +18 = 11165, Xvfb icon_probe 扩展 6 池 互异/非空/主色 命中/未设态 全透明 全过); 156b UI 接入 待做 (词缀行/背包格 词缀名 前 接入 + ui_test 断言 + 商店截图 复核)
-- [ ] 6 词缀池 字形（atk/def/qi/stone/break/offline 池 各 1 枚 单字或几何 符号 + 池主色，词缀行/背包格 词缀名 前 接入）
-- [ ] ui_test 断言（6 池 各 1 枚 + 背包格 接入 + 挂机 恒定）
+> 进度: 156a 数据层+绘制层 完成 (AFFIX_POOL_COLORS 6 池 主色 单源 [qi_rate=灵气 青/stone_rate=灵石 金/bt_chance=突破 橙/offline_rate=离线 蓝紫/atk=攻击 红/def=防御 灰蓝] + AFFIX_POOL_CN 池 中文名 单源 与 affixes.json pool_name 同源; affix_pool_color/affix_pool_name/affix_pool_of/affix_pool_glyph_tip 只读 接口; affix_icon.gd 6 池 几何 字形 24x24 幂等 不 重绘 [灵气 涡旋/灵石 宝石/突破 箭矢/离线 月相/攻击 交叉 锋/防御 盾形, 几何 同 153/154/155 确定性 口径, 品质 色 由 背包格 品质色 区分 不 随 品质 变色]; selftest +18 = 11165, Xvfb icon_probe 扩展 6 池 互异/非空/主色 命中/未设态 全透明 全过); 156b UI 接入 完成 (main.gd _rebuild_m63_bag_grid 背包格 左上角 插 affix_icon 12px 纯 装饰 无 热区 + _m63_ensure_chips 装备行 词缀槽 chip 左上角 10px [已装 = 词缀 池 字形/空 槽 = 未设态 全 透明 隐藏] + _m156b_affix_icons/_m156b_chip_icons 登记 + 网格 重建 清 死引用; 格/chip tooltip 追加 池字形 口径 行 affix_pool_glyph_tip 单源 恒 追加; ui_test 新增 _assert_m156b_affix_icons 31 项 [6 池 背包格 全覆盖 + 池 = 数据 接口 恒等 + 纯 装饰 无 热区 + tooltip 口径 行 + chip 全量 构建 空槽 未设态 + 装配 池 同步 + tooltip 口径 行 + 换装/拆卸 真实 UI 路径 同步 回 未设态 + 同态 幂等 不 重绘 无 统计 副作用 + 收尾 干净 基准]; ui_test +31 = 4257, selftest/stress 不 变 11165/646, 冒烟 0 错误); 2026-09-27 M8-4 全部 子任务 完成。
+- [x] 6 词缀池 字形（atk/def/qi/stone/break/offline 池 各 1 枚 几何 符号 + 池主色，背包格 + 装备行 chip 接入）
+- [x] ui_test 断言（6 池 各 1 枚 + 背包格 接入 + 挂机 恒定）
 
 ### M8-5 真图备选（打磨-157，**需小焕确认 路线 后 才 推进**，主线 153-156 完成 前 不动）
 - [ ] （备选）OpenGameArt 逐件选图：怪物 6 类 各 1 张 生物 底图（类内 20 种 共享 + modulate 色调 区分 前缀 差异，

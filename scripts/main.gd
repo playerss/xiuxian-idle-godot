@@ -333,6 +333,8 @@ var _shop_row_nodes: Dictionary = {} # 法器 id -> row (tooltip 状态刷新用
 var _equip_icon_nodes: Dictionary = {} # 装备 id -> 部位 剪影 图标 (badge 右侧, 纯 装饰)
 var _shop_icon_nodes: Dictionary = {}  # 法器 id -> 金边 几何 字形 图标 (badge 右侧, 纯 装饰)
 var _skill_icon_nodes: Dictionary = {} # 技能 id -> 类别 字形 图标 (badge 右侧, 纯 装饰, M8-3 打磨-155b)
+var _m156b_affix_icons: Dictionary = {} # M8-4 打磨-156b: 词缀 id -> 池 字形 图标 (背包格/装备行 chip 左上 纯 装饰, 同 池 恒 同 图)
+var _m156b_chip_icons: Dictionary = {}  # M8-4 打磨-156b: 装备 id -> [chip 槽 字形 图标 xN] (已装 词缀 池 字形, 未装 未设态 全 透明)
 var _shop_eta: Dictionary = {}     # 法器 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_eta: Dictionary = {}    # 装备 id -> 购买 ETA 提示标签 (打磨-12)
 var _equip_swap: Dictionary = {}   # 打磨-25: 装备 id -> 换装对比提示标签
@@ -4207,6 +4209,7 @@ func _rebuild_m63_bag_grid() -> void:
 	for c in _m63_bag_grid.get_children():
 		c.queue_free()
 	_m63_bag_cells.clear()
+	_m156b_affix_icons.clear()  # M8-4 打磨-156b: 格 全 释放, 池字形 图标 登记 同步 清 (防 死引用 残留)
 	var ids: Array = g.affix_bag.keys()
 	ids.sort_custom(func(a, b) -> bool:  # 品质 降序, 同品质 value 降序, 再 id
 		var ta: int = int(g.affix_by_id.get(str(a), {}).get("tier", 0))
@@ -4236,6 +4239,10 @@ func _rebuild_m63_bag_grid() -> void:
 		cell.tooltip_text = "「%s」 %s · %s\n数值 +%.2f%% (装备 总属性 = 基础 x (1+Σ词缀) 同池 乘算独立项)\n点击 选中/取消; 选中后 点 装备行 槽位 chip 装配" % [
 			str(a.get("name", "")), g.affix_tier_name(int(a.get("tier", 0))), str(a.get("pool_name", "")),
 			float(a.get("value", 0.0))]
+		# M8-4 打磨-156b: tooltip 追加 池字形 口径 行 (单源 affix_pool_glyph_tip, 与 格 内 图标 同 池 口径)
+		var atip156: String = g.affix_pool_glyph_tip(str(aid))
+		if atip156 != "":
+			cell.tooltip_text += "\n" + atip156
 		# 打磨-135c-2: 词缀格 换皮 — 未选中 = btn_secondary 9-slice 纹理 底 (深色仙侠 调色 三态),
 		# 选中 = 金边 StyleBoxFlat 叠加 (M6-3 口径 不变, 断言 边框=2); flat 保留 防 引擎 默认 底 叠 纹理
 		cell.add_theme_stylebox_override("normal", _btn2_n)
@@ -4246,6 +4253,15 @@ func _rebuild_m63_bag_grid() -> void:
 			var sb := _make_btn_sb_gold()
 			cell.add_theme_stylebox_override("normal", sb)
 		cell.pressed.connect(_on_m63_cell.bind(str(aid)))
+		# 词缀格 (名称+堆叠数 居中) + M8-4 打磨-156b: 池 字形 图标 左上 角 (12px 纯 装饰,
+		# Button 子 节点 不参与 文字 布局 [4.4 无 对齐 属性 实测], 文字 居中 不 重叠 2 行 名;
+		# 同 池 恒 同 图 幂等 不 重绘, 品质 色 由 格 字体 区分 不 随 品质 变色)
+		var aic: Control = (load("res://scripts/affix_icon.gd").new())
+		aic.position = Vector2(3, 3)
+		aic.size = Vector2(12, 12)
+		cell.add_child(aic)
+		aic.set_pool(str(a.get("pool", "")), g.affix_pool_color(str(a.get("pool", ""))))
+		_m156b_affix_icons[str(aid)] = aic
 		_m63_bag_grid.add_child(cell)
 		_m63_bag_cells[str(aid)] = cell
 
@@ -4260,13 +4276,22 @@ func _m63_ensure_chips(equip_id: String) -> void:
 	if chips_box == null:
 		return
 	var chips_arr: Array = []
+	var icon_arr: Array = []
 	for _c in g.equipment_slots(str(equip_id)):
 		var cb := _make_button("+")
 		cb.custom_minimum_size = Vector2(0, 22)
 		cb.add_theme_font_size_override("font_size", 12)
 		cb.pressed.connect(_on_m63_chip.bind(str(equip_id), chips_arr.size()))
+		# M8-4 打磨-156b: chip 池 字形 图标 左上 角 (10px 纯 装饰, Button 子 节点 不 参与 文字 布局,
+		# 居中 文字 不 重叠; 已装 = 词缀 池 字形 / 空 = 未设态 全 透明 隐藏; 同 键 幂等 不 重绘)
+		var aic: Control = (load("res://scripts/affix_icon.gd").new())
+		aic.position = Vector2(2, 3)
+		aic.size = Vector2(10, 10)
+		cb.add_child(aic)
+		icon_arr.append(aic)
 		chips_box.add_child(cb)
 		chips_arr.append(cb)
+	_m156b_chip_icons[str(equip_id)] = icon_arr
 	_m63_chips[str(equip_id)] = chips_arr
 
 # 单 装备行 chips/评分 刷新 (chips 文本/颜色/禁用态 随 装配态+选中; 评分 = GameData.equip_score)
@@ -4279,6 +4304,13 @@ func _refresh_m63_equip_row(equip_id: String) -> void:
 		var cb: Button = chips[i]
 		var pos_key := str(i)
 		var cur: String = str(load.get(pos_key, ""))
+		# M8-4 打磨-156b: chip 池 字形 图标 同步 (已装 = 词缀 池 字形 / 空 槽/未拥有 = 未设态 全 透明 隐藏;
+		# 同 键 幂等 不 重绘, 挂机 恒定 无 每帧 刷新)
+		var aics156: Array = _m156b_chip_icons.get(str(equip_id), [])
+		if i < aics156.size():
+			var aic156: Control = aics156[i]
+			var pool156: String = str(g.affix_by_id.get(cur, {}).get("pool", "")) if owned and cur != "" else ""
+			aic156.set_pool(pool156, g.affix_pool_color(pool156) if pool156 != "" else Color())
 		if not owned:
 			cb.text = "·"
 			cb.disabled = true
@@ -4298,6 +4330,10 @@ func _refresh_m63_equip_row(equip_id: String) -> void:
 			cb.add_theme_color_override("font_color", g.affix_color(cur))
 			cb.tooltip_text = "「%s」 %s +%.2f%%\n点击 拆卸 (回背包); 点选 其他词缀 后 点击 = 换装" % [
 				str(a.get("name", "")), g.affix_tier_name(int(a.get("tier", 0))), float(a.get("value", 0.0))]
+			# M8-4 打磨-156b: tooltip 追加 池字形 口径 行 (单源 affix_pool_glyph_tip, 与 chip 内 图标 同 池 口径)
+			var ctip156: String = g.affix_pool_glyph_tip(cur)
+			if ctip156 != "":
+				cb.tooltip_text += "\n" + ctip156
 	var sl: Label = _m63_score_labels.get(str(equip_id))
 	if sl != null:
 		var sc_txt: String = "评分 %s" % g.fmt_score(g.equip_score(str(equip_id)))

@@ -245,6 +245,7 @@ func _ready() -> void:
 	await _assert_m153b_mon_icons()  # M8-1 打磨-153b: 爬塔页 怪物 类别 剪影 图标 接入 (怪物卡 图标 节点/6 类别 轮转 显隐+类别/主色 接口 恒等/tooltip 首行 类别 段 恒等/Boss 层 无 类别 图标 隐藏+tooltip 无 段/挂机 恒定 幂等 不 重绘/收尾 干净 基准)
 	await _assert_m154b_equip_icons()  # M8-2 打磨-154b: 装备 5 部位 剪影 + 法器 10 件 金边 几何 字形 图标 接入 (140 行 部位 覆盖 接口 恒等/10 法器 字形 不重 不空/20px 纯 装饰 口径/同态 幂等 不 重绘 无 副作用/收尾 干净 基准)
 	await _assert_m155b_skill_icons()  # M8-3 打磨-155b: 技能页 120 行 5 类别 字形 图标 接入 (120 行 覆盖 接口 恒等/5 类 全覆盖/24 主动 描边 档/tooltip 口径 行 恒等/同态 幂等 不 重绘 无 副作用/收尾 干净 基准)
+	await _assert_m156b_affix_icons()  # M8-4 打磨-156b: 词缀 6 池字形 图标 UI 接入 (背包格 6 池 覆盖 接口 恒等/tooltip 口径 行/chip 已装 池 同步 换装 拆卸 未设态/同态 幂等 不 重绘 无 副作用/收尾 干净 基准)
 
 	_finish()
 
@@ -5786,6 +5787,121 @@ func _assert_m155b_skill_icons() -> void:
 	g.set_process(true)
 	check(ui._skill_icon_nodes.size() == g.skill_ids.size(),
 			"M8-3 打磨-155b 收尾 节点 恒在 干净 基准")
+
+
+# M8-4 打磨-156b: 词缀 6 池字形 图标 UI 接入断言 — 背包格 (12px 左上角 纯 装饰) + 装备行
+# 词缀槽 chip (10px 左上角, 已装 = 池 字形/空 = 未设态 全 透明) + tooltip 池字形 口径 行 (单源
+# affix_pool_glyph_tip, 与 155b/154b 图标 断言 同 口径: 接口 恒等/6 池 全覆盖/同态 幂等 不 重绘
+# 无 副作用/收尾 干净 基准; 像素 走 Xvfb icon_probe 156a 段 已 交付)
+func _assert_m156b_affix_icons() -> void:
+	var g := GameData
+	g.set_process(false)
+	ui._tab.current_tab = 2
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.affix_bag = {}
+	g.affix_load = {}
+	g.slot_upgrades = {}
+	g.seen_affixes = []
+	g.stones = 1e12
+	ui._m63_sel = ""
+	# 前序 段 (135c-2/M6-3/97/99/101 等) 残留 格子 图标 登记 (格 已 free, 登记 为 死引用),
+	# 清 空 保证 本段 登记 数 = 本段 6 格 (图标 注册 表 随 网格 重建 增减, 清 旧 死引用 不 影响 活 节点)
+	ui._m156b_affix_icons.clear()
+	g.buy_equipment("robe_0_0")
+	# 6 池 各 1 词缀 入包 (af_<pool>_0_0 数据 锚定, 6 池 全覆盖)
+	var pool_ids156b: Array = [
+		"af_qi_rate_0_0", "af_stone_rate_0_0", "af_bt_chance_0_0",
+		"af_offline_rate_0_0", "af_atk_0_0", "af_def_0_0"]
+	for pid in pool_ids156b:
+		g.affix_add(str(pid), 1)
+	ui._refresh()
+	await get_tree().process_frame
+	# 1) 背包格 图标 接入 (6 格 = 6 池 全覆盖, 池 = 数据 接口 恒等, 纯 装饰 口径)
+	check(ui._m63_bag_grid.get_child_count() == 6,
+			"M8-4 打磨-156b 背包 6 词缀 6 格 (实际 %d)" % ui._m63_bag_grid.get_child_count())
+	check(ui._m156b_affix_icons.size() == 6,
+			"M8-4 打磨-156b 背包格 图标 全量 登记 (实际 %d/6)" % ui._m156b_affix_icons.size())
+	var icfail156b := ""
+	var pool_seen156b: Dictionary = {}
+	for pid in pool_ids156b:
+		var cell: Button = ui._m63_bag_cells.get(str(pid), null)
+		var aic: Control = ui._m156b_affix_icons.get(str(pid), null)
+		if cell == null or aic == null or aic.get_parent() != cell:
+			icfail156b = str(pid) + " 缺 图标/父 不 匹配"
+			break
+		var exp_pool: String = g.affix_pool_of(str(pid))
+		check(aic.mouse_filter == Control.MOUSE_FILTER_IGNORE
+					and str(aic.custom_minimum_size) == str(Vector2(24, 24)),
+					"M8-4 打磨-156b 背包格 %s 图标 纯 装饰 无 热区 (实际 %s)" % [str(pid), str(aic.custom_minimum_size)])
+		check(aic.get_pool() == exp_pool and exp_pool != "",
+					"M8-4 打磨-156b 背包格 %s 池 = 数据 %s 接口 恒等 (实际 %s)" % [str(pid), exp_pool, aic.get_pool()])
+		pool_seen156b[exp_pool] = true
+		# tooltip 含 池字形 口径 行 (单源 接口 恒等)
+		check(str(cell.tooltip_text).find(g.affix_pool_glyph_tip(str(pid))) >= 0,
+					"M8-4 打磨-156b 背包格 %s tooltip 含 池字形 口径 行 (实际 %s)" % [str(pid), str(cell.tooltip_text).get_slice("\n", 3)])
+	check(icfail156b == "", "M8-4 打磨-156b 6 池 背包格 图标 全覆盖 (首个 失 %s)" % icfail156b)
+	check(pool_seen156b.size() == 6,
+			"M8-4 打磨-156b 6 池 全覆盖 (实际 %d: %s)" % [pool_seen156b.size(), str(pool_seen156b.keys())])
+	# 2) 装备行 chip 图标: 空 槽 = 未设态 全 透明 (隐藏 口径)
+	var cicons156b: Array = ui._m156b_chip_icons.get("robe_0_0", [])
+	var chips156b: Array = ui._m63_chips.get("robe_0_0", [])
+	check(cicons156b.size() == g.equipment_slots("robe_0_0") and chips156b.size() == g.equipment_slots("robe_0_0"),
+			"M8-4 打磨-156b robe chip 图标 全量 构建 (实际 %d/%d)" % [cicons156b.size(), chips156b.size()])
+	for ci in cicons156b.size():
+		var aicb: Control = cicons156b[ci]
+		check(aicb.get_pool() == "" and aicb.get_parent() == (chips156b[ci] as Control),
+					"M8-4 打磨-156b robe 空槽 %d chip 图标 未设态 (实际 %s)" % [ci, aicb.get_pool()])
+	# 3) 装配 后 chip 图标 = 词缀 池 + tooltip 口径 行 (qi_rate 槽0 / atk 槽1)
+	g.affix_equip("robe_0_0", 0, "af_qi_rate_0_0")
+	g.affix_equip("robe_0_0", 1, "af_atk_0_0")
+	ui._refresh()
+	await get_tree().process_frame
+	var c0: Control = cicons156b[0]
+	var c1: Control = cicons156b[1]
+	check(c0.get_pool() == "qi_rate" and c1.get_pool() == "atk",
+			"M8-4 打磨-156b 装配 后 chip 图标 池 同步 (实际 %s/%s)" % [c0.get_pool(), c1.get_pool()])
+	check(str((chips156b[0] as Button).tooltip_text).find(g.affix_pool_glyph_tip("af_qi_rate_0_0")) >= 0
+			and str((chips156b[1] as Button).tooltip_text).find(g.affix_pool_glyph_tip("af_atk_0_0")) >= 0,
+			"M8-4 打磨-156b 装配 后 chip tooltip 含 池字形 口径 行")
+	# 4) 换装 同步 (槽1 换 def): 选中 def 词缀 点 槽1 chip = affix_swap 真实 UI 路径
+	# (图标 池 变化 + 旧 词缀 回 背包)
+	ui._m63_sel = "af_def_0_0"
+	var cb1: Button = chips156b[1]
+	cb1.pressed.emit()
+	await get_tree().process_frame
+	check(c1.get_pool() == "def", "M8-4 打磨-156b 换装 后 chip 图标 池 同步 (实际 %s)" % c1.get_pool())
+	check(int(g.affix_bag.get("af_atk_0_0", 0)) == 1, "M8-4 打磨-156b 换装 旧 词缀 回 背包")
+	# 5) 拆卸 回 未设态 (再 点 槽1 chip = affix_unequip 真实 UI 路径)
+	cb1.pressed.emit()
+	await get_tree().process_frame
+	check(c1.get_pool() == "", "M8-4 打磨-156b 拆卸 后 chip 图标 回 未设态 (实际 %s)" % c1.get_pool())
+	check(int(g.affix_bag.get("af_def_0_0", 0)) == 1, "M8-4 打磨-156b 拆卸 无损 回 背包")
+	# 6) 挂机 恒定: 装配/拆卸 后 背包态 已 稳, 取 chip 图标 (节点 槽数 恒定 不 重建) +
+	# 背包 常驻 格 图标 (stone_rate 全程 未 装配, 格 图标 稳态), 记录 稳态 重绘 计数,
+	# 再 刷 应 幂等 不 重绘 不 重建 无 统计 副作用 (登记 数 = 当前 背包 种类 数)
+	var c0s: Control = ui._m156b_chip_icons.get("robe_0_0", [])[0]
+	var rc0: int = c0s.redraw_count
+	var bg_ic: Control = ui._m156b_affix_icons.get("af_stone_rate_0_0", null)
+	var rc1: int = bg_ic.redraw_count
+	var snap156b: Dictionary = g.stats.duplicate(true)
+	ui._refresh()
+	await get_tree().process_frame
+	check(c0s.redraw_count == rc0 and bg_ic.redraw_count == rc1
+			and ui._m156b_affix_icons.size() == g.affix_bag.size() and g.stats == snap156b,
+			"M8-4 打磨-156b 同态 再刷 幂等 不 重绘 无 统计 副作用 (chip %d / 格 %d / 登记 %d)" % [c0s.redraw_count, rc1, ui._m156b_affix_icons.size()])
+	# 收尾: 清 词缀 归 干净 基准 (防 污染 后续 段 收集/背包 断言)
+	g.affix_decompose_all()
+	g.affix_bag.clear()
+	g.seen_affixes.clear()
+	g.affix_load = {}
+	g.equipped.clear()
+	ui._tab.current_tab = 3
+	ui._refresh()
+	await get_tree().process_frame
+	g.set_process(true)
+	check(ui._m156b_affix_icons.size() == 0 and g.affix_bag.is_empty(),
+			"M8-4 打磨-156b 收尾 干净 基准 (图标 %d, 背包 %d)" % [ui._m156b_affix_icons.size(), g.affix_bag.size()])
 
 
 func _finish() -> void:
