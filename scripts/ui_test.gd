@@ -212,6 +212,53 @@ func _ready() -> void:
 	await _assert_m99_upgrade()  # 打磨-99: 一键 强化 槽位 按钮 (道祖期 批量 3->4, 200 材料/件)
 	await _assert_m101_exchange_all()  # 打磨-101: 一键 兑换 按钮 (材料 连兑 买不起 的 最高 变体 词缀)
 	await _assert_stats_affix()  # 打磨-110: 修行统计 词缀 段 (stats_text 4 段 展示/tooltip 口径/埋点 联动/节流/收尾)
+	# 打磨-158: 修行统计 突破 失败 段 (break_fail 埋点 打磨-14 已有 [try_breakthrough 失败 分支], 展示位 补齐)
+	var g := GameData
+	check(ui._stats_label != null, "打磨-158 统计 标签 存在")
+	var bf158: int = int(g.stats.get("break_fail", 0.0))
+	var ok158: int = int(g.stats.get("break_ok", 0.0))
+	var stt158: String = g.stats_text()
+	check(stt158.find("突破 %d 次 (失败 %d)" % [ok158, bf158]) >= 0, "打磨-158 stats_text 含 突破 失败 段 (实际 %s)" % stt158)
+	check(str(ui._stats_label.text) == stt158, "打磨-158 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	check(ui._stats_label.tooltip_text.find("突破 失败 次数") >= 0
+			and ui._stats_label.tooltip_text.find("道行精进 失败 不 计入 本 段") >= 0
+			and ui._stats_label.tooltip_text.find("打磨-158") >= 0,
+			"打磨-158 统计 行 tooltip 含 失败 段 口径 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# 真实 路径 埋点 同步 (成功 晋层 + 失败 停留, 前后 基准 快照; 收尾 复原 防 污染 后续 段)
+	var r158: int = g.realm_idx
+	var l158: int = g.layer
+	var a158: bool = g.ascended
+	var es158: float = g.essence
+	var bf_before158: int = int(g.stats.get("break_fail", 0.0))
+	var ok_before158: int = int(g.stats.get("break_ok", 0.0))
+	var stt_before158: String = g.stats_text()
+	g.ascended = false
+	g.essence = g.breakthrough_cost()
+	g.try_breakthrough(0.01)
+	g.essence = g.breakthrough_cost()
+	g.try_breakthrough(0.999)
+	check(int(g.stats["break_ok"]) == ok_before158 + 1 and int(g.stats["break_fail"]) == bf_before158 + 1,
+			"打磨-158 真实 路径 成功 晋层 + 失败 停留 埋点 各 +1 (实际 ok %d / fail %d)" % [int(g.stats["break_ok"]), int(g.stats["break_fail"])])
+	ui._refresh()
+	var bf_after158: int = int(g.stats["break_fail"])
+	check(stt_before158.find("突破 %d 次 (失败 %d)" % [ok_before158, bf_before158]) >= 0, "打磨-158 前置 口径 校验")
+	check(g.stats_text().find("突破 %d 次 (失败 %d)" % [ok_before158 + 1, bf_after158]) >= 0, "打磨-158 埋点 后 文案 含 新 失败 计数 (实际 %s)" % g.stats_text())
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-158 _refresh 后 标签 文本 同步 恒等")
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached158: String = ui._stats_text
+	var es_chk158: float = g.essence
+	ui._refresh()
+	check(ui._stats_text == cached158 and str(ui._stats_label.text) == g.stats_text() and g.essence == es_chk158,
+			"打磨-158 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (境界 状态 恢复 防 污染 后续 段)
+	g.ascended = a158
+	g.essence = es158
+	g.realm_idx = r158
+	g.layer = l158
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-158 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
 	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)

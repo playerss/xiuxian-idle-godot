@@ -1598,6 +1598,14 @@ func _init() -> void:
 	check(stt.find("突破 %d 次" % int(g.stats["break_ok"])) >= 0, "stats_text 含突破计数 (实际 %s)" % stt)
 	check(stt.find("装备 %d 件" % int(g.stats["equip_buy"])) >= 0, "stats_text 含装备计数 (实际 %s)" % stt)
 	check(stt.find("神通") >= 0 and stt.find("法器") >= 0 and stt.find("道行精进") >= 0 and stt.find("修行") >= 0, "stats_text 含修行/神通/法器/道行段 (实际 %s)" % stt)
+	# 打磨-158: 突破 失败 段 (break_fail 埋点 打磨-14 已有, 展示位 补齐; 与 突破 成功 段 相邻 成败 对照)
+	var bf158: int = int(g.stats.get("break_fail", 0.0))
+	check(stt.find("突破 %d 次 (失败 %d)" % [int(g.stats["break_ok"]), bf158]) >= 0, "打磨-158 stats_text 含 突破 失败 段 (实际 %s)" % stt)
+	check(stt.find("(失败 %d) · 道行精进" % bf158) >= 0, "打磨-158 失败 段 位于 道行精进 段 前 (实际 %s)" % stt.left(60))
+	var sv158: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("突破 0 次 (失败 0)") >= 0, "打磨-158 空档 _load_stats 兜底 失败 段 = 0 (实际 %s)" % g.stats_text().left(40))
+	g.stats = sv158
 
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
