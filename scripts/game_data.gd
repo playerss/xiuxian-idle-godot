@@ -1716,18 +1716,21 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "skill_use", "item_buy", "equip_buy", "tower_win", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
 # 统计文本 (修行页展示)
 # 打磨-110: 追加 词缀 段 (掉落/装配/分解/兑换 — 埋点 打磨-96/99/101 已有, 展示位 补齐)
 # 打磨-158: 突破失败 段 (break_fail 埋点 打磨-14 已有 [try_breakthrough 失败 分支], 展示位 补齐;
-# 道行精进 失败 无 埋点 不 计入 — 本 段 仅 突破 失败 口径, 与 突破 成功 段 相邻 便于 对照 成败 比)
+# 与 突破 成功 段 相邻 便于 对照 成败 比)
+# 打磨-159: 道行精进 失败 段 (dao_fail 埋点 本轮 新增 [try_dao_break 失败 分支, 对称 打磨-158 突破 失败],
+# 展示位 补齐: 道行精进 成功 段 括号 内 失败 次数, 与 成功 计数 相邻 便于 对照 成败 比; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
-		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)), int(stats.get("dao_ok", 0.0)),
+		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
+		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
 		int(stats.get("skill_use", 0.0)), int(stats.get("item_buy", 0.0)),
 		int(stats.get("equip_buy", 0.0)), int(stats.get("tower_win", 0.0)),
 		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
@@ -4041,6 +4044,7 @@ func try_dao_break(roll: float = -1.0) -> String:
 		return "道行精进! 当前境界: %s·%s" % [realm_name(), IMMORTAL_REALMS[dao_level]]
 	last_break_result = 2
 	break_seq += 1
+	_stat_inc("dao_fail")  # 打磨-159: 道行精进失败计数 (对称 打磨-14 突破 break_fail)
 	return "道行精进失败… 道心不稳, 静修再来!"
 
 # 境界展示 (顶栏): 未飞升 "练气 第 1 层" / 飞升后 "真仙·初仙 (已飞升)"

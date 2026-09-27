@@ -1605,7 +1605,34 @@ func _init() -> void:
 	var sv158: Dictionary = g.stats.duplicate(true)
 	g._load_stats({})
 	check(g.stats_text().find("突破 0 次 (失败 0)") >= 0, "打磨-158 空档 _load_stats 兜底 失败 段 = 0 (实际 %s)" % g.stats_text().left(40))
+	check(g.stats_text().find("道行精进 0 次 (失败 0)") >= 0, "打磨-159 空档 _load_stats 兜底 道行精进 失败 段 = 0 (实际 %s)" % g.stats_text().left(60))
 	g.stats = sv158
+	# 打磨-159: 道行精进 失败 段 (dao_fail 埋点 本轮 新增 [try_dao_break 失败 分支, 对称 打磨-158 突破 失败])
+	var df159: int = int(g.stats.get("dao_fail", 0.0))
+	var dok159: int = int(g.stats.get("dao_ok", 0.0))
+	check(stt.find("道行精进 %d 次 (失败 %d)" % [dok159, df159]) >= 0, "打磨-159 stats_text 含 道行精进 失败 段 (实际 %s)" % stt)
+	check(stt.find("道行精进 %d 次 (失败 %d) · 神通" % [dok159, df159]) >= 0, "打磨-159 失败 段 位于 神通 段 前 (实际 %s)" % stt.left(70))
+	# 真实 路径 埋点: 成功 晋阶 + 失败 停留 (dao_level 0 成功率 90%: roll 0.5 胜 / 0.95 败, 前后 基准 快照)
+	var asc159: bool = g.ascended
+	var dl159: int = g.dao_level
+	var dao159: float = g.dao
+	var dok_before159: int = int(g.stats.get("dao_ok", 0.0))
+	var df_before159: int = int(g.stats.get("dao_fail", 0.0))
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = g.dao_break_cost() + 1.0
+	g.try_dao_break(0.5)
+	g.dao = g.dao_break_cost() + 1.0
+	g.try_dao_break(0.995)
+	check(int(g.stats["dao_ok"]) == dok_before159 + 1 and int(g.stats["dao_fail"]) == df_before159 + 1,
+			"打磨-159 真实 路径 晋阶 + 失败 停留 埋点 各 +1 (实际 ok %d / fail %d)" % [int(g.stats["dao_ok"]), int(g.stats["dao_fail"])])
+	check(g.dao_level == 1, "打磨-159 仅 成功 晋阶 1 次, 失败 未 再 晋阶 (实际 %d)" % g.dao_level)
+	check(g.stats_text().find("道行精进 %d 次 (失败 %d)" % [dok_before159 + 1, df_before159 + 1]) >= 0,
+			"打磨-159 埋点 后 文案 含 新 道行精进 失败 计数 (实际 %s)" % g.stats_text())
+	# 收尾 复原 (阶段 回 0 防 污染 后续 段; 失败 停留 已 未 晋阶, 成功 晋阶 需 回退)
+	g.ascended = asc159
+	g.dao_level = dl159
+	g.dao = dao159
 
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
