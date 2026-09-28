@@ -2111,6 +2111,65 @@ func _init() -> void:
 	g.owned_eq = owe165s
 	g.equipped = eq165d
 
+	# ---------- 打磨-166: 主资源 消耗 累计 段 (primary_spent 埋点 本轮 新增 [try_breakthrough/
+	# try_dao_break 扣除 分支, 对称 打磨-165 灵石 消耗 累计 但 主资源 口径]: 只 计 突破/道行精进
+	# 实际 扣除 灵气/道行 [失败 重烧 全耗 计入], 主资源 飞升后 计 道行 口径 与 离线 收益 段
+	# 打磨-160 同 口径, 手动+自动 突破 路径 均 经 try_breakthrough 同 口径 累加; 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 primary_spent = 0
+	var sv166: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("灵石 消耗 0 · 主资源 消耗 0") >= 0,
+			"打磨-166 空档 _load_stats 兜底 主资源 消耗 段 = 0 (实际 %s)" % g.stats_text().left(100))
+	g.stats = sv166
+	# stats_text 含 主资源 消耗 段 (动态 锚定, fmt 万/亿 档)
+	var sp166: float = float(g.stats.get("primary_spent", 0.0))
+	check(g.stats_text().find("灵石 消耗 %s · 主资源 消耗 %s" % [g.fmt(float(g.stats.get("stone_spent", 0.0))), g.fmt(sp166)]) >= 0,
+			"打磨-166 stats_text 含 主资源 消耗 段 (实际 %s)" % g.stats_text().left(100))
+	# 真实 路径: 受控 基准 境界0层1 突破 消耗 10 (realm0 layer1 消耗 = 10 x 3^0 x 1), 成功/失败 均 计入
+	var ri166: int = g.realm_idx
+	var ly166: int = g.layer
+	var es166: float = g.essence
+	var as166: bool = g.ascended
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 100.0
+	var before166: float = float(g.stats.get("primary_spent", 0.0))
+	var msg166a: String = g.try_breakthrough(0.0)
+	check(msg166a.find("突破成功") >= 0 and g.essence == 90.0,
+			"打磨-166 突破 成功 扣 10 (实际 %s / 灵气 %d)" % [msg166a, int(g.essence)])
+	check(float(g.stats.get("primary_spent", 0.0)) == before166 + 10.0,
+			"打磨-166 突破 成功 埋点 增量 = 消耗 10 (实际 %d / 期望 %d)" % [int(g.stats.get("primary_spent", 0.0)), int(before166 + 10.0)])
+	g.layer = 1
+	g.essence = 100.0
+	var msg166b: String = g.try_breakthrough(0.99)
+	check(msg166b.find("突破失败") >= 0 and g.essence == 90.0 and g.layer == 1,
+			"打磨-166 突破 失败 停留 本层 仍 扣 10 (实际 %s / 灵气 %d)" % [msg166b, int(g.essence)])
+	check(float(g.stats.get("primary_spent", 0.0)) == before166 + 20.0,
+			"打磨-166 失败 重烧 全耗 计入 累计 = 20 (实际 %d)" % int(g.stats.get("primary_spent", 0.0)))
+	check(g.stats_text().find("主资源 消耗 %s" % g.fmt(float(g.stats.get("primary_spent", 0.0)))) >= 0,
+			"打磨-166 埋点 后 文案 含 新 主资源 消耗 累计 (实际 %s)" % g.stats_text().left(100))
+	# 飞升后 道行 口径: 初仙->少仙 消耗 1e9, 成功/失败 均 计入
+	# 飞升后 道行 口径: 初仙->少仙 消耗 1e9, 晋阶后 再 消耗 x8 = 8e9 (成功/失败 均 计入, 动态 锚定 防 阶段 漂移)
+	var dl166: int = g.dao_level
+	var dao166: float = g.dao
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 2.0e9
+	var dbefore166: float = float(g.stats.get("primary_spent", 0.0))
+	g.try_dao_break(0.5)
+	g.dao = g.dao_break_cost() + 1.0
+	g.try_dao_break(0.995)
+	check(float(g.stats.get("primary_spent", 0.0)) == dbefore166 + 1.0e9 + 8.0e9 and g.dao_level == 1,
+			"打磨-166 道行 成功+失败 埋点 增量 = 1e9 + 8e9 (实际 %d / 阶段 %d)" % [int(g.stats.get("primary_spent", 0.0)), g.dao_level])
+	# 收尾 复原 干净 基准 (境界/层/灵气/飞升/阶段/道行 复原 防 污染 后续 段; 主资源 消耗 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = as166
+	g.realm_idx = ri166
+	g.layer = ly166
+	g.essence = es166
+	g.dao_level = dl166
+	g.dao = dao166
+
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
 	g.essence = 54321.0

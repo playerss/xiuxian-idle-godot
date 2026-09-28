@@ -679,6 +679,56 @@ func _ready() -> void:
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-165 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
+	# 打磨-166: 修行统计 主资源 消耗 累计 段 (primary_spent 埋点 真实 路径 [try_breakthrough/
+	# try_dao_break 扣除 分支]: 只 计 突破/道行精进 实际 扣除 灵气/道行 [失败 重烧 全耗 计入],
+	# 主资源 飞升后 计 道行 口径, 手动+自动 突破 路径 均 经 try_breakthrough 同 口径)
+	check(ui._stats_label.tooltip_text.find("主资源 消耗") >= 0 and ui._stats_label.tooltip_text.find("打磨-166") >= 0
+			and ui._stats_label.tooltip_text.find("双资源 收支 对照") >= 0,
+			"打磨-166 统计 行 tooltip 含 主资源 消耗 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 主资源 消耗 段 + 标签 = 接口 恒等
+	var sp166: float = float(g.stats.get("primary_spent", 0.0))
+	check(g.stats_text().find("灵石 消耗 %s · 主资源 消耗 %s" % [g.fmt(float(g.stats.get("stone_spent", 0.0))), g.fmt(sp166)]) >= 0,
+			"打磨-166 stats_text 含 主资源 消耗 段 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-166 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 受控 基准 境界0层1 突破 成功 扣 10 + 失败 停留 扣 10 -> 埋点 增量 20 -> _refresh 标签 同步
+	var ri166u: int = g.realm_idx
+	var ly166u: int = g.layer
+	var es166u: float = g.essence
+	var as166u: bool = g.ascended
+	var dl166u: int = g.dao_level
+	var dao166u: float = g.dao
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 100.0
+	var ib166: float = float(g.stats.get("primary_spent", 0.0))
+	check(g.try_breakthrough(0.0).find("突破成功") >= 0 and g.essence == 90.0, "打磨-166 突破 成功 扣 10 (受控 态)")
+	g.layer = 1
+	g.essence = 100.0
+	check(g.try_breakthrough(0.99).find("突破失败") >= 0 and g.essence == 90.0, "打磨-166 突破 失败 停留 仍 扣 10 (受控 态)")
+	check(float(g.stats.get("primary_spent", 0.0)) == ib166 + 20.0,
+			"打磨-166 埋点 增量 = 突破 消耗 合计 20 (实际 %d)" % int(g.stats.get("primary_spent", 0.0)))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-166 _refresh 后 标签 文本 = 接口 恒等 (含 主资源 消耗 段)")
+	check(g.stats_text().find("灵石 消耗 %s · 主资源 消耗 %s" % [g.fmt(float(g.stats.get("stone_spent", 0.0))), g.fmt(float(g.stats.get("primary_spent", 0.0)))]) >= 0,
+			"打磨-166 埋点 后 文案 含 新 主资源 消耗 累计 (实际 %s)" % g.stats_text().left(90))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached166: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached166 and str(ui._stats_label.text) == g.stats_text() and g.essence == 90.0,
+			"打磨-166 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (境界/灵气/飞升 复原 防 污染 后续 段; 主资源 消耗 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = as166u
+	g.realm_idx = ri166u
+	g.layer = ly166u
+	g.essence = es166u
+	g.dao_level = dl166u
+	g.dao = dao166u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-166 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
 	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)
