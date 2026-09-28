@@ -1535,6 +1535,10 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		# 只 计 层 基础 奖励 reward_stone [含 幸运/不屈 叠乘], 不含 通关 大奖/每日 首胜 额外 奖励;
 		# 手动+自动 路径 同 口径 累加; 只 改 内存 统计 不 改 结算 逻辑)
 		_stat_inc("tower_total_stone", reward_stone)
+		# 打磨-164: 爬塔材料 收益 累计 埋点 (对称 打磨-163 爬塔灵石 累计: 只 计 层 基础 奖励 reward_mat
+		# [含 幸运/不屈 叠乘, 与 材料 入账 affix_materials 同源 单点], 不含 通关 大奖 折算 材料
+		# [clear_reward_mat 独立 路径 不 计入]; 手动+自动 路径 同 口径 累加; 只 改 内存 统计 不 改 结算 逻辑)
+		_stat_inc("tower_total_mat", float(reward_mat))
 		_stat_inc("tower_win")
 		# 打磨-161: 爬塔 败 计数 埋点 (对称 打磨-14 tower_win 胜局 埋点: 双塔 败局 停留 本层 无 惩罚,
 	# 胜/败 均 手动+自动 路径 经 本 函数 同 口径 计数; 只 改 内存 统计 不 改 结算 逻辑)
@@ -1724,7 +1728,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1749,8 +1753,13 @@ func _load_stats(v: Variant) -> void:
 # 赚 多少 灵石, 只 见 单场 底部 消息/浮动 与 会话 内存 文案 [打磨-95]; 只 计 层 基础 奖励
 # reward_stone [含 幸运/不屈 叠乘], 不含 通关 大奖/每日 首胜 额外 奖励, 与 单场 结算 明细 同源;
 # 旧档 缺 键 兜底 0)
+# 打磨-164: 爬塔材料 收益 累计 段 (tower_total_mat 埋点 本轮 新增 [try_tower_challenge 胜局 分支,
+# 对称 打磨-163 爬塔灵石 累计]: 玩家 挂机 回看 不知 爬塔 累计 掉 多少 材料, 只 见 单场 底部
+# 消息/浮动 与 会话 内存 文案 [打磨-95/100]; 只 计 层 基础 奖励 reward_mat [含 幸运/不屈 叠乘,
+# 向上取整 整件入账], 不含 通关 大奖 折算 材料 [clear_reward_mat 独立 路径], 与 单场 结算
+# 明细 同源 单点 累加; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
@@ -1758,6 +1767,7 @@ func stats_text() -> String:
 		int(stats.get("equip_buy", 0.0)), int(stats.get("tower_win", 0.0)),
 		int(stats.get("tower_loss", 0.0)),
 		fmt(float(stats.get("tower_total_stone", 0.0))),
+		int(stats.get("tower_total_mat", 0.0)),
 		fmt_stats_time(float(stats.get("offline_total_sec", 0.0))),
 		fmt(float(stats.get("offline_total_qi", 0.0))), fmt(float(stats.get("offline_total_stone", 0.0))),
 		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
