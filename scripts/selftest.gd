@@ -2269,6 +2269,112 @@ func _init() -> void:
 	g._offline_stone = 0.0
 	g.offline_msg = ""
 
+	# ---------- 打磨-168: 灵石 获取 累计 段 (stone_gain 埋点 本轮 新增 [挂机 累积 分支 +
+	# 塔 胜局 层 基础 奖励/通关 大奖/每日 首胜 分支 + load_game 离线 结算 分支, 对称 打磨-165
+	# 灵石 消耗 累计 方向 相反]: 只 计 五 路径 实际 入账 灵石, 与 stones 入账 同源 单点 累加;
+	# 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 stone_gain = 0
+	var sv168: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("主资源 获取 0 · 灵石 获取 0") >= 0,
+			"打磨-168 空档 _load_stats 兜底 灵石 获取 段 = 0 (实际 %s)" % g.stats_text().left(120))
+	g.stats = sv168
+	# stats_text 含 灵石 获取 段 (动态 锚定, fmt 万/亿 档)
+	var sg168: float = float(g.stats.get("stone_gain", 0.0))
+	check(g.stats_text().find("主资源 获取 %s · 灵石 获取 %s" % [g.fmt(float(g.stats.get("primary_gain", 0.0))), g.fmt(sg168)]) >= 0,
+			"打磨-168 stats_text 含 灵石 获取 段 (实际 %s)" % g.stats_text().left(120))
+	# 真实 路径 1: 受控 基准 境界0层1 纯 挂机 (前序 段 收尾 已 复原 境界 状态, 无 功法/装备 残留),
+	# 手动 驱动 _process(0.25) -> 埋点 增量 = 灵石 速率 x delta, 与 stones 实增 恒等
+	var ri168: int = g.realm_idx
+	var ly168: int = g.layer
+	var es168: float = g.essence
+	var st168: float = g.stones
+	var asc168: bool = g.ascended
+	var dl168: int = g.dao_level
+	var dao168: float = g.dao
+	var lr168s: Array[String] = g.learned.duplicate()
+	var owe168: Array[String] = g.owned_eq.duplicate()
+	var eq168: Dictionary = g.equipped.duplicate(true)
+	var twf168: int = g.tower_fixed_floor
+	var tec168: int = g.tower_endless_floor
+	var teb168: int = g.tower_endless_best
+	var td168: String = g.tower_daily_date
+	var twc168: bool = g.tower_fixed_clear
+	var tcg168: bool = g.tower_clear_reward_got
+	var pb168: int = g.poison_battles
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	var rate168: float = g.stone_per_sec()
+	var stb168: float = float(g.stats.get("stone_gain", 0.0))
+	g._process(0.25)
+	check(absf(g.stones - (rate168 * 0.25)) < 1e-6
+			and absf(float(g.stats.get("stone_gain", 0.0)) - (stb168 + rate168 * 0.25)) < 1e-6,
+			"打磨-168 挂机 累积 埋点 增量 = 灵石 速率 x delta 且 与 灵石 实增 恒等 (实际 %s / 灵石 %s)" % [g.fmt(float(g.stats.get("stone_gain", 0.0))), g.fmt(g.stones)])
+	# 真实 路径 2: 塔 胜局 层 基础 奖励 (强玩家 道祖 登天梯 1 层 恒胜, 结算 明细 同源 锚定;
+	# 新纪录 触发 每日 首胜 0.5x — 首胜 额外 段 也 计入 本 累计, 差额 = reward_stone + daily_bonus)
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.stones = 0.0
+	var sg168b: float = float(g.stats.get("stone_gain", 0.0))
+	var r168: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r168["win"]), "打磨-168 强玩家 道祖 登天梯 1 层 胜 (win=%s)" % str(r168["win"]))
+	var exp168: float = float(r168["reward_stone"]) + float(r168.get("daily_bonus", 0.0))
+	check(absf(g.stones - exp168) < 1e-6
+			and absf(float(g.stats.get("stone_gain", 0.0)) - (sg168b + exp168)) < 1e-6,
+			"打磨-168 塔 胜局 埋点 增量 = 层 基础 奖励 + 每日 首胜 额外 (与 结算 明细 同源; 实际 %s / 期望 %s)" % [g.fmt(float(g.stats.get("stone_gain", 0.0))), g.fmt(exp168)])
+	# 真实 路径 3: 二次 胜局 累计 再 增 跨 场 持久 (2 层 再胜, 无 新纪录 无 首胜 额外)
+	var sg168c: float = float(g.stats.get("stone_gain", 0.0))
+	var st168c: float = g.stones
+	var r168b: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r168b["win"]) and float(r168b.get("daily_bonus", 0.0)) == 0.0,
+			"打磨-168 二次 胜局 登天梯 2 层 (win=%s, 无 首胜 额外)" % str(r168b["win"]))
+	check(absf(float(g.stats.get("stone_gain", 0.0)) - (sg168c + float(r168b["reward_stone"]))) < 1e-6,
+			"打磨-168 二次 胜局 累计 再 增 = 上 基准 + 本层 基础 奖励 (实际 %s)" % g.fmt(float(g.stats.get("stone_gain", 0.0))))
+	# 真实 路径 4: 离线 结算 路径 (构造 2h 离线档 读档 结算, 灵石 明细 埋点 增量 = 本次 明细 恒等)
+	var sg168d: float = float(g.stats.get("stone_gain", 0.0))
+	var save168: Dictionary = {"realm_idx": 0, "layer": 1, "essence": 0.0, "dao": 0.0, "ascended": false, "dao_level": 0, "ts": int(Time.get_unix_time_from_system()) - 7200, "stats": g.stats.duplicate(true)}
+	var f168 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f168.store_string(JSON.stringify(save168))
+	f168.close()
+	g.load_game()
+	check(g._offline_sec > 60.0 and absf(g._offline_stone) > 0.0
+			and absf(float(g.stats.get("stone_gain", 0.0)) - (sg168d + g._offline_stone)) < 1e-6,
+			"打磨-168 离线 结算 埋点 增量 = 本次 灵石 明细 恒等 (实际 离线灵石 %s)" % g.fmt(g._offline_stone))
+	# 埋点 后 文案 含 新 灵石 获取 累计 (动态 恒等)
+	check(g.stats_text().find("灵石 获取 %s" % g.fmt(float(g.stats.get("stone_gain", 0.0)))) >= 0,
+			"打磨-168 埋点 后 文案 含 新 灵石 获取 累计 (实际 %s)" % g.stats_text().left(120))
+	# 收尾 复原 干净 基准 (境界/层/灵石/飞升/阶段/塔 态/已学 复原 防 污染 后续 段; 获取 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc168
+	g.realm_idx = ri168
+	g.layer = ly168
+	g.essence = es168
+	g.stones = st168
+	g.dao_level = dl168
+	g.dao = dao168
+	g.learned = lr168s
+	g.owned_eq = owe168
+	g.equipped = eq168
+	g.tower_fixed_floor = twf168
+	g.tower_endless_floor = tec168
+	g.tower_endless_best = teb168
+	g.tower_daily_date = td168
+	g.tower_fixed_clear = twc168
+	g.tower_clear_reward_got = tcg168
+	g.poison_battles = pb168
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+	g.offline_msg = ""
+
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
 	g.essence = 54321.0

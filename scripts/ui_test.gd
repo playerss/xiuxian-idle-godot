@@ -792,6 +792,74 @@ func _ready() -> void:
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-167 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
+	# 打磨-168: 修行统计 灵石 获取 累计 段 (stone_gain 埋点 真实 路径 [挂机 累积 + 塔 胜局 层
+	# 基础 奖励 + 离线 结算]: 只 计 五 路径 实际 入账 灵石, 与 stones 入账 同源 单点 累加,
+	# 与 灵石 消耗 打磨-165 收支 对照)
+	check(ui._stats_label.tooltip_text.find("灵石 获取") >= 0 and ui._stats_label.tooltip_text.find("打磨-168") >= 0
+			and ui._stats_label.tooltip_text.find("五 路径 实际 入账") >= 0,
+			"打磨-168 统计 行 tooltip 含 灵石 获取 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 灵石 获取 段 + 标签 = 接口 恒等
+	var sg168: float = float(g.stats.get("stone_gain", 0.0))
+	check(g.stats_text().find("主资源 获取 %s · 灵石 获取 %s" % [g.fmt(float(g.stats.get("primary_gain", 0.0))), g.fmt(sg168)]) >= 0,
+			"打磨-168 stats_text 含 灵石 获取 段 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-168 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 受控 基准 境界0层1 挂机 累积 入账 (支出 路径 无 联动) + 离线 结算 入账 (获取 路径) -> _refresh 标签 同步
+	var ri168u: int = g.realm_idx
+	var ly168u: int = g.layer
+	var es168u: float = g.essence
+	var st168u: float = g.stones
+	var as168u: bool = g.ascended
+	var dl168u: int = g.dao_level
+	var dao168u: float = g.dao
+	var offsec168: float = g._offline_sec
+	var offqi168: float = g._offline_qi
+	var offst168: float = g._offline_stone
+	var om168u: String = g.offline_msg
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	var ib168u: float = float(g.stats.get("stone_gain", 0.0))
+	var rate168u: float = g.stone_per_sec()
+	g._process(0.25)
+	check(absf(g.stones - (rate168u * 0.25)) < 1e-6
+			and absf(float(g.stats.get("stone_gain", 0.0)) - (ib168u + rate168u * 0.25)) < 1e-6,
+			"打磨-168 挂机 累积 埋点 增量 = 灵石 速率 x delta 恒等 (实际 %s)" % g.fmt(float(g.stats.get("stone_gain", 0.0))))
+	var save168u: Dictionary = {"realm_idx": 0, "layer": 1, "essence": 0.0, "dao": 0.0, "ascended": false, "dao_level": 0, "ts": int(Time.get_unix_time_from_system()) - 7200, "stats": g.stats.duplicate(true)}
+	var f168u := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f168u.store_string(JSON.stringify(save168u))
+	f168u.close()
+	g.load_game()
+	check(g._offline_sec > 60.0 and g.offline_msg.find("离") >= 0
+			and absf(float(g.stats.get("stone_gain", 0.0)) - (ib168u + rate168u * 0.25 + g._offline_stone)) < 1e-6,
+			"打磨-168 离线 结算 埋点 增量 = 本次 灵石 明细 恒等 (实际 离线灵石 %s)" % g.fmt(g._offline_stone))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-168 _refresh 后 标签 文本 = 接口 恒等 (含 灵石 获取 段)")
+	check(g.stats_text().find("主资源 获取 %s · 灵石 获取 %s" % [g.fmt(float(g.stats.get("primary_gain", 0.0))), g.fmt(float(g.stats.get("stone_gain", 0.0)))]) >= 0,
+			"打磨-168 埋点 后 文案 含 新 灵石 获取 累计 (实际 %s)" % g.stats_text().left(90))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached168: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached168 and str(ui._stats_label.text) == g.stats_text(),
+			"打磨-168 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (境界/灵气/灵石/飞升/阶段/离线 明细 复原 防 污染 后续 段; 获取 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = as168u
+	g.realm_idx = ri168u
+	g.layer = ly168u
+	g.essence = es168u
+	g.stones = st168u
+	g.dao_level = dl168u
+	g.dao = dao168u
+	g._offline_sec = offsec168
+	g._offline_qi = offqi168
+	g._offline_stone = offst168
+	g.offline_msg = om168u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-168 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
 	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)

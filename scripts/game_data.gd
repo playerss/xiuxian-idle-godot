@@ -304,6 +304,7 @@ func _process(delta: float) -> void:
 		essence += qi_per_sec() * delta
 		_stat_inc("primary_gain", qi_per_sec() * delta)  # 打磨-167: 主资源 获取 累计 (挂机 灵气 口径, 与 essence/dao 入账 同源 单点)
 	stones += stone_per_sec() * delta
+	_stat_inc("stone_gain", stone_per_sec() * delta)  # 打磨-168: 灵石 获取 累计 (挂机 灵石 口径, 与 stones 入账 同源 单点)
 	# 打磨-67: 自动突破 (开启时 资源攒够 自动尝试; _try_auto_break 自门控于 auto_break,
 	# 每帧至多一次, 突破后资源已低于 下一档 阈值, 无热循环)
 	_try_auto_break()
@@ -1473,6 +1474,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 			stone_mult_tr *= 1.2
 		reward_stone = float(mon["stone"]) * stone_mult_tr
 		stones += reward_stone
+		_stat_inc("stone_gain", reward_stone)  # 打磨-168: 灵石 获取 累计 (塔 层 基础 奖励, 与 stones 入账 同源 单点, 含 幸运/不屈 叠乘)
 		# 材料 入账 (基础 = 1+怪物种 mat_w, 材料囊 x2 已含; 幸运/不屈 叠乘; 向上取整 整件入账)
 		reward_mat = int(ceil(float(mon["mats"]) * stone_mult_tr))
 		affix_materials += reward_mat
@@ -1506,6 +1508,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 						tower_clear_reward_got = true
 						clear_reward_stone = TOWER_CLEAR_BONUS_STONE
 						stones += clear_reward_stone
+						_stat_inc("stone_gain", float(clear_reward_stone))  # 打磨-168: 灵石 获取 累计 (通关 一次性 大奖, 与 stones 入账 同源 单点)
 						# 打磨-114: 通关 大奖 追加 顶级(传说) 词缀 x3 (M5 规格 落地): 数值 最高 3 件 传说
 						# 逐件 affix_add 真实 入账 (背包满 时 高品质 拒绝 返回 0), 未入包 件 折算 材料
 						# (分解 产出口径 1+品质档=5/件, 计 分解 埋点) — 不 重复 发放 (reward_got 防 重放)
@@ -1533,6 +1536,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 				daily_bonus = reward_stone * 0.5
 				stones += daily_bonus
 				tower_daily_bonus_stones += daily_bonus
+				_stat_inc("stone_gain", daily_bonus)  # 打磨-168: 灵石 获取 累计 (登天梯 每日 首胜 额外 奖励, 与 stones 入账 同源 单点)
 		# 打磨-163: 爬塔灵石 收益 累计 埋点 (对称 打磨-14 tower_win 胜局 埋点 + 打磨-160 离线 收益 累计:
 		# 只 计 层 基础 奖励 reward_stone [含 幸运/不屈 叠乘], 不含 通关 大奖/每日 首胜 额外 奖励;
 		# 手动+自动 路径 同 口径 累加; 只 改 内存 统计 不 改 结算 逻辑)
@@ -1730,7 +1734,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1777,8 +1781,15 @@ func _load_stats(v: Variant) -> void:
 # 速率 x delta / 神通 爆发 qi_per_sec x 秒数 / 离线 结算 qi_per_sec x elapsed x 效率],
 # 主资源 飞升后 计 道行 口径 与 离线 收益 段 打磨-160 同 口径; 只 改 内存 统计 不 改 结算
 # 逻辑; 旧档 缺 键 兜底 0)
+# 打磨-168: 灵石 获取 累计 段 (stone_gain 埋点 本轮 新增 [挂机 累积 分支 + 塔 胜局 层 基础
+# 奖励/通关 大奖/每日 首胜 分支 + load_game 离线 结算 分支, 对称 打磨-165 灵石 消耗 累计
+# 方向 相反]: 玩家 挂机 回看 不知 开荒 起 累计 赚 多少 灵石 [顶栏 只 显 当前 净值 = 获取 -
+# 消耗, 收入 总量 无 持久化]; 五 入账 路径 均 与 stones 入账 同源 单点 累加 [挂机 每帧
+# 速率 x delta / 塔 层 基础 奖励 含 幸运/不屈 叠乘 / 通关 一次性 大奖 / 登天梯 每日 首胜
+# 额外 0.5x / 离线 结算 明细], 手动+自动 塔 路径 同 口径; 只 改 内存 统计 不 改 结算
+# 逻辑; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
@@ -1792,7 +1803,7 @@ func stats_text() -> String:
 		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
 		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0)),
 		fmt(float(stats.get("stone_spent", 0.0))), fmt(float(stats.get("primary_spent", 0.0))),
-		fmt(float(stats.get("primary_gain", 0.0)))]
+		fmt(float(stats.get("primary_gain", 0.0))), fmt(float(stats.get("stone_gain", 0.0)))]
 
 # 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
 # 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)
@@ -4286,6 +4297,7 @@ func load_game() -> void:
 			var gq := qi_per_sec() * elapsed * rate
 			var gs := stone_per_sec() * elapsed * rate
 			stones += gs
+			_stat_inc("stone_gain", gs)  # 打磨-168: 灵石 获取 累计 (离线 结算 灵石 明细, 与 stones 入账 同源 单点)
 			# 打磨-66: 记录本次离线明细, 供启动金色浮动提示 (offline_float_text)
 			_offline_sec = elapsed
 			_offline_qi = gq
