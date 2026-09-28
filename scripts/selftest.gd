@@ -2170,6 +2170,105 @@ func _init() -> void:
 	g.dao_level = dl166
 	g.dao = dao166
 
+	# ---------- 打磨-167: 主资源 获取 累计 段 (primary_gain 埋点 本轮 新增 [挂机 累积 分支 +
+	# use_active_skill 爆发 分支 + load_game 离线 结算 分支, 对称 打磨-166 主资源 消耗 累计
+	# 方向 相反]: 只 计 三 路径 实际 入账 灵气/道行, 与 essence/dao 入账 同源 单点 累加,
+	# 主资源 飞升后 计 道行 口径 与 离线 收益 段 打磨-160 同 口径; 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 primary_gain = 0
+	var sv167: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("主资源 消耗 0 · 主资源 获取 0") >= 0,
+			"打磨-167 空档 _load_stats 兜底 主资源 获取 段 = 0 (实际 %s)" % g.stats_text().left(110))
+	g.stats = sv167
+	# stats_text 含 主资源 获取 段 (动态 锚定, fmt 万/亿 档)
+	var pg167: float = float(g.stats.get("primary_gain", 0.0))
+	check(g.stats_text().find("主资源 消耗 %s · 主资源 获取 %s" % [g.fmt(float(g.stats.get("primary_spent", 0.0))), g.fmt(pg167)]) >= 0,
+			"打磨-167 stats_text 含 主资源 获取 段 (实际 %s)" % g.stats_text().left(110))
+	# 真实 路径 1: 受控 基准 境界0层1 纯 挂机 速率 1.0 (前序 段 收尾 已 复原 境界 状态, 无 功法/装备 残留),
+	# 手动 驱动 _process(0.25) -> 埋点 增量 = 速率 x delta, 与 essence 实增 恒等
+	var ri167: int = g.realm_idx
+	var ly167: int = g.layer
+	var es167: float = g.essence
+	var as167: bool = g.ascended
+	var dl167: int = g.dao_level
+	var dao167: float = g.dao
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 100.0
+	var rate167: float = g.qi_per_sec()
+	var pb167: float = float(g.stats.get("primary_gain", 0.0))
+	g._process(0.25)
+	check(absf(g.essence - (100.0 + rate167 * 0.25)) < 1e-6 and absf(float(g.stats.get("primary_gain", 0.0)) - (pb167 + rate167 * 0.25)) < 1e-6,
+			"打磨-167 挂机 累积 埋点 增量 = 速率 x delta 且 与 灵气 实增 恒等 (实际 %d / 灵气 %d)" % [int(float(g.stats.get("primary_gain", 0.0)) - pb167), int(g.essence)])
+	# 真实 路径 2: 神通 爆发 未飞升 灵气 口径 (凡品 主动 境界0 层1 可 学 数据 锚定)
+	var lr167s: Array[String] = g.learned.duplicate()
+	var sid167: String = "sword_0_3"
+	g.learned.clear()
+	g.learned.append(sid167)
+	var s167: Dictionary = g.skill_by_id.get(sid167, {})
+	g._active_cd.clear()
+	check(g.learned.has(sid167) and g.active_ready(sid167),
+			"打磨-167 神通 受控 基准 可 施展 (实际 已学 %d 就绪 %d)" % [int(g.learned.has(sid167)), int(g.active_ready(sid167))])
+	var gain167: float = g.qi_per_sec() * float(s167["value"])
+	var msg167a: String = g.use_active_skill(sid167)
+	check(msg167a.find("瞬间获得灵气") >= 0 and absf(g.essence - (100.0 + rate167 * 0.25 + gain167)) < 1e-6
+			and absf(float(g.stats.get("primary_gain", 0.0)) - (pb167 + rate167 * 0.25 + gain167)) < 1e-6,
+			"打磨-167 神通 爆发 灵气 埋点 增量 = 速率 x 秒数 恒等 (实际 %s)" % msg167a)
+	# 真实 路径 3: 飞升后 道行 口径 (同 爆发 路径, 主资源 计 道行)
+	g.ascended = true
+	g.dao_level = 0
+	g.dao = 10.0
+	g._active_cd.clear()
+	var msg167b: String = g.use_active_skill(sid167)
+	check(msg167b.find("瞬间获得道行") >= 0 and absf(g.dao - (10.0 + gain167)) < 1e-6,
+			"打磨-167 飞升 道行 口径 爆发 入账 道行 恒等 (实际 %s)" % msg167b)
+	# 真实 路径 4: 离线 结算 路径 (构造 2h 离线档 读档 结算, 埋点 增量 = 本次 明细 恒等)
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.essence = 0.0
+	var off167: float = float(g.stats.get("primary_gain", 0.0))
+	g.learned.clear()
+	var save167: Dictionary = {"realm_idx": 0, "layer": 1, "essence": 0.0, "dao": 0.0, "ascended": false, "dao_level": 0, "ts": int(Time.get_unix_time_from_system()) - 7200, "stats": g.stats.duplicate(true)}
+	var f167 := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f167.store_string(JSON.stringify(save167))
+	f167.close()
+	g.load_game()
+	check(g._offline_sec > 60.0 and g.offline_msg.find("离线") >= 0 and absf(g.essence - float(g._offline_qi)) < 1e-6
+			and absf(float(g.stats.get("primary_gain", 0.0)) - (off167 + g._offline_qi)) < 1e-6,
+			"打磨-167 离线 结算 埋点 增量 = 本次 明细 恒等 (实际 离线 %s)" % g.fmt(g._offline_qi))
+	# 离线 结算 道行 口径 (飞升态 2h 档)
+	g.ascended = true
+	var off167b: float = float(g.stats.get("primary_gain", 0.0))
+	g.learned.clear()
+	save167["ascended"] = true
+	save167["dao_level"] = 0
+	save167["dao"] = 0.0
+	save167["stats"] = g.stats.duplicate(true)
+	f167 = FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f167.store_string(JSON.stringify(save167))
+	f167.close()
+	g.load_game()
+	check(g.ascended and absf(g.dao - float(g._offline_qi)) < 1e-6
+			and absf(float(g.stats.get("primary_gain", 0.0)) - (off167b + g._offline_qi)) < 1e-6,
+			"打磨-167 离线 结算 道行 口径 埋点 增量 恒等 (道行 %d)" % int(g.dao))
+	check(g.stats_text().find("主资源 获取 %s" % g.fmt(float(g.stats.get("primary_gain", 0.0)))) >= 0,
+			"打磨-167 埋点 后 文案 含 新 主资源 获取 累计 (实际 %s)" % g.stats_text().left(110))
+	# 收尾 复原 干净 基准 (境界/层/灵气/道行/飞升/阶段/已学/离线 明细 复原 防 污染 后续 段; 获取 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = as167
+	g.realm_idx = ri167
+	g.layer = ly167
+	g.essence = es167
+	g.dao_level = dl167
+	g.dao = dao167
+	g.learned = lr167s
+	g._active_cd.clear()
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+	g.offline_msg = ""
+
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
 	g.essence = 54321.0

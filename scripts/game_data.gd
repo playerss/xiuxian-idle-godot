@@ -299,8 +299,10 @@ func _process(delta: float) -> void:
 	# 挂机自动积累 (飞升后: 道行替代灵气, 打磨-10)
 	if ascended:
 		dao += qi_per_sec() * delta
+		_stat_inc("primary_gain", qi_per_sec() * delta)  # 打磨-167: 主资源 获取 累计 (挂机 道行 口径, 与 essence/dao 入账 同源 单点)
 	else:
 		essence += qi_per_sec() * delta
+		_stat_inc("primary_gain", qi_per_sec() * delta)  # 打磨-167: 主资源 获取 累计 (挂机 灵气 口径, 与 essence/dao 入账 同源 单点)
 	stones += stone_per_sec() * delta
 	# 打磨-67: 自动突破 (开启时 资源攒够 自动尝试; _try_auto_break 自门控于 auto_break,
 	# 每帧至多一次, 突破后资源已低于 下一档 阈值, 无热循环)
@@ -1728,7 +1730,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1768,8 +1770,15 @@ func _load_stats(v: Variant) -> void:
 # 烧 多少 灵气/道行 突破 [失败 重烧 全耗 计入, 只 见 单场 浮动 不 持久化]; 主资源 飞升后
 # 计 道行 口径 与 离线 收益 段 打磨-160 同 口径, 手动 路径 单点 累加 自动突破 经
 # try_breakthrough 同 口径; 只 改 内存 统计 不 改 结算 逻辑; 旧档 缺 键 兜底 0)
+# 打磨-167: 主资源 获取 累计 段 (primary_gain 埋点 本轮 新增 [挂机 累积 分支 + use_active_skill
+# 爆发 分支 + load_game 离线 结算 分支, 对称 打磨-166 主资源 消耗 累计 方向 相反]: 玩家 挂机
+# 回看 不知 开荒 起 累计 攒 多少 灵气/道行 [只 见 顶栏 当前 值, 当前 值 = 获取 - 消耗 的 净值,
+# 支出 侧 打磨-166 已 累计]; 三 入账 路径 均 与 essence/dao 入账 同源 单点 累加 [挂机 每帧
+# 速率 x delta / 神通 爆发 qi_per_sec x 秒数 / 离线 结算 qi_per_sec x elapsed x 效率],
+# 主资源 飞升后 计 道行 口径 与 离线 收益 段 打磨-160 同 口径; 只 改 内存 统计 不 改 结算
+# 逻辑; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s · 主资源 消耗 %s" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
@@ -1782,7 +1791,8 @@ func stats_text() -> String:
 		fmt(float(stats.get("offline_total_qi", 0.0))), fmt(float(stats.get("offline_total_stone", 0.0))),
 		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
 		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0)),
-		fmt(float(stats.get("stone_spent", 0.0))), fmt(float(stats.get("primary_spent", 0.0)))]
+		fmt(float(stats.get("stone_spent", 0.0))), fmt(float(stats.get("primary_spent", 0.0))),
+		fmt(float(stats.get("primary_gain", 0.0)))]
 
 # 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
 # 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)
@@ -2458,6 +2468,7 @@ func use_active_skill(id: String) -> String:
 	_active_cd[id] = float(s["cooldown"])
 	_stat_inc("skill_use")  # 打磨-14: 神通施展计数
 	# 打磨-11: 飞升后灵气不再使用, 神通爆发改为获得道行
+	_stat_inc("primary_gain", gain)  # 打磨-167: 主资源 获取 累计 (神通爆发 入账, 成功 施展 口径, 飞升后 计 道行)
 	if ascended:
 		dao += gain
 		return "施展「%s」! 瞬间获得道行 %s!" % [s["name"], fmt(gain)]
@@ -4282,6 +4293,7 @@ func load_game() -> void:
 			# 打磨-160: 离线收益 累计 埋点 (stats 只 增不减 存档 持久化, 与 本次 明细 同源 单点;
 			# 只 改 内存 统计 不 改 结算 逻辑, 旧档 缺 键 兜底 0)
 			_stat_inc("offline_total_qi", gq)
+			_stat_inc("primary_gain", gq)  # 打磨-167: 主资源 获取 累计 (离线 结算 入账, 与 离线 明细 同源 单点, 飞升后 计 道行 口径)
 			_stat_inc("offline_total_stone", gs)
 			# 打磨-162: 离线时长 累计 埋点 (与 _offline_sec 同源 单点, 对称 打磨-160 收益 埋点;
 			# stats 只 增不减 存档 持久化, 旧档 缺 键 兜底 0)

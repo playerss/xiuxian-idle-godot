@@ -729,6 +729,69 @@ func _ready() -> void:
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-166 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
+	# 打磨-167: 修行统计 主资源 获取 累计 段 (primary_gain 埋点 真实 路径 [_process 挂机 累积 +
+	# use_active_skill 爆发 + load_game 离线 结算]: 只 计 三 路径 实际 入账 灵气/道行,
+	# 与 essence/dao 入账 同源 单点 累加, 主资源 飞升后 计 道行 口径, 与 当前 主资源值 收支 对照)
+	check(ui._stats_label.tooltip_text.find("主资源 获取") >= 0 and ui._stats_label.tooltip_text.find("打磨-167") >= 0
+			and ui._stats_label.tooltip_text.find("三 路径 实际 入账") >= 0,
+			"打磨-167 统计 行 tooltip 含 主资源 获取 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 主资源 获取 段 + 标签 = 接口 恒等
+	var pg167: float = float(g.stats.get("primary_gain", 0.0))
+	check(g.stats_text().find("主资源 消耗 %s · 主资源 获取 %s" % [g.fmt(float(g.stats.get("primary_spent", 0.0))), g.fmt(pg167)]) >= 0,
+			"打磨-167 stats_text 含 主资源 获取 段 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-167 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 受控 基准 境界0层1 突破 成功 扣 10 (支出 路径 联动) + 离线 结算 入账 (获取 路径) -> _refresh 标签 同步
+	var ri167u: int = g.realm_idx
+	var ly167u: int = g.layer
+	var es167u: float = g.essence
+	var as167u: bool = g.ascended
+	var dl167u: int = g.dao_level
+	var dao167u: float = g.dao
+	var lr167u: Array[String] = g.learned.duplicate()
+	var offsec167: float = g._offline_sec
+	var offqi167: float = g._offline_qi
+	var offst167: float = g._offline_stone
+	var om167u: String = g.offline_msg
+	g.ascended = false
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 100.0
+	var ib167u: float = float(g.stats.get("primary_gain", 0.0))
+	check(g.try_breakthrough(0.0).find("突破成功") >= 0 and g.essence == 90.0, "打磨-167 突破 成功 扣 10 (受控 态)")
+	var save167u: Dictionary = {"realm_idx": 0, "layer": 1, "essence": 0.0, "dao": 0.0, "ascended": false, "dao_level": 0, "ts": int(Time.get_unix_time_from_system()) - 7200, "stats": g.stats.duplicate(true)}
+	var f167u := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f167u.store_string(JSON.stringify(save167u))
+	f167u.close()
+	g.load_game()
+	check(g._offline_sec > 60.0 and g.offline_msg.find("离") >= 0 and absf(g.essence - float(g._offline_qi)) < 1e-6
+			and absf(float(g.stats.get("primary_gain", 0.0)) - (ib167u + g._offline_qi)) < 1e-6,
+			"打磨-167 离线 结算 埋点 增量 = 本次 明细 恒等 (实际 离线 %s)" % g.fmt(g._offline_qi))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-167 _refresh 后 标签 文本 = 接口 恒等 (含 主资源 获取 段)")
+	check(g.stats_text().find("主资源 消耗 %s · 主资源 获取 %s" % [g.fmt(float(g.stats.get("primary_spent", 0.0))), g.fmt(float(g.stats.get("primary_gain", 0.0)))]) >= 0,
+			"打磨-167 埋点 后 文案 含 新 主资源 获取 累计 (实际 %s)" % g.stats_text().left(90))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached167: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached167 and str(ui._stats_label.text) == g.stats_text() and g.essence == g._offline_qi,
+			"打磨-167 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (境界/灵气/飞升/阶段/道行/已学/离线 明细 复原 防 污染 后续 段; 获取 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = as167u
+	g.realm_idx = ri167u
+	g.layer = ly167u
+	g.essence = es167u
+	g.dao_level = dl167u
+	g.dao = dao167u
+	g.learned = lr167u
+	g._offline_sec = offsec167
+	g._offline_qi = offqi167
+	g._offline_stone = offst167
+	g.offline_msg = om167u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-167 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
 	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)
