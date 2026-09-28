@@ -1728,7 +1728,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1758,8 +1758,13 @@ func _load_stats(v: Variant) -> void:
 # 消息/浮动 与 会话 内存 文案 [打磨-95/100]; 只 计 层 基础 奖励 reward_mat [含 幸运/不屈 叠乘,
 # 向上取整 整件入账], 不含 通关 大奖 折算 材料 [clear_reward_mat 独立 路径], 与 单场 结算
 # 明细 同源 单点 累加; 旧档 缺 键 兜底 0)
+# 打磨-165: 灵石 消耗 累计 段 (stone_spent 埋点 本轮 新增 [buy_equipment/try_buy_item 成功 分支,
+# 对称 打磨-163/164 收益 累计 方向 相反]: 玩家 挂机 回看 不知 开荒 起 累计 花 多少 灵石 购置
+# 装备/法器 [灵石 只有 收入 侧 累计 打磨-160/163, 支出 侧 无 展示位]; 只 计 购置 实际 扣除
+# 价格, 手动+自动 路径 均 经 本 两 函数 同 口径 累加 [_try_auto_buy/buy_items_affordable/
+# buy_affordable 单点 复用], 只 改 内存 统计 不 改 结算 逻辑; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
@@ -1771,7 +1776,8 @@ func stats_text() -> String:
 		fmt_stats_time(float(stats.get("offline_total_sec", 0.0))),
 		fmt(float(stats.get("offline_total_qi", 0.0))), fmt(float(stats.get("offline_total_stone", 0.0))),
 		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
-		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0))]
+		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0)),
+		fmt(float(stats.get("stone_spent", 0.0)))]
 
 # 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
 # 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)
@@ -2466,6 +2472,7 @@ func buy_equipment(id: String) -> String:
 	stones -= float(e["cost"])
 	owned_eq.append(id)
 	_stat_inc("equip_buy")  # 打磨-14: 装备购置计数
+	_stat_inc("stone_spent", float(e["cost"]))  # 打磨-165: 灵石 消耗 累计 (购置 实际 扣除 价格, 手动+自动 路径 同 口径)
 	var msg := "购得「%s」(%s)" % [e["name"], e["tier_name"]]
 	var slot := str(e["slot"])
 	if equipped.get(slot) == null:
@@ -3585,6 +3592,7 @@ func try_buy_item(item_id: String) -> String:
 				stones -= it["cost"]
 				owned.append(item_id)
 				_stat_inc("item_buy")  # 打磨-14: 法器购置计数
+				_stat_inc("stone_spent", float(it["cost"]))  # 打磨-165: 灵石 消耗 累计 (购置 实际 扣除 价格, 手动+自动 路径 同 口径)
 				return "购得「%s」, 灵气速率 x%.1f!" % [it["name"], it["boost"]]
 			else:
 				return "灵石不足: 需要 %s" % fmt(it["cost"])

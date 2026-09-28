@@ -333,7 +333,7 @@ func _ready() -> void:
 			"打磨-160 离线 结算 埋点 增量 = 本次 明细 (实际 %s / %s)" % [g.fmt(otdq160), g.fmt(otds160)])
 	ui._refresh()
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-160 _refresh 后 标签 文本 = 接口 恒等 (含 离线 累计 段)")
-	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(otq160), g.fmt(ots160)]) >= 0,
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(otq160), g.fmt(ots160), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-160 埋点 后 文案 含 新 离线 累计 (打磨-162 新 格式 串 适配, 实际 %s)" % g.stats_text().left(90))
 	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
 	var cached160: String = ui._stats_text
@@ -431,7 +431,7 @@ func _ready() -> void:
 			"打磨-162 统计 行 tooltip 含 离线时长 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
 	# stats_text 含 累计离线 段 + 标签 = 接口 恒等
 	var ots162: float = float(g.stats.get("offline_total_sec", 0.0))
-	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(ots162), g.fmt(float(g.stats.get("offline_total_qi", 0.0))), g.fmt(float(g.stats.get("offline_total_stone", 0.0)))]) >= 0,
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [g.fmt_stats_time(ots162), g.fmt(float(g.stats.get("offline_total_qi", 0.0))), g.fmt(float(g.stats.get("offline_total_stone", 0.0))), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-162 stats_text 含 累计离线 段 (实际 %s)" % g.stats_text().left(90))
 	# 真实 路径: 构造 2h 离线档 读档 -> 结算 埋点 入账 -> _refresh 标签 同步 (elapsed 墙钟 漂移 动态 锚定)
 	var asc162: bool = g.ascended
@@ -633,6 +633,51 @@ func _ready() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-164 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+	# 打磨-165: 修行统计 灵石 消耗 累计 段 (stone_spent 埋点 真实 路径 [buy_equipment/try_buy_item
+	# 成功 分支]: 只 计 购置 实际 扣除 价格, 手动+自动 购置 路径 同 口径, 与 灵石 收入 累计
+	# 打磨-160/163 收支 对照)
+	check(ui._stats_label.tooltip_text.find("灵石 消耗") >= 0 and ui._stats_label.tooltip_text.find("打磨-165") >= 0
+			and ui._stats_label.tooltip_text.find("收支 对照") >= 0,
+			"打磨-165 统计 行 tooltip 含 灵石 消耗 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 灵石 消耗 段 + 标签 = 接口 恒等
+	var ss165: float = float(g.stats.get("stone_spent", 0.0))
+	check(g.stats_text().find("兑换 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), g.fmt(ss165)]) >= 0,
+			"打磨-165 stats_text 含 灵石 消耗 段 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-165 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 受控 基准 购置 (清空 前序 段 遗留 拥有 态 防 已 拥有 早退, 法器 木剑 100 + 装备 木剑 100)
+	# -> 埋点 增量 = 购置 价格 -> _refresh 标签 同步
+	var st165u: float = g.stones
+	var ow165u: Array[String] = g.owned.duplicate()
+	var owe165u: Array[String] = g.owned_eq.duplicate()
+	var eq165u: Dictionary = g.equipped.duplicate(true)
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 1000.0
+	var ibb165: float = float(g.stats.get("stone_spent", 0.0))
+	check(g.try_buy_item("wooden_sword").find("购得") >= 0, "打磨-165 法器 木剑 购置 成功 (受控 态)")
+	check(g.buy_equipment("weapon_0_0").find("购得") >= 0, "打磨-165 装备 木剑 购置 成功 (受控 态)")
+	check(float(g.stats.get("stone_spent", 0.0)) == ibb165 + 200.0 and g.stones == 800.0,
+			"打磨-165 胜局 埋点 增量 = 购置 价格 合计 200 (实际 %d / 灵石 %d)" % [int(g.stats.get("stone_spent", 0.0)), int(g.stones)])
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-165 _refresh 后 标签 文本 = 接口 恒等 (含 灵石 消耗 段)")
+	check(g.stats_text().find("兑换 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
+			"打磨-165 埋点 后 文案 含 新 灵石 消耗 累计 (实际 %s)" % g.stats_text().left(90))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached165: String = ui._stats_text
+	var es_chk165: float = g.essence
+	ui._refresh()
+	check(ui._stats_text == cached165 and str(ui._stats_label.text) == g.stats_text() and g.essence == es_chk165,
+			"打磨-165 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (收集/装备/灵石 复原 防 污染 后续 段; 灵石 消耗 累计 保留 — stats 只 增不减 存档 口径)
+	g.stones = st165u
+	g.owned = ow165u
+	g.owned_eq = owe165u
+	g.equipped = eq165u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-165 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)

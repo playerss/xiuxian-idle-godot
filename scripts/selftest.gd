@@ -1645,7 +1645,7 @@ func _init() -> void:
 	var otq160: float = float(g.stats.get("offline_total_qi", 0.0))
 	var ots160: float = float(g.stats.get("offline_total_stone", 0.0))
 	var stt160: String = g.stats_text()
-	check(stt160.find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(otq160), g.fmt(ots160)]) >= 0,
+	check(stt160.find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(otq160), g.fmt(ots160), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-160 stats_text 含 离线 累计 段 (打磨-162 新 格式 串 适配, 实际 %s)" % stt160.left(90))
 	# 真实 路径: 构造 未飞升 2h 离线档 读档 -> 累计 埋点 入账 = 本次 明细 恒等 (elapsed 含 墙钟 漂移, 相对 容差)
 	var asc160: bool = g.ascended
@@ -1681,7 +1681,7 @@ func _init() -> void:
 	check(absf(float(g.stats["offline_total_qi"]) - (otq_b160 + g._offline_qi)) / 3601.0 < 1e-6
 			and absf(float(g.stats["offline_total_stone"]) - (ots_b160 + g._offline_stone)) / 3601.0 < 1e-6,
 			"打磨-160 累计 = 基准 + 本次 增量 恒等 (相对容差 防 float 往返 漂移)")
-	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(float(g.stats["offline_total_qi"])), g.fmt(float(g.stats["offline_total_stone"]))]) >= 0,
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(float(g.stats["offline_total_qi"])), g.fmt(float(g.stats["offline_total_stone"])), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-160 埋点 后 文案 含 新 离线 累计 (打磨-162 新 格式 串 适配, 实际 %s)" % g.stats_text().left(90))
 	# 二次 读档 累加: 再 构造 1h 离线档 -> 累计 再 增 (≈900), 历史 累计 跨 读档 持久
 	var otq_m160: float = float(g.stats["offline_total_qi"])
@@ -1794,7 +1794,7 @@ func _init() -> void:
 	g.stats = sv162
 	# stats_text 含 累计离线 段 (动态 锚定, fmt_stats_time 日/小时/分 档)
 	var ots162: float = float(g.stats.get("offline_total_sec", 0.0))
-	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀" % [g.fmt_stats_time(ots162), g.fmt(float(g.stats.get("offline_total_qi", 0.0))), g.fmt(float(g.stats.get("offline_total_stone", 0.0)))]) >= 0,
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [g.fmt_stats_time(ots162), g.fmt(float(g.stats.get("offline_total_qi", 0.0))), g.fmt(float(g.stats.get("offline_total_stone", 0.0))), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-162 stats_text 含 累计离线 段 (实际 %s)" % g.stats_text().left(90))
 	# 真实 路径: 构造 2h 离线档 读档 -> 埋点 增量 = 本次 elapsed (elapsed 含 墙钟 漂移, 动态 锚定)
 	var asc162: bool = g.ascended
@@ -2055,6 +2055,61 @@ func _init() -> void:
 	g.owned = ow164
 	g.owned_eq = owe164
 	g.equipped = eq164
+
+	# ---------- 打磨-165: 灵石 消耗 累计 段 (stone_spent 埋点 本轮 新增 [buy_equipment/try_buy_item
+	# 成功 分支, 对称 打磨-163/164 收益 累计 方向 相反]: 只 计 购置 实际 扣除 价格, 手动+自动
+	# 路径 均 经 本 两 函数 同 口径 累加 [_try_auto_buy/buy_items_affordable/buy_affordable
+	# 单点 复用]; 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 stone_spent = 0
+	var sv165: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("兑换 0 · 灵石 消耗 0") >= 0,
+			"打磨-165 空档 _load_stats 兜底 灵石 消耗 段 = 0 (实际 %s)" % g.stats_text().left(90))
+	g.stats = sv165
+	# stats_text 含 灵石 消耗 段 (动态 锚定, fmt 万/亿 档)
+	var ss165: float = float(g.stats.get("stone_spent", 0.0))
+	check(g.stats_text().find("兑换 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), g.fmt(ss165)]) >= 0,
+			"打磨-165 stats_text 含 灵石 消耗 段 (实际 %s)" % g.stats_text().left(90))
+	# 真实 路径: 受控 基准 购置 (清空 前序 段 遗留 拥有 态 防 已 拥有 早退, 法器 木剑 100 + 装备 木剑 100)
+	# -> 埋点 增量 = 购置 价格 恒等
+	var st165: float = g.stones
+	var ow165s: Array[String] = g.owned.duplicate()
+	var owe165s: Array[String] = g.owned_eq.duplicate()
+	var eq165d: Dictionary = g.equipped.duplicate(true)
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.stones = 1000.0
+	var ib_before165: float = float(g.stats.get("stone_spent", 0.0))
+	var msg165a: String = g.try_buy_item("wooden_sword")
+	check(msg165a.find("购得") >= 0 and g.owned.has("wooden_sword") and g.stones == 900.0,
+			"打磨-165 法器 木剑 购置 成功 扣 100 (实际 %s / 灵石 %d)" % [msg165a, int(g.stones)])
+	var msg165b: String = g.buy_equipment("weapon_0_0")
+	check(msg165b.find("购得") >= 0 and g.owned_eq.has("weapon_0_0") and g.stones == 800.0,
+			"打磨-165 装备 木剑 购置 成功 扣 100 (实际 %s / 灵石 %d)" % [msg165b, int(g.stones)])
+	check(float(g.stats.get("stone_spent", 0.0)) == ib_before165 + 200.0,
+			"打磨-165 胜局 埋点 增量 = 购置 价格 合计 200 (实际 %d / 期望 %d)" % [int(g.stats.get("stone_spent", 0.0)), int(ib_before165 + 200.0)])
+	check(g.stats_text().find("兑换 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
+			"打磨-165 埋点 后 文案 含 新 灵石 消耗 累计 (实际 %s)" % g.stats_text().left(90))
+	# 重复 购置 不 计数 (已 拥有 早退, 不 扣 灵石 不 埋点)
+	g.try_buy_item("wooden_sword")
+	g.buy_equipment("weapon_0_0")
+	check(float(g.stats.get("stone_spent", 0.0)) == ib_before165 + 200.0 and g.stones == 800.0,
+			"打磨-165 重复 购置 不 计数 不 扣 灵石 (实际 %d)" % int(g.stats.get("stone_spent", 0.0)))
+	# 自动 购置 路径 同 口径 (_try_auto_buy 复用 buy_items_affordable/buy_affordable 单点)
+	g.auto_buy = true
+	g.stones = 2000.0
+	var ib2_before165: float = float(g.stats.get("stone_spent", 0.0))
+	g._try_auto_buy()
+	var ib2_after165: float = float(g.stats.get("stone_spent", 0.0))
+	check(ib2_after165 > ib2_before165 and g.stones == 2000.0 - (ib2_after165 - ib2_before165),
+			"打磨-165 自动 购置 路径 埋点 同 口径 且 与 灵石 实扣 恒等 (增量 %d / 灵石 %d)" % [int(ib2_after165 - ib2_before165), int(g.stones)])
+	# 收尾 复原 干净 基准 (收集/装备/灵石 复原 防 污染 后续 段; 灵石 消耗 累计 保留 — stats 只 增不减 存档 口径)
+	g.auto_buy = false
+	g.stones = st165
+	g.owned = ow165s
+	g.owned_eq = owe165s
+	g.equipped = eq165d
 
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
