@@ -484,6 +484,80 @@ func _ready() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-162 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+	# 打磨-163: 修行统计 爬塔灵石 收益 累计 段 (tower_total_stone 埋点 真实 路径 [try_tower_challenge
+	# 胜局 分支]: 只 计 层 基础 奖励, 不含 通关 大奖/每日 首胜 额外 奖励, 手动+自动 路径 同 口径)
+	check(ui._stats_label.tooltip_text.find("爬塔灵石") >= 0 and ui._stats_label.tooltip_text.find("打磨-163") >= 0
+			and ui._stats_label.tooltip_text.find("不含 通关 大奖/每日 首胜 额外 奖励") >= 0,
+			"打磨-163 统计 行 tooltip 含 爬塔灵石 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 爬塔灵石 段 + 标签 = 接口 恒等
+	var tts163: float = float(g.stats.get("tower_total_stone", 0.0))
+	check(g.stats_text().find("爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 累计离线" % [
+			int(g.stats.get("tower_win", 0.0)), int(g.stats.get("tower_loss", 0.0)), g.fmt(tts163)]) >= 0,
+			"打磨-163 stats_text 含 爬塔灵石 段 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-163 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 强玩家 道祖 登天梯 1 层 胜 -> 埋点 增量 = 层 基础 奖励 -> _refresh 标签 同步
+	var a163: bool = g.ascended
+	var r163i: int = g.realm_idx
+	var l163i: int = g.layer
+	var es163i: float = g.essence
+	var st163i: float = g.stones
+	var dao163i: float = g.dao
+	var dl163i: int = g.dao_level
+	var lr163i: Array[String] = g.learned.duplicate()
+	var ow163i: Array[String] = g.owned.duplicate()
+	var owe163i: Array[String] = g.owned_eq.duplicate()
+	var eq163i: Dictionary = g.equipped.duplicate(true)
+	var tec163i: int = g.tower_endless_floor
+	var teb163i: int = g.tower_endless_best
+	var td163i: String = g.tower_daily_date
+	var tts_before163: float = float(g.stats.get("tower_total_stone", 0.0))
+	g.ascended = true
+	g.dao_level = 8
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.learned.clear()
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	var r163u: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r163u["win"]), "打磨-163 强玩家 道祖 登天梯 1 层 胜 (win=%s)" % str(r163u["win"]))
+	check(absf(float(g.stats.get("tower_total_stone", 0.0)) - (tts_before163 + float(r163u["reward_stone"]))) < 1e-6,
+			"打磨-163 胜局 埋点 增量 = 层 基础 奖励 (与 结算 明细 同源; 实际 %s)" % g.fmt(float(g.stats.get("tower_total_stone", 0.0))))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-163 _refresh 后 标签 文本 = 接口 恒等 (含 爬塔灵石 段)")
+	check(g.stats_text().find("爬塔灵石 %s · 累计离线" % g.fmt(float(g.stats.get("tower_total_stone", 0.0)))) >= 0,
+			"打磨-163 埋点 后 文案 含 新 爬塔灵石 累计 (实际 %s)" % g.stats_text().left(90))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached163: String = ui._stats_text
+	var es_chk163: float = g.essence
+	ui._refresh()
+	check(ui._stats_text == cached163 and str(ui._stats_label.text) == g.stats_text() and g.essence == es_chk163,
+			"打磨-163 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (境界 状态+塔 态 恢复 防 污染 后续 段; 爬塔灵石 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = a163
+	g.realm_idx = r163i
+	g.layer = l163i
+	g.essence = es163i
+	g.stones = st163i
+	g.dao_level = dl163i
+	g.dao = dao163i
+	g.learned = lr163i
+	g.owned = ow163i
+	g.owned_eq = owe163i
+	g.equipped = eq163i
+	g.tower_endless_floor = tec163i
+	g.tower_endless_best = teb163i
+	g.tower_daily_date = td163i
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-163 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
