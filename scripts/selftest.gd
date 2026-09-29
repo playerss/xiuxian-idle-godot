@@ -2587,6 +2587,72 @@ func _init() -> void:
 	g.dao_level = dl170
 	g.seen_affixes = seen170
 
+	# ---------- 打磨-171: 技能 领悟 计数 段 (skill_learn 埋点 本轮 新增 [learn_skill 成功 分支 +
+	# learn_all_available 一键领悟 + learn_all_active 一键神通, 三 真实 领悟 路径 单点 累加,
+	# 已学/境界不足 早退 不计]): 历史 领悟 次数 展示位; 旧档 缺 键 兜底 0 ----------
+	# 空档 _load_stats 兜底 skill_learn = 0
+	var sv171: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().ends_with("技能 领悟 0 次"),
+			"打磨-171 空档 _load_stats 兜底 技能 领悟 段 = 0 (实际 %s)" % g.stats_text().right(40))
+	g.stats = sv171
+	# stats_text 尾部 含 技能 领悟 段 (动态 锚定, int 计数)
+	check(g.stats_text().ends_with("技能 领悟 %d 次" % int(g.stats.get("skill_learn", 0.0))),
+			"打磨-171 stats_text 含 技能 领悟 段 (实际 %s)" % g.stats_text().right(40))
+	# 受控 基准 快照 (learn_skill/learn_all_available/learn_all_active 只 动 learned; 收尾 复原)
+	var lm171: Array = g.learned.duplicate()
+	var rl171: int = g.realm_idx
+	var ly171: int = g.layer
+	# 受控 状态: 境界0层1 (realm0 layer1 可学 11 项: 被动 5 + 主动 6, 数据 锚定)
+	g.realm_idx = 0
+	g.layer = 1
+	g.learned.assign([])
+	check(g.learn_available_count("", -1) == 11,
+			"打磨-171 受控 基准 境界0层1 全局 可学 = 11 (实际 %d)" % g.learn_available_count("", -1))
+	var sl171a: float = float(g.stats.get("skill_learn", 0.0))
+	# 真实 路径 1: learn_skill 成功 埋点 +1
+	check(g.learn_skill("sword_0_0") != "已经学会了哦", "打磨-171 受控 领悟 成功")
+	check(absf(float(g.stats.get("skill_learn", 0.0)) - (sl171a + 1.0)) < 1e-9,
+			"打磨-171 learn_skill 成功 埋点 增量 = 1 (实际 %s)" % str(g.stats.get("skill_learn", 0.0)))
+	# 已学 早退 不 计 埋点
+	var sl171b: float = float(g.stats.get("skill_learn", 0.0))
+	check(g.learn_skill("sword_0_0") == "已经学会了哦" and absf(float(g.stats.get("skill_learn", 0.0)) - sl171b) < 1e-9,
+			"打磨-171 已学 再 学 早退 不 计 埋点")
+	# 境界 不足 拒绝 不 计 埋点 (realm1 技能 在 境界0 不可学)
+	var sl171b2: float = float(g.stats.get("skill_learn", 0.0))
+	check(g.learn_skill("sword_1_0").begins_with("境界不足") and absf(float(g.stats.get("skill_learn", 0.0)) - sl171b2) < 1e-9,
+			"打磨-171 境界 不足 拒绝 不 计 埋点")
+	# 真实 路径 2: learn_all_active 一键神通 批量 埋点 = count 恒等 (境界0层1 可学 主动 6, 无 前置 已学)
+	var sl171c: float = float(g.stats.get("skill_learn", 0.0))
+	var r171: Dictionary = g.learn_all_active("", -1)
+	check(int(r171["count"]) == 6 and absf(float(g.stats.get("skill_learn", 0.0)) - (sl171c + 6.0)) < 1e-9,
+			"打磨-171 一键神通 批量 埋点 = count 6 恒等 (实际 count=%d / %s)" % [int(r171["count"]), str(g.stats.get("skill_learn", 0.0))])
+	# 幂等: 再 调 0 变更 不 计 埋点
+	var sl171c2: float = float(g.stats.get("skill_learn", 0.0))
+	var r171b: Dictionary = g.learn_all_active("", -1)
+	check(int(r171b["count"]) == 0 and absf(float(g.stats.get("skill_learn", 0.0)) - sl171c2) < 1e-9,
+			"打磨-171 一键神通 幂等 0 变更 不 计 埋点")
+	# 真实 路径 3: learn_all_available 一键领悟 批量 埋点 = count 恒等 (境界0层1 余 可学 被动 4 [5 被动 - 已学 sword_0_0])
+	var sl171d: float = float(g.stats.get("skill_learn", 0.0))
+	var r171c: Dictionary = g.learn_all_available("", -1)
+	check(int(r171c["count"]) == 4 and absf(float(g.stats.get("skill_learn", 0.0)) - (sl171d + 4.0)) < 1e-9,
+			"打磨-171 一键领悟 批量 埋点 = count 4 恒等 (实际 count=%d / %s)" % [int(r171c["count"]), str(g.stats.get("skill_learn", 0.0))])
+	# 全 学完 再 调 0 变更 不 计 埋点 (11 项 全 学完 幂等)
+	var sl171d2: float = float(g.stats.get("skill_learn", 0.0))
+	check(int(g.learn_all_available("", -1)["count"]) == 0 and absf(float(g.stats.get("skill_learn", 0.0)) - sl171d2) < 1e-9,
+			"打磨-171 一键领悟 全 学完 幂等 不 计 埋点")
+	# 埋点 后 文案 含 新 领悟 计数 (动态 恒等)
+	check(g.stats_text().find("技能 领悟 %d 次" % int(g.stats.get("skill_learn", 0.0))) >= 0,
+			"打磨-171 埋点 后 文案 含 新 技能 领悟 计数 (实际 %s)" % g.stats_text().right(40))
+	# 只读: 连读 恒定 无 状态/统计 副作用
+	var stt171: String = g.stats_text()
+	var st171snap: Dictionary = g.stats.duplicate(true)
+	check(g.stats_text() == stt171 and g.stats == st171snap, "打磨-171 stats_text 只读 连读 恒定 (无 状态/统计 副作用)")
+	# 收尾 复原 干净 基准 (learned/境界/层 复原 防 污染 后续 段; 领悟 计数 保留 — stats 只 增不减 存档 口径)
+	g.learned.assign(lm171)
+	g.realm_idx = rl171
+	g.layer = ly171
+
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
 	g.essence = 54321.0

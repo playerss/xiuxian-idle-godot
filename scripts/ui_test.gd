@@ -933,6 +933,47 @@ func _ready() -> void:
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-170 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
+	# 打磨-171: 修行统计 技能 领悟 计数 段 (skill_learn 埋点 真实 路径 [learn_skill 成功 分支]:
+	# 三 真实 领悟 路径 单点 累加, 已学/境界不足 早退 不计, 与 收集 进度 技能 净值 对照)
+	check(ui._stats_label.tooltip_text.find("技能 领悟") >= 0 and ui._stats_label.tooltip_text.find("打磨-171") >= 0
+			and ui._stats_label.tooltip_text.find("三 真实 路径 同 口径 计数") >= 0,
+			"打磨-171 统计 行 tooltip 含 技能 领悟 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 尾部 含 技能 领悟 段 (动态 锚定, int 计数) + 标签 = 接口 恒等
+	check(g.stats_text().ends_with("技能 领悟 %d 次" % int(g.stats.get("skill_learn", 0.0))),
+			"打磨-171 stats_text 含 技能 领悟 段 (实际 %s)" % g.stats_text().right(40))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-171 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 受控 领悟 入账 (境界0层1 可学 11 项 数据 锚定, learned 清空 受控) -> _refresh 标签 同步
+	var lm171u: Array = g.learned.duplicate()
+	var ri171u: int = g.realm_idx
+	var ly171u: int = g.layer
+	var sl171u: float = float(g.stats.get("skill_learn", 0.0))
+	g.learned.assign([])
+	g.realm_idx = 0
+	g.layer = 1
+	check(g.learn_skill("sword_0_0") != "已经学会了哦"
+			and absf(float(g.stats.get("skill_learn", 0.0)) - (sl171u + 1.0)) < 1e-9,
+			"打磨-171 受控 领悟 埋点 增量 = 1 (实际 %s)" % str(g.stats.get("skill_learn", 0.0)))
+	g.learn_all_active("", -1)
+	check(absf(float(g.stats.get("skill_learn", 0.0)) - (sl171u + 7.0)) < 1e-9,
+			"打磨-171 一键神通 批量 埋点 = 6 恒等 (实际 %s)" % str(g.stats.get("skill_learn", 0.0)))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-171 _refresh 后 标签 文本 = 接口 恒等 (含 技能 领悟 段)")
+	check(g.stats_text().find("技能 领悟 %d 次" % int(g.stats.get("skill_learn", 0.0))) >= 0,
+			"打磨-171 埋点 后 文案 含 新 技能 领悟 计数 (实际 %s)" % g.stats_text().right(40))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached171: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached171 and str(ui._stats_label.text) == g.stats_text(),
+			"打磨-171 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (learned/境界/层 复原 防 污染 后续 段; 领悟 计数 保留 — stats 只 增不减 存档 口径)
+	g.learned.assign(lm171u)
+	g.realm_idx = ri171u
+	g.layer = ly171u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-171 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
