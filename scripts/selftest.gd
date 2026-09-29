@@ -1645,7 +1645,7 @@ func _init() -> void:
 	var otq160: float = float(g.stats.get("offline_total_qi", 0.0))
 	var ots160: float = float(g.stats.get("offline_total_stone", 0.0))
 	var stt160: String = g.stats_text()
-	check(stt160.find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(otq160), g.fmt(ots160), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
+	check(stt160.find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 拆卸 %d · 灵石 消耗 %s" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(otq160), g.fmt(ots160), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), int(g.stats.get("affix_unequip", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-160 stats_text 含 离线 累计 段 (打磨-162 新 格式 串 适配, 实际 %s)" % stt160.left(90))
 	# 真实 路径: 构造 未飞升 2h 离线档 读档 -> 累计 埋点 入账 = 本次 明细 恒等 (elapsed 含 墙钟 漂移, 相对 容差)
 	var asc160: bool = g.ascended
@@ -1681,7 +1681,7 @@ func _init() -> void:
 	check(absf(float(g.stats["offline_total_qi"]) - (otq_b160 + g._offline_qi)) / 3601.0 < 1e-6
 			and absf(float(g.stats["offline_total_stone"]) - (ots_b160 + g._offline_stone)) / 3601.0 < 1e-6,
 			"打磨-160 累计 = 基准 + 本次 增量 恒等 (相对容差 防 float 往返 漂移)")
-	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(float(g.stats["offline_total_qi"])), g.fmt(float(g.stats["offline_total_stone"])), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 拆卸 %d · 灵石 消耗 %s" % [g.fmt_stats_time(float(g.stats.get("offline_total_sec", 0.0))), g.fmt(float(g.stats["offline_total_qi"])), g.fmt(float(g.stats["offline_total_stone"])), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), int(g.stats.get("affix_unequip", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-160 埋点 后 文案 含 新 离线 累计 (打磨-162 新 格式 串 适配, 实际 %s)" % g.stats_text().left(90))
 	# 二次 读档 累加: 再 构造 1h 离线档 -> 累计 再 增 (≈900), 历史 累计 跨 读档 持久
 	var otq_m160: float = float(g.stats["offline_total_qi"])
@@ -1794,7 +1794,7 @@ func _init() -> void:
 	g.stats = sv162
 	# stats_text 含 累计离线 段 (动态 锚定, fmt_stats_time 日/小时/分 档)
 	var ots162: float = float(g.stats.get("offline_total_sec", 0.0))
-	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s" % [g.fmt_stats_time(ots162), g.fmt(float(g.stats.get("offline_total_qi", 0.0))), g.fmt(float(g.stats.get("offline_total_stone", 0.0))), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
+	check(g.stats_text().find("累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 拆卸 %d · 灵石 消耗 %s" % [g.fmt_stats_time(ots162), g.fmt(float(g.stats.get("offline_total_qi", 0.0))), g.fmt(float(g.stats.get("offline_total_stone", 0.0))), int(g.stats.get("affix_drop", 0.0)), int(g.stats.get("affix_equip", 0.0)), int(g.stats.get("affix_decompose", 0.0)), int(g.stats.get("affix_exchange", 0.0)), int(g.stats.get("affix_unequip", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-162 stats_text 含 累计离线 段 (实际 %s)" % g.stats_text().left(90))
 	# 真实 路径: 构造 2h 离线档 读档 -> 埋点 增量 = 本次 elapsed (elapsed 含 墙钟 漂移, 动态 锚定)
 	var asc162: bool = g.ascended
@@ -2063,12 +2063,12 @@ func _init() -> void:
 	# 空档 _load_stats 兜底 stone_spent = 0
 	var sv165: Dictionary = g.stats.duplicate(true)
 	g._load_stats({})
-	check(g.stats_text().find("兑换 0 · 灵石 消耗 0") >= 0,
-			"打磨-165 空档 _load_stats 兜底 灵石 消耗 段 = 0 (实际 %s)" % g.stats_text().left(90))
+	check(g.stats_text().find("兑换 0 · 拆卸 0 · 灵石 消耗 0") >= 0,
+			"打磨-165 空档 _load_stats 兜底 灵石 消耗 段 = 0 (打磨-172 词缀 组 新 拆卸 段 适配, 实际 %s)" % g.stats_text().left(90))
 	g.stats = sv165
 	# stats_text 含 灵石 消耗 段 (动态 锚定, fmt 万/亿 档)
 	var ss165: float = float(g.stats.get("stone_spent", 0.0))
-	check(g.stats_text().find("兑换 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), g.fmt(ss165)]) >= 0,
+	check(g.stats_text().find("兑换 %d · 拆卸 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), int(g.stats.get("affix_unequip", 0.0)), g.fmt(ss165)]) >= 0,
 			"打磨-165 stats_text 含 灵石 消耗 段 (实际 %s)" % g.stats_text().left(90))
 	# 真实 路径: 受控 基准 购置 (清空 前序 段 遗留 拥有 态 防 已 拥有 早退, 法器 木剑 100 + 装备 木剑 100)
 	# -> 埋点 增量 = 购置 价格 恒等
@@ -2089,7 +2089,7 @@ func _init() -> void:
 			"打磨-165 装备 木剑 购置 成功 扣 100 (实际 %s / 灵石 %d)" % [msg165b, int(g.stones)])
 	check(float(g.stats.get("stone_spent", 0.0)) == ib_before165 + 200.0,
 			"打磨-165 胜局 埋点 增量 = 购置 价格 合计 200 (实际 %d / 期望 %d)" % [int(g.stats.get("stone_spent", 0.0)), int(ib_before165 + 200.0)])
-	check(g.stats_text().find("兑换 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
+	check(g.stats_text().find("兑换 %d · 拆卸 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), int(g.stats.get("affix_unequip", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
 			"打磨-165 埋点 后 文案 含 新 灵石 消耗 累计 (实际 %s)" % g.stats_text().left(90))
 	# 重复 购置 不 计数 (已 拥有 早退, 不 扣 灵石 不 埋点)
 	g.try_buy_item("wooden_sword")
@@ -2652,6 +2652,89 @@ func _init() -> void:
 	g.learned.assign(lm171)
 	g.realm_idx = rl171
 	g.layer = ly171
+
+	# ---------- 打磨-172: 词缀 拆卸 计数 段 (affix_unequip 成功 分支 埋点 本轮 新增: 词缀 段 原 只 掉落/装配/分解/兑换
+	# 4 段 [打磨-110], 历史 拆卸 次数 无 展示位; affix_swap 先卸 后装 复用 单件 真实 路径 同 口径; 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 affix_unequip = 0
+	var sv172: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("兑换 0 · 拆卸 0 · 灵石 消耗 %s" % g.fmt(0.0)) >= 0,
+			"打磨-172 空档 _load_stats 兜底 词缀 拆卸 段 = 0 (实际 %s)" % g.stats_text().right(60))
+	g.stats = sv172
+	# stats_text 尾部 含 词缀 拆卸 段 (动态 锚定, int 计数)
+	check(g.stats_text().find("兑换 %d · 拆卸 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), int(g.stats.get("affix_unequip", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
+			"打磨-172 stats_text 含 词缀 拆卸 段 (词缀 组 内, 实际 %s)" % g.stats_text().right(60))
+	# 受控 状态 快照 (affix_bag/affix_load/owned_eq/learned/境界/层 收尾 复原 防 污染 后续 段)
+	var ab172: Dictionary = g.affix_bag.duplicate(true)
+	var al172: Dictionary = g.affix_load.duplicate(true)
+	var oe172: Array = g.owned_eq.duplicate()
+	var lm172: Array = g.learned.duplicate()
+	var rl172: int = g.realm_idx
+	var ly172: int = g.layer
+	var stn172: float = g.stones
+	var sa172: Array = g.seen_affixes.duplicate()
+	var eq172: Dictionary = g.equipped.duplicate(true)
+	g.realm_idx = 0
+	g.layer = 1
+	g.learned.assign([])
+	if not g.owned_eq.has("weapon_0_0"):
+		g.stones = 999999999.0
+		check(str(g.buy_equipment("weapon_0_0")).find("购得") >= 0, "打磨-172 受控 购置 weapon_0_0")
+	g.affix_add("af_qi_rate_0_0", 1)
+	check(str(g.affix_load.get("weapon_0_0", {})).find("af_qi_rate_0_0") < 0,
+			"打磨-172 受控 基准 weapon_0_0 槽 无 已装 词缀")
+	# 真实 路径: 装配 后 卸下 — 埋点 增量 = 1, 词缀 回 背包
+	var au172a: float = float(g.stats.get("affix_unequip", 0.0))
+	check(g.affix_equip("weapon_0_0", 0, "af_qi_rate_0_0") == "", "打磨-172 受控 装配 成功")
+	check(g.affix_unequip("weapon_0_0", 0) == ""
+			and absf(float(g.stats.get("affix_unequip", 0.0)) - (au172a + 1.0)) < 1e-9,
+			"打磨-172 卸下 埋点 增量 = 1 (实际 %s)" % str(g.stats.get("affix_unequip", 0.0)))
+	check(int(g.affix_bag.get("af_qi_rate_0_0", 0)) >= 1, "打磨-172 卸下 回 背包 (数量 不 消耗)")
+	# 未装配 槽位 卸下 拒绝 不 计 埋点
+	var au172b: float = float(g.stats.get("affix_unequip", 0.0))
+	check(g.affix_unequip("weapon_0_0", 0) == "该槽位 未装配"
+			and absf(float(g.stats.get("affix_unequip", 0.0)) - au172b) < 1e-9,
+			"打磨-172 未装配 槽位 拒绝 不 计 埋点")
+	# 空槽 卸载 拒绝 不 计 埋点 (affix_unequip 唯一 拒绝 路径 = 该槽位 未装配 早退, 无 拥有 检查 — 双 空槽 连拒 幂等 不 计数)
+	check(g.affix_unequip("weapon_0_0", 1) == "该槽位 未装配"
+			and absf(float(g.stats.get("affix_unequip", 0.0)) - au172b) < 1e-9
+			and g.affix_unequip("weapon_0_0", 2) == "该槽位 未装配"
+			and absf(float(g.stats.get("affix_unequip", 0.0)) - au172b) < 1e-9,
+			"打磨-172 空槽 卸载 拒绝 不 计 埋点 (双 空槽 幂等)")
+	# 真实 路径 2: affix_swap 先卸 后装 (空槽 直接 装 不 经 拆卸 分支 不 计 埋点, 须 槽 内 有 词缀) — 复用 单件 路径 埋点 增量 = 1
+	g.affix_equip("weapon_0_0", 0, "af_qi_rate_0_0")
+	g.affix_add("af_def_0_0", 1)
+	var au172c: float = float(g.stats.get("affix_unequip", 0.0))
+	check(g.affix_swap("weapon_0_0", 0, "af_def_0_0") == "", "打磨-172 受控 换装 成功")
+	check(str(g.affix_load["weapon_0_0"]["0"]) == "af_def_0_0"
+			and absf(float(g.stats.get("affix_unequip", 0.0)) - (au172c + 1.0)) < 1e-9,
+			"打磨-172 affix_swap 路径 埋点 增量 = 1 恒等 (实际 %s)" % str(g.stats.get("affix_unequip", 0.0)))
+	# 埋点 后 文案 含 新 拆卸 计数 (动态 恒等)
+	check(g.stats_text().find("兑换 %d · 拆卸 %d · 灵石 消耗 %s" % [int(g.stats.get("affix_exchange", 0.0)), int(g.stats.get("affix_unequip", 0.0)), g.fmt(float(g.stats.get("stone_spent", 0.0)))]) >= 0,
+			"打磨-172 埋点 后 文案 含 新 词缀 拆卸 计数 (实际 %s)" % g.stats_text().right(60))
+	# 只读: 连读 恒定 无 状态/统计 副作用
+	var stt172: String = g.stats_text()
+	var st172snap: Dictionary = g.stats.duplicate(true)
+	check(g.stats_text() == stt172 and g.stats == st172snap, "打磨-172 stats_text 只读 连读 恒定 (无 状态/统计 副作用)")
+	# 收尾 复原 干净 基准 (词缀 bag/load 复原 [af_qi_rate_0_0 扣 1 测试 增量, 槽 0 残留 清],
+	# owned_eq 去 测试 购置 防 污染 后续 段 购置 早退 断言, 境界/层/learned/灵石 复原; 拆卸 计数 保留 — stats 只 增不减 存档 口径)
+	if "af_qi_rate_0_0" in g.affix_bag and "af_qi_rate_0_0" not in ab172:
+		g.affix_bag.erase("af_qi_rate_0_0")
+	if "af_qi_rate_0_0" in g.affix_bag:
+		g.affix_bag["af_qi_rate_0_0"] = int(ab172.get("af_qi_rate_0_0", 0))
+	if "af_def_0_0" in g.affix_bag and "af_def_0_0" not in ab172:
+		g.affix_bag.erase("af_def_0_0")
+	g.affix_load = al172
+	g.seen_affixes.assign(sa172)  # seen 只 增不减 存档 口径 — 测试 入包 复原 防 污染 后续 收集 计数 断言
+	g.equipped = eq172
+	if "weapon_0_0" in oe172:
+		g.owned_eq.assign(oe172)
+	else:
+		g.owned_eq.erase("weapon_0_0")
+	g.learned.assign(lm172)
+	g.realm_idx = rl172
+	g.layer = ly172
+	g.stones = stn172
 
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
