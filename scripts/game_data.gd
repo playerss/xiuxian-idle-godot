@@ -638,6 +638,7 @@ func affix_add(id: String, n: int) -> int:
 		if int(a.get("tier", 0)) == 0:
 			affix_materials += affix_decomp_gain(id) * n
 			_stat_inc("affix_decompose", n)
+			_stat_inc("mat_gain", float(affix_decomp_gain(id) * n))  # 打磨-169: 材料 获取 累计 (背包满 普通 自动 入料, 与 affix_materials 入账 同源 单点)
 			return 0
 		return 0
 	affix_bag[id] = int(affix_bag.get(id, 0)) + n
@@ -655,6 +656,7 @@ func affix_decompose(id: String, n: int = -1) -> int:
 		return 0
 	affix_materials += affix_decomp_gain(id) * cnt
 	_stat_inc("affix_decompose", cnt)
+	_stat_inc("mat_gain", float(affix_decomp_gain(id) * cnt))  # 打磨-169: 材料 获取 累计 (分解 产出, 与 affix_materials 入账 同源 单点)
 	if have - cnt <= 0:
 		affix_bag.erase(id)
 	else:
@@ -1478,6 +1480,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 		# 材料 入账 (基础 = 1+怪物种 mat_w, 材料囊 x2 已含; 幸运/不屈 叠乘; 向上取整 整件入账)
 		reward_mat = int(ceil(float(mon["mats"]) * stone_mult_tr))
 		affix_materials += reward_mat
+		_stat_inc("mat_gain", float(reward_mat))  # 打磨-169: 材料 获取 累计 (塔 层 基础 奖励, 与 affix_materials 入账 同源 单点, 含 幸运/不屈 叠乘)
 		# 剧毒: 战胜 后 玩家 atk -15%, 持续 2 场 (可 刷新);
 		# 打磨-93: 触发/刷新 时 推 poison_events 事件 (怪物名|new/refresh; UI drain 后 弹 紫色浮动,
 		# 玩家 不知 为何 战力 下降 的 即时 反馈; 事件 不持久化 不 改 战斗 口径)
@@ -1522,6 +1525,7 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 							clear_reward_mat = mat_gain_total
 							affix_materials += mat_gain_total
 							_stat_inc("affix_decompose", float(mat_gain_total))
+							_stat_inc("mat_gain", float(mat_gain_total))  # 打磨-169: 材料 获取 累计 (通关 大奖 词缀 背包满 折算 材料, 与 affix_materials 入账 同源 单点)
 		elif tower == "endless":
 			# 口径: tower_endless_best = 历史 最高 已 通关 层; tower_endless_floor = 当前 待挑战 层 (最高+1)
 			# 本胜 通关 next_floor 层 -> 最高纪录 更新 为 next_floor, 待挑战 推进 到 next_floor+1
@@ -1734,7 +1738,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain", "mat_gain"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1788,8 +1792,9 @@ func _load_stats(v: Variant) -> void:
 # 速率 x delta / 塔 层 基础 奖励 含 幸运/不屈 叠乘 / 通关 一次性 大奖 / 登天梯 每日 首胜
 # 额外 0.5x / 离线 结算 明细], 手动+自动 塔 路径 同 口径; 只 改 内存 统计 不 改 结算
 # 逻辑; 旧档 缺 键 兜底 0)
+# 打磨-169: 材料 获取 累计 段 (mat_gain 埋点 本轮 新增 [塔 胜局 层 基础 奖励 + 分解 产出 + 背包满 普通 自动 入料 + 通关 大奖 折算 材料, 对称 打磨-168 灵石 获取 累计 但 材料 口径]: 只 计 四 路径 实际 入账 材料, 与 affix_materials 入账 同源 单点 累加; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s · 材料 获取 %s" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
@@ -1803,7 +1808,8 @@ func stats_text() -> String:
 		int(stats.get("affix_drop", 0.0)), int(stats.get("affix_equip", 0.0)),
 		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0)),
 		fmt(float(stats.get("stone_spent", 0.0))), fmt(float(stats.get("primary_spent", 0.0))),
-		fmt(float(stats.get("primary_gain", 0.0))), fmt(float(stats.get("stone_gain", 0.0)))]
+		fmt(float(stats.get("primary_gain", 0.0))), fmt(float(stats.get("stone_gain", 0.0))),
+		fmt(float(stats.get("mat_gain", 0.0)))]
 
 # 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
 # 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)

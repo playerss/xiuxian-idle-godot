@@ -860,6 +860,46 @@ func _ready() -> void:
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-168 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
+	# 打磨-169: 修行统计 材料 获取 累计 段 (mat_gain 埋点 真实 路径 [分解 产出]: 只 计 四 路径
+	# 实际 入账 材料, 与 affix_materials 入账 同源 单点 累加, 与 爬塔材料 打磨-164 口径 对照)
+	check(ui._stats_label.tooltip_text.find("材料 获取") >= 0 and ui._stats_label.tooltip_text.find("打磨-169") >= 0
+			and ui._stats_label.tooltip_text.find("四 路径 实际 入账") >= 0,
+			"打磨-169 统计 行 tooltip 含 材料 获取 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 材料 获取 段 + 标签 = 接口 恒等
+	var mg169u: float = float(g.stats.get("mat_gain", 0.0))
+	check(g.stats_text().find("灵石 获取 %s · 材料 获取 %s" % [g.fmt(float(g.stats.get("stone_gain", 0.0))), g.fmt(mg169u)]) >= 0,
+			"打磨-169 stats_text 含 材料 获取 段 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-169 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 分解 产出 入账 (优秀 2/传说 5) -> _refresh 标签 同步
+	var bag169u: Dictionary = g.affix_bag.duplicate(true)
+	var mat169u: int = g.affix_materials
+	g.affix_bag = {}
+	g.affix_add("af_qi_rate_1_0", 1)
+	g.affix_add("af_atk_4_0", 1)
+	var ib169u: float = float(g.stats.get("mat_gain", 0.0))
+	g.affix_decompose("af_qi_rate_1_0", 1)
+	g.affix_decompose("af_atk_4_0", 1)
+	check(absf(float(g.stats.get("mat_gain", 0.0)) - (ib169u + 7.0)) < 1e-6
+			and g.affix_materials == mat169u + 7,
+			"打磨-169 分解 埋点 增量 = 产出 7 且 与 affix_materials 实增 恒等 (实际 %s)" % g.fmt(float(g.stats.get("mat_gain", 0.0))))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-169 _refresh 后 标签 文本 = 接口 恒等 (含 材料 获取 段)")
+	check(g.stats_text().find("灵石 获取 %s · 材料 获取 %s" % [g.fmt(float(g.stats.get("stone_gain", 0.0))), g.fmt(float(g.stats.get("mat_gain", 0.0)))]) >= 0,
+			"打磨-169 埋点 后 文案 含 新 材料 获取 累计 (实际 %s)" % g.stats_text().left(90))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached169: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached169 and str(ui._stats_label.text) == g.stats_text(),
+			"打磨-169 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (词缀/材料 复原 防 污染 后续 段; 获取 累计 保留 — stats 只 增不减 存档 口径)
+	g.affix_bag = bag169u
+	g.affix_materials = mat169u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-169 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
+
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
 	await _assert_monster_bias_tip()  # 打磨-117: 怪物卡 tooltip 追加 属性偏向/类型 行 (M5 规格 stat_bias 血牛/狂攻/铁壁/均衡 展示位: 含 偏向 行/接口 恒等/Boss 无 行/节流/收尾)

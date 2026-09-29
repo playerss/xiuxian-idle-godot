@@ -2375,6 +2375,141 @@ func _init() -> void:
 	g._offline_stone = 0.0
 	g.offline_msg = ""
 
+	# ---------- 打磨-169: 材料 获取 累计 段 (mat_gain 埋点 本轮 新增 [塔 胜局 层 基础
+	# 奖励 + 分解 产出 + 背包满 普通 自动 入料 + 通关 大奖 折算 材料, 对称 打磨-168 灵石
+	# 获取 累计 但 材料 口径]): 只 计 四 路径 实际 入账 材料, 与 affix_materials 入账 同源
+	# 单点 累加; 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 mat_gain = 0
+	var sv169: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("灵石 获取 0 · 材料 获取 0") >= 0,
+			"打磨-169 空档 _load_stats 兜底 材料 获取 段 = 0 (实际 %s)" % g.stats_text().left(130))
+	g.stats = sv169
+	# stats_text 含 材料 获取 段 (动态 锚定, fmt 万/亿 档)
+	var mg169: float = float(g.stats.get("mat_gain", 0.0))
+	check(g.stats_text().find("灵石 获取 %s · 材料 获取 %s" % [g.fmt(float(g.stats.get("stone_gain", 0.0))), g.fmt(mg169)]) >= 0,
+			"打磨-169 stats_text 含 材料 获取 段 (实际 %s)" % g.stats_text().left(130))
+	# 受控 基准 快照 (防 前序/后续 段 污染; 段 内 词缀/材料/塔 态 改动 收尾 复原)
+	var mg169s: float = g.affix_materials
+	var bag169: Dictionary = g.affix_bag.duplicate(true)
+	var seen169: Array = g.seen_affixes.duplicate()
+	var owq169: Array[String] = g.owned_eq.duplicate()
+	var eq169: Dictionary = g.equipped.duplicate(true)
+	var tu169: Dictionary = g.slot_upgrades.duplicate(true)
+	var acd169: Array[String] = g.ach_done.duplicate() as Array[String]
+	var ri169: int = g.realm_idx
+	var ly169: int = g.layer
+	var es169: float = g.essence
+	var st169: float = g.stones
+	var asc169: bool = g.ascended
+	var dl169: int = g.dao_level
+	var dao169: float = g.dao
+	var twf169: int = g.tower_fixed_floor
+	var tec169: int = g.tower_endless_floor
+	var teb169: int = g.tower_endless_best
+	var td169: String = g.tower_daily_date
+	var twc169: bool = g.tower_fixed_clear
+	var tcg169: bool = g.tower_clear_reward_got
+	var pb169: int = g.poison_battles
+	# 真实 路径 1: 分解 产出 (真实 路径 affix_decompose 埋点, 每 件 1+品质档: 优秀2/传说5)
+	g.affix_bag = {}
+	g.affix_add("af_qi_rate_1_0", 1)
+	g.affix_add("af_atk_4_0", 1)
+	var mg169b: float = float(g.stats.get("mat_gain", 0.0))
+	var mat169b: int = g.affix_materials
+	g.affix_decompose("af_qi_rate_1_0", 1)
+	g.affix_decompose("af_atk_4_0", 1)
+	check(absf(float(g.stats.get("mat_gain", 0.0)) - (mg169b + 2.0 + 5.0)) < 1e-6
+			and g.affix_materials == mat169b + 7,
+			"打磨-169 分解 产出 埋点 增量 = 产出 合计 7 且 与 affix_materials 实增 恒等 (实际 %s / 材料 %d)" % [g.fmt(float(g.stats.get("mat_gain", 0.0))), g.affix_materials])
+	# 只读: 连读 恒定 无 副作用
+	var stt169r: String = g.stats_text()
+	var st169snap: Dictionary = g.stats.duplicate(true)
+	check(g.stats_text() == stt169r and g.stats == st169snap, "打磨-169 连读 恒定 无 副作用 (分解 段)")
+	# 真实 路径 2: 背包满 普通 自动 入料 (背包 30 格 满 时 普通品质 新 词缀 不入包 直接 入料 同 分解 产出 口径)
+	for i in 30:
+		g.affix_add(str(g.affix_ids[i]), 1)
+	check(g.affix_bag_used() == 30 and g.affix_bag_full(), "打磨-169 背包 满 30 格 (实际 %d)" % g.affix_bag_used())
+	var mg169c: float = float(g.stats.get("mat_gain", 0.0))
+	var mat169c: int = g.affix_materials
+	# 选 前 30 格 之外 的 未 入包 普通品质 词缀 (数据序 40 = 第 4 池 tier0, 背包 未 含)
+	var anew169: String = str(g.affix_ids[40])
+	check(int(g.affix_by_id[anew169]["tier"]) == 0 and not g.affix_bag.has(anew169),
+			"打磨-169 受控 词缀 = 未 入包 普通品质 (实际 %s)" % anew169)
+	var ag169: int = g.affix_decomp_gain(anew169)
+	check(g.affix_add(anew169, 1) == 0, "打磨-169 背包满 新 普通 词缀 自动 入料 (不入包)")
+	check(absf(float(g.stats.get("mat_gain", 0.0)) - (mg169c + float(ag169))) < 1e-6
+			and g.affix_materials == mat169c + ag169,
+			"打磨-169 自动 入料 埋点 增量 = 产出 %d 且 与 affix_materials 实增 恒等 (实际 %s)" % [ag169, g.fmt(float(g.stats.get("mat_gain", 0.0)))])
+	# 高品质 背包满 拒绝 不 入料 不 计 埋点 (口径 不 变)
+	var mg169c2: float = float(g.stats.get("mat_gain", 0.0))
+	check(g.affix_add("af_atk_4_1", 1) == 0 and absf(float(g.stats.get("mat_gain", 0.0)) - mg169c2) < 1e-9,
+			"打磨-169 背包满 高品质 拒绝 不 入料 不 计 材料 埋点")
+	# 真实 路径 3: 塔 胜局 层 基础 奖励 (强玩家 道祖 登天梯 1 层 恒胜, 与 结算 明细 reward_mat 同源 锚定;
+	# 背包 满 态 本 胜 掉词缀 可能 触发 自动 入料 叠加 — 断言 用 affix_materials 实增 恒等 不变量 防 随机 干扰)
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	var mg169d: float = float(g.stats.get("mat_gain", 0.0))
+	var mat169d: int = g.affix_materials
+	var r169: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r169["win"]), "打磨-169 强玩家 道祖 登天梯 1 层 胜 (win=%s)" % str(r169["win"]))
+	check(absf(float(g.stats.get("mat_gain", 0.0)) - (mg169d + (g.affix_materials - mat169d))) < 1e-6
+			and float(g.stats.get("mat_gain", 0.0)) - mg169d >= float(r169["reward_mat"]),
+			"打磨-169 塔 胜局 埋点 增量 = affix_materials 实增 恒等 且 >= 层 基础 奖励 (实际 %s / 层基础 %d)" % [g.fmt(float(g.stats.get("mat_gain", 0.0))), int(r169["reward_mat"])])
+	# 真实 路径 4: 通关 大奖 词缀 背包满 折算 材料 (首通 1000 层 大奖 3 件 全 拒绝 全 折算 = 15;
+	# 背包 仍 满 30 格; 断言 锚定 r169b["clear_reward_mat"] 结算 明细 同源 + affix_materials 实增 恒等 不变量
+	# [本局 层 基础 奖励/掉词缀 自动 入料 也 同源 入账, 恒等 不受 随机 干扰])
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_fixed_floor = 999
+	g.tower_fixed_clear = false
+	g.tower_clear_reward_got = false
+	var mg169e: float = float(g.stats.get("mat_gain", 0.0))
+	var mat169e: int = g.affix_materials
+	var r169b: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(r169b["win"]) and r169b["clear_reward_affixes"].is_empty()
+			and int(r169b["clear_reward_mat"]) == 15,
+			"打磨-169 首通 1000 层 大奖 3 件 背包满 全 折算 15 材料 (实际 %s)" % str(r169b["clear_reward_mat"]))
+	check(absf(float(g.stats.get("mat_gain", 0.0)) - (mg169e + (g.affix_materials - mat169e))) < 1e-6
+			and float(g.stats.get("mat_gain", 0.0)) - mg169e >= 15.0,
+			"打磨-169 通关 折算 埋点 增量 = affix_materials 实增 恒等 且 >= 折算 15 (实际 %s)" % g.fmt(float(g.stats.get("mat_gain", 0.0))))
+	# 埋点 后 文案 含 新 材料 获取 累计 (动态 恒等)
+	check(g.stats_text().find("材料 获取 %s" % g.fmt(float(g.stats.get("mat_gain", 0.0)))) >= 0,
+			"打磨-169 埋点 后 文案 含 新 材料 获取 累计 (实际 %s)" % g.stats_text().left(130))
+	# 只读: 连读 恒定 无 状态/统计 副作用
+	var stt169: String = g.stats_text()
+	var st169snap2: Dictionary = g.stats.duplicate(true)
+	check(g.stats_text() == stt169 and g.stats == st169snap2, "打磨-169 stats_text 只读 连读 恒定 (无 状态/统计 副作用)")
+	# 收尾 复原 干净 基准 (词缀/材料/塔 态/境界/资源 复原 防 污染 后续 段; 获取 累计 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc169
+	g.realm_idx = ri169
+	g.layer = ly169
+	g.essence = es169
+	g.stones = st169
+	g.dao_level = dl169
+	g.dao = dao169
+	g.affix_bag = bag169
+	g.affix_materials = mg169s
+	g.seen_affixes = seen169
+	g.owned_eq = owq169
+	g.equipped = eq169
+	g.slot_upgrades = tu169
+	g.ach_done = acd169
+	g.tower_fixed_floor = twf169
+	g.tower_endless_floor = tec169
+	g.tower_endless_best = teb169
+	g.tower_daily_date = td169
+	g.tower_fixed_clear = twc169
+	g.tower_clear_reward_got = tcg169
+	g.poison_battles = pb169
+	g._offline_sec = 0.0
+	g._offline_qi = 0.0
+	g._offline_stone = 0.0
+	g.offline_msg = ""
+
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
 	g.essence = 54321.0
