@@ -701,6 +701,7 @@ func affix_exchange(id: String) -> String:
 	if affix_materials < cost:
 		return "材料不足 (需 %d, 当前 %d)" % [cost, affix_materials]
 	affix_materials -= cost
+	_stat_inc("mat_spent", float(cost))  # 打磨-170: 材料 消耗 累计 (兑换 实际 扣除, 批量 affix_exchange_all 复用 单件 真实 路径 同 口径)
 	affix_bag[id] = int(affix_bag.get(id, 0)) + 1
 	_affix_seen_mark(id)
 	_stat_inc("affix_exchange")
@@ -809,6 +810,7 @@ func affix_slot_upgrade(equip_id: String) -> String:
 	if affix_materials < mat_cost:
 		return "材料不足 (需 %d, 当前 %d)" % [mat_cost, affix_materials]
 	affix_materials -= mat_cost
+	_stat_inc("mat_spent", float(mat_cost))  # 打磨-170: 材料 消耗 累计 (槽位 升级 3->4 实际 扣除, 批量 affix_upgrade_all 复用 单件 真实 路径 同 口径)
 	slot_upgrades[equip_id] = 1
 	return ""
 
@@ -1738,7 +1740,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain", "mat_gain"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain", "mat_gain", "mat_spent"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1793,8 +1795,9 @@ func _load_stats(v: Variant) -> void:
 # 额外 0.5x / 离线 结算 明细], 手动+自动 塔 路径 同 口径; 只 改 内存 统计 不 改 结算
 # 逻辑; 旧档 缺 键 兜底 0)
 # 打磨-169: 材料 获取 累计 段 (mat_gain 埋点 本轮 新增 [塔 胜局 层 基础 奖励 + 分解 产出 + 背包满 普通 自动 入料 + 通关 大奖 折算 材料, 对称 打磨-168 灵石 获取 累计 但 材料 口径]: 只 计 四 路径 实际 入账 材料, 与 affix_materials 入账 同源 单点 累加; 旧档 缺 键 兜底 0)
+# 打磨-170: 材料 消耗 累计 段 (mat_spent 埋点 本轮 新增 [affix_exchange 兑换 扣除 分支 + affix_slot_upgrade 槽位 升级 3->4 扣除 分支, 对称 打磨-165 灵石 消耗 累计 但 材料 口径]: 玩家 挂机 回看 不知 开荒 起 累计 花 多少 材料 兑换/强化 [材料 收入 侧 打磨-169 mat_gain 已 累计, 支出 侧 无 展示位]; 只 计 两 路径 实际 扣除 成本, 批量 接口 affix_exchange_all/affix_upgrade_all 复用 单件 真实 路径 同 口径 累加, 只 改 内存 统计 不 改 结算 逻辑; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s · 材料 获取 %s" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s · 材料 获取 %s · 材料 消耗 %s" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
@@ -1809,7 +1812,7 @@ func stats_text() -> String:
 		int(stats.get("affix_decompose", 0.0)), int(stats.get("affix_exchange", 0.0)),
 		fmt(float(stats.get("stone_spent", 0.0))), fmt(float(stats.get("primary_spent", 0.0))),
 		fmt(float(stats.get("primary_gain", 0.0))), fmt(float(stats.get("stone_gain", 0.0))),
-		fmt(float(stats.get("mat_gain", 0.0)))]
+		fmt(float(stats.get("mat_gain", 0.0))), fmt(float(stats.get("mat_spent", 0.0)))]
 
 # 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
 # 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)

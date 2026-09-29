@@ -2510,6 +2510,83 @@ func _init() -> void:
 	g._offline_stone = 0.0
 	g.offline_msg = ""
 
+	# ---------- 打磨-170: 材料 消耗 累计 段 (mat_spent 埋点 本轮 新增 [兑换 扣除 + 槽位 升级 扣除,
+	# 对称 打磨-165 灵石 消耗 累计 但 材料 口径]): 只 计 两 路径 实际 扣除 成本, 批量 接口 复用
+	# 单件 真实 路径 同 口径 累加; 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 mat_spent = 0
+	var sv170: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().find("材料 获取 0 · 材料 消耗 0") >= 0,
+			"打磨-170 空档 _load_stats 兜底 材料 消耗 段 = 0 (实际 %s)" % g.stats_text().left(140))
+	g.stats = sv170
+	# stats_text 含 材料 消耗 段 (动态 锚定, fmt 万/亿 档)
+	var ms170: float = float(g.stats.get("mat_spent", 0.0))
+	check(g.stats_text().find("材料 获取 %s · 材料 消耗 %s" % [g.fmt(float(g.stats.get("mat_gain", 0.0))), g.fmt(ms170)]) >= 0,
+			"打磨-170 stats_text 含 材料 消耗 段 (实际 %s)" % g.stats_text().left(140))
+	# 受控 基准 快照 (防 前序/后续 段 污染; 段 内 词缀/材料/装备/升级 改动 收尾 复原)
+	var bag170: Dictionary = g.affix_bag.duplicate(true)
+	var mat170: int = g.affix_materials
+	var owq170: Array[String] = g.owned_eq.duplicate()
+	var eq170: Dictionary = g.equipped.duplicate(true)
+	var tu170: Dictionary = g.slot_upgrades.duplicate(true)
+	var acd170: Array[String] = g.ach_done.duplicate() as Array[String]
+	var asc170: bool = g.ascended
+	var dl170: int = g.dao_level
+	var seen170: Array = g.seen_affixes.duplicate()
+	# 真实 路径 1: 兑换 扣除 (普通 品质 成本 25, 与 affix_exchange_cost 同源)
+	g.affix_bag = {}
+	g.affix_materials = 25
+	var aid170: String = "af_qi_rate_0_0"
+	check(int(g.affix_by_id[aid170]["tier"]) == 0 and g.affix_exchange_cost(aid170) == 25,
+			"打磨-170 受控 兑换 目标 = 普通品质 成本 25 (实际 %s / %d)" % [aid170, g.affix_exchange_cost(aid170)])
+	var ms170a: float = float(g.stats.get("mat_spent", 0.0))
+	check(g.affix_exchange(aid170) == "", "打磨-170 兑换 成功 (25 材料)")
+	check(absf(float(g.stats.get("mat_spent", 0.0)) - (ms170a + 25.0)) < 1e-6
+			and g.affix_materials == 0 and int(g.affix_bag.get(aid170, 0)) == 1,
+			"打磨-170 兑换 埋点 增量 = 成本 25 且 与 affix_materials 实扣 恒等 (实际 %s / 材料 %d)" % [g.fmt(float(g.stats.get("mat_spent", 0.0))), g.affix_materials])
+	# 材料 不足 拒绝 不 扣 不 计 埋点 (口径 不 变)
+	var ms170a2: float = float(g.stats.get("mat_spent", 0.0))
+	check(g.affix_exchange(aid170) != "" and absf(float(g.stats.get("mat_spent", 0.0)) - ms170a2) < 1e-9
+			and g.affix_materials == 0,
+			"打磨-170 兑换 材料 不足 拒绝 不 扣 不 计 埋点")
+	# 只读: 连读 恒定 无 副作用
+	var stt170r: String = g.stats_text()
+	var st170snap: Dictionary = g.stats.duplicate(true)
+	check(g.stats_text() == stt170r and g.stats == st170snap, "打磨-170 连读 恒定 无 副作用 (兑换 段)")
+	# 真实 路径 2: 槽位 升级 扣除 (道祖期 + 200 材料/件, 与 affix_slot_up_cost 同源)
+	g.owned_eq.append("weapon_0_0")
+	g.affix_materials = 200
+	check(not int(g.slot_upgrades.get("weapon_0_0", 0)) >= 1, "打磨-170 受控 装备 未 升级 过")
+	var ms170b: float = float(g.stats.get("mat_spent", 0.0))
+	var upc170: int = g.affix_slot_up_cost()
+	g.ascended = true
+	g.dao_level = g.IMMORTAL_REALMS.size() - 1
+	check(g.affix_slot_upgrade("weapon_0_0") == "", "打磨-170 道祖期 槽位 升级 成功")
+	check(absf(float(g.stats.get("mat_spent", 0.0)) - (ms170b + float(upc170))) < 1e-6
+			and g.affix_materials == 0 and int(g.slot_upgrades.get("weapon_0_0", 0)) == 1,
+			"打磨-170 槽位 升级 埋点 增量 = 成本 %d 且 与 affix_materials 实扣 恒等 (实际 %s / 材料 %d)" % [upc170, g.fmt(float(g.stats.get("mat_spent", 0.0))), g.affix_materials])
+	# 拒绝 不 扣 不 计 埋点 (口径 不 变): 槽位 已 满级 再 升级 拒绝
+	var ms170b2: float = float(g.stats.get("mat_spent", 0.0))
+	check(g.affix_slot_upgrade("weapon_0_0") != "" and absf(float(g.stats.get("mat_spent", 0.0)) - ms170b2) < 1e-9,
+			"打磨-170 槽位 升级 已 满级 拒绝 不 计 埋点")
+	# 埋点 后 文案 含 新 材料 消耗 累计 (动态 恒等)
+	check(g.stats_text().find("材料 消耗 %s" % g.fmt(float(g.stats.get("mat_spent", 0.0)))) >= 0,
+			"打磨-170 埋点 后 文案 含 新 材料 消耗 累计 (实际 %s)" % g.stats_text().left(140))
+	# 只读: 连读 恒定 无 状态/统计 副作用
+	var stt170: String = g.stats_text()
+	var st170snap2: Dictionary = g.stats.duplicate(true)
+	check(g.stats_text() == stt170 and g.stats == st170snap2, "打磨-170 stats_text 只读 连读 恒定 (无 状态/统计 副作用)")
+	# 收尾 复原 干净 基准 (词缀/材料/装备/升级/境界 复原 防 污染 后续 段; 消耗 累计 保留 — stats 只 增不减 存档 口径)
+	g.affix_bag = bag170
+	g.affix_materials = mat170
+	g.owned_eq = owq170
+	g.equipped = eq170
+	g.slot_upgrades = tu170
+	g.ach_done = acd170
+	g.ascended = asc170
+	g.dao_level = dl170
+	g.seen_affixes = seen170
+
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false
 	g.essence = 54321.0

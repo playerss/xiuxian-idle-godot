@@ -899,6 +899,40 @@ func _ready() -> void:
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-169 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
+	# 打磨-170: 修行统计 材料 消耗 累计 段 (mat_spent 埋点 真实 路径 [兑换 扣除]: 只 计 兑换/槽位 升级
+	# 两 路径 实际 扣除 成本, 与 affix_materials 入账 同源 单点 累加, 与 材料 获取 打磨-169 收支 对照)
+	check(ui._stats_label.tooltip_text.find("材料 消耗") >= 0 and ui._stats_label.tooltip_text.find("打磨-170") >= 0
+			and ui._stats_label.tooltip_text.find("收支 对照") >= 0,
+			"打磨-170 统计 行 tooltip 含 材料 消耗 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 含 材料 消耗 段 + 标签 = 接口 恒等
+	var ms170u: float = float(g.stats.get("mat_spent", 0.0))
+	check(g.stats_text().find("材料 获取 %s · 材料 消耗 %s" % [g.fmt(float(g.stats.get("mat_gain", 0.0))), g.fmt(ms170u)]) >= 0,
+			"打磨-170 stats_text 含 材料 消耗 段 (实际 %s)" % g.stats_text().left(90))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-170 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 兑换 扣除 入账 (普通 品质 成本 25) -> _refresh 标签 同步
+	var mat170u: int = g.affix_materials
+	g.affix_materials = 25
+	var ib170u: float = float(g.stats.get("mat_spent", 0.0))
+	check(g.affix_exchange("af_qi_rate_0_0") == "", "打磨-170 兑换 成功 (25 材料)")
+	check(absf(float(g.stats.get("mat_spent", 0.0)) - (ib170u + 25.0)) < 1e-6
+			and g.affix_materials == 0,
+			"打磨-170 兑换 埋点 增量 = 成本 25 且 与 affix_materials 实扣 恒等 (实际 %s)" % g.fmt(float(g.stats.get("mat_spent", 0.0))))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-170 _refresh 后 标签 文本 = 接口 恒等 (含 材料 消耗 段)")
+	check(g.stats_text().find("材料 消耗 %s" % g.fmt(float(g.stats.get("mat_spent", 0.0)))) >= 0,
+			"打磨-170 埋点 后 文案 含 新 材料 消耗 累计 (实际 %s)" % g.stats_text().left(90))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached170: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached170 and str(ui._stats_label.text) == g.stats_text(),
+			"打磨-170 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (材料 复原 防 污染 后续 段; 消耗 累计 保留 — stats 只 增不减 存档 口径)
+	g.affix_materials = mat170u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-170 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
 	await _assert_tower_power_compose()  # 打磨-113: 爬塔 战力构成 tooltip (M5 规格 境界x功法x装备x塔专属 构成 展示位: 双塔 拼接 恒等/剧毒 口径 切换/节流/收尾)
