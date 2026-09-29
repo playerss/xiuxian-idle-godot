@@ -2593,12 +2593,12 @@ func _init() -> void:
 	# 空档 _load_stats 兜底 skill_learn = 0
 	var sv171: Dictionary = g.stats.duplicate(true)
 	g._load_stats({})
-	check(g.stats_text().ends_with("技能 领悟 0 次"),
-			"打磨-171 空档 _load_stats 兜底 技能 领悟 段 = 0 (实际 %s)" % g.stats_text().right(40))
+	check(g.stats_text().find("技能 领悟 0 次") >= 0,
+			"打磨-171 空档 _load_stats 兜底 技能 领悟 段 = 0 (打磨-173 尾部 登天新纪录 段 适配, 实际 %s)" % g.stats_text().right(60))
 	g.stats = sv171
-	# stats_text 尾部 含 技能 领悟 段 (动态 锚定, int 计数)
-	check(g.stats_text().ends_with("技能 领悟 %d 次" % int(g.stats.get("skill_learn", 0.0))),
-			"打磨-171 stats_text 含 技能 领悟 段 (实际 %s)" % g.stats_text().right(40))
+	# stats_text 含 技能 领悟 段 (动态 锚定, int 计数; 打磨-173 追加 尾部 登天新纪录 段 后 改 find 锚定)
+	check(g.stats_text().find("技能 领悟 %d 次" % int(g.stats.get("skill_learn", 0.0))) >= 0,
+			"打磨-171 stats_text 含 技能 领悟 段 (实际 %s)" % g.stats_text().right(60))
 	# 受控 基准 快照 (learn_skill/learn_all_available/learn_all_active 只 动 learned; 收尾 复原)
 	var lm171: Array = g.learned.duplicate()
 	var rl171: int = g.realm_idx
@@ -2735,6 +2735,118 @@ func _init() -> void:
 	g.realm_idx = rl172
 	g.layer = ly172
 	g.stones = stn172
+
+	# ---------- 打磨-173: 登天新纪录 计数 段 (endless_record 埋点 本轮 新增 [try_tower_challenge 胜局 分支
+	# was_best 结算 口径 与 结果 字典 new_record 字段 打磨-126 同源 单点, 仅 登天梯 胜局 且 创 新纪录 计,
+	# 镇妖塔/败局 恒 false 不 计入; 手动+自动 塔 路径 同 口径]: 历史 累计 次数 展示位; 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 endless_record = 0
+	var sv173: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().ends_with("登天新纪录 0 次"),
+			"打磨-173 空档 _load_stats 兜底 登天新纪录 段 = 0 (实际 %s)" % g.stats_text().right(40))
+	g.stats = sv173
+	# stats_text 尾部 含 登天新纪录 段 (动态 锚定, int 计数)
+	check(g.stats_text().ends_with("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))),
+			"打磨-173 stats_text 尾部 含 登天新纪录 段 (实际 %s)" % g.stats_text().right(40))
+	# 受控 状态 快照 (登天 塔 态/境界/层/资源/收集 收尾 复原 防 污染 后续 段; 新纪录 计数 保留 — stats 只 增不减 存档 口径)
+	var ri173: int = g.realm_idx
+	var ly173: int = g.layer
+	var es173: float = g.essence
+	var st173: float = g.stones
+	var asc173: bool = g.ascended
+	var dl173: int = g.dao_level
+	var dao173: float = g.dao
+	var lr173: Array[String] = g.learned.duplicate()
+	var ow173: Array[String] = g.owned.duplicate()
+	var owe173: Array[String] = g.owned_eq.duplicate()
+	var eq173: Dictionary = g.equipped.duplicate(true)
+	var twf173: int = g.tower_fixed_floor
+	var tec173: int = g.tower_endless_floor
+	var teb173: int = g.tower_endless_best
+	var td173: String = g.tower_daily_date
+	var twc173: bool = g.tower_fixed_clear
+	var tcg173: bool = g.tower_clear_reward_got
+	var pb173: int = g.poison_battles
+	var ab173: Dictionary = g.affix_bag.duplicate(true)
+	var al173: Dictionary = g.affix_load.duplicate(true)
+	var sa173: Array = g.seen_affixes.duplicate()
+	var acd173: Array = g.ach_done.duplicate()
+	# 真实 路径 1: 弱玩家 登天梯 3 层 败 (数据 锚定 怪 atk 2.382 x 0.85 = 2.025 > 2.0, 同 打磨-123/161)
+	# 败局 was_best 结算 恒 false [win 分支 不 入] 不 计 埋点
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.learned.assign([])
+	g.owned.assign([])
+	g.owned_eq.assign([])
+	g.equipped = {}
+	g.tower_endless_floor = 3
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.poison_battles = 0
+	var er173a: float = float(g.stats.get("endless_record", 0.0))
+	var r173l: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(not bool(r173l["win"]) and not bool(r173l["new_record"])
+			and absf(float(g.stats.get("endless_record", 0.0)) - er173a) < 1e-9,
+			"打磨-173 登天梯 败局 不 计 埋点 (new_record 结算 恒 false)")
+	# 真实 路径 2: 强玩家 道祖 登天梯 1 层 胜 创 新纪录 埋点 增量 = 1 + new_record 字段 同源 恒等
+	# (败局 不 推进 层, 显式 重置 floor=1/best=0 再 起 算, 胜 1/2 层 数据 锚定)
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	var er173b: float = float(g.stats.get("endless_record", 0.0))
+	var r173: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r173["win"]) and bool(r173["new_record"]) and g.tower_endless_best == 1,
+			"打磨-173 受控 基准 登天梯 第 1 层 胜局 且 创 新纪录 (实际 best=%d)" % g.tower_endless_best)
+	check(absf(float(g.stats.get("endless_record", 0.0)) - (er173b + 1.0)) < 1e-9,
+			"打磨-173 登天梯 胜局 新纪录 埋点 增量 = 1 (实际 %s)" % str(g.stats.get("endless_record", 0.0)))
+	# 真实 路径 3: 二次 胜局 推进 层 创 新纪录 累计 再 增 (跨 场 持久)
+	var er173c: float = float(g.stats.get("endless_record", 0.0))
+	var r173b: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r173b["win"]) and bool(r173b["new_record"]) and g.tower_endless_best == 2
+			and absf(float(g.stats.get("endless_record", 0.0)) - (er173c + 1.0)) < 1e-9,
+			"打磨-173 二次 胜局 新纪录 累计 再 增 跨 场 持久 (实际 best=%d)" % g.tower_endless_best)
+	# 镇妖塔 胜局 不 计 埋点 (was_best 仅 登天梯 结算 分支 置位, 镇妖塔 恒 false)
+	var er173d: float = float(g.stats.get("endless_record", 0.0))
+	var r173f: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(r173f["win"]) and not bool(r173f["new_record"])
+			and absf(float(g.stats.get("endless_record", 0.0)) - er173d) < 1e-9,
+			"打磨-173 镇妖塔 胜局 不 计 埋点 (实际 %s)" % str(g.stats.get("endless_record", 0.0)))
+	# 埋点 后 文案 含 新 计数 (动态 恒等, 尾部 段)
+	check(g.stats_text().ends_with("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))),
+			"打磨-173 埋点 后 文案 含 新 登天新纪录 计数 (实际 %s)" % g.stats_text().right(40))
+	# 只读: 连读 恒定 无 状态/统计 副作用
+	var stt173: String = g.stats_text()
+	var st173snap: Dictionary = g.stats.duplicate(true)
+	check(g.stats_text() == stt173 and g.stats == st173snap, "打磨-173 stats_text 只读 连读 恒定 (无 状态/统计 副作用)")
+	# 收尾 复原 干净 基准 (登天 塔 态/境界/层/资源/收集 复原 防 污染 后续 段; 新纪录 计数 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc173
+	g.realm_idx = ri173
+	g.layer = ly173
+	g.essence = es173
+	g.stones = st173
+	g.dao_level = dl173
+	g.dao = dao173
+	g.tower_fixed_floor = twf173
+	g.tower_endless_floor = tec173
+	g.tower_endless_best = teb173
+	g.tower_daily_date = td173
+	g.tower_fixed_clear = twc173
+	g.tower_clear_reward_got = tcg173
+	g.poison_battles = pb173
+	g.learned.assign(lr173)
+	g.owned.assign(ow173)
+	g.owned_eq.assign(owe173)
+	g.equipped = eq173
+	g.affix_bag = ab173
+	g.affix_load = al173
+	g.seen_affixes.assign(sa173)
+	g.ach_done.assign(acd173)
 
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false

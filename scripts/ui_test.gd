@@ -938,9 +938,9 @@ func _ready() -> void:
 	check(ui._stats_label.tooltip_text.find("技能 领悟") >= 0 and ui._stats_label.tooltip_text.find("打磨-171") >= 0
 			and ui._stats_label.tooltip_text.find("三 真实 路径 同 口径 计数") >= 0,
 			"打磨-171 统计 行 tooltip 含 技能 领悟 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
-	# stats_text 尾部 含 技能 领悟 段 (动态 锚定, int 计数) + 标签 = 接口 恒等
-	check(g.stats_text().ends_with("技能 领悟 %d 次" % int(g.stats.get("skill_learn", 0.0))),
-			"打磨-171 stats_text 含 技能 领悟 段 (实际 %s)" % g.stats_text().right(40))
+	# stats_text 含 技能 领悟 段 (动态 锚定, int 计数; 打磨-173 追加 尾部 登天新纪录 段 后 改 find 锚定) + 标签 = 接口 恒等
+	check(g.stats_text().find("技能 领悟 %d 次" % int(g.stats.get("skill_learn", 0.0))) >= 0,
+			"打磨-171 stats_text 含 技能 领悟 段 (实际 %s)" % g.stats_text().right(60))
 	check(str(ui._stats_label.text) == g.stats_text(),
 			"打磨-171 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
 	# 真实 路径: 受控 领悟 入账 (境界0层1 可学 11 项 数据 锚定, learned 清空 受控) -> _refresh 标签 同步
@@ -1025,6 +1025,81 @@ func _ready() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-172 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
+	# 打磨-173: 修行统计 登天新纪录 计数 段 (endless_record 埋点 真实 路径 [try_tower_challenge 胜局 分支
+	# was_best 结算 口径 与 new_record 字段 打磨-126 同源 单点, 仅 登天梯 胜局 且 创 新纪录 计,
+	# 镇妖塔/败局 恒 false 不 计入; 单场 只 显 浮动/底部消息, 历史 累计 次数 展示位; 旧档 缺 键 兜底 0)
+	check(ui._stats_label.tooltip_text.find("登天新纪录") >= 0 and ui._stats_label.tooltip_text.find("打磨-173") >= 0
+			and ui._stats_label.tooltip_text.find("was_best 结算 口径") >= 0,
+			"打磨-173 统计 行 tooltip 含 登天新纪录 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 尾部 含 登天新纪录 段 (动态 锚定, int 计数) + 标签 = 接口 恒等
+	check(g.stats_text().ends_with("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))),
+			"打磨-173 stats_text 尾部 含 登天新纪录 段 (实际 %s)" % g.stats_text().right(40))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-173 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 受控 登天 塔 态 + 受控 基准 [清空 功法/装备 防 前序 段 残留 atk 池 抬 玩家 战力 致 弱 玩家
+	# 假设 失效, 同 打磨-116 口径] — 弱玩家 3 层 败 不 计 + 道祖 1/2 层 胜 新纪录 埋点 入账 +2 + 镇妖 胜局 不 计
+	var asc173u: bool = g.ascended
+	var dl173u: int = g.dao_level
+	var dao173u: float = g.dao
+	var tec173u: int = g.tower_endless_floor
+	var teb173u: int = g.tower_endless_best
+	var td173u: String = g.tower_daily_date
+	var twc173u: bool = g.tower_fixed_clear
+	var twf173u: int = g.tower_fixed_floor
+	var lr173u: Array[String] = g.learned.duplicate()
+	var ow173u: Array[String] = g.owned_eq.duplicate()
+	var eq173u: Dictionary = g.equipped.duplicate(true)
+	var er173u: float = float(g.stats.get("endless_record", 0.0))
+	g.tower_endless_floor = 400  # 400 层 恒 败 (怪 atk ~8.3e6 远超 满修 玩家 战力, 防 前序 段 残留 atk 池 干扰)
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.assign([])
+	g.owned_eq.assign([])
+	g.equipped = {}
+	var r173lu: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(not bool(r173lu["win"]) and absf(float(g.stats.get("endless_record", 0.0)) - er173u) < 1e-9,
+			"打磨-173 登天梯 败局 不 计 埋点 (数据 锚定 400 层 恒败)")
+	# 败局 不 推进 层, 显式 重置 floor=1/best=0 再 起 算 (败 局 停留 400 层, 同 上)
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	g.try_tower_challenge("endless", 0.5)
+	g.try_tower_challenge("endless", 0.5)
+	check(g.tower_endless_best == 2
+			and absf(float(g.stats.get("endless_record", 0.0)) - (er173u + 2.0)) < 1e-9,
+			"打磨-173 受控 双 胜局 新纪录 埋点 入账 = 2 (实际 %s)" % str(g.stats.get("endless_record", 0.0)))
+	var rf173u: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rf173u["win"]) and not bool(rf173u["new_record"])
+			and absf(float(g.stats.get("endless_record", 0.0)) - (er173u + 2.0)) < 1e-9,
+			"打磨-173 镇妖塔 胜局 不 计 埋点")
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-173 _refresh 后 标签 文本 = 接口 恒等 (含 登天新纪录 段)")
+	check(g.stats_text().ends_with("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))),
+			"打磨-173 埋点 后 文案 含 新 登天新纪录 计数 (实际 %s)" % g.stats_text().right(40))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached173: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached173 and str(ui._stats_label.text) == g.stats_text(),
+			"打磨-173 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (登天 塔 态/飞升 态/功法/装备 复原 防 污染 后续 段; 新纪录 计数 保留 — stats 只 增不减 存档 口径)
+	g.tower_endless_floor = tec173u
+	g.tower_endless_best = teb173u
+	g.tower_daily_date = td173u
+	g.tower_fixed_clear = twc173u
+	g.tower_fixed_floor = twf173u
+	g.ascended = asc173u
+	g.dao_level = dl173u
+	g.dao = dao173u
+	g.learned.assign(lr173u)
+	g.owned_eq.assign(ow173u)
+	g.equipped = eq173u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-173 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
