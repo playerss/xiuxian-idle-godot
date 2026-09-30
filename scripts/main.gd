@@ -962,6 +962,10 @@ func _build_training_page(page: Panel) -> void:
 	bp_sb.bg_color = Color(0, 0, 0, 0)
 	bp_sb.set_corner_radius_all(8)
 	_break_panel.add_theme_stylebox_override("panel", bp_sb)
+	# 机器试玩修复(A/B 根因): _break_panel 入 VBox 无最小高 → 0 高, break_box 撑出到 y318..360,
+	# 被后入树的 _auto_sum_panel 内部 PASS HBox 抢吃中心点击 (A 不 fire) + 行文字叠字 (B)。
+	# 最小高 = break_box 内容高 (~42) + 边 4, VBox 正常分配后两面板各落其位互不溢出。
+	_break_panel.custom_minimum_size = Vector2(0, 46)
 	_break_panel.tooltip_text = "突破区 (进度/ETA/成功率/下一目标/突破按钮/自动系列 开关)。顶栏 下一目标 进度条 点击 可 直达 本区 (金边高亮 1.2s)。"
 	left.add_child(_break_panel)
 	# 突破区 横排 (成功率 + 进度区 VBox + 突破按钮 + 4 自动开关; 视觉 顺序/间距 与原 竖排 一致)
@@ -1101,6 +1105,10 @@ func _build_training_page(page: Panel) -> void:
 	asp_sb.bg_color = Color(0, 0, 0, 0)
 	asp_sb.set_corner_radius_all(8)
 	_auto_sum_panel.add_theme_stylebox_override("panel", asp_sb)
+	# 机器试玩修复(A/B 同根因): Panel 入 VBox 无最小高度 → 0 高槽位, 内部 FULL_RECT 子节点
+	# 溢出到上方突破按钮行 (重叠 视觉 bug B), 且该 PASS 容器吞掉按钮中心点点击 (不 fire bug A)。
+	# 给它 23px 最小高 让 VBox 正常分配, 行 落位 不再 越界。
+	_auto_sum_panel.custom_minimum_size = Vector2(0, 23)
 	_auto_sum_panel.tooltip_text = "挂机自动系列 状态汇总 (✓=开 ✗=关, 与上方 4 自动开关+爬塔页 自动爬塔 同步; 各段可点击, 点击切换 对应 自动开关, 与上方按钮同口径+底部消息确认; 顶栏 自动 N/5 徽标 (M5-3 起 5 开关) 点击也可直达本行):\n· 自动突破 — 资源攒够 自动 尝试 突破/道行精进\n· 自动购置 — 灵石攒够 自动 购入 法器/装备 + 最佳换装\n· 自动施展 — 已学 主动神通 冷却完毕 自动 施展 爆发\n· 自动领悟 — 境界/层 提升 解锁 新技能 自动 批量 领悟\n· 自动爬塔 — 挂机时 镇妖塔/登天梯 自动 挑战 (胜推进 败停留)\n开关 存档 持久化, 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。"
 	left.add_child(_auto_sum_panel)
 	_auto_sum_box = HBoxContainer.new()
