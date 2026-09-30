@@ -168,7 +168,7 @@ func _click_named(prefix: String) -> void:
 	var btns: Array = []
 	_all_buttons(ui, btns)
 	for b in btns:
-		if not is_instance_valid(b) or not b.enabled or not _is_on_screen(b):
+		if not is_instance_valid(b) or b.disabled or not _is_on_screen(b):
 			continue
 		if String(b.text).strip_edges().begins_with(prefix):
 			var g: Rect2 = (b as Control).get_global_rect()
