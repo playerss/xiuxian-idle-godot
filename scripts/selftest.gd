@@ -2742,12 +2742,12 @@ func _init() -> void:
 	# 空档 _load_stats 兜底 endless_record = 0
 	var sv173: Dictionary = g.stats.duplicate(true)
 	g._load_stats({})
-	check(g.stats_text().ends_with("登天新纪录 0 次"),
-			"打磨-173 空档 _load_stats 兜底 登天新纪录 段 = 0 (实际 %s)" % g.stats_text().right(40))
+	check(g.stats_text().find("登天新纪录 0 次") >= 0,
+			"打磨-173 空档 _load_stats 兜底 登天新纪录 段 = 0 (打磨-174 尾部 里程碑宝箱 段 适配, 实际 %s)" % g.stats_text().right(60))
 	g.stats = sv173
-	# stats_text 尾部 含 登天新纪录 段 (动态 锚定, int 计数)
-	check(g.stats_text().ends_with("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))),
-			"打磨-173 stats_text 尾部 含 登天新纪录 段 (实际 %s)" % g.stats_text().right(40))
+	# stats_text 含 登天新纪录 段 (动态 锚定, int 计数; 打磨-174 追加 尾部 里程碑宝箱 段 后 改 find 锚定)
+	check(g.stats_text().find("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))) >= 0,
+			"打磨-173 stats_text 含 登天新纪录 段 (实际 %s)" % g.stats_text().right(60))
 	# 受控 状态 快照 (登天 塔 态/境界/层/资源/收集 收尾 复原 防 污染 后续 段; 新纪录 计数 保留 — stats 只 增不减 存档 口径)
 	var ri173: int = g.realm_idx
 	var ly173: int = g.layer
@@ -2817,9 +2817,9 @@ func _init() -> void:
 	check(bool(r173f["win"]) and not bool(r173f["new_record"])
 			and absf(float(g.stats.get("endless_record", 0.0)) - er173d) < 1e-9,
 			"打磨-173 镇妖塔 胜局 不 计 埋点 (实际 %s)" % str(g.stats.get("endless_record", 0.0)))
-	# 埋点 后 文案 含 新 计数 (动态 恒等, 尾部 段)
-	check(g.stats_text().ends_with("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))),
-			"打磨-173 埋点 后 文案 含 新 登天新纪录 计数 (实际 %s)" % g.stats_text().right(40))
+	# 埋点 后 文案 含 新 计数 (动态 恒等; 打磨-174 尾部 里程碑宝箱 段 后 改 find 锚定)
+	check(g.stats_text().find("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))) >= 0,
+			"打磨-173 埋点 后 文案 含 新 登天新纪录 计数 (实际 %s)" % g.stats_text().right(60))
 	# 只读: 连读 恒定 无 状态/统计 副作用
 	var stt173: String = g.stats_text()
 	var st173snap: Dictionary = g.stats.duplicate(true)
@@ -2847,6 +2847,119 @@ func _init() -> void:
 	g.affix_load = al173
 	g.seen_affixes.assign(sa173)
 	g.ach_done.assign(acd173)
+
+	# ---------- 打磨-174: 里程碑宝箱 计数 段 (milestone_chest 埋点 本轮 新增 [try_tower_challenge 胜局 分支
+	# is_milestone 结算 口径 与 结果 字典 字段 打磨-115 同源 单点, 仅 登天梯 100 倍数 Boss 胜局 计,
+	# 镇妖塔/普通层/败局 恒 false 不 计入; 手动+自动 塔 路径 同 口径]: 历史 累计 次数 展示位; 旧档 缺 键 兜底 0) ----------
+	# 空档 _load_stats 兜底 milestone_chest = 0
+	var sv174: Dictionary = g.stats.duplicate(true)
+	g._load_stats({})
+	check(g.stats_text().ends_with("里程碑宝箱 0 次"),
+			"打磨-174 空档 _load_stats 兜底 里程碑宝箱 段 = 0 (实际 %s)" % g.stats_text().right(40))
+	g.stats = sv174
+	# stats_text 尾部 含 里程碑宝箱 段 (动态 锚定, int 计数)
+	check(g.stats_text().ends_with("里程碑宝箱 %d 次" % int(g.stats.get("milestone_chest", 0.0))),
+			"打磨-174 stats_text 尾部 含 里程碑宝箱 段 (实际 %s)" % g.stats_text().right(40))
+	# 受控 状态 快照 (塔 态/境界/层/资源/收集 收尾 复原 防 污染 后续 段; 宝箱 计数 保留 — stats 只 增不减 存档 口径)
+	var ri174: int = g.realm_idx
+	var ly174: int = g.layer
+	var es174: float = g.essence
+	var st174: float = g.stones
+	var asc174: bool = g.ascended
+	var dl174: int = g.dao_level
+	var dao174: float = g.dao
+	var lr174: Array[String] = g.learned.duplicate()
+	var ow174: Array[String] = g.owned.duplicate()
+	var owe174: Array[String] = g.owned_eq.duplicate()
+	var eq174: Dictionary = g.equipped.duplicate(true)
+	var twf174: int = g.tower_fixed_floor
+	var tec174: int = g.tower_endless_floor
+	var teb174: int = g.tower_endless_best
+	var td174: String = g.tower_daily_date
+	var twc174: bool = g.tower_fixed_clear
+	var tcg174: bool = g.tower_clear_reward_got
+	var pb174: int = g.poison_battles
+	var ab174: Dictionary = g.affix_bag.duplicate(true)
+	var al174: Dictionary = g.affix_load.duplicate(true)
+	var sa174: Array = g.seen_affixes.duplicate()
+	var acd174: Array = g.ach_done.duplicate()
+	# 真实 路径 1: 弱玩家 登天梯 400 层 败 (数据 锚定 怪 atk 远超 2.0 恒败, 同 打磨-173/123 口径)
+	# 败局 is_milestone 结算 恒 false [win 分支 不 入] 不 计 埋点
+	g.ascended = false
+	g.dao_level = 0
+	g.dao = 0.0
+	g.realm_idx = 0
+	g.layer = 1
+	g.essence = 0.0
+	g.stones = 0.0
+	g.learned.assign([])
+	g.owned.assign([])
+	g.owned_eq.assign([])
+	g.equipped = {}
+	g.tower_endless_floor = 400
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.poison_battles = 0
+	var mc174a: float = float(g.stats.get("milestone_chest", 0.0))
+	var r174l: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(not bool(r174l["win"]) and not bool(r174l["is_milestone"])
+			and absf(float(g.stats.get("milestone_chest", 0.0)) - mc174a) < 1e-9,
+			"打磨-174 登天梯 败局 不 计 埋点 (数据 锚定 400 层 恒败)")
+	# 真实 路径 2: 强玩家 道祖 登天梯 普通层 胜 (1 层, 数据 锚定 阈值 1.44 < 道祖 有效 ATK) 非 Boss 层 不 计
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	var mc174b: float = float(g.stats.get("milestone_chest", 0.0))
+	var r174p: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r174p["win"]) and not bool(r174p["is_milestone"])
+			and absf(float(g.stats.get("milestone_chest", 0.0)) - mc174b) < 1e-9,
+			"打磨-174 登天梯 普通层 胜 不 计 埋点 (is_milestone 结算 恒 false)")
+	# 真实 路径 3: 强玩家 登天梯 100 层 里程碑 Boss 胜 (数据 锚定 阈值 5768 < 道祖 有效 ATK) 埋点 增量 = 1
+	# (败局/普通层 胜 均 停留/推进 后 层 态 已 推进 至 100, 显式 置 floor=100 再 起 算)
+	g.tower_endless_floor = 100
+	var mc174c: float = float(g.stats.get("milestone_chest", 0.0))
+	var r174: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r174["win"]) and bool(r174["is_milestone"]) and g.tower_endless_best == 100
+			and absf(float(g.stats.get("milestone_chest", 0.0)) - (mc174c + 1.0)) < 1e-9,
+			"打磨-174 登天梯 100 层 里程碑 Boss 胜 埋点 增量 = 1 (实际 best=%d)" % g.tower_endless_best)
+	# 镇妖塔 胜局 不 计 埋点 (is_milestone 仅 登天梯 结算 分支 置位, 镇妖塔 恒 false)
+	var mc174d: float = float(g.stats.get("milestone_chest", 0.0))
+	var r174f: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(r174f["win"]) and not bool(r174f["is_milestone"])
+			and absf(float(g.stats.get("milestone_chest", 0.0)) - mc174d) < 1e-9,
+			"打磨-174 镇妖塔 胜局 不 计 埋点 (实际 %s)" % str(g.stats.get("milestone_chest", 0.0)))
+	# 埋点 后 文案 含 新 计数 (动态 恒等, 尾部 段)
+	check(g.stats_text().ends_with("里程碑宝箱 %d 次" % int(g.stats.get("milestone_chest", 0.0))),
+			"打磨-174 埋点 后 文案 含 新 里程碑宝箱 计数 (实际 %s)" % g.stats_text().right(40))
+	# 只读: 连读 恒定 无 状态/统计 副作用
+	var stt174: String = g.stats_text()
+	var st174snap: Dictionary = g.stats.duplicate(true)
+	check(g.stats_text() == stt174 and g.stats == st174snap, "打磨-174 stats_text 只读 连读 恒定 (无 状态/统计 副作用)")
+	# 收尾 复原 干净 基准 (塔 态/境界/层/资源/收集 复原 防 污染 后续 段; 宝箱 计数 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc174
+	g.realm_idx = ri174
+	g.layer = ly174
+	g.essence = es174
+	g.stones = st174
+	g.dao_level = dl174
+	g.dao = dao174
+	g.tower_fixed_floor = twf174
+	g.tower_endless_floor = tec174
+	g.tower_endless_best = teb174
+	g.tower_daily_date = td174
+	g.tower_fixed_clear = twc174
+	g.tower_clear_reward_got = tcg174
+	g.poison_battles = pb174
+	g.learned.assign(lr174)
+	g.owned.assign(ow174)
+	g.owned_eq.assign(owe174)
+	g.equipped = eq174
+	g.affix_bag = ab174
+	g.affix_load = al174
+	g.seen_affixes.assign(sa174)
+	g.ach_done.assign(acd174)
+
 
 	# ---------- 打磨-19: 顶栏主资源切换 (飞升后 灵气 -> 道行) ----------
 	g.ascended = false

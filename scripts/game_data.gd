@@ -1544,6 +1544,12 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 				stones += daily_bonus
 				tower_daily_bonus_stones += daily_bonus
 				_stat_inc("stone_gain", daily_bonus)  # 打磨-168: 灵石 获取 累计 (登天梯 每日 首胜 额外 奖励, 与 stones 入账 同源 单点)
+		# 打磨-174: 登天梯 里程碑 Boss 宝箱 计数 埋点 (仅 登天梯 100 倍数 Boss 胜局 时 计 [is_milestone 结算
+		# 口径 与 结果 字典 字段 打磨-115 同源 单点, 镇妖塔/普通层/败局 恒 false 不 计入, 手动+自动 塔 路径
+		# 同 口径]: 单场 只 显 浮动/底部消息 [打磨-115/133 会话 口径], 历史 累计 次数 无 持久化 展示位;
+		# 只 改 内存 统计 不 改 结算 逻辑)
+		if tower == "endless" and str(mon["boss_type"]) != "" and next_floor % 100 == 0:
+			_stat_inc("milestone_chest")
 		# 打磨-163: 爬塔灵石 收益 累计 埋点 (对称 打磨-14 tower_win 胜局 埋点 + 打磨-160 离线 收益 累计:
 		# 只 计 层 基础 奖励 reward_stone [含 幸运/不屈 叠乘], 不含 通关 大奖/每日 首胜 额外 奖励;
 		# 手动+自动 路径 同 口径 累加; 只 改 内存 统计 不 改 结算 逻辑)
@@ -1746,7 +1752,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain", "mat_gain", "mat_spent", "skill_learn", "affix_unequip", "endless_record"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain", "mat_gain", "mat_spent", "skill_learn", "affix_unequip", "endless_record", "milestone_chest"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1808,8 +1814,12 @@ func _load_stats(v: Variant) -> void:
 # was_best 结算 口径 与 结果 字典 new_record 字段 打磨-126 同源 单点, 仅 登天梯 胜局 且 创 新纪录
 # 时 计, 镇妖塔/败局 恒 false 不 计入; 单场 只 显 浮动/底部消息, 历史 累计 次数 无 展示位, 玩家
 # 挂机 回看 不知 开荒 起 累计 创 了多少 新纪录]; int 计数 与 技能 领悟 段 打磨-171 同 口径; 旧档 缺 键 兜底 0)
+# 打磨-174: 里程碑宝箱 计数 段 (milestone_chest 埋点 本轮 新增 [try_tower_challenge 胜局 分支 is_milestone
+# 结算 口径 与 结果 字典 字段 打磨-115 同源 单点, 仅 登天梯 100 倍数 Boss 胜局 时 计, 镇妖塔/普通层/败局
+# 恒 false 不 计入; 单场 只 显 浮动/底部消息 与 会话 内存 文案 [打磨-115/133], 历史 累计 次数 无 展示位,
+# 玩家 挂机 回看 不知 开荒 起 累计 触发 了多少 里程碑 宝箱]; int 计数 与 登天新纪录 段 打磨-173 同 口径; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 拆卸 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s · 材料 获取 %s · 材料 消耗 %s · 技能 领悟 %d 次 · 登天新纪录 %d 次" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 拆卸 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s · 材料 获取 %s · 材料 消耗 %s · 技能 领悟 %d 次 · 登天新纪录 %d 次 · 里程碑宝箱 %d 次" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
@@ -1827,7 +1837,8 @@ func stats_text() -> String:
 		fmt(float(stats.get("primary_gain", 0.0))), fmt(float(stats.get("stone_gain", 0.0))),
 		fmt(float(stats.get("mat_gain", 0.0))), fmt(float(stats.get("mat_spent", 0.0))),
 		int(stats.get("skill_learn", 0.0)),
-		int(stats.get("endless_record", 0.0))]  # 打磨-173: 登天新纪录 计数 段 (was_best 结算 口径 单点 埋点, 仅 登天梯 胜局 且 创 新纪录 计, 与 new_record 字段 打磨-126 同源; int 计数 与 技能 领悟 段 打磨-171 同 口径, 旧档 缺 键 兜底 0)
+		int(stats.get("endless_record", 0.0)),  # 打磨-173: 登天新纪录 计数 段 (was_best 结算 口径 单点 埋点, 仅 登天梯 胜局 且 创 新纪录 计, 与 new_record 字段 打磨-126 同源; int 计数 与 技能 领悟 段 打磨-171 同 口径, 旧档 缺 键 兜底 0)
+		int(stats.get("milestone_chest", 0.0))]  # 打磨-174: 里程碑宝箱 计数 段 (is_milestone 结算 口径 单点 埋点, 仅 登天梯 100 倍数 Boss 胜局 计, 与 宝箱 段 打磨-115 同源; int 计数 与 登天新纪录 段 打磨-173 同 口径, 旧档 缺 键 兜底 0)
 
 # 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
 # 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)

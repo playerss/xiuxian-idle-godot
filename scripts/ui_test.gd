@@ -1032,9 +1032,9 @@ func _ready() -> void:
 	check(ui._stats_label.tooltip_text.find("登天新纪录") >= 0 and ui._stats_label.tooltip_text.find("打磨-173") >= 0
 			and ui._stats_label.tooltip_text.find("was_best 结算 口径") >= 0,
 			"打磨-173 统计 行 tooltip 含 登天新纪录 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
-	# stats_text 尾部 含 登天新纪录 段 (动态 锚定, int 计数) + 标签 = 接口 恒等
-	check(g.stats_text().ends_with("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))),
-			"打磨-173 stats_text 尾部 含 登天新纪录 段 (实际 %s)" % g.stats_text().right(40))
+	# stats_text 含 登天新纪录 段 (动态 锚定, int 计数; 打磨-174 追加 尾部 里程碑宝箱 段 后 改 find 锚定) + 标签 = 接口 恒等
+	check(g.stats_text().find("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))) >= 0,
+			"打磨-173 stats_text 含 登天新纪录 段 (实际 %s)" % g.stats_text().right(60))
 	check(str(ui._stats_label.text) == g.stats_text(),
 			"打磨-173 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
 	# 真实 路径: 受控 登天 塔 态 + 受控 基准 [清空 功法/装备 防 前序 段 残留 atk 池 抬 玩家 战力 致 弱 玩家
@@ -1078,8 +1078,8 @@ func _ready() -> void:
 			"打磨-173 镇妖塔 胜局 不 计 埋点")
 	ui._refresh()
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-173 _refresh 后 标签 文本 = 接口 恒等 (含 登天新纪录 段)")
-	check(g.stats_text().ends_with("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))),
-			"打磨-173 埋点 后 文案 含 新 登天新纪录 计数 (实际 %s)" % g.stats_text().right(40))
+	check(g.stats_text().find("登天新纪录 %d 次" % int(g.stats.get("endless_record", 0.0))) >= 0,
+			"打磨-173 埋点 后 文案 含 新 登天新纪录 计数 (打磨-174 尾部 段 适配, 实际 %s)" % g.stats_text().right(60))
 	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
 	var cached173: String = ui._stats_text
 	ui._refresh()
@@ -1100,6 +1100,89 @@ func _ready() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-173 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
+
+	# 打磨-174: 修行统计 里程碑宝箱 计数 段 (milestone_chest 埋点 真实 路径 [try_tower_challenge 胜局 分支
+	# is_milestone 结算 口径 与 结果 字典 字段 打磨-115 同源 单点, 仅 登天梯 100 倍数 Boss 胜局 计,
+	# 镇妖塔/普通层/败局 恒 false 不 计入; 单场 只 显 浮动/底部消息, 历史 累计 次数 展示位; 旧档 缺 键 兜底 0)
+	check(ui._stats_label.tooltip_text.find("里程碑宝箱") >= 0 and ui._stats_label.tooltip_text.find("打磨-174") >= 0
+			and ui._stats_label.tooltip_text.find("is_milestone 结算 口径") >= 0,
+			"打磨-174 统计 行 tooltip 含 里程碑宝箱 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 尾部 含 里程碑宝箱 段 (动态 锚定, int 计数) + 标签 = 接口 恒等
+	check(g.stats_text().ends_with("里程碑宝箱 %d 次" % int(g.stats.get("milestone_chest", 0.0))),
+			"打磨-174 stats_text 尾部 含 里程碑宝箱 段 (实际 %s)" % g.stats_text().right(40))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-174 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 受控 登天 塔 态 + 受控 基准 [清空 功法/装备 防 前序 段 残留 atk 池 抬 玩家 战力 致 弱 玩家
+	# 假设 失效, 同 打磨-116 口径] — 弱玩家 400 层 败 不 计 + 道祖 普通层 胜 不 计 + 道祖 100 层 里程碑 Boss
+	# 胜 埋点 入账 = 1 + 镇妖 胜局 不 计
+	var asc174u: bool = g.ascended
+	var dl174u: int = g.dao_level
+	var dao174u: float = g.dao
+	var tec174u: int = g.tower_endless_floor
+	var teb174u: int = g.tower_endless_best
+	var td174u: String = g.tower_daily_date
+	var twc174u: bool = g.tower_fixed_clear
+	var twf174u: int = g.tower_fixed_floor
+	var lr174u: Array[String] = g.learned.duplicate()
+	var ow174u: Array[String] = g.owned_eq.duplicate()
+	var eq174u: Dictionary = g.equipped.duplicate(true)
+	var mc174u: float = float(g.stats.get("milestone_chest", 0.0))
+	g.tower_endless_floor = 400  # 400 层 恒 败 (怪 atk ~8.3e6 远超 满修 玩家 战力, 防 前序 段 残留 atk 池 干扰)
+	g.tower_endless_best = 0
+	g.tower_daily_date = ""
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.assign([])
+	g.owned_eq.assign([])
+	g.equipped = {}
+	var r174lu: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(not bool(r174lu["win"]) and absf(float(g.stats.get("milestone_chest", 0.0)) - mc174u) < 1e-9,
+			"打磨-174 登天梯 败局 不 计 埋点 (数据 锚定 400 层 恒败)")
+	# 败局 不 推进 层, 显式 重置 强玩家 普通层 1 层 胜 [非 Boss 层 is_milestone 恒 false 不 计]
+	g.ascended = true
+	g.dao_level = 8
+	g.tower_endless_floor = 1
+	g.tower_endless_best = 0
+	var mc174u1: float = float(g.stats.get("milestone_chest", 0.0))
+	var r174pu: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r174pu["win"]) and not bool(r174pu["is_milestone"])
+			and absf(float(g.stats.get("milestone_chest", 0.0)) - mc174u1) < 1e-9,
+			"打磨-174 登天梯 普通层 胜 不 计 埋点 (is_milestone 结算 恒 false)")
+	# 100 层 里程碑 Boss 胜 埋点 入账 = 1 (普通层 胜 推进 后 显式 置 floor=100 再 起 算)
+	g.tower_endless_floor = 100
+	var r174mu: Dictionary = g.try_tower_challenge("endless", 0.5)
+	check(bool(r174mu["win"]) and bool(r174mu["is_milestone"]) and g.tower_endless_best == 100
+			and absf(float(g.stats.get("milestone_chest", 0.0)) - (mc174u + 1.0)) < 1e-9,
+			"打磨-174 受控 100 层 里程碑 Boss 胜 埋点 入账 = 1 (实际 %s)" % str(g.stats.get("milestone_chest", 0.0)))
+	var rf174u: Dictionary = g.try_tower_challenge("fixed", 0.5)
+	check(bool(rf174u["win"]) and not bool(rf174u["is_milestone"])
+			and absf(float(g.stats.get("milestone_chest", 0.0)) - (mc174u + 1.0)) < 1e-9,
+			"打磨-174 镇妖塔 胜局 不 计 埋点")
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-174 _refresh 后 标签 文本 = 接口 恒等 (含 里程碑宝箱 段)")
+	check(g.stats_text().ends_with("里程碑宝箱 %d 次" % int(g.stats.get("milestone_chest", 0.0))),
+			"打磨-174 埋点 后 文案 含 新 里程碑宝箱 计数 (实际 %s)" % g.stats_text().right(40))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached174: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached174 and str(ui._stats_label.text) == g.stats_text(),
+			"打磨-174 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (登天 塔 态/飞升 态/功法/装备 复原 防 污染 后续 段; 宝箱 计数 保留 — stats 只 增不减 存档 口径)
+	g.tower_endless_floor = tec174u
+	g.tower_endless_best = teb174u
+	g.tower_daily_date = td174u
+	g.tower_fixed_clear = twc174u
+	g.tower_fixed_floor = twf174u
+	g.ascended = asc174u
+	g.dao_level = dl174u
+	g.dao = dao174u
+	g.learned.assign(lr174u)
+	g.owned_eq.assign(ow174u)
+	g.equipped = eq174u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-174 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
 
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
