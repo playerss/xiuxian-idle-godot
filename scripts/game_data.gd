@@ -813,6 +813,7 @@ func affix_slot_upgrade(equip_id: String) -> String:
 	affix_materials -= mat_cost
 	_stat_inc("mat_spent", float(mat_cost))  # 打磨-170: 材料 消耗 累计 (槽位 升级 3->4 实际 扣除, 批量 affix_upgrade_all 复用 单件 真实 路径 同 口径)
 	slot_upgrades[equip_id] = 1
+	_stat_inc("slot_upgrade")  # 打磨-175: 槽位 升级 计数 (成功 口径 单 埋点, 仅 道祖期 3->4 槽 升级 计, 批量 affix_upgrade_all 复用 单件 真实 路径 同 口径)
 	return ""
 
 # 打磨-99: 批量 强化 槽位 3->4 (复用 affix_slot_upgrade 单件 口径: 道祖期 + 200 材料/件).
@@ -1752,7 +1753,7 @@ func _load_stats(v: Variant) -> void:
 		for k in v:
 			stats[str(k)] = float(v[k])
 	# 兜底键齐全 (旧档缺失不影响读取)
-	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain", "mat_gain", "mat_spent", "skill_learn", "affix_unequip", "endless_record", "milestone_chest"]:
+	for k in ["play_sec", "break_ok", "break_fail", "dao_ok", "dao_fail", "skill_use", "item_buy", "equip_buy", "tower_win", "tower_loss", "tower_total_stone", "tower_total_mat", "affix_drop", "affix_equip", "affix_decompose", "affix_exchange", "offline_total_qi", "offline_total_stone", "offline_total_sec", "stone_spent", "primary_spent", "primary_gain", "stone_gain", "mat_gain", "mat_spent", "skill_learn", "affix_unequip", "endless_record", "milestone_chest", "slot_upgrade"]:
 		if not stats.has(k):
 			stats[k] = 0.0
 
@@ -1819,7 +1820,7 @@ func _load_stats(v: Variant) -> void:
 # 恒 false 不 计入; 单场 只 显 浮动/底部消息 与 会话 内存 文案 [打磨-115/133], 历史 累计 次数 无 展示位,
 # 玩家 挂机 回看 不知 开荒 起 累计 触发 了多少 里程碑 宝箱]; int 计数 与 登天新纪录 段 打磨-173 同 口径; 旧档 缺 键 兜底 0)
 func stats_text() -> String:
-	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 拆卸 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s · 材料 获取 %s · 材料 消耗 %s · 技能 领悟 %d 次 · 登天新纪录 %d 次 · 里程碑宝箱 %d 次" % [
+	return "修行 %s · 突破 %d 次 (失败 %d) · 道行精进 %d 次 (失败 %d) · 神通 %d 次 · 法器 %d 件 · 装备 %d 件 · 爬塔胜 %d 次 (败 %d) · 爬塔灵石 %s · 爬塔材料 %d · 累计离线 %s · 离线 主资源 %s · 灵石 %s · 词缀 掉落 %d · 装配 %d · 分解 %d · 兑换 %d · 拆卸 %d · 灵石 消耗 %s · 主资源 消耗 %s · 主资源 获取 %s · 灵石 获取 %s · 材料 获取 %s · 材料 消耗 %s · 技能 领悟 %d 次 · 登天新纪录 %d 次 · 里程碑宝箱 %d 次 · 槽位升级 %d 次" % [
 		fmt_stats_time(float(stats.get("play_sec", 0.0))),
 		int(stats.get("break_ok", 0.0)), int(stats.get("break_fail", 0.0)),
 		int(stats.get("dao_ok", 0.0)), int(stats.get("dao_fail", 0.0)),
@@ -1838,7 +1839,8 @@ func stats_text() -> String:
 		fmt(float(stats.get("mat_gain", 0.0))), fmt(float(stats.get("mat_spent", 0.0))),
 		int(stats.get("skill_learn", 0.0)),
 		int(stats.get("endless_record", 0.0)),  # 打磨-173: 登天新纪录 计数 段 (was_best 结算 口径 单点 埋点, 仅 登天梯 胜局 且 创 新纪录 计, 与 new_record 字段 打磨-126 同源; int 计数 与 技能 领悟 段 打磨-171 同 口径, 旧档 缺 键 兜底 0)
-		int(stats.get("milestone_chest", 0.0))]  # 打磨-174: 里程碑宝箱 计数 段 (is_milestone 结算 口径 单点 埋点, 仅 登天梯 100 倍数 Boss 胜局 计, 与 宝箱 段 打磨-115 同源; int 计数 与 登天新纪录 段 打磨-173 同 口径, 旧档 缺 键 兜底 0)
+		int(stats.get("milestone_chest", 0.0)),  # 打磨-174: 里程碑宝箱 计数 段 (is_milestone 结算 口径 单点 埋点, 仅 登天梯 100 倍数 Boss 胜局 计, 与 宝箱 段 打磨-115 同源; int 计数 与 登天新纪录 段 打磨-173 同 口径, 旧档 缺 键 兜底 0)
+		int(stats.get("slot_upgrade", 0.0))]  # 打磨-175: 槽位 升级 计数 段 (affix_slot_upgrade 成功 分支 单点 埋点, 仅 道祖期 3->4 槽 升级 计, 与 mat_spent 打磨-170 槽位 升级 扣除 同源; int 计数 与 里程碑宝箱 段 打磨-174 同 口径, 旧档 缺 键 兜底 0)
 
 # 打磨-77: 挂机时长 只读 接口 (顶栏 常显 用; 复用 stats.play_sec + fmt_stats_time 口径,
 # 只读 不 改 状态/存档/统计; 返回 空串 时 UI 隐藏 标签 避免 首帧 空文本 占位)

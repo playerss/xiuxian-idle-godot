@@ -1108,9 +1108,9 @@ func _ready() -> void:
 	check(ui._stats_label.tooltip_text.find("里程碑宝箱") >= 0 and ui._stats_label.tooltip_text.find("打磨-174") >= 0
 			and ui._stats_label.tooltip_text.find("is_milestone 结算 口径") >= 0,
 			"打磨-174 统计 行 tooltip 含 里程碑宝箱 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
-	# stats_text 尾部 含 里程碑宝箱 段 (动态 锚定, int 计数) + 标签 = 接口 恒等
-	check(g.stats_text().ends_with("里程碑宝箱 %d 次" % int(g.stats.get("milestone_chest", 0.0))),
-			"打磨-174 stats_text 尾部 含 里程碑宝箱 段 (实际 %s)" % g.stats_text().right(40))
+	# stats_text 含 里程碑宝箱 段 (动态 锚定, int 计数; 打磨-175 追加 尾部 槽位升级 段 后 改 find 锚定) + 标签 = 接口 恒等
+	check(g.stats_text().find("里程碑宝箱 %d 次" % int(g.stats.get("milestone_chest", 0.0))) >= 0,
+			"打磨-174 stats_text 含 里程碑宝箱 段 (实际 %s)" % g.stats_text().right(60))
 	check(str(ui._stats_label.text) == g.stats_text(),
 			"打磨-174 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
 	# 真实 路径: 受控 登天 塔 态 + 受控 基准 [清空 功法/装备 防 前序 段 残留 atk 池 抬 玩家 战力 致 弱 玩家
@@ -1161,8 +1161,8 @@ func _ready() -> void:
 			"打磨-174 镇妖塔 胜局 不 计 埋点")
 	ui._refresh()
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-174 _refresh 后 标签 文本 = 接口 恒等 (含 里程碑宝箱 段)")
-	check(g.stats_text().ends_with("里程碑宝箱 %d 次" % int(g.stats.get("milestone_chest", 0.0))),
-			"打磨-174 埋点 后 文案 含 新 里程碑宝箱 计数 (实际 %s)" % g.stats_text().right(40))
+	check(g.stats_text().find("里程碑宝箱 %d 次" % int(g.stats.get("milestone_chest", 0.0))) >= 0,
+			"打磨-174 埋点 后 文案 含 新 里程碑宝箱 计数 (打磨-175 尾部 槽位升级 段 后 改 find 锚定, 实际 %s)" % g.stats_text().right(60))
 	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
 	var cached174: String = ui._stats_text
 	ui._refresh()
@@ -1183,6 +1183,79 @@ func _ready() -> void:
 	ui._refresh()
 	await get_tree().process_frame
 	check(str(ui._stats_label.text) == g.stats_text(), "打磨-174 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
+	# 打磨-175: 修行统计 槽位 升级 计数 段 (slot_upgrade 埋点 真实 路径 [affix_slot_upgrade 成功 分支 单点,
+	# 仅 道祖期 3->4 槽 升级 计, 批量 affix_upgrade_all 复用 单件 真实 路径 同 口径, 与 材料 消耗 打磨-170
+	# 槽位 升级 扣除 同源]: 道祖期 槽位 强化 无 历史 次数 展示位, 旧档 缺 键 兜底 0)
+	check(ui._stats_label.tooltip_text.find("槽位升级") >= 0 and ui._stats_label.tooltip_text.find("打磨-175") >= 0
+			and ui._stats_label.tooltip_text.find("affix_slot_upgrade 成功 口径") >= 0,
+			"打磨-175 统计 行 tooltip 含 槽位升级 口径 说明 (实际 %s)" % ui._stats_label.tooltip_text.left(60))
+	# stats_text 尾部 含 槽位升级 段 (动态 锚定, int 计数) + 标签 = 接口 恒等
+	check(g.stats_text().ends_with("槽位升级 %d 次" % int(g.stats.get("slot_upgrade", 0.0))),
+			"打磨-175 stats_text 尾部 含 槽位升级 段 (实际 %s)" % g.stats_text().right(40))
+	check(str(ui._stats_label.text) == g.stats_text(),
+			"打磨-175 统计 行 文本 = stats_text 接口 恒等 (实际 %s)" % str(ui._stats_label.text).left(60))
+	# 真实 路径: 受控 基准 [清空 功法/装备 防 前序 段 残留 污染, 同 打磨-116 口径] — 非 道祖期 拒绝 不 计
+	# + 道祖期 单件 升级 埋点 = 1 + 批量 2 件 埋点 = 2
+	var asc175u: bool = g.ascended
+	var dl175u: int = g.dao_level
+	var dao175u: float = g.dao
+	var owq175u: Array[String] = g.owned_eq.duplicate()
+	var eq175u: Dictionary = g.equipped.duplicate(true)
+	var tu175u: Dictionary = g.slot_upgrades.duplicate(true)
+	var mat175u: int = g.affix_materials
+	var lr175u: Array[String] = g.learned.duplicate()
+	var su175u: float = float(g.stats.get("slot_upgrade", 0.0))
+	g.ascended = false
+	g.dao_level = 0
+	g.learned.assign([])
+	g.owned_eq.assign([])
+	g.owned_eq.append("weapon_0_0")
+	g.equipped = {}
+	g.slot_upgrades.erase("weapon_0_0")
+	g.affix_materials = 200
+	var r175ru: String = g.affix_slot_upgrade("weapon_0_0")
+	check(r175ru != "" and absf(float(g.stats.get("slot_upgrade", 0.0)) - su175u) < 1e-9,
+			"打磨-175 非 道祖期 拒绝 不 计 埋点")
+	# 道祖期 单件 升级 成功 埋点 入账 = 1
+	g.ascended = true
+	g.dao_level = 8
+	var upc175u: int = g.affix_slot_up_cost()
+	check(g.affix_slot_upgrade("weapon_0_0") == "", "打磨-175 道祖期 单件 升级 成功 (材料 %d)" % upc175u)
+	check(absf(float(g.stats.get("slot_upgrade", 0.0)) - (su175u + 1.0)) < 1e-9
+			and int(g.slot_upgrades.get("weapon_0_0", 0)) == 1,
+			"打磨-175 单件 升级 埋点 入账 = 1 (实际 %s)" % str(g.stats.get("slot_upgrade", 0.0)))
+	# 批量 affix_upgrade_all 复用 单件 真实 路径 同 口径 累加 (weapon_0_0 已 满级, 仅 robe_0_0 1 件 可升)
+	# 段 内 累计: 单件 +1 (weapon_0_0) + 批量 +1 (robe_0_0) = 段 起算 su175u + 2
+	g.owned_eq.append("robe_0_0")
+	g.slot_upgrades.erase("robe_0_0")
+	g.affix_materials = 2 * upc175u
+	var r175all: Dictionary = g.affix_upgrade_all()
+	check(int(r175all["count"]) == 1 and str(r175all["upgraded"][0]) == "robe_0_0"
+			and absf(float(g.stats.get("slot_upgrade", 0.0)) - (su175u + 2.0)) < 1e-9,
+			"打磨-175 单件+批量 埋点 入账 = 2 (weapon_0_0 已 满级 批量 仅 升 robe_0_0, 实际 %s)" % str(g.stats.get("slot_upgrade", 0.0)))
+	ui._refresh()
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-175 _refresh 后 标签 文本 = 接口 恒等 (含 槽位升级 段)")
+	check(g.stats_text().ends_with("槽位升级 %d 次" % int(g.stats.get("slot_upgrade", 0.0))),
+			"打磨-175 埋点 后 文案 含 新 槽位升级 计数 (实际 %s)" % g.stats_text().right(40))
+	# 同态 节流: 再 刷 缓存 键 不变 文本 稳定 无 资源 副作用
+	var cached175: String = ui._stats_text
+	ui._refresh()
+	check(ui._stats_text == cached175 and str(ui._stats_label.text) == g.stats_text(),
+			"打磨-175 同态 节流 文本 稳定 无 资源 副作用")
+	# 收尾 复原 干净 基准 (装备/升级/材料/境界 复原 防 污染 后续 段; 升级 计数 保留 — stats 只 增不减 存档 口径)
+	g.ascended = asc175u
+	g.dao_level = dl175u
+	g.dao = dao175u
+	g.learned.assign(lr175u)
+	g.owned_eq = owq175u
+	g.equipped = eq175u
+	g.slot_upgrades = tu175u
+	g.affix_materials = mat175u
+	ui._refresh()
+	await get_tree().process_frame
+	check(str(ui._stats_label.text) == g.stats_text(), "打磨-175 收尾 干净 基准 标签 = 接口 恒等 (实际 %s)" % g.stats_text().left(60))
+
 
 
 	await _assert_swap_delta()  # 打磨-112: 换装对比 战力/评分 Δ 段 (行 标签=接口 恒等/攻击防御评分 段/负差/词缀 装配 动态 同步/tooltip 口径/节流/收尾)
