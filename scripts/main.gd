@@ -1160,7 +1160,12 @@ func _build_training_page(page: Panel) -> void:
 		seg_btn.add_theme_stylebox_override("hover", _auto_sum_sb_hover)
 		seg_btn.add_theme_stylebox_override("pressed", _auto_sum_sb_hover)
 		seg_btn.add_theme_stylebox_override("focus", _auto_sum_sb_hover)
+		# 机器试玩修复(D): Button 非 Container, 子 Label 的最小尺寸 不计入 按钮 min_size ->
+		# flat 段热区 宽 0, 5 个 seg Label 全挤在 起点 处 叠成 乱码块 (真实截图 可见; headless
+		# ui_test 只断言 seg 文本/存在性, 测不出 热区 0 宽 叠字)。补 按钮 min = 子 Label 组合 min,
+		# _apply_auto_summary 文本变化 时 再刷 一次 (✓/✗ 宽度差)。
 		seg_btn.toggle_mode = false
+		seg_btn.custom_minimum_size = seg_l.get_combined_minimum_size()
 		_auto_sum_tip_statics.append(str(sum_tips[si]) + "\n\n" + str(sum_tip_marks[si]) + "\n")
 		_auto_sum_tips.append(GameData.auto_summary_seg_tip(si))
 		seg_btn.tooltip_text = str(_auto_sum_tip_statics[si]) + str(_auto_sum_tips[si])
@@ -3861,6 +3866,7 @@ func _apply_auto_summary() -> void:
 	for i in names.size():
 		var seg_l: Label = _auto_sum_segs[i]
 		seg_l.text = names[i] + (" ✓" if on[i] else " ✗")
+		_auto_sum_btns[i].custom_minimum_size = seg_l.get_combined_minimum_size()
 		seg_l.add_theme_color_override("font_color", GOLD if on[i] else DIM)
 
 
