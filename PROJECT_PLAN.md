@@ -468,7 +468,13 @@ floor=1/best=0 再 起 算 同 selftest 坑]/镇妖塔 胜局 不 计 埋点/_re
 - [x] 试玩-2026-09-30：自动汇总行 5 段热区宽 0 叠字（D 新增，已修 commit 4881739：flat Button 子 Label 不计入 min_size，补 custom_minimum_size；判据：5 段 rect 0 宽→38px 顺序排列，截图 4x 放大清晰无叠字）
 - [x] 试玩-2026-09-30：种档脚本读真实存档泄漏（已修 commit 0f599d4：seed 前删 user://save.json + 显式复位 ascended/dao 等字段）
 - [x] 试玩-2026-09-30：playtest_bot 引用不存在 Button.enabled 致 SCRIPT ERROR 刷屏（已修 commit fad462f：改 b.disabled）
-- [ ] 性能观察-2026-09-30：15min 真实窗口试玩 fps 均值 18、最低 5（20/180 采样点 <10，集中在 realm 2→9 高速突破+塔自动挑战段）；essence/stones 收支与 realm/layer 推进全部正常，非收支/推进 bug。复现：PLAYTEST_SEC=900 中期种档 + 全自动挂机段；已试：headless 无真实渲染无法复现（headless 恒 30fps 级），低 fps 来自真实渲染/自动战斗 UI 刷新叠加，待下轮对照（纯挂机不点按钮段 fps 曲线）决定是否立性能任务。
+- [ ] 性能专项 M9-P：真实渲染帧率专项（升级自 性能观察-2026-09-30，立为独立任务链；验收口径：真实 1920 渲染窗口 fps 均值 ≥30 且最低 ≥15，headless 帧率不作约束）
+  - P1 热点定位（1 轮）：新建 scripts/perf_probe.gd + scenes/perf_probe.tscn —— 三态对照采样，每态 ≥120s：①纯挂机零点击 ②挂机+自动爬塔 ③高速突破段（注入突破资源）。每 0.5s 记录 Performance.get_monitor 的 time_fps / time_process / time_draw / draw_calls / items / object_node_count + 数值快照，写 user://playtest/prof/<state>.csv；判据：能明确指出 fps<15 出现在哪个态、哪个 monitor 同步飙升（time_process 高 = 脚本热路径 / draw_calls·items 高 = UI 重绘 / time_draw 高 = 渲染）。
+  - P2 代码审计（1 轮，只读）：按 P1 结论审计 main.gd 每帧热路径——①`_refresh` 全量遍历（技能 120 行 / 装备 140 行 / 词缀背包 / 收集条 5 条 / tooltip 字符串重拼）哪些是"每帧无条件"而非既有"变化才刷"口径；②GameData._process 每帧 5 个 `_try_auto_*` + `_tick_active_cd` + 成就 1s 节流的合计成本；③浮动/闪光 tween 数量。产出：按单次成本排序的前 5 热路径清单（写进 PROJECT_PLAN），每条给"无节流 / 有节流但触发条件过宽"判定。
+  - P3 优化实施（拆 2~4 子任务，逐个做逐个验）：候选手段按 P1/P2 结论取舍——①不可见页的列表行跳过刷新（切页时补刷一次，需保 ui_test `_refresh(force=true)` 语义不变）；②tooltip 长文本惰性构建（现有 tooltip 静态+动态重拼每帧拼接的段改按需）；③高频刷新行加量化档位节流（复用打磨-77/40/136 量化口径）；④自动战斗汇总类底部消息/状态行的合并节流（打磨-95 已有 seq 事件，扩到窗口刷新）。纪律：每子任务只动一处 + 4 项基线全绿 + 3 分钟真实窗口 perf 复跑才 commit（一个优化一个 commit），禁止一次多改。
+  - P4 验收与留档（1 轮）：perf_probe 复跑三态，fps 曲线前后对照写入 PROJECT_PLAN「试玩遗留问题清单」性能条目并勾选；5 张商店截图若布局有变动须 Xvfb 重跑复核；README 补一行 perf 基线（fps 均值/最低 + draw_calls 上限）。
+  - 【坑与红线】① ui_test 4418 项里大量断言依赖 `_refresh` 的节流/缓存键/`force=true` 语义（打磨-150 已知坑），任何"跳过刷新"都必须保留 force 全量路径，否则假通过；② headless 恒 30fps 级，测不出真实渲染瓶颈，一切性能结论必须来自 DISPLAY=:99 真实窗口；③ 不引入引擎级改动（不改 renderer/stretch）除非 P1 证明是渲染层；④ 优化后须跑一轮 15min 长试玩确认收支/推进统计无回归（_stat_inc 口径不能被节流吞掉）。
+  - 初始线索（自 性能观察-2026-09-30 升级合入）：15min 真实窗口 fps 均值 18、最低 5（20/180 采样点 <10，集中在 realm 2→9 高速突破+塔自动挑战段）；essence/stones 收支与 realm/layer 推进全部正常，非收支/推进 bug；headless 无真实渲染无法复现，低 fps 来自真实渲染/自动战斗 UI 刷新叠加。
 - [ ] 待验证-2026-09-30：顶栏最右「一键 领取/修炼」与「自动购置」按钮右缘 1920 宽窗口下贴边/轻微裁切迹象（vision 两次提及，未定论为稳定 bug 还是 VLM 读数噪声；若下轮截图复现则给顶栏/汇总行加 clipping 或收窄文案）。
 - [ ] 待验证-2026-09-30：<1920 宽视口拉伸/溢出仍未系统验证（现有 bot 均在 1920 渲染窗口跑，需加 --width 缩放或项目 display mode 切换后截图布局断言，非本轮 30 分钟可修，列为专门任务）。
 - [x] 试玩-2026-09-30：PASS 轮记录（修后干净 15min 长试玩：点击 81，截图 15，fails 0，SCRIPT ERROR 0，fps 均值 18 最低 5，essence 单调 0 回落，break_ok 12→31 突破 19 次，realm 2→9 飞升完成，tower_win +3，点击不 fire 0 例，画面无冻结帧无缺渲染）
