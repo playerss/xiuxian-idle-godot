@@ -3,9 +3,20 @@ extends SceneTree
 ## 用法: ~/bin/godot --headless --path . -s res://scripts/playtest_seed.gd
 
 func _init() -> void:
+	# 机器试玩修复: 种档前 必须 先删 user://save.json — 否则 g._ready() 的 load_game() 会读真实
+	# 玩家存档 (ascended/dao/owned_eq/equipped 等 种档脚本 未覆写 字段 全部 泄漏, 曾致 一整轮
+	# 900s 长试玩 全程 ascended=true + dao=8e21 数据 作废)。
+	if FileAccess.file_exists("user://save.json"):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://save.json"))
 	var g = load("res://scripts/game_data.gd").new()
 	root.add_child(g)
 	g._ready()
+	g.ascended = false
+	g.dao = 0.0
+	g.dao_level = 0
+	g.owned.clear()
+	g.owned_eq.clear()
+	g.equipped.clear()
 	g.affix_bag.clear()
 	g.affix_load.clear()
 	g.slot_upgrades.clear()
