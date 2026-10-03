@@ -965,23 +965,33 @@ func _build_training_page(page: Panel) -> void:
 	# 机器试玩修复(A/B 根因): _break_panel 入 VBox 无最小高 → 0 高, break_box 撑出到 y318..360,
 	# 被后入树的 _auto_sum_panel 内部 PASS HBox 抢吃中心点击 (A 不 fire) + 行文字叠字 (B)。
 	# 最小高 = break_box 内容高 (~42) + 边 4, VBox 正常分配后两面板各落其位互不溢出。
-	_break_panel.custom_minimum_size = Vector2(0, 46)
+	_break_panel.custom_minimum_size = Vector2(0, 96)
 	_break_panel.tooltip_text = "突破区 (进度/ETA/成功率/下一目标/突破按钮/自动系列 开关)。顶栏 下一目标 进度条 点击 可 直达 本区 (金边高亮 1.2s)。"
 	left.add_child(_break_panel)
 	# 突破区 横排 (成功率 + 进度区 VBox + 突破按钮 + 4 自动开关; 视觉 顺序/间距 与原 竖排 一致)
-	var break_box := HBoxContainer.new()
+	# 试玩修复(打磨-17x): break_box min 宽 1559 > 面板 898 → HBox 撑破锚框压到右栏 (视觉 B)。
+	# 改 VBox 双 HBox 行: 行1=成功率+进度列+突破按钮 (min ~736), 行2=自动系列+装饰+一键 (min ~823), 均 <898。
+	var break_box := VBoxContainer.new()
 	break_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	break_box.offset_left = 2
 	break_box.offset_top = 2
 	break_box.offset_right = -2
 	break_box.offset_bottom = -2
-	break_box.add_theme_constant_override("separation", 8)
+	break_box.add_theme_constant_override("separation", 6)
 	_break_panel.add_child(break_box)
-	break_box.add_child(_chance_label)
+	var break_row1 := HBoxContainer.new()
+	break_row1.add_theme_constant_override("separation", 8)
+	break_box.add_child(break_row1)
+	var break_row2 := HBoxContainer.new()
+	break_row2.add_theme_constant_override("separation", 8)
+	break_row1.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	break_row2.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	break_box.add_child(break_row2)
+	break_row1.add_child(_chance_label)
 	var break_col := VBoxContainer.new()
 	break_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	break_col.add_theme_constant_override("separation", 8)
-	break_box.add_child(break_col)
+	break_row1.add_child(break_col)
 	# 打磨-31: 下一目标提示 (玩家下一步该做什么: 目标名+缺口+预计时间)
 	_goal_label = _label("", 14, GOLD)
 	break_col.add_child(_goal_label)
@@ -1004,7 +1014,7 @@ func _build_training_page(page: Panel) -> void:
 	# 静态 前缀 存 成员 供 重拼 (防 split 坑, 同 打磨-84/85 动态段 口径)
 	_break_btn_tip_static = ("点击 尝试 突破/道行精进 (消耗 与 成功率 见 按钮文案, 失败 全耗 重攒). 金边高亮 = 资源 已 攒够 可 点击 (打磨-32).\n\n【本次 突破 预估 (动态)】\n")
 	_break_btn.tooltip_text = _break_btn_tip_static + GameData.break_btn_tip()
-	break_box.add_child(_break_btn)
+	break_row1.add_child(_break_btn)
 	# 打磨-67: 自动突破开关 (资源攒够自动尝试 突破/道行精进; 状态变化才刷按钮态)
 	_auto_break_btn = _make_button("自动突破: 关")
 	_auto_break_btn.toggle_mode = true
@@ -1016,7 +1026,7 @@ func _build_training_page(page: Panel) -> void:
 		+ "开关 存档 持久化, 默认 关 (手动玩家不受影响); 道祖封顶 恒不触发。\n\n"
 		+ "【下次 自动突破 耗时 (动态)】")
 	_auto_break_btn.tooltip_text = _auto_break_tip_static
-	break_box.add_child(_auto_break_btn)
+	break_row2.add_child(_auto_break_btn)
 	# 打磨-68: 自动购置开关 (灵石攒够 自动购买 法器/装备 + 自动最佳换装; 状态变化才刷按钮态)
 	_auto_buy_btn = _make_button("自动购置: 关")
 	_auto_buy_btn.toggle_mode = true
@@ -1028,7 +1038,7 @@ func _build_training_page(page: Panel) -> void:
 		+ "开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
 		+ "【下一件 可购 时间 (动态)】")
 	_auto_buy_btn.tooltip_text = _auto_buy_tip_static
-	break_box.add_child(_auto_buy_btn)
+	break_row2.add_child(_auto_buy_btn)
 	# 打磨-69: 自动施展开关 (主动神通 冷却完毕 自动 施展 爆发; 状态变化才刷按钮态)
 	_auto_cast_btn = _make_button("自动施展: 关")
 	_auto_cast_btn.toggle_mode = true
@@ -1040,7 +1050,7 @@ func _build_training_page(page: Panel) -> void:
 		+ "开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
 		+ "【神通 就绪/爆发/冷却 (动态)】")
 	_auto_cast_btn.tooltip_text = _auto_cast_tip_static
-	break_box.add_child(_auto_cast_btn)
+	break_row2.add_child(_auto_cast_btn)
 	# 打磨-80: 自动领悟开关 (境界/层 提升 解锁 新技能 自动 批量 领悟; 状态变化才刷按钮态)
 	_auto_learn_btn = _make_button("自动领悟: 关")
 	_auto_learn_btn.toggle_mode = true
@@ -1052,7 +1062,7 @@ func _build_training_page(page: Panel) -> void:
 		+ "开关 存档 持久化, 默认 关 (手动玩家不受影响); 离线期间不触发 (离线只结算收益, 重新进入游戏后生效)。\n\n"
 		+ "【当前 可学/下一 门槛 (动态)】")
 	_auto_learn_btn.tooltip_text = _auto_learn_tip_static
-	break_box.add_child(_auto_learn_btn)
+	break_row2.add_child(_auto_learn_btn)
 
 	# 打磨-137-2: 水墨山水 背景 开关 (toggle; 默认 开; 与 自动 系列 按钮 同区 末位;
 	# 装饰 开关 无 离线 触发 语义, 文案 不 挂 离线 提示; 状态 变化 才 刷, _process 幂等 同步)
@@ -1064,7 +1074,7 @@ func _build_training_page(page: Panel) -> void:
 		+ "低 饱和 深色系 不 抢 前景 文字; 0.1s 量化 重绘 10fps, 关闭 时 节点 隐藏 零 开销。\n" \
 		+ "开关 存档 持久化, 默认 开 (旧档 缺字段 默认 开)。"
 	_bg_btn.pressed.connect(_on_bg_toggle)
-	break_box.add_child(_bg_btn)
+	break_row2.add_child(_bg_btn)
 	# 打磨-140: 音效 开关 (toggle; 默认 开; 与 水墨背景 开关 同区 同 定位: 装饰 设置 开关, 存档 持久化,
 	# 状态 变化 才 刷, _refresh 幂等 同步; 关 = _sfx_play 静默 跳过 [触发点 逻辑/浮动/消息 不变])
 	_sfx_btn = _make_button("音效: 开" if GameData.sfx_on else "音效: 关")
@@ -1075,7 +1085,7 @@ func _build_training_page(page: Panel) -> void:
 		+ "关闭 后 触发 点 静默 跳过 (浮动/底部 消息/结算 逻辑 均 不变, 只 不 播 声); 音量 -6dB 不 盖 音乐 口径 不变。\n" \
 		+ "开关 存档 持久化, 默认 开 (旧档 缺字段 默认 开)。"
 	_sfx_btn.pressed.connect(_on_sfx_toggle)
-	break_box.add_child(_sfx_btn)
+	break_row2.add_child(_sfx_btn)
 	# 打磨-88: 一键挂机 按钮 (一键 全开/全关 自动系列 4 开关 [突破/购置/施展/领悟];
 	# toggle 反映 全开 态: 全开="一键挂机: 全开" 按压, 未全开/部分开="一键挂机: 全关" 未按压;
 	# 点击 方向: 未全开 → 全开 (补齐 至 全开, 含 部分开 场景), 全开 → 全关;
@@ -1096,7 +1106,7 @@ func _build_training_page(page: Panel) -> void:
 	_idle_focus.bg_color = Color(0, 0, 0, 0)
 	_auto_idle_btn.add_theme_stylebox_override("focus", _idle_focus)
 	_idle_btn_sb_rest = _auto_idle_btn.get_theme_stylebox("normal")
-	break_box.add_child(_auto_idle_btn)
+	break_row2.add_child(_auto_idle_btn)
 	# 打磨-70: 自动系列 状态汇总行 (三个开关 开启后 扫视 不知 哪些 已 生效;
 	# 一行摘要 "自动: 突破 ✓/✗ · 购置 ✓/✗ · 施展 ✓/✗", 开启 金 / 未开 灰, 状态 变化 才刷)
 	# 打磨-74: 汇总行 包进透明 Panel (顶栏 自动 徽标 点击直达 时 金边高亮 1.2s, 复用 法器区 口径)
