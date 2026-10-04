@@ -154,7 +154,7 @@ func _process(_delta: float) -> void:
 # ---------- 交互 (真实 UI 路径) ----------
 
 const PAGE_TABS := {
-	"break_act": 0, "autos_all": 0,
+	"break_act": 0, "autos_all": 0, "first_break": 0, "break_loop": 0, "save_reload": 0,
 	"one_learn": 1, "first_learn": 1, "one_divine": 1, "one_cast": 1,
 	"one_buy": 2, "first_buy": 2, "one_best": 2, "affix_best": 2, "affix_equip_try": 2,
 	"slot_upgrade": 2, "one_exchange": 2,
