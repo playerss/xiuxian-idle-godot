@@ -27,7 +27,8 @@ var _last_led: Dictionary = {}
 var _interacts: Dictionary = {}  # stage -> {key: "done"}
 var _shot_turn := 0
 var _tick_n := 0
-var _act_queue: Array[String] = []
+var _slot := ""
+var _slot_phase := 0
 var _stage_results: Array = []
 
 const STAGES := [
@@ -115,7 +116,7 @@ func _enter_stage() -> void:
 	var st: Dictionary = STAGES[cur_stage]
 	stage_deadline = float(Time.get_ticks_msec()) / 1000.0 + float(st.budget)
 	_interacts[cur_stage] = {}
-	_act_queue.clear()
+	_slot = ""
 	print("STAGE %d [%s] ENTER goal: %s" % [cur_stage, str(st.name), str(st.goal)])
 
 
@@ -188,45 +189,54 @@ func _stage_tick() -> void:
 	var budget: float = float(st.budget)
 	var spent := float(Time.get_ticks_msec()) / 1000.0 - (stage_deadline - budget)
 	var frac := clampf(spent / budget, 0.0, 1.0)
-	# 队列补货: 交互键排队串行执行, 避免键之间互抢页面
+	# 单槽状态机: 一个动作两拍 (切页拍->点击拍), 期间页面不被抢
+	if _slot != "":
+		if _slot_phase == 0:
+			var need := _page_set(_slot)
+			if need >= 0 and int(ui._tab.current_tab) != need:
+				_click_tab(need)
+				_slot_phase = 1
+				return
+			_slot_phase = 1
+			_act_now(_slot)
+			_slot = ""
+			return
+	# 槽空: 1/8 拍借修行页突破, 否则自动爬塔, 否则补队列
+	if frac >= 0.1 and _tick_n % 8 == 0:
+		if bool(g.ascended) or bool(g.breakthrough_ready()):
+			_slot = "break_act"
+			_slot_phase = 0
+			return
+	if (cur_stage >= 1 and frac >= 0.7) and not bool(g.auto_tower):
+		done_map["auto_tower_on"] = true
+		_slot = "auto_tower_on"
+		_slot_phase = 0
+		_slot_repeat[_slot] = false
+		return
 	for key in st.interacts:
 		var k := str(key)
 		if frac < _ratio_for(k):
 			continue
-		if k in REPEATED_INTERACTS:
-			if not _act_queue.has(k):
-				_act_queue.append(k)
-		elif not bool(done_map.get(k, false)) and not _act_queue.has(k):
+		var rep := k in REPEATED_INTERACTS
+		if rep and _tick_n % 3 != 0:
+			continue  # 重交互 3 tick 一拍, 给突破/他键让出页面
+		if not rep and bool(done_map.get(k, false)):
+			continue
+		_slot = k
+		_slot_phase = 0
+		if not rep:
 			done_map[k] = true
-			_act_queue.append(k)
-	# 每 8 tick 借一次修行页推进突破/道行 (先切页, 下一 tick 布局落定再点)
-	if frac >= 0.1 and _tick_n % 8 == 5 and int(ui._tab.current_tab) != 0:
-		_click_tab(0)
 		return
-	if frac >= 0.1 and _tick_n % 8 == 0 and int(ui._tab.current_tab) == 0:
+
+
+func _act_now(k: String) -> void:
+	if k == "break_act":
 		if bool(g.ascended):
 			_click_named("修炼道行")
-			return
 		elif bool(g.breakthrough_ready()):
 			_click_named("尝试突破")
-			return
-	if not _act_queue.is_empty():
-		var head := str(_act_queue[0])
-		var need0 := _page_set(head)
-		if need0 >= 0 and int(ui._tab.current_tab) != need0:
-			_click_tab(need0)
-			return  # 切页后下一 tick 布局落定再点
-		_act_queue.pop_front()
-		do_interact(head)
 		return
-	if (cur_stage >= 1 and frac >= 0.7) and not bool(g.auto_tower):
-		done_map["auto_tower_on"] = true
-		if int(ui._tab.current_tab) != 4:
-			_click_tab(4)
-		else:
-			_click_named("自动爬塔")
-
-
+	do_interact(k)
 
 
 func _dao_ready() -> bool:
@@ -248,9 +258,7 @@ func do_interact(k: String) -> void:
 		"first_learn", "one_learn":
 			_click_named("一键领悟")
 		"first_buy", "one_buy":
-			# 修行页 法器区购买 + 装备页 一键购买
-			_click_named("法器")
-			_click_named("一键购买")
+			_click_named("一键购买")  # 法器区购置由 autos/自动购置 覆盖
 		"one_best":
 			_click_named("一键最佳")
 		"one_divine":
