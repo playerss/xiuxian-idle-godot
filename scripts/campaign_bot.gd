@@ -212,6 +212,12 @@ func _stage_tick() -> void:
 	var frac := clampf(spent / budget, 0.0, 1.0)
 	# 单槽状态机: 一个动作两拍 (切页拍->点击拍), 点击拍不抢页
 	if _slot != "":
+		if _tick_n % 5 == 2:
+			var dfp := FileAccess.open(OUT + "/diag.log", FileAccess.READ_WRITE)
+			if dfp:
+				dfp.seek_end()
+				dfp.store_line("SLOT %s ph=%d tab=%d" % [_slot, _slot_phase, int(ui._tab.current_tab)])
+				dfp.close()
 		if _slot_phase == 0:
 			var need := _page_set(_slot)
 			if need >= 0 and int(ui._tab.current_tab) != need:
@@ -219,14 +225,14 @@ func _stage_tick() -> void:
 				_slot_phase = 1
 				return
 			_slot_phase = 1
-			_act_now(_slot)
-			_act_last[_slot] = _tick_n
-			var flag := _slot_flag_ok(_slot)
-			if flag:
-				done_map[_slot] = true
-				_slot = ""
-			elif _tick_n - int(_act_last.get(_slot, -99)) > 6:
-				_slot = ""  # 点击未生效, 放回调度重试
+		_act_now(_slot)
+		_act_last[_slot] = _tick_n
+		var flag := _slot_flag_ok(_slot)
+		if flag:
+			done_map[_slot] = true
+			_slot = ""
+		elif _tick_n - int(_act_last.get(_slot, -99)) > 6:
+			_slot = ""  # 点击未生效, 放回调度重试
 		return
 	# P1+ 先全开自动系列 (挂机引擎推进进度, bot 只验证按钮路径)
 	if cur_stage >= 1 and frac >= 0.1 and not _autos_on():
@@ -557,6 +563,12 @@ func _click_named(prefix: String) -> void:
 			df.seek_end()
 			df.store_line("MISS %s n=%d tab=%d" % [prefix, tot, int(ui._tab.current_tab)])
 			df.close()
+	if tot == 0:
+		var df2 := FileAccess.open(OUT + "/diag.log", FileAccess.READ_WRITE)
+		if df2:
+			df2.seek_end()
+			df2.store_line("NOMATCH %s n=%d tab=%d" % [prefix, btns.size(), int(ui._tab.current_tab)])
+			df2.close()
 
 
 func _click_tab(i: int) -> void:
