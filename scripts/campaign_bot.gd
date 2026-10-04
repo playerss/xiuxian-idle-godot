@@ -111,6 +111,10 @@ func _ready() -> void:
 		f.store_line("rt_sec,fps,essence,stones,dao,ascended,realm,layer,break_ok,break_fail,primary_gain,primary_spent,stone_gain,stone_spent")
 	f.close()
 	_enter_stage()
+	var dl := FileAccess.open(OUT + "/diag.log", FileAccess.WRITE)
+	if dl:
+		dl.store_line("DIAG START st=%d budget=%.0f" % [cur_stage, total_budget])
+	dl.close()
 	print("CAMPAIGN START speed=%.0fx budget=%.0fs stage=%s" % [speed, total_budget, STAGES[cur_stage].name])
 
 
@@ -187,6 +191,13 @@ func _ratio_for(k: String) -> float:
 
 
 func _stage_tick() -> void:
+	if _tick_n % 5 == 1:
+		var fr := clampf((float(Time.get_ticks_msec()) / 1000.0 - (stage_deadline - float(STAGES[cur_stage].budget))) / float(STAGES[cur_stage].budget), 0.0, 1.0)
+		var df := FileAccess.open(OUT + "/diag.log", FileAccess.READ_WRITE)
+		if df:
+			df.seek_end()
+			df.store_line("TICK n=%d st=%d frac=%.2f slot=%s tab=%d tw=%d" % [_tick_n, cur_stage, fr, _slot, int(ui._tab.current_tab), int(g.tower_fixed_floor)])
+			df.close()
 	var st: Dictionary = STAGES[cur_stage]
 	var done_map: Dictionary = _interacts[cur_stage]
 	var budget: float = float(st.budget)
@@ -510,16 +521,35 @@ func _on_screen(c: Node) -> bool:
 func _click_named(prefix: String) -> void:
 	var btns: Array = []
 	_all_buttons(ui, btns)
+	var miss := 0
+	var tot := 0
 	for b in btns:
-		if not is_instance_valid(b) or b.disabled or not _on_screen(b):
+		if not is_instance_valid(b):
 			continue
-		if str(b.text).strip_edges().begins_with(prefix):
-			var r: Rect2 = b.get_global_rect()
-			print("CLICK %s rect=%s" % [prefix, str(r)])
-			if r.size.x < 4 or r.size.y < 4:
-				continue
-			_click(r.position + r.size * 0.5)
-			return
+		if not str(b.text).strip_edges().begins_with(prefix):
+			continue
+		tot += 1
+		if b.disabled or not _on_screen(b):
+			miss += 1
+			continue
+		var r: Rect2 = b.get_global_rect()
+		print("CLICK %s rect=%s" % [prefix, str(r)])
+		var df := FileAccess.open(OUT + "/diag.log", FileAccess.READ_WRITE)
+		if df:
+			df.seek_end()
+			df.store_line("CLICK %s %s" % [prefix, str(r)])
+			df.close()
+		if r.size.x < 4 or r.size.y < 4:
+			continue
+		_click(r.position + r.size * 0.5)
+		return
+	if tot > 0 and miss == tot:
+		print("CLICK-MISS %s all %d disabled/offscreen tab=%d" % [prefix, tot, int(ui._tab.current_tab)])
+		var df := FileAccess.open(OUT + "/diag.log", FileAccess.READ_WRITE)
+		if df:
+			df.seek_end()
+			df.store_line("MISS %s n=%d tab=%d" % [prefix, tot, int(ui._tab.current_tab)])
+			df.close()
 
 
 func _click_tab(i: int) -> void:
