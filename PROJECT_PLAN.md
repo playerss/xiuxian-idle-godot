@@ -493,3 +493,24 @@ floor=1/best=0 再 起 算 同 selftest 坑]/镇妖塔 胜局 不 计 埋点/_re
 - [x] 试玩-2026-10-03：PASS 轮记录（900s 真实窗口：点击 81，截图 15，fails 0，本轮日志段 SCRIPT ERROR 0；fps 均值 18.2 / 中位 20 / 最低 5，19/180 采样 <10 集中在 t=473..773 飞升+仙界道行段，与 M9-P 初始线索一致；essence 0 回落，stones 13 次回落全部与 stone_spent 增量对齐（收支正常）；realm 2→9 并飞升，break_ok 12→31 / dao_ok 8，15min 内突破 19 次节奏正常；15 张截图全不同无冻结无黑屏；无真实玩家存档，seed 档跑完已清理）。
 
 - [x] 试玩-2026-09-30：PASS 轮记录（修后干净 15min 长试玩：点击 81，截图 15，fails 0，SCRIPT ERROR 0，fps 均值 18 最低 5，essence 单调 0 回落，break_ok 12→31 突破 19 次，realm 2→9 飞升完成，tower_win +3，点击不 fire 0 例，画面无冻结帧无缺渲染）
+
+## M10 战役封测（一测/二测 完整功能测试）
+
+> 定位：playtest 每晚 15 分钟巡检只覆盖"当前版本健康度"，无法回答"完整玩家线是否走得通"。
+> M10 用 6 阶段战役引擎（scripts/campaign_bot.gd）模拟玩家完整旅程：真实窗口+真实点击+
+> Engine.time_scale 加速（8x，一夜 ~4h 模拟两周进度），每阶段有目标判据+时限，阶段产物
+> stage_N.json / checkpoint_N.json / history.csv / ledger 账本（收支恒等式审计）。
+> 引擎冒烟 0 fail 已过（commit f169df2）。
+
+### 阶段链
+- [ ] P0 新手期（真实速度）：第一次点进游戏零配置 15min 体验，判据=点成第一次突破+5 页无报错
+- [ ] P1 凡境筑基：realm≥化神 / learned≥40 / owned_eq≥20 / 突破≥8 次
+- [ ] P2 化神炼虚+爬塔：realm≥大乘 / 镇妖塔≥150 / 登天梯≥100 / 词缀掉落≥1
+- [ ] P3 渡劫飞升：ascended / dao_level≥1
+- [ ] P4 仙界道途：dao_level≥8（道祖）+ 词缀装配/槽位升级路径
+- [ ] P5 全收集收官：120 技能/140 装备/10 法器/词缀全池/全成就 + 存读档往返一致
+
+### 一测循环
+1. 战役跑完出 stage 报告 → 0 fail + 全阶段 PASS = 一测通过
+2. 未过阶段 → 记「封测 bug/平衡清单」+ dev 修复 → 二测 = 同战役断点续跑（CAMPAIGN_STAGE=n + checkpoint 档）
+3. 收敛条件：连续两轮"全阶段 PASS 且无新增 bug"→ 宣布功能测试通过，转回归节奏
