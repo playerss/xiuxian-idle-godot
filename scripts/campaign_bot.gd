@@ -154,7 +154,7 @@ func _process(_delta: float) -> void:
 # ---------- 交互 (真实 UI 路径) ----------
 
 const PAGE_TABS := {
-	"break_act": 0,
+	"break_act": 0, "autos_all": 0,
 	"one_learn": 1, "first_learn": 1, "one_divine": 1, "one_cast": 1,
 	"one_buy": 2, "first_buy": 2, "one_best": 2, "affix_best": 2, "affix_equip_try": 2,
 	"slot_upgrade": 2, "one_exchange": 2,
@@ -192,7 +192,7 @@ func _stage_tick() -> void:
 	var budget: float = float(st.budget)
 	var spent := float(Time.get_ticks_msec()) / 1000.0 - (stage_deadline - budget)
 	var frac := clampf(spent / budget, 0.0, 1.0)
-	# 单槽状态机: 一个动作两拍 (切页拍->点击拍), 期间页面不被抢
+	# 单槽状态机: 一个动作两拍 (切页拍->点击拍), 点击拍不抢页
 	if _slot != "":
 		if _slot_phase == 0:
 			var need := _page_set(_slot)
@@ -203,23 +203,40 @@ func _stage_tick() -> void:
 			_slot_phase = 1
 			_act_now(_slot)
 			_act_last[_slot] = _tick_n
-			_slot = ""
-			return
-	# 槽空: 1/8 拍借修行页突破, 否则自动爬塔, 否则补队列
-	if frac >= 0.1 and _tick_n % 8 == 0:
-		if bool(g.ascended) or bool(g.breakthrough_ready()):
-			_slot = "break_act"
-			_slot_phase = 0
-			return
-	if (cur_stage >= 1 and frac >= 0.7) and not bool(g.auto_tower):
-		done_map["auto_tower_on"] = true
+			var flag := _slot_flag_ok(_slot)
+			if flag:
+				done_map[_slot] = true
+				_slot = ""
+			elif _tick_n - int(_act_last.get(_slot, -99)) > 6:
+				_slot = ""  # 点击未生效, 放回调度重试
+		return
+	# P1+ 先全开自动系列 (挂机引擎推进进度, bot 只验证按钮路径)
+	if cur_stage >= 1 and frac >= 0.1 and not _autos_on():
+		_slot = "autos_all"
+		_slot_phase = 0
+		return
+	if cur_stage >= 2 and frac >= 0.5 and not bool(g.auto_tower):
 		_slot = "auto_tower_on"
 		_slot_phase = 0
 		return
+	# 自动突破兜底 (自动失败/未开时 手动点 突破/道行)
+	if frac >= 0.1 and _tick_n % 8 == 0:
+		if bool(g.ascended):
+			if not bool(g.auto_break) and _dao_ready():
+				_slot = "break_act"
+				_slot_phase = 0
+				return
+		elif bool(g.breakthrough_ready()) and not bool(g.auto_break):
+			_slot = "break_act"
+			_slot_phase = 0
+			return
+	# 其余收集/兑换类交互 (轮转防饿死, 重交互 8 tick 冷却)
 	var keys: Array = st.interacts
 	var n := keys.size()
 	for i in n:
-		var k := str(keys[(_act_rot + 1 + i) % n])  # 轮转起点, 防前置键饿死后续键
+		var k := str(keys[(_act_rot + 1 + i) % n])
+		if k == "autos" or k == "auto_tower_on" or k == "break_loop" or k == "first_break":
+			continue
 		if frac < _ratio_for(k):
 			continue
 		var rep := k in REPEATED_INTERACTS
@@ -235,18 +252,47 @@ func _stage_tick() -> void:
 		return
 
 
-func _act_now(k: String) -> void:
-	if k == "break_act":
-		if bool(g.ascended):
-			_click_named("修炼道行")
-		elif bool(g.breakthrough_ready()):
-			_click_named("尝试突破")
-		return
-	do_interact(k)
+func _autos_on() -> bool:
+	return bool(g.auto_break) and bool(g.auto_buy) and bool(g.auto_learn) and bool(g.auto_cast)
+
+
+func _slot_flag_ok(k: String) -> bool:
+	match k:
+		"autos_all":
+			return _autos_on()
+		"auto_tower_on":
+			return bool(g.auto_tower)
+		"autos":
+			return _autos_on()
+		_:
+			return true
 
 
 func _dao_ready() -> bool:
-	return true  # dao 攒够由 auto_break 自动精进, 按钮点击兜底
+	if not bool(g.ascended):
+		return bool(g.breakthrough_ready())
+	return int(g.dao_level) < 8 and float(g.dao) >= float(g.dao_break_cost())
+
+
+func _act_now(k: String) -> void:
+	if k == "break_act":
+		_interacts[cur_stage]["first_break"] = true
+		if bool(g.ascended):
+			_click_named("修炼道行")
+		else:
+			_click_named("尝试突破")
+		return
+	if k == "autos_all":
+		if not bool(g.auto_learn):
+			_click_named("自动领悟")
+		if not bool(g.auto_buy):
+			_click_named("自动购置")
+		if not bool(g.auto_cast):
+			_click_named("自动施展")
+		if not bool(g.auto_break):
+			_click_named("自动突破")
+		return
+	do_interact(k)
 
 
 func _page_set(k: String) -> int:
