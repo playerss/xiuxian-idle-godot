@@ -1868,10 +1868,84 @@ func stone_rate_text() -> String:
 		return ""
 	return "+%s/秒" % fmt(r)
 
+# ---------- perf(M9-P) P3-1: tooltip 量化键节流 公共设施 ----------
+# 只读文本接口 内部缓存: [量化状态键 -> 文本]，键未变 直接 复用 文本，跳过 全量 重算 (挂机 每帧 ≈ 键成本)。
+# 键 构造 原则: 离散状态 (境界/dao/飞升/目标件id/技能集哈希) + 文本粒度 量化档 (_eta_band / fmt 输出串 / 冷却精确值) —
+# 量化档 严格 比 fmt/eta_text 文本粒度 更细或 等距对齐 (档相等 ⇒ 文本 必相等; 取更细 只 多 一次 重算 不 过期)。
+# 不改 状态/存档/统计 语义，不改 main.gd "文本变化才刷" 缓存 (本缓存 仅 接口内部 加速，返回值 与 全量重算 逐字符 一致)。
+var _tip_cache := {}          # slot -> [key(String), text(String)] (P3-1 各 tooltip 接口)
+var _eqt_memo := []           # equip_next_target 静态段 memo [owned_eq.hash, {id,name,cost}] (P3-1)
+var _itm_memo := []           # item_next_target 静态段 memo [owned.hash, {id,name,cost}] (P3-1)
+# eta_text / breakthrough_eta_text / fmt_time 文本 不变 档 (<0 无收入 / 0 即时 / <60s 不足1分 / 其余 分钟档, 对齐 fmt_time 粒度)
+func _eta_band(t: float) -> int:
+	if t < 0.0:
+		return -1
+	if t == 0.0:
+		return 0
+	if t < 60.0:
+		return 1
+	return 2 + int(t / 60.0)
+
+# 键命中 即 复用文本: 键 由 全部 文本输入 的 量化档 构成，档相等 ⇒ 各 fmt/eta/fmt_time 输出 恒等 ⇒ 全文本 恒等;
+# 键变化 走 全量重算 (与 旧实现 逐字 相同 的 _full 体)。只读 无副作用 (P3-1)。
+func _tip_cached(slot: String, key: String, full: Callable) -> String:
+	var c: Array = _tip_cache.get(slot, [])
+	if not c.is_empty() and c[0] == key:
+		return String(c[1])
+	var t: String = String(full.call())
+	_tip_cache[slot] = [key, t]
+	return t
+
+# 最便宜 未拥有 装备/法器 静态段 (id/name/cost — 与 stones 无关, memo by owned hash; shortfall 恒 现算)
+func _equip_target_static() -> Dictionary:
+	var k := owned_eq.hash()
+	var m: Array = _eqt_memo
+	if m.is_empty() or int(m[0]) != int(k):
+		var best: Dictionary = {}
+		for id in equip_ids:
+			if owned_eq.has(id):
+				continue
+			var e: Dictionary = equip_by_id.get(id, {})
+			if e.is_empty():
+				continue
+			var c: float = float(e.get("cost", INF))
+			if best.is_empty() or c < float(best["cost"]) or (c == float(best["cost"]) and str(id) < str(best["id"])):
+				best = e
+		var v: Dictionary = {} if best.is_empty() else {"id": str(best["id"]), "name": str(best.get("name", "")), "cost": float(best["cost"])}
+		m = [k, v]
+		_eqt_memo = m
+	return m[1]
+
+func _item_target_static() -> Dictionary:
+	var k := owned.hash()
+	var m: Array = _itm_memo
+	if m.is_empty() or int(m[0]) != int(k):
+		var best: Dictionary = {}
+		for it in ITEMS:
+			if owned.has(str(it["id"])):
+				continue
+			var c: float = float(it["cost"])
+			if best.is_empty() or c < float(best["cost"]) or (c == float(best["cost"]) and str(it["id"]) < str(best["id"])):
+				best = it
+		var v: Dictionary = {} if best.is_empty() else {"id": str(best["id"]), "name": str(best.get("name", "")), "cost": float(best["cost"])}
+		m = [k, v]
+		_itm_memo = m
+	return m[1]
+
+# 静态段 + 现算 shortfall (与 旧 equip_next_target/item_next_target 返回 逐字段 一致)
+func _with_shortfall(st: Dictionary) -> Dictionary:
+	if st.is_empty():
+		return {}
+	return {"id": st["id"], "name": st["name"], "cost": float(st["cost"]), "shortfall": maxf(float(st["cost"]) - stones, 0.0)}
+
 # 打磨-83: 顶栏 挂机时长 悬停 离线收益 预估 tooltip (只读, 复用 offline_gain/offline_rate 口径;
 # 玩家 悬停 顶栏 ⏳ 挂机时长 即知 离线 X 小时 可攒 多少 主资源/灵石, 不 切 修行页;
 # 口径: 基础 效率 50% + 功法/装备 加成, 上限 8 小时, 飞升后 主资源=道行; 纯 文本 无 副作用)
 func offline_preview_tip() -> String:
+	# P3-1 量化键: 纯离散态 (三档数值 = 速率×时长, 速率由 境界/道阶/已学/穿戴/拥有 决定, 无连续输入)
+	return _tip_cached("op", "op|%d|%d|%d|%s|%s|%s|%s" % [realm_idx, dao_level, int(ascended), str(learned.hash()), str(owned.hash()), str(equipped.hash()), str(affix_load.hash())], _offline_preview_tip_full)
+
+func _offline_preview_tip_full() -> String:
 	var r: float = offline_rate()
 	var res_name: String = "道行" if ascended else "灵气"
 	var h1 := offline_gain(3600.0)
@@ -3700,33 +3774,10 @@ func _item_price_cmp(a: Dictionary, b: Dictionary) -> bool:
 # shortfall = cost - 当前灵石 (>=0; 连买买不起时恒 >0, 供 UI 追加 "距下一件还差")
 
 func equip_next_target() -> Dictionary:
-	var best: Dictionary = {}
-	for id in equip_ids:
-		if owned_eq.has(id):
-			continue
-		var e: Dictionary = equip_by_id.get(id, {})
-		if e.is_empty():
-			continue
-		var c: float = float(e.get("cost", INF))
-		if best.is_empty() or c < float(best["cost"]) or (c == float(best["cost"]) and str(id) < str(best["id"])):
-			best = e
-	if best.is_empty():
-		return {}
-	return {"id": str(best["id"]), "name": str(best.get("name", "")),
-		"cost": float(best["cost"]), "shortfall": maxf(float(best["cost"]) - stones, 0.0)}
+	return _with_shortfall(_equip_target_static())
 
 func item_next_target() -> Dictionary:
-	var best: Dictionary = {}
-	for it in ITEMS:
-		if owned.has(str(it["id"])):
-			continue
-		var c: float = float(it["cost"])
-		if best.is_empty() or c < float(best["cost"]) or (c == float(best["cost"]) and str(it["id"]) < str(best["id"])):
-			best = it
-	if best.is_empty():
-		return {}
-	return {"id": str(best["id"]), "name": str(best.get("name", "")),
-		"cost": float(best["cost"]), "shortfall": maxf(float(best["cost"]) - stones, 0.0)}
+	return _with_shortfall(_item_target_static())
 
 # ---------- 打磨-48: 下一件缺口 ETA 联动 (复用 打磨-12 eta_seconds/eta_text 口径) ----------
 # 只读: target 空 或 缺口<=0 (买得起) 返回 ""; 灵石速率>0 时返回 " 约 X 可购" (前缀空格供拼接),
@@ -3748,8 +3799,9 @@ func next_target_eta_text(target: Dictionary) -> String:
 # 复用 equip_next_target / item_next_target 的 shortfall 口径, 追加 kind = "装备"/"法器" 供 UI 命名。
 # 全部拥有 = {}。
 func stone_next_target() -> Dictionary:
-	var e: Dictionary = equip_next_target()
-	var i: Dictionary = item_next_target()
+	# P3-1: 静态段 (id/name/cost) 按 owned hash memo, shortfall 恒现算 ⇒ 与旧实现逐字段一致
+	var e: Dictionary = _with_shortfall(_equip_target_static())
+	var i: Dictionary = _with_shortfall(_item_target_static())
 	if e.is_empty() and i.is_empty():
 		return {}
 	var pick: Dictionary = e
@@ -3809,6 +3861,16 @@ func stone_next_target_inline() -> String:
 # (复用 打磨-12 eta_seconds/eta_text; 全拥有 = 已集齐, 缺口<=0 = 可立即购入, 无 灵石 收入 省略 ETA)。
 # 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
 func auto_buy_next_tip() -> String:
+	# P3-1 量化键: 离散态(境界/道阶/飞升/已学/穿戴/拥有) + 缺口 fmt 档 + ETA 分钟档 ⇒ 键相等 ⇒ 文本恒等
+	var k := "ab|%d|%d|%d|%s|%s|%s|%s|%s" % [realm_idx, dao_level, int(ascended), str(learned.hash()), str(equipped.hash()), str(affix_load.hash()), str(owned.hash()), str(owned_eq.hash())]
+	var tgt: Dictionary = stone_next_target()
+	if tgt.is_empty():
+		k += "|done"
+	else:
+		k += "|%s|%d" % [fmt(float(tgt["shortfall"])), _eta_band(eta_seconds(float(tgt["cost"])))]
+	return _tip_cached("ab", k, _auto_buy_next_tip_full)
+
+func _auto_buy_next_tip_full() -> String:
 	var rate: float = stone_per_sec()
 	var head := "当前 %s 灵石/秒" % fmt(rate)
 	var target: Dictionary = stone_next_target()
@@ -3831,6 +3893,19 @@ func auto_buy_next_tip() -> String:
 # 资源已足够 = 可立即突破, 无 主资源 收入 = 标注 当前无收入, 道祖封顶 = 圆满 不再 精进)。
 # 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
 func auto_break_next_tip() -> String:
+	# P3-1 量化键: 离散态 + 圆满标记 + 缺口 fmt 档 + 突破ETA 分钟档
+	var capped := dao_level >= IMMORTAL_REALMS.size() - 1
+	var k := "bk|%d|%d|%d|%d|%d|%s|%s|%s|%s" % [realm_idx, layer, dao_level, int(ascended), int(ascended and capped), str(learned.hash()), str(equipped.hash()), str(affix_load.hash()), str(owned.hash())]
+	if not (ascended and capped):
+		var need: float = dao_break_cost() if ascended else breakthrough_cost()
+		var cur: float = dao if ascended else essence
+		if cur >= need:
+			k += "|ok"
+		else:
+			k += "|%s|%d" % [fmt(need - cur), _eta_band(breakthrough_eta_seconds())]
+	return _tip_cached("bk", k, _auto_break_next_tip_full)
+
+func _auto_break_next_tip_full() -> String:
 	var res_name: String = primary_res_name()
 	var head := "当前 %s %s/秒" % [fmt(qi_per_sec()), res_name]
 	if ascended and dao_level >= IMMORTAL_REALMS.size() - 1:
@@ -3854,6 +3929,13 @@ func auto_break_next_tip() -> String:
 # 只 给 冷却 ETA; 就绪 0 且 无 冷却 说明 全就绪 可 自动 施展。
 # 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
 func auto_cast_next_tip() -> String:
+	# P3-1 量化键: 离散态 + 已学集 hash + 冷却 dict 精确值 (就绪 tick 归零 即 erase, idle 态 dict 恒空 命中缓存; 战斗中 键随帧 变 但 full 本就要跑, 无 回退)
+	var k := "ac|%d|%d|%d|%s|%s|%s|%s" % [realm_idx, dao_level, int(ascended), str(learned.hash()), str(owned.hash()), str(equipped.hash()), str(affix_load.hash())]
+	for cid in _active_cd:
+		k += "|%s%s" % [str(cid), str(float(_active_cd[cid]))]  # 精确 浮点: 同键⇒文本 恒等 (idle 态 dict 空 零成本)
+	return _tip_cached("ac", k, _auto_cast_next_tip_full)
+
+func _auto_cast_next_tip_full() -> String:
 	var learned_n := 0
 	var ready_n := 0
 	var burst := 0.0
@@ -3890,6 +3972,10 @@ func auto_cast_next_tip() -> String:
 # "还需 X 第 Y 层")。无 未学 技能 = 已集齐 说明 文案。
 # 只读: 不 改 状态/存档/统计 (供 UI 悬停 tooltip 动态 刷新, 文本 变化 才 写)
 func auto_learn_next_tip() -> String:
+	# P3-1 量化键: 境界/层/已学集 hash (全可算, 无连续输入)
+	return _tip_cached("al", "al|%d|%d|%s" % [realm_idx, layer, str(learned.hash())], _auto_learn_next_tip_full)
+
+func _auto_learn_next_tip_full() -> String:
 	var n := learn_available_count()
 	if n > 0:
 		return "当前 可学 %d 个 (开启时 立即 批量 领悟)" % n
