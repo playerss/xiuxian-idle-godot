@@ -61,6 +61,8 @@ const STAGES := [
 	},
 ]
 
+const REPEATED_INTERACTS := ["one_learn", "first_learn", "one_buy", "first_buy", "one_best", "one_divine", "one_cast", "one_exchange", "affix_best", "affix_equip_try", "tower_challenge", "slot_upgrade", "autos", "auto_break_on"]
+
 var BTN := {
 	"尝试突破": "尝试突破",
 	"one_learn": "一键领悟",
@@ -138,7 +140,7 @@ func _process(_delta: float) -> void:
 		_finish_stage("TIMEOUT")
 		return
 	if rt >= total_budget:
-		_finish_stage("TIMEOUT")
+		_partial_quit()
 		return
 
 
@@ -174,18 +176,23 @@ func _stage_tick() -> void:
 				ratio = 0.6
 			"save_reload":
 				ratio = 0.9
-		if frac >= ratio:
+		var repeat := k in REPEATED_INTERACTS
+		if frac >= ratio and (repeat or not bool(done_map.get(k, false))):
 			do_interact(k)
 			done_map[k] = true
 	# break_loop 持续: 资源够就点
 	if frac >= 0.1:
-		if g.breakthrough_ready() or (bool(g.ascended) and _dao_ready()):
+		if bool(g.ascended):
+			_click_named("修炼道行")
+		elif g.breakthrough_ready():
 			_click_named("尝试突破")
 	# 塔持续
-	if bool(done_map.get("auto_tower_on", false)) or (cur_stage >= 1 and frac >= 0.7):
-		if not bool(g.auto_tower) and cur_stage >= 1:
-			_click_tab(4)
-			_click_named("自动爬塔")
+	if (cur_stage >= 1 and frac >= 0.7) and not bool(g.auto_tower):
+		if bool(done_map.get("auto_tower_on", false)) and not bool(g.auto_tower):
+			done_map["auto_tower_on"] = false  # 上轮点击未生效(页签可见性滞后), 重试
+		_click_tab(4)
+		_click_named("自动爬塔")
+		if bool(g.auto_tower):
 			done_map["auto_tower_on"] = true
 
 
@@ -241,6 +248,8 @@ func do_interact(k: String) -> void:
 				_click_named("自动购置")
 			if not bool(g.auto_cast):
 				_click_named("自动施展")
+			if not bool(g.auto_break):
+				_click_named("自动突破")
 		"auto_break_on":
 			_click_tab(0)
 			if not bool(g.auto_break):
@@ -316,6 +325,17 @@ func _finish_stage(res: String) -> void:
 		_end_run()
 	else:
 		_enter_stage()
+
+
+func _partial_quit() -> void:
+	g.save_game()
+	var ck := FileAccess.open(OUT + "/checkpoint_%d.json" % cur_stage, FileAccess.WRITE)
+	var sf := FileAccess.open("user://save.json", FileAccess.READ)
+	if ck and sf:
+		ck.store_string(sf.get_as_text())
+	print("CAMPAIGN_PARTIAL stage=%d" % cur_stage)
+	Engine.time_scale = 1.0
+	get_tree().quit()
 
 
 func _end_run() -> void:
