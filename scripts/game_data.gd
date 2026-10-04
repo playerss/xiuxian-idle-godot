@@ -1876,6 +1876,9 @@ func stone_rate_text() -> String:
 var _tip_cache := {}          # slot -> [key(String), text(String)] (P3-1 各 tooltip 接口)
 var _eqt_memo := []           # equip_next_target 静态段 memo [owned_eq.hash, {id,name,cost}] (P3-1)
 var _itm_memo := []           # item_next_target 静态段 memo [owned.hash, {id,name,cost}] (P3-1)
+var _ok_cache := {}          # sig -> [vals,tips] (P3-2 onekey 六项数值+六段明细 键缓存)
+var _ok_item_costs := []     # [owned.hash, 未拥有 法器 sorted cost float 数组] (P3-2 二分)
+var _ok_equip_costs := []    # [owned_eq.hash, 未拥有 装备 sorted cost float 数组] (P3-2 二分)
 # eta_text / breakthrough_eta_text / fmt_time 文本 不变 档 (<0 无收入 / 0 即时 / <60s 不足1分 / 其余 分钟档, 对齐 fmt_time 粒度)
 func _eta_band(t: float) -> int:
 	if t < 0.0:
@@ -1895,6 +1898,74 @@ func _tip_cached(slot: String, key: String, full: Callable) -> String:
 	var t: String = String(full.call())
 	_tip_cache[slot] = [key, t]
 	return t
+
+# ---------- M9-P P3-2: onekey 六项 状态键 组件 (量化键: 离散 hash + 可购数二分档 + 冷却键集签名) ----------
+# 未拥有 法器/装备 可购数 = sorted cost 数组 上界二分 (与 item_affordable_count/equip_affordable_count
+# 的 stones >= cost 谓词 恒等, owned 集 变化 才 重建 排序, P3-2)
+func _ok_afford_n(is_item: bool) -> int:
+	var k := owned.hash() if is_item else owned_eq.hash()
+	var m: Array = _ok_item_costs if is_item else _ok_equip_costs
+	if m.is_empty() or int(m[0]) != int(k):
+		var arr: Array = []
+		if is_item:
+			for it in ITEMS:
+				if not owned.has(str(it["id"])):
+					arr.append(float(it["cost"]))
+		else:
+			for eid in equip_ids:
+				if not owned_eq.has(str(eid)):
+					var e: Dictionary = equip_by_id.get(str(eid), {})
+					if not e.is_empty():
+						arr.append(float(e["cost"]))
+		arr.sort()
+		if is_item:
+			_ok_item_costs = [k, arr]
+		else:
+			_ok_equip_costs = [k, arr]
+		m = [k, arr]
+	var arr2: Array = m[1]
+	var lo := 0
+	var hi := arr2.size()
+	while lo < hi:
+		var mid := (lo + hi) >> 1
+		if float(arr2[mid]) <= stones:
+			lo = mid + 1
+		else:
+			hi = mid
+	return lo
+
+# 状态 签名 (只读): 离散态 hash + 筛选 + 两个 可购数 二分档 + 冷却 键集 — 键相等 ⇒ 六项数值/六段 明细 恒等
+func _ok_sig(cat: String, tier: int) -> String:
+	var cds: Array = _active_cd.keys()
+	cds.sort()
+	var cd_k := ""
+	for ck in cds:
+		cd_k += "|" + str(ck)
+	return "okst|%d|%d|%d|%d|%s|%s|%s|%s|%s|f|%s|%d|n1=%d|n2=%d|cd%s" % [
+		realm_idx, layer, dao_level, int(ascended),
+		str(learned.hash()), str(owned.hash()), str(owned_eq.hash()),
+		str(equipped.hash()), str(affix_load.hash()), cat, tier,
+		_ok_afford_n(true), _ok_afford_n(false), cd_k]
+
+# 缓存 六项数值+六段明细: 键命中 复用 (duplicate 防 外部 改写), 键变 走 原 全量 路径 (逐字 同 旧实现)
+func _ok_state(cat: String, tier: int) -> Array:
+	var sig := _ok_sig(cat, tier)
+	var c: Array = _ok_cache.get(sig, [])
+	if not c.is_empty():
+		return c
+	var vals: Array = [learn_available_count(cat, tier), active_learn_available_count(cat, tier),
+		active_ready_count(), _ok_afford_n(true), _ok_afford_n(false), equip_best_pending()]
+	var tips: Array = []
+	tips.append(_ok_tip_learn(cat, tier, false))
+	tips.append(_ok_tip_learn(cat, tier, true))
+	tips.append(_ok_tip_cast())
+	tips.append(_ok_tip_item())
+	tips.append(_ok_tip_equip())
+	tips.append(_ok_tip_best())
+	if _ok_cache.size() >= 64:
+		_ok_cache.clear()
+	_ok_cache[sig] = [vals, tips]
+	return [vals, tips]
 
 # 最便宜 未拥有 装备/法器 静态段 (id/name/cost — 与 stones 无关, memo by owned hash; shortfall 恒 现算)
 func _equip_target_static() -> Dictionary:
@@ -3822,6 +3893,20 @@ func stone_next_target() -> Dictionary:
 # 全拥有 = "已集齐"; 灵石已足够 = "可立即购买"; 缺口>0 且 灵石速率>0 = 缺口额 + "约 X 可购"
 # (复用 打磨-12 eta_seconds/eta_text 口径); 无灵石收入 省略 ETA 并标注。
 func stone_next_target_tip() -> String:
+	# P3-2 量化键: 选优 目标 id/kind (随 拥有集) + shortfall fmt 档 + ok/ETA 档 + 速率 fmt 档
+	var t: Dictionary = stone_next_target()
+	var k := "snst|%s" % fmt(stone_per_sec())
+	if t.is_empty():
+		k += "|done"
+	else:
+		k += "|%s|%s" % [str(t.get("id", "?")), str(t.get("kind", ""))]
+		if float(t["shortfall"]) <= 0.0:
+			k += "|ok"
+		else:
+			k += "|%s|%d" % [fmt(float(t["shortfall"])), _eta_band(eta_seconds(float(t["cost"])))]
+	return _tip_cached("snst", k, _stone_next_target_tip_full)
+
+func _stone_next_target_tip_full() -> String:
 	var rate: float = stone_per_sec()
 	var head := "当前 %s 灵石/秒" % fmt(rate)
 	var target: Dictionary = stone_next_target()
@@ -3841,6 +3926,20 @@ func stone_next_target_tip() -> String:
 # 缺口>0 且 灵石速率>0 -> "距下一件「类别·名」还差 X 灵石 <ETA 档位>" (复用 打磨-12 eta_text 口径);
 # 缺口>0 且 无灵石收入 -> 省略 ETA 标注 "当前无灵石收入"。无新存档字段。
 func stone_next_target_inline() -> String:
+	# P3-2 量化键: 同 snst 口径 (文本 = 缺口 fmt + ETA 档, 无 速率头 段; 键相等⇒文本恒等)
+	var t: Dictionary = stone_next_target()
+	var k := "sni"
+	if t.is_empty():
+		k += "|done"
+	else:
+		k += "|%s|%s" % [str(t.get("id", "?")), str(t.get("kind", ""))]
+		if float(t["shortfall"]) <= 0.0:
+			k += "|ok"
+		else:
+			k += "|%s|%d" % [fmt(float(t["shortfall"])), _eta_band(eta_seconds(float(t["cost"])))]
+	return _tip_cached("sni", k, _stone_next_target_inline_full)
+
+func _stone_next_target_inline_full() -> String:
 	var target: Dictionary = stone_next_target()
 	if target.is_empty():
 		return "已集齐全部 装备与法器"
@@ -4050,8 +4149,9 @@ func equip_affordable_count() -> int:
 # 六项 可执行数 [领悟, 神通, 施展, 法器, 装备, 最佳] (只读; cat/tier = 当前 技能页 筛选,
 # "" = 全部类别 / -1 = 全部品质, 与 技能页 按钮 同口径)
 func onekey_summary_vals(cat: String = "", tier: int = -1) -> Array:
-	return [learn_available_count(cat, tier), active_learn_available_count(cat, tier),
-		active_ready_count(), item_affordable_count(), equip_affordable_count(), equip_best_pending()]
+	# P3-2: 量化键 缓存 (键=离散态+可购数二分档+冷却键集, 键相等⇒数值恒等; miss 走 上列 全量 口径 逐字 一致)
+	var st: Array = _ok_state(cat, tier)
+	return (st[0] as Array).duplicate()
 
 # 汇总 状态键 (只读; 变化才刷 UI 文本/颜色) — cat/tier 同 onekey_summary_vals
 func onekey_summary_key(cat: String = "", tier: int = -1) -> String:
@@ -4191,14 +4291,9 @@ func _ok_tip_best() -> String:
 
 # 六段 明细 [领悟, 神通, 施展, 法器, 装备, 最佳] (只读; cat/tier 同 onekey_summary_vals)
 func onekey_segment_tips(cat: String = "", tier: int = -1) -> Array:
-	var tips: Array = []
-	tips.append(_ok_tip_learn(cat, tier, false))
-	tips.append(_ok_tip_learn(cat, tier, true))
-	tips.append(_ok_tip_cast())
-	tips.append(_ok_tip_item())
-	tips.append(_ok_tip_equip())
-	tips.append(_ok_tip_best())
-	return tips
+	# P3-2: 与 六项数值 同 状态签名 缓存 (miss 走 旧 六段 全量 拼接, 输出 恒等)
+	var st: Array = _ok_state(cat, tier)
+	return (st[1] as Array).duplicate()
 
 # ---------- 打磨-143: 各页 一键 按钮 tooltip 动态段 (单源 复用 打磨-76 onekey_segment_tips 明细) ----------
 # 只读: 第 i 段 (0..5 = 领悟/神通/施展/法器/装备/最佳) 明细文本, cat/tier 同 onekey_segment_tips
@@ -4887,6 +4982,12 @@ func goal_line_tip() -> String:
 # 各段 单点 复用 qi_per_sec/stone_per_sec 分解 函数 (QI_MULT/immortal_mult/item_boost/
 # qi_mult_skill_equip/stone_mult_skill_equip), 与 item_qi_compose 构成 口径 同源 不 二重 表达式.
 func rate_compose_tip() -> String:
+	# P3-2 量化键: 纯离散态 (速率构成 全部字段 = 离散状态 的 确定函数, 无 连续输入)
+	var k := "rc|%d|%d|%d|%s|%s|%s|%s" % [realm_idx, dao_level, int(ascended),
+		str(learned.hash()), str(owned.hash()), str(equipped.hash()), str(affix_load.hash())]
+	return _tip_cached("rc", k, _rate_compose_tip_full)
+
+func _rate_compose_tip_full() -> String:
 	var res_name := "道行" if ascended else "灵气"
 	var base_txt := "境界基础 x%.1f" % QI_MULT[realm_idx]
 	if ascended:
