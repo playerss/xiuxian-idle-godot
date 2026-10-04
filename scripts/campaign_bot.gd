@@ -146,6 +146,15 @@ func _process(_delta: float) -> void:
 
 # ---------- 交互 (真实 UI 路径) ----------
 
+const PAGE_TABS := {
+	"one_learn": 1, "first_learn": 1, "one_divine": 1, "one_cast": 1,
+	"one_buy": 2, "first_buy": 2, "one_best": 2, "affix_best": 2, "affix_equip_try": 2,
+	"slot_upgrade": 2, "one_exchange": 2,
+	"tower_challenge": 4, "auto_tower_on": 4,
+	"autos": 0, "auto_break_on": 0,
+}
+
+
 func _stage_tick() -> void:
 	var st: Dictionary = STAGES[cur_stage]
 	var done_map: Dictionary = _interacts[cur_stage]
@@ -178,29 +187,41 @@ func _stage_tick() -> void:
 				ratio = 0.9
 		var repeat := k in REPEATED_INTERACTS
 		if frac >= ratio and (repeat or not bool(done_map.get(k, false))):
+			print("INTERACT %s frac=%.2f" % [k, frac])
 			do_interact(k)
 			done_map[k] = true
 	# break_loop 持续: 资源够就点
 	if frac >= 0.1:
-		if bool(g.ascended):
-			_click_named("修炼道行")
-		elif g.breakthrough_ready():
-			_click_named("尝试突破")
+		var act: bool = bool(g.ascended) or bool(g.breakthrough_ready())
+		if act:
+			if int(ui._tab.current_tab) != 0:
+				_click_tab(0)
+			elif bool(g.ascended):
+				_click_named("修炼道行")
+			else:
+				_click_named("尝试突破")
 	# 塔持续
 	if (cur_stage >= 1 and frac >= 0.7) and not bool(g.auto_tower):
-		if bool(done_map.get("auto_tower_on", false)) and not bool(g.auto_tower):
-			done_map["auto_tower_on"] = false  # 上轮点击未生效(页签可见性滞后), 重试
-		_click_tab(4)
-		_click_named("自动爬塔")
-		if bool(g.auto_tower):
-			done_map["auto_tower_on"] = true
+		done_map["auto_tower_on"] = true
+		if int(ui._tab.current_tab) != 4:
+			_click_tab(4)
+		else:
+			_click_named("自动爬塔")
 
 
 func _dao_ready() -> bool:
 	return true  # dao 攒够由 auto_break 自动精进, 按钮点击兜底
 
 
+func _page_set(k: String) -> int:
+	return int(PAGE_TABS.get(k, -1))
+
+
 func do_interact(k: String) -> void:
+	var need := _page_set(k)
+	if need >= 0 and int(ui._tab.current_tab) != need:
+		_click_tab(need)  # 先落页, 下一 tick 布局定稿后再点按钮
+		return
 	match k:
 		"tabs":
 			var t: int = _shot_turn % 5
@@ -427,6 +448,7 @@ func _click_named(prefix: String) -> void:
 			continue
 		if str(b.text).strip_edges().begins_with(prefix):
 			var r: Rect2 = b.get_global_rect()
+			print("CLICK %s rect=%s" % [prefix, str(r)])
 			if r.size.x < 4 or r.size.y < 4:
 				continue
 			_click(r.position + r.size * 0.5)
