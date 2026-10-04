@@ -211,7 +211,6 @@ func _stage_tick() -> void:
 		done_map["auto_tower_on"] = true
 		_slot = "auto_tower_on"
 		_slot_phase = 0
-		_slot_repeat[_slot] = false
 		return
 	for key in st.interacts:
 		var k := str(key)
