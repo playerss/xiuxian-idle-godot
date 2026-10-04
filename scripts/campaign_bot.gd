@@ -191,6 +191,13 @@ func _ratio_for(k: String) -> float:
 
 
 func _stage_tick() -> void:
+	if _tick_n % 150 == 100:  # 20min 一次自动断点 (kill 安全)
+		g.save_game()
+		var ck := FileAccess.open(OUT + "/checkpoint_%d.json" % cur_stage, FileAccess.WRITE)
+		var sf := FileAccess.open("user://save.json", FileAccess.READ)
+		if ck and sf:
+			ck.store_string(sf.get_as_text())
+			ck.close()
 	if _tick_n % 5 == 1:
 		var fr := clampf((float(Time.get_ticks_msec()) / 1000.0 - (stage_deadline - float(STAGES[cur_stage].budget))) / float(STAGES[cur_stage].budget), 0.0, 1.0)
 		var df := FileAccess.open(OUT + "/diag.log", FileAccess.READ_WRITE)
@@ -226,7 +233,7 @@ func _stage_tick() -> void:
 		_slot = "autos_all"
 		_slot_phase = 0
 		return
-	if cur_stage >= 2 and frac >= 0.5 and not bool(g.auto_tower):
+	if cur_stage >= 2 and frac >= 0.1 and not bool(g.auto_tower):
 		_slot = "auto_tower_on"
 		_slot_phase = 0
 		return
