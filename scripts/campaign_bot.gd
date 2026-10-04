@@ -26,6 +26,7 @@ var _led_acc := 0.0
 var _last_led: Dictionary = {}
 var _interacts: Dictionary = {}  # stage -> {key: "done"}
 var _shot_turn := 0
+var _tick_n := 0
 var _stage_results: Array = []
 
 const STAGES := [
@@ -131,6 +132,7 @@ func _process(_delta: float) -> void:
 	_act_acc += _delta / speed
 	if _act_acc >= 4.0:
 		_act_acc = 0.0
+		_tick_n += 1
 		_stage_tick()
 	# 目标检查
 	if goal_met():
@@ -191,7 +193,7 @@ func _stage_tick() -> void:
 			do_interact(k)
 			done_map[k] = true
 	# break_loop 持续: 资源够就点
-	if frac >= 0.1:
+	if frac >= 0.1 and _tick_n % 6 == 0:
 		var act: bool = bool(g.ascended) or bool(g.breakthrough_ready())
 		if act:
 			if int(ui._tab.current_tab) != 0:
