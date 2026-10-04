@@ -19,6 +19,7 @@ var stage_deadline := 0.0
 var run_start_ms := 0
 var done := false
 var fails := 0
+var one_stage := false
 var cur_shot := 0
 var _act_acc := 0.0
 var _led_acc := 0.0
@@ -80,6 +81,8 @@ func _ready() -> void:
 		speed = maxf(1.0, float(OS.get_environment("CAMPAIGN_SPEED").to_int()))
 	if OS.get_environment("CAMPAIGN_SECONDS").is_valid_int():
 		total_budget = maxf(120.0, float(OS.get_environment("CAMPAIGN_SECONDS").to_int()))
+	if OS.get_environment("CAMPAIGN_ONE") == "1":
+		one_stage = true
 	if OS.get_environment("CAMPAIGN_STAGE").is_valid_int():
 		start_stage = clampi(OS.get_environment("CAMPAIGN_STAGE").to_int(), 0, STAGES.size() - 1)
 	Engine.time_scale = speed
@@ -309,7 +312,7 @@ func _finish_stage(res: String) -> void:
 	print("STAGE %d [%s] %s (%.0fs)" % [cur_stage, str(st.name), res, sec])
 	cur_stage += 1
 	var rt_now := float(Time.get_ticks_msec() - run_start_ms) / 1000.0
-	if cur_stage >= STAGES.size() or rt_now >= total_budget:
+	if cur_stage >= STAGES.size() or rt_now >= total_budget or one_stage:
 		_end_run()
 	else:
 		_enter_stage()
@@ -400,7 +403,7 @@ func _click_named(prefix: String) -> void:
 	var btns: Array = []
 	_all_buttons(ui, btns)
 	for b in btns:
-		if not is_instance_valid(b) or not b.disabled or not _on_screen(b):
+		if not is_instance_valid(b) or b.disabled or not _on_screen(b):
 			continue
 		if str(b.text).strip_edges().begins_with(prefix):
 			var r: Rect2 = b.get_global_rect()
