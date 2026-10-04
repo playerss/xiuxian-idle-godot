@@ -163,7 +163,8 @@ func _stage_tick() -> void:
 	var frac := clampf(spent / budget, 0.0, 1.0)
 	for key in st.interacts:
 		var k := str(key)
-		if bool(done_map.get(k, false)):
+		var repeat := k in REPEATED_INTERACTS
+		if bool(done_map.get(k, false)) and not repeat:
 			continue
 		var ratio := 0.0
 		match k:
@@ -185,7 +186,6 @@ func _stage_tick() -> void:
 				ratio = 0.6
 			"save_reload":
 				ratio = 0.9
-		var repeat := k in REPEATED_INTERACTS
 		if frac >= ratio and (repeat or not bool(done_map.get(k, false))):
 			print("INTERACT %s frac=%.2f" % [k, frac])
 			do_interact(k)
