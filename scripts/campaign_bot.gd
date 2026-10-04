@@ -28,6 +28,8 @@ var _interacts: Dictionary = {}  # stage -> {key: "done"}
 var _shot_turn := 0
 var _tick_n := 0
 var _slot := ""
+var _act_last := {}
+var _act_rot := -1
 var _slot_phase := 0
 var _stage_results: Array = []
 
@@ -152,6 +154,7 @@ func _process(_delta: float) -> void:
 # ---------- 交互 (真实 UI 路径) ----------
 
 const PAGE_TABS := {
+	"break_act": 0,
 	"one_learn": 1, "first_learn": 1, "one_divine": 1, "one_cast": 1,
 	"one_buy": 2, "first_buy": 2, "one_best": 2, "affix_best": 2, "affix_equip_try": 2,
 	"slot_upgrade": 2, "one_exchange": 2,
@@ -199,6 +202,7 @@ func _stage_tick() -> void:
 				return
 			_slot_phase = 1
 			_act_now(_slot)
+			_act_last[_slot] = _tick_n
 			_slot = ""
 			return
 	# 槽空: 1/8 拍借修行页突破, 否则自动爬塔, 否则补队列
@@ -212,15 +216,18 @@ func _stage_tick() -> void:
 		_slot = "auto_tower_on"
 		_slot_phase = 0
 		return
-	for key in st.interacts:
-		var k := str(key)
+	var keys: Array = st.interacts
+	var n := keys.size()
+	for i in n:
+		var k := str(keys[(_act_rot + 1 + i) % n])  # 轮转起点, 防前置键饿死后续键
 		if frac < _ratio_for(k):
 			continue
 		var rep := k in REPEATED_INTERACTS
-		if rep and _tick_n % 3 != 0:
-			continue  # 重交互 3 tick 一拍, 给突破/他键让出页面
+		if rep and _tick_n - int(_act_last.get(k, -999)) < 8:
+			continue
 		if not rep and bool(done_map.get(k, false)):
 			continue
+		_act_rot = (_act_rot + 1 + i) % n
 		_slot = k
 		_slot_phase = 0
 		if not rep:
