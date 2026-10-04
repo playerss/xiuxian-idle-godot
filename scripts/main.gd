@@ -2507,6 +2507,14 @@ func _add_ach_row(id: String) -> void:
 
 func _refresh() -> void:
 	var g := GameData
+	# 打磨 M9-P P3-3: 技能/装备/法器 行 群 扫描 页可见性 门控 —— 不可见 页 跳过 每帧
+	# text/disabled/高亮/重排 遍历; 切页 后 同帧 或 下一帧 _process 走 可见 路径 自然
+	# 全量 补刷 (current_tab 即时 生效, 无 视觉 缺口); 手动 驱动 (ui_test) 切 tab 后 _refresh()
+	# 亦 走 可见 路径; force/节流 语义 不 变, 只 跳过 屏幕 外 页 的 无 读者 每帧 重算。
+	var v_page: int = _tab.current_tab
+	var v0: bool = v_page == 0
+	var v1: bool = v_page == 1
+	var v2: bool = v_page == 2
 	var realm_mult := g.qi_mult_realm()
 	_realm_label.text = "境界: %s · 灵气x%s" % [g.realm_display(), g.fmt(realm_mult)]
 	# tooltip: 倍率构成 (境界基础含道行 / 功法装备 / 法器 / 道行), 仅在数值变化时刷新
@@ -2897,68 +2905,72 @@ func _refresh() -> void:
 		_break_ready = ready_now
 		_apply_break_btn_style()
 	# 法器
-	for id in _shop_rows:
-		var btn: Button = _shop_rows[id]
-		var it: Dictionary = _find_item(id)
-		if g.owned.has(id):
-			btn.text = "已拥有"
-			btn.disabled = true
-		else:
-			btn.text = "购买"
-			btn.disabled = g.stones < it["cost"]
+	if v0:
+		for id in _shop_rows:
+			var btn: Button = _shop_rows[id]
+			var it: Dictionary = _find_item(id)
+			if g.owned.has(id):
+				btn.text = "已拥有"
+				btn.disabled = true
+			else:
+				btn.text = "购买"
+				btn.disabled = g.stones < it["cost"]
 	# 技能
-	for id in _skill_btns:
-		var s: Dictionary = GameData.skill_by_id[id]
-		var btn: Button = _skill_btns[id]
-		if str(s["type"]) == "active":
-			if not g.learned.has(id):
-				btn.text = "未领悟"
-				btn.disabled = true
-			elif not g.active_ready(id):
-				btn.text = "冷却%d秒" % g.active_cd_left(id)
-				btn.disabled = true
+	if v1:
+		for id in _skill_btns:
+			var s: Dictionary = GameData.skill_by_id[id]
+			var btn: Button = _skill_btns[id]
+			if str(s["type"]) == "active":
+				if not g.learned.has(id):
+					btn.text = "未领悟"
+					btn.disabled = true
+				elif not g.active_ready(id):
+					btn.text = "冷却%d秒" % g.active_cd_left(id)
+					btn.disabled = true
+				else:
+					btn.text = "施展"
+					btn.disabled = false
 			else:
-				btn.text = "施展"
-				btn.disabled = false
-		else:
-			if g.learned.has(id):
-				btn.text = "已领悟"
-				btn.disabled = true
-			elif g.can_learn(id):
-				btn.text = "领悟"
-				btn.disabled = false
-			else:
-				btn.text = "未解锁"
-				btn.disabled = true
+				if g.learned.has(id):
+					btn.text = "已领悟"
+					btn.disabled = true
+				elif g.can_learn(id):
+					btn.text = "领悟"
+					btn.disabled = false
+				else:
+					btn.text = "未解锁"
+					btn.disabled = true
 	# 打磨-54: 主动神通 爆发预览 (未领悟隐藏; 已领悟显示 当前灵气速率 x 爆发秒数,
 	# 标签文本变化才刷; tooltip 预览行按 已学|预览文本 键变化才重建 — 预览值只随
 	# 离散状态 (领悟/购买/穿戴/突破/飞升) 变化, 挂机期间恒定, 无需节流;
 	# 未领悟时 tooltip 预览行同样随速率变化刷新, 与 打磨-9 状态行互补)
-	for id in _burst_previews:
-		var l54: Label = _burst_previews[id]
-		var t54: String = g.skill_burst_preview(id)
-		if g.learned.has(id):
-			if l54.text != t54 or not l54.visible:
-				l54.text = t54
-				l54.visible = true
-		elif l54.visible:
-			l54.visible = false
-			l54.text = ""
-		var key54 := "%d|%s" % [int(g.learned.has(id)), t54]
-		if str(_burst_previews_key[id]) != key54:
-			_burst_previews_key[id] = key54
-			(_skill_row_nodes[id] as Node).tooltip_text = g.skill_detail(id)
+	if v1:
+		for id in _burst_previews:
+			var l54: Label = _burst_previews[id]
+			var t54: String = g.skill_burst_preview(id)
+			if g.learned.has(id):
+				if l54.text != t54 or not l54.visible:
+					l54.text = t54
+					l54.visible = true
+			elif l54.visible:
+				l54.visible = false
+				l54.text = ""
+			var key54 := "%d|%s" % [int(g.learned.has(id)), t54]
+			if str(_burst_previews_key[id]) != key54:
+				_burst_previews_key[id] = key54
+				(_skill_row_nodes[id] as Node).tooltip_text = g.skill_detail(id)
 	# 装备
-	for id in _equip_btns:
-		var e: Dictionary = GameData.equip_by_id[id]
-		var btn: Button = _equip_btns[id]
-		if not g.owned_eq.has(id):
-			btn.text = "购买"
-			btn.disabled = g.stones < float(e["cost"])
-		else:
-			var worn: bool = str(g.equipped.get(e["slot"], "")) == id
-			btn.text = "已穿戴" if worn else "穿戴"
-			btn.disabled = worn
+	if v2:
+		for id in _equip_btns:
+			var e: Dictionary = GameData.equip_by_id[id]
+			var btn: Button = _equip_btns[id]
+			if not g.owned_eq.has(id):
+				btn.text = "购买"
+				btn.disabled = g.stones < float(e["cost"])
+			else:
+				var worn: bool = str(g.equipped.get(e["slot"], "")) == id
+				btn.text = "已穿戴" if worn else "穿戴"
+				btn.disabled = worn
 	# 打磨-23: 批量按钮 (境界/灵石/已学数变化时才刷, 避免每帧写文本)
 	# 打磨-27: 一键领悟按当前 类别/品质 筛选计可学数 (点击只学筛选内技能, 计数与执行口径一致)
 	# 顺带修: 原 ternary ("一键领悟 x%d" if ... else ...) 返回未格式化字面量 x%d, 计数从未真正显示;
@@ -3006,56 +3018,64 @@ func _refresh() -> void:
 	if _items_buy_btn.text != ib_txt:
 		_items_buy_btn.text = ib_txt
 	# 槽位
-	for slot in g.SLOTS:
-		(_slot_labels[slot] as Label).text = g.equipped_name(slot)
+	if v2:
+		for slot in g.SLOTS:
+			(_slot_labels[slot] as Label).text = g.equipped_name(slot)
 	# 状态高亮: 已学技能 / 已穿戴装备 金色边框 (仅状态变化时应用, 避免每帧重刷)
-	for id in _skill_row_nodes:
-		_apply_card_hl(_skill_row_nodes[id], g.learned.has(id))
-	for id in _equip_row_nodes:
-		var e: Dictionary = g.equip_by_id[id]
-		_apply_card_hl(_equip_row_nodes[id], str(g.equipped.get(str(e["slot"]), "")) == id)
+	if v1:
+		for id in _skill_row_nodes:
+			_apply_card_hl(_skill_row_nodes[id], g.learned.has(id))
+	if v2:
+		for id in _equip_row_nodes:
+			var e: Dictionary = g.equip_by_id[id]
+			_apply_card_hl(_equip_row_nodes[id], str(g.equipped.get(str(e["slot"]), "")) == id)
 	# 打磨-22: 装备列表按状态重排 (购买/穿戴/卸下 时状态快照变化才真正重排)
-	_resort_equip()
+	if v2:
+		_resort_equip()
 	# M6-3: 词缀 UI (chips/背包抽屉/评分; 缓存键 节流, 挂机 恒定 无 每帧 重绘)
 	_refresh_m63_ui()
 	# 打磨-96: 词缀 材料 兑换 面板 (材料行/兑换按钮 文案; 缓存键 节流 同 M6-3 口径)
 	_refresh_m96_ui()
 	# 打磨-9: tooltip 状态行 (已领悟/已穿戴/已拥有 变化时才重建文本)
-	for id in _skill_row_nodes:
-		var row: Node = _skill_row_nodes[id]
-		if int(row.get_meta("_dk", -1)) != int(g.learned.has(id)):
-			row.set_meta("_dk", int(g.learned.has(id)))
-			row.tooltip_text = g.skill_detail(id)
-	for id in _equip_row_nodes:
-		var e2: Dictionary = g.equip_by_id[id]
-		var row2: Node = _equip_row_nodes[id]
-		var st := 0
-		if str(g.equipped.get(str(e2["slot"]), "")) == id:
-			st = 2
-		elif g.owned_eq.has(id):
-			st = 1
-		if int(row2.get_meta("_dk", -1)) != st:
-			row2.set_meta("_dk", st)
-			row2.tooltip_text = g.equip_detail(id)
-	for id in _shop_row_nodes:
-		var row3: Node = _shop_row_nodes[id]
-		# 打磨-51: tooltip 含 当前贡献/购买后预览 (随 拥有状态+法器连乘+境界+功法装备+飞升 变化)
-		# 0.1 档量化 + 1 秒节流 (与 打磨-33 速率档口径一致), 避免挂机每帧 10 行文本重建
-		var boost_q51 := int(round(g.item_boost() * 10.0)) / 10.0
-		var mult_q51 := int(round(g.qi_mult_skill_equip() * 100.0)) / 100.0
-		var key51 := "%d|%d|%d|%d|%d|%.1f|%.2f" % [
-			int(g.owned.has(id)), g.realm_idx, int(g.ascended), g.dao_level,
-			g.learned.size(), boost_q51, mult_q51]
-		if str(row3.get_meta("_dkey", "")) != key51:
-			row3.set_meta("_dkey", key51)
-			row3.tooltip_text = g.item_detail(id)
+	if v1:
+		for id in _skill_row_nodes:
+			var row: Node = _skill_row_nodes[id]
+			if int(row.get_meta("_dk", -1)) != int(g.learned.has(id)):
+				row.set_meta("_dk", int(g.learned.has(id)))
+				row.tooltip_text = g.skill_detail(id)
+	if v2:
+		for id in _equip_row_nodes:
+			var e2: Dictionary = g.equip_by_id[id]
+			var row2: Node = _equip_row_nodes[id]
+			var st := 0
+			if str(g.equipped.get(str(e2["slot"]), "")) == id:
+				st = 2
+			elif g.owned_eq.has(id):
+				st = 1
+			if int(row2.get_meta("_dk", -1)) != st:
+				row2.set_meta("_dk", st)
+				row2.tooltip_text = g.equip_detail(id)
+	if v0:
+		for id in _shop_row_nodes:
+			var row3: Node = _shop_row_nodes[id]
+			# 打磨-51: tooltip 含 当前贡献/购买后预览 (随 拥有状态+法器连乘+境界+功法装备+飞升 变化)
+			# 0.1 档量化 + 1 秒节流 (与 打磨-33 速率档口径一致), 避免挂机每帧 10 行文本重建
+			var boost_q51 := int(round(g.item_boost() * 10.0)) / 10.0
+			var mult_q51 := int(round(g.qi_mult_skill_equip() * 100.0)) / 100.0
+			var key51 := "%d|%d|%d|%d|%d|%.1f|%.2f" % [
+				int(g.owned.has(id)), g.realm_idx, int(g.ascended), g.dao_level,
+				g.learned.size(), boost_q51, mult_q51]
+			if str(row3.get_meta("_dkey", "")) != key51:
+				row3.set_meta("_dkey", key51)
+				row3.tooltip_text = g.item_detail(id)
 	# 打磨-25: 换装对比提示 (穿上本件后该部位 灵气/灵石 差值; 文本变化才写标签, 并同步行 tooltip)
-	for id in _equip_swap:
-		var t25: String = str(g.equip_swap_hint(str(id))["text"])
-		var l25: Label = _equip_swap[id]
-		if l25.text != t25:
-			l25.text = t25
-			(_equip_row_nodes[id] as Node).tooltip_text = g.equip_detail(str(id))
+	if v2:
+		for id in _equip_swap:
+			var t25: String = str(g.equip_swap_hint(str(id))["text"])
+			var l25: Label = _equip_swap[id]
+			if l25.text != t25:
+				l25.text = t25
+				(_equip_row_nodes[id] as Node).tooltip_text = g.equip_detail(str(id))
 	# 打磨-9: 总加成汇总 (文本变化时才刷)
 	var bt: String = g.bonus_summary_text()
 	if bt != _bonus_text:
