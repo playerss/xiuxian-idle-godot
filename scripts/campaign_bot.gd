@@ -27,6 +27,7 @@ var _last_led: Dictionary = {}
 var _interacts: Dictionary = {}  # stage -> {key: "done"}
 var _shot_turn := 0
 var _tick_n := 0
+var _act_queue: Array[String] = []
 var _stage_results: Array = []
 
 const STAGES := [
@@ -114,6 +115,7 @@ func _enter_stage() -> void:
 	var st: Dictionary = STAGES[cur_stage]
 	stage_deadline = float(Time.get_ticks_msec()) / 1000.0 + float(st.budget)
 	_interacts[cur_stage] = {}
+	_act_queue.clear()
 	print("STAGE %d [%s] ENTER goal: %s" % [cur_stage, str(st.name), str(st.goal)])
 
 
@@ -157,58 +159,74 @@ const PAGE_TABS := {
 }
 
 
+func _ratio_for(k: String) -> float:
+	match k:
+		"tabs":
+			return 0.15
+		"first_break", "break_loop":
+			return 0.1
+		"first_learn", "one_learn", "one_divine":
+			return 0.3
+		"first_buy", "one_buy":
+			return 0.35
+		"one_best", "affix_best", "affix_equip_try":
+			return 0.4
+		"one_cast", "one_exchange":
+			return 0.45
+		"tower_challenge", "auto_tower_on":
+			return 0.5
+		"autos", "auto_break_on", "slot_upgrade":
+			return 0.6
+		"save_reload":
+			return 0.9
+	return 0.0
+
+
 func _stage_tick() -> void:
 	var st: Dictionary = STAGES[cur_stage]
 	var done_map: Dictionary = _interacts[cur_stage]
 	var budget: float = float(st.budget)
 	var spent := float(Time.get_ticks_msec()) / 1000.0 - (stage_deadline - budget)
 	var frac := clampf(spent / budget, 0.0, 1.0)
+	# 队列补货: 交互键排队串行执行, 避免键之间互抢页面
 	for key in st.interacts:
 		var k := str(key)
-		var repeat := k in REPEATED_INTERACTS
-		if bool(done_map.get(k, false)) and not repeat:
+		if frac < _ratio_for(k):
 			continue
-		var ratio := 0.0
-		match k:
-			"tabs":
-				ratio = 0.15
-			"first_break", "break_loop":
-				ratio = 0.1
-			"first_learn", "one_learn", "one_divine":
-				ratio = 0.3
-			"first_buy", "one_buy":
-				ratio = 0.35
-			"one_best", "affix_best", "affix_equip_try":
-				ratio = 0.4
-			"one_cast", "one_exchange":
-				ratio = 0.45
-			"tower_challenge", "auto_tower_on":
-				ratio = 0.5
-			"autos", "auto_break_on", "slot_upgrade":
-				ratio = 0.6
-			"save_reload":
-				ratio = 0.9
-		if frac >= ratio and (repeat or not bool(done_map.get(k, false))):
-			print("INTERACT %s frac=%.2f" % [k, frac])
-			do_interact(k)
+		if k in REPEATED_INTERACTS:
+			if not _act_queue.has(k):
+				_act_queue.append(k)
+		elif not bool(done_map.get(k, false)) and not _act_queue.has(k):
 			done_map[k] = true
-	# break_loop 持续: 资源够就点
-	if frac >= 0.1 and _tick_n % 6 == 0:
-		var act: bool = bool(g.ascended) or bool(g.breakthrough_ready())
-		if act:
-			if int(ui._tab.current_tab) != 0:
-				_click_tab(0)
-			elif bool(g.ascended):
-				_click_named("修炼道行")
-			else:
-				_click_named("尝试突破")
-	# 塔持续
+			_act_queue.append(k)
+	# 每 8 tick 借一次修行页推进突破/道行 (先切页, 下一 tick 布局落定再点)
+	if frac >= 0.1 and _tick_n % 8 == 5 and int(ui._tab.current_tab) != 0:
+		_click_tab(0)
+		return
+	if frac >= 0.1 and _tick_n % 8 == 0 and int(ui._tab.current_tab) == 0:
+		if bool(g.ascended):
+			_click_named("修炼道行")
+			return
+		elif bool(g.breakthrough_ready()):
+			_click_named("尝试突破")
+			return
+	if not _act_queue.is_empty():
+		var head := str(_act_queue[0])
+		var need0 := _page_set(head)
+		if need0 >= 0 and int(ui._tab.current_tab) != need0:
+			_click_tab(need0)
+			return  # 切页后下一 tick 布局落定再点
+		_act_queue.pop_front()
+		do_interact(head)
+		return
 	if (cur_stage >= 1 and frac >= 0.7) and not bool(g.auto_tower):
 		done_map["auto_tower_on"] = true
 		if int(ui._tab.current_tab) != 4:
 			_click_tab(4)
 		else:
 			_click_named("自动爬塔")
+
+
 
 
 func _dao_ready() -> bool:
@@ -220,10 +238,6 @@ func _page_set(k: String) -> int:
 
 
 func do_interact(k: String) -> void:
-	var need := _page_set(k)
-	if need >= 0 and int(ui._tab.current_tab) != need:
-		_click_tab(need)  # 先落页, 下一 tick 布局定稿后再点按钮
-		return
 	match k:
 		"tabs":
 			var t: int = _shot_turn % 5
@@ -232,21 +246,16 @@ func do_interact(k: String) -> void:
 		"first_break", "break_loop":
 			_click_named("尝试突破")
 		"first_learn", "one_learn":
-			_click_tab(1)
 			_click_named("一键领悟")
 		"first_buy", "one_buy":
 			# 修行页 法器区购买 + 装备页 一键购买
 			_click_named("法器")
-			_click_tab(2)
 			_click_named("一键购买")
 		"one_best":
-			_click_tab(2)
 			_click_named("一键最佳")
 		"one_divine":
-			_click_tab(1)
 			_click_named("一键神通")
 		"one_cast":
-			_click_tab(1)
 			_click_named("一键施展")
 		"one_exchange":
 			_click_named("一键兑换")
@@ -257,14 +266,11 @@ func do_interact(k: String) -> void:
 		"slot_upgrade":
 			_click_named("一键强化槽位")
 		"tower_challenge":
-			_click_tab(4)
 			_click_named("挑战")
 		"auto_tower_on":
-			_click_tab(4)
 			if not bool(g.auto_tower):
 				_click_named("自动爬塔")
 		"autos":
-			_click_tab(0)
 			if not bool(g.auto_learn):
 				_click_named("自动领悟")
 			if not bool(g.auto_buy):
@@ -274,7 +280,6 @@ func do_interact(k: String) -> void:
 			if not bool(g.auto_break):
 				_click_named("自动突破")
 		"auto_break_on":
-			_click_tab(0)
 			if not bool(g.auto_break):
 				_click_named("自动突破")
 		"save_reload":
