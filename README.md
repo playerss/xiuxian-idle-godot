@@ -67,6 +67,8 @@ PROJECT_PLAN.md          # 项目计划
 
 ## 导出 (打包)
 
+**性能基线（M9-P P4, 2026-10-05）**：1920 真实窗口（Xvfb/Mesa llvmpipe 软件光栅、gl_compatibility）perf_probe 三态各 130s：idle/tower/break 均值 **14.3 / 13.9 / 13.2 fps**，最低 9~12，draw_calls 均值 ~450（峰值 ~513）、图元 ~9000。脚本热路径经 P3 三项优化（tooltip 量化键节流 + 不可见页跳过刷新，_refresh 脚本成本 -45~-72%）后较专项起点 +2~3fps。**验收口径 avg≥30 / min≥15 的终版复核须在带 GPU 的真机跑 `scripts/perf_probe.gd` 三态采样**（本机软件光栅 ~14fps 为底噪，非游戏回归），列为发版前置项。
+
 已配置 Linux / Windows 双平台 export preset（`export_presets.cfg`，均 x86_64、release 用二进制脚本、不内嵌 pck）。
 
 ```bash
