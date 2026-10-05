@@ -61,7 +61,9 @@ const STAGES := [
 	},
 	{
 		"name": "P5 全收集收官", "budget": 1500.0, "seed": false,
-		"interacts": ["tabs", "one_learn", "one_buy", "one_best", "save_reload"],
+		# 封测1 二轮: 补 affix_equip_try — P5 全成就需 diy_first/resonance_first (词缀装配路径),
+		# 原 interacts 无装配动作, 各 checkpoint affix_load 恒空 = bot 覆盖缺口 (工具 bug 非游戏 bug)
+		"interacts": ["tabs", "one_learn", "one_buy", "one_best", "affix_equip_try", "save_reload"],
 		"goal": "技能120/装备140/法器10/成就全解锁 存读档往返一致",
 	},
 ]
