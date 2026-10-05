@@ -11497,6 +11497,101 @@ func _init() -> void:
 	g.save_game()
 	g.save_game()
 	
+	# ---------- 打磨-176: 词缀 收集 保底 (affix_pity) [封测1 平衡拍板: 飞升后台层
+	# 胜利 连续 未 掉 新收集 15 次 -> 从 缺失集 定向 补 1 种; 飞升前 恒 静默 (存量 玩家 口径 不变)]
+	var p176_asc: bool = g.ascended
+	var p176_dao: int = g.dao_level
+	var p176_seen: Array = g.seen_affixes.duplicate()
+	var p176_bag: Dictionary = g.affix_bag.duplicate(true)
+	var p176_mat: int = int(g.affix_materials)
+	var p176_pity: int = g.affix_pity
+	var p176_st: Dictionary = g.stats.duplicate(true)
+	var p176_ess: float = float(g.essence)
+	var p176_ston: float = float(g.stones)
+	# A) 飞升前 恒 静默: 14+ 次 调用 零 发放, pity 恒 0
+	g.ascended = false
+	g.affix_pity = 0
+	var p176_a_ok: bool = true
+	for i176 in g.AFFIX_PITY_WINS + 5:
+		if not (g._affix_pity_on_win(int(g.seen_affixes.size())) as Array).is_empty():
+			p176_a_ok = false
+	check(p176_a_ok and g.affix_pity == 0, "打磨-176 飞升前 零 发放 pity 恒 0")
+	# B) 飞升后 空 收集: 连 15 胜 第 15 次 定向 补发 1 件 (缺失集 = 全 120)
+	g.ascended = true
+	g.seen_affixes = []
+	g.affix_bag = {}
+	g.affix_pity = 0
+	var p176_hits: int = 0
+	var p176_last: Array = []
+	for i176 in g.AFFIX_PITY_WINS:
+		var rb176: Array = g._affix_pity_on_win(int(g.seen_affixes.size()))
+		if not rb176.is_empty():
+			p176_hits += 1
+			p176_last = rb176
+	check(p176_hits == 1 and p176_last.size() == 1 and g.seen_affixes.size() == 1 and int(g.affix_bag.get(str(p176_last[0]), 0)) == 1 and g.affix_pity == 0,
+			"打磨-176 飞升后 %d 胜 触发 一次 补发 (入包+收集+计数 归零)" % g.AFFIX_PITY_WINS)
+	# C) 本胜 掉出 新收集 -> 计数 归零 不清发
+	g.affix_pity = g.AFFIX_PITY_WINS - 1
+	var rc176: Array = g._affix_pity_on_win(int(g.seen_affixes.size()) - 1)
+	check(rc176.is_empty() and g.affix_pity == 0, "打磨-176 新收集 出现 -> pity 归零")
+	# D) 全收集: 恒 静默 归零
+	g.seen_affixes = g.affix_ids.duplicate()
+	g.affix_pity = g.AFFIX_PITY_WINS - 1
+	var rd176: Array = g._affix_pity_on_win(int(g.seen_affixes.size()))
+	check(rd176.is_empty() and g.affix_pity == 0, "打磨-176 全收集 恒 静默 归零")
+	# E) 背包 满 + 缺失 全 高品质: 拒入 退化 折材料 + 补 收集 标记 (收集线 恒 有 出口)
+	var p176_t0: Array = []
+	for id176 in g.affix_ids:
+		if int(g.affix_by_id[str(id176)].get("tier", 0)) == 0:
+			p176_t0.append(str(id176))
+	g.seen_affixes = p176_t0.duplicate()
+	g.affix_bag = {}
+	for id176 in p176_t0:
+		g.affix_bag[id176] = 1
+	for id176 in g.affix_ids:
+		if g.affix_bag_used() >= g.affix_bag_capacity():
+			break
+		g.affix_bag[str(id176)] = 1
+		g._affix_seen_mark(str(id176))
+	g.affix_pity = g.AFFIX_PITY_WINS - 1
+	var mat176_0: int = int(g.affix_materials)
+	var dec176_0: float = float(g.stats.get("affix_decompose", 0.0))
+	var rf176: Array = g._affix_pity_on_win(g.seen_affixes.size())
+	var aid176: String = str(rf176[0])
+	check(g.seen_affixes.has(aid176) and int(g.affix_materials) == mat176_0 + int(g.affix_decomp_gain(aid176)) and absf(float(g.stats.get("affix_decompose", 0.0)) - dec176_0 - 1.0) < 1e-9 and int(g.affix_bag.get(aid176, 0)) == 0,
+			"打磨-176 背包满 补发 折材料 且 标 收集 不占格 (材料 +%d)" % int(g.affix_decomp_gain(aid176)))
+	# F) 存档 往返: pity 持久 (旧档 缺字段 = 0 静默 起步)
+	g.affix_pity = 7
+	g.save_game()
+	g.affix_pity = 3
+	g.load_game()
+	check(g.affix_pity == 7, "打磨-176 存档 往返 pity 复原 (实际 %d)" % g.affix_pity)
+	var p176_old: Dictionary = {}
+	p176_old["seen_affixes"] = []
+	var p176_sf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.READ)
+	var p176_v: Variant = JSON.parse_string(p176_sf.get_as_text()) if p176_sf != null else null
+	if p176_sf != null:
+		p176_sf.close()
+	if typeof(p176_v) == TYPE_DICTIONARY and p176_v.has("affix_pity"):
+		p176_v.erase("affix_pity")
+		var p176_wf: FileAccess = FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+		if p176_wf != null:
+			p176_wf.store_string(JSON.stringify(p176_v))
+			p176_wf.close()
+	g.affix_pity = 9
+	g.load_game()
+	check(g.affix_pity == 0, "打磨-176 旧档 缺字段 pity 默认 0 (实际 %d)" % g.affix_pity)
+	# 收尾 复原 (防 污染 后续 收集/统计 断言; 本段 为 末段 仍 留 复原 惯例)
+	g.ascended = p176_asc
+	g.dao_level = p176_dao
+	g.seen_affixes = p176_seen
+	g.affix_bag = p176_bag
+	g.affix_materials = p176_mat
+	g.affix_pity = p176_pity
+	g.stats = p176_st
+	g.essence = p176_ess
+	g.stones = p176_ston
+
 	# ---------- 汇报 ----------
 	print("")
 	if _fail.is_empty():

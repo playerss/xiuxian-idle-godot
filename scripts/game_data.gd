@@ -29,6 +29,7 @@ const TOWER_POISON_BATTLES := 2      # 剧毒持续场数
 const TOWER_CLEAR_BONUS_STONE := 1000000.0  # 通关 一次性 灵石 大奖
 const TOWER_CLEAR_BUFF := 0.15              # 通关 永久 增益: 玩家 atk/def +15% (乘算 独立 项)
 const TOWER_CLEAR_BONUS_AFFIX_COUNT := 3    # 通关 一次性 大奖 顶级(传说) 词缀 件数 (M5 规格 x3)
+const AFFIX_PITY_WINS := 15  # 打磨-176: 飞升后台层胜利未掉出新收集满 N 次 -> 定向补 1 种缺失 (封测1 平衡拍板: 保底计数器)
 # 打磨-127: 下一里程碑 ETA 估算口径 — 战斗 节拍 = 2s/层 (M5 规格 "战斗 节奏 ≤2 秒/层",
 # ETA = 距 下一 里程碑 层数 x 本层 预估 回合数 [tower_rounds_line 同源 最不利 0.9 档] x 本节拍;
 # 展示 上限 7 天 封顶 "7天+" (同 境界 阶梯 ETA 打磨-33 上限 口径); 纯 估算 不 改 判定)
@@ -1011,6 +1012,7 @@ func affix_sel_delta_text(affix_id: String) -> String:
 # 词缀 收集 (曾 入包 过的 词缀 id 集合; 卸下/分解 不 移除, 只增不减).
 # 背包 集齐 120 成就 判 此 集合; 存档 seen_affixes 字段 (旧档 缺 默认 空).
 var seen_affixes: Array = []
+var affix_pity := 0  # 打磨-176: 收集保底计数 (飞升后, 连续未掉新收集胜场; 存档持久)
 
 # 标记 词缀 曾 入包 (affix_add 成功后 调用; 幂等)
 func _affix_seen_mark(aid: String) -> void:
@@ -1020,6 +1022,50 @@ func _affix_seen_mark(aid: String) -> void:
 # 收集 进度 文本 (装备页 词缀背包 标题; N/120)
 func affix_seen_text() -> String:
 	return "词缀 收集 %d/%d" % [seen_affixes.size(), affix_ids.size()]
+
+# 打磨-176: 词缀 收集 保底 (affix_pity) — 飞升后台层胜利连续 AFFIX_PITY_WINS 次
+# 未掉出"曾 未 收集" 词缀 时, 从 缺失 集 定向 补 1 种 (封测1: 稀有池补齐极慢, 给收集党确定性出口).
+# 缺失集内等概率 randf (与 全 游戏 随机源 一致); 全收集 后 恒 静默.
+func _affix_pick_missing() -> String:
+	var miss: Array = []
+	for id in affix_ids:
+		if not seen_affixes.has(str(id)):
+			miss.append(str(id))
+	if miss.is_empty():
+		return ""
+	return str(miss[int(randf() * float(miss.size()))])
+
+# 保底 发放: 入包 优先; 背包满 拒入/自动入料 不 标 收集 的 口径 差 — 保底 特例:
+# 未 标 收集 时 按 品质 折算 材料 + 标记 收集 (保底 的 目的 是 收集线 有 出口, 落袋 方式 退化 可接受)
+func _affix_give_missing() -> String:
+	var aid := _affix_pick_missing()
+	if aid == "":
+		return ""
+	if affix_add(aid, 1) == 0 and not seen_affixes.has(aid):
+		# 未入包未收集: 高品质 拒入 -> 按品质折材料入袋; tier0 自动入料 affix_add 已记材料/埋点 -> 只补收集标记
+		if int(affix_by_id[aid].get("tier", 0)) > 0:
+			affix_materials += affix_decomp_gain(aid)
+			_stat_inc("affix_decompose", 1.0)
+			_stat_inc("mat_gain", float(affix_decomp_gain(aid)))
+		_affix_seen_mark(aid)
+	return aid
+
+# 每 场 塔层 胜利 结算 单点 调用 (seen_before = 结算前 seen 数). 返回 本次 额外 补 发 词缀 数组.
+func _affix_pity_on_win(seen_before: int) -> Array:
+	if not ascended or seen_affixes.size() > seen_before:
+		affix_pity = 0
+		return []
+	if seen_affixes.size() >= affix_ids.size():
+		affix_pity = 0
+		return []
+	affix_pity += 1
+	if affix_pity < AFFIX_PITY_WINS:
+		return []
+	var got: String = _affix_give_missing()
+	affix_pity = 0
+	if got == "":
+		return []
+	return [got]
 
 const AFFIX_DIY_SLOTS := 3
 
@@ -1498,7 +1544,9 @@ func try_tower_challenge(tower: String, roll: float = -1.0) -> Dictionary:
 			drop_src = "elite"
 		elif str(mon["boss_type"]) != "":
 			drop_src = "milestone" if tower == "endless" else "boss"
+		var seen_w176 := seen_affixes.size()  # 打磨-176: 保底 结算 快照
 		affix_drops = affix_roll_drop(drop_src, next_floor, dr, affix_bonus_chance, float(mon.get("affix_w", 1.0)))
+		affix_drops.append_array(_affix_pity_on_win(seen_w176))
 		_stat_inc("affix_drop", float(affix_drops.size()))
 		if tower == "fixed":
 			if next_floor < 1000:
@@ -4397,6 +4445,7 @@ func save_game() -> void:
 		"slot_upgrades": slot_upgrades,
 		"affix_materials": affix_materials,  # 打磨-96: 词缀 材料 (旧档缺字段 默认 0)
 		"seen_affixes": seen_affixes,  # M6-3: 词缀 收集 (曾 入包; 旧档缺字段 默认 空)
+		"affix_pity": affix_pity,  # 打磨-176: 收集 保底 计数 (旧档 默认 0)
 		"ts": int(Time.get_unix_time_from_system()),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -4496,6 +4545,7 @@ func load_game() -> void:
 				sa[str(item)] = true
 	for k in sa:
 		seen_affixes.append(str(k))
+	affix_pity = int(parsed.get("affix_pity", 0))  # 打磨-176: 旧档 缺字段 默认 0
 	# 登天梯 一致性: 当前 层 不 低于 历史 最高+1 的 防御 (断点 续爬)
 	if tower_endless_floor < tower_endless_best + 1:
 		tower_endless_floor = tower_endless_best + 1
